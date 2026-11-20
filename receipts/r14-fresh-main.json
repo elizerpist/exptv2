@@ -1,0 +1,16 @@
+{
+  "artifact_id": "14639399199",
+  "zip_sha256": "352b7e9e0c38018bb0b1e6f8310da8d8728a1b682bb97fb5c1d342d45eea74dc",
+  "zip_bytes": 3125938,
+  "run_id": 44758461466,
+  "app_source": "536987c2345bf0c0cc2cb297b68c7227a0aed3c8",
+  "selected": [
+    "capture.txt",
+    "fixture.txt",
+    "g1-withdrawal-marks.txt",
+    "identity.txt",
+    "instrumentation.txt",
+    "process-identity.txt",
+    "queue-and-reads.txt"
+  ]
+}

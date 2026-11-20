@@ -1,0 +1,14 @@
+{
+  "artifact_id": "14640682486",
+  "zip_sha256": "5950fee89a78f4179678ca0f00778ed05d19906ecc1f3ebf8ace42e82ef2adb6",
+  "zip_bytes": 606110,
+  "run_id": 44758461466,
+  "app_source": "536987c2345bf0c0cc2cb297b68c7227a0aed3c8",
+  "selected": [
+    "capture.txt",
+    "fixture.txt",
+    "identity.txt",
+    "instrumentation.txt",
+    "process-identity.txt"
+  ]
+}

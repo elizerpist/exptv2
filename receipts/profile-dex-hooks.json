@@ -1,0 +1,130 @@
+{
+  "apk_sha256": "5837bcc8a2711396a38a3436d7f45e3b2f96f66302648c994ebe0736235345d9",
+  "initial_attempts": [
+    "O_NOFOLLOW on /proc/self/fd (ELOOP)",
+    "UTF-8 decoder rejected a DEX string"
+  ],
+  "inspection": "SDK DEX disassembly with a self-fd-only open shim; no separate release APK",
+  "dexes": [
+    {
+      "dex": "classes.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes10.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes11.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes12.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes13.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes14.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes15.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes16.dex",
+      "self_reference_count": 3,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes17.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes18.dex",
+      "self_reference_count": 3,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes19.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes2.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes20.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes3.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes4.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes5.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes6.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes7.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes8.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    },
+    {
+      "dex": "classes9.dex",
+      "self_reference_count": 0,
+      "external_reference_count": 0,
+      "external_examples": []
+    }
+  ]
+}

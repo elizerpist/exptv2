@@ -1,0 +1,21 @@
+{
+  "artifact_id": "14640568475",
+  "zip_sha256": "dc8c402d2d52e84c57c5d1a3870f6b4e0e9fd5491169ffb601555372fac22c48",
+  "zip_bytes": 5759931,
+  "run_id": 44758461466,
+  "app_source": "536987c2345bf0c0cc2cb297b68c7227a0aed3c8",
+  "selected": [
+    "after-a-occluder.png",
+    "after-successor-occluder.png",
+    "before-a-before.png",
+    "before-a-green-reference.png",
+    "before-a-occluder.png",
+    "capture.txt",
+    "fixture.txt",
+    "g1-withdrawal-marks.txt",
+    "identity.txt",
+    "instrumentation.txt",
+    "process-identity.txt",
+    "queue-and-reads.txt"
+  ]
+}

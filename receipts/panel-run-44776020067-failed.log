@@ -1,0 +1,477 @@
+r16-owned-layer-panel	Run stock and owned real-panel controls	﻿2026-11-20T16:43:08.1947534Z ##[group]Run reactivecircus/android-emulator-runner@v2
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1947790Z with:
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1947943Z   api-level: 35
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1948104Z   emulator-build: 15081367
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1948275Z   target: default
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1948428Z   arch: x86_64
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1948592Z   profile: pixel_7
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1948739Z   cores: 4
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1948880Z   ram-size: 2048M
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1949366Z   disable-animations: false
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1949917Z   emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1950574Z   pre-emulator-launch-script: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1951064Z   script: bash scripts/test-keyguard-r16-panel.sh
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1951298Z   avd-name: test
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1951457Z   force-avd-creation: true
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1951707Z   emulator-boot-timeout: 600
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1951883Z   emulator-port: 5554
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1952053Z   disable-spellchecker: false
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1952252Z   disable-linux-hw-accel: auto
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1952432Z   enable-hw-keyboard: false
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1952601Z   channel: stable
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1952753Z env:
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1952977Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1953310Z   JAVA_HOME_17_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/17.0.21-9/x64
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1953576Z   MAVEN_ARGS: -ntp
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1953866Z   ANDROID_HOME: /usr/local/lib/android/sdk
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1954087Z   ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1954349Z   FLUTTER_ROOT: /opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1954609Z   PUB_CACHE: /home/runner/.pub-cache
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.1954793Z ##[endgroup]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2391532Z ##[group]Configure emulator
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2393113Z API level: 35
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2393638Z System image API level: 35
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2394025Z target: default
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2394434Z CPU architecture: x86_64
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2396115Z Hardware profile: pixel_7
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2396783Z Cores: 4
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2397095Z RAM size: 2048M
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2397342Z Heap size: 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2397606Z SD card path or size: 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2397863Z Disk size: 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2398071Z AVD name: test
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2398343Z force avd creation: true
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2398678Z Emulator boot timeout: 600
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2399109Z emulator port: 5554
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2399876Z emulator options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2400532Z disable animations: false
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2401096Z disable spellchecker: false
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2401689Z disable Linux hardware acceleration: false
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2402079Z enable hardware keyboard: false
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2402356Z using emulator build: 15081367
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2402675Z Channel: 0 (stable)
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2402895Z Script:
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2403128Z bash scripts/test-keyguard-r16-panel.sh
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2403423Z Pre emulator launch script:
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2403982Z cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2404676Z ##[endgroup]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2405048Z ##[group]Install Android SDK
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:08.2436027Z [command]/usr/bin/sh -c \yes | sdkmanager --licenses > /dev/null
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:10.7669467Z Installing latest build tools, platform tools, and platform.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:10.7682583Z [command]/usr/bin/sh -c \sdkmanager --install 'build-tools;37.0.0' platform-tools 'platforms;android-35'> /dev/null
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:11.8782507Z Installing latest emulator.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:11.8793192Z [command]/usr/bin/sh -c \sdkmanager --install emulator --channel=0 > /dev/null
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:21.2023227Z Installing emulator build 15081367.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:21.2034771Z [command]/usr/bin/curl -fo emulator.zip https://dl.google.com/android/repository/emulator-linux_x64-15081367.zip
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:21.2093193Z   % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:21.2096346Z                                  Dload  Upload  Total   Spent   Left   Speed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:21.2096935Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:22.2083029Z   0      0   0      0   0      0      0      0                              0
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:22.8584822Z  54 316.1M  54 172.0M   0      0 172.2M      0   00:01           00:01 172.0M
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:22.8587027Z 100 316.1M 100 316.1M   0      0 191.7M      0   00:01   00:01         172.0M
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:22.8587440Z 100 316.1M 100 316.1M   0      0 191.6M      0   00:01   00:01         172.0M
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:22.8587767Z 100 316.1M 100 316.1M   0      0 191.6M      0   00:01   00:01         172.0M
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:22.8626938Z [command]/usr/bin/unzip -o -q emulator.zip -d /usr/local/lib/android/sdk
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:27.9560662Z Installing system images.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:27.9574048Z [command]/usr/bin/sh -c \sdkmanager --install 'system-images;android-35;default;x86_64' --channel=0 > /dev/null
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:47.9116798Z ##[endgroup]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:47.9117981Z ##[group]Create AVD
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:47.9118586Z Creating AVD.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:47.9133180Z [command]/usr/bin/sh -c \echo no | avdmanager create avd --force -n test --package 'system-images;android-35;default;x86_64' --device 'pixel_7'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:48.5440345Z Loading local repository...                                                     
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:48.7160983Z [=========                              ] 25% Loading local repository...       
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:48.7161373Z Auto-selecting single ABI x86_64
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:49.0710413Z [command]/usr/bin/sh -c \printf 'hw.cpu.ncore=4\nhw.ramSize=2048M\n' >> /home/runner/.android/avd/test.avd/config.ini
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:49.0726946Z ##[endgroup]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:49.0727385Z ##[group]Run pre emulator launch script
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:49.0738222Z [command]/usr/bin/sh -c cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:49.1600949Z Downloading https://services.gradle.org/distributions/gradle-8.14-all.zip
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:50.3906184Z .....................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................................
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:50.3920576Z Unzipping /home/runner/.gradle/wrapper/dists/gradle-8.14-all/c2qonpi39x1mddn7hk5gh9iqj/gradle-8.14-all.zip to /home/runner/.gradle/wrapper/dists/gradle-8.14-all/c2qonpi39x1mddn7hk5gh9iqj
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.3491289Z Set executable permissions for: /home/runner/.gradle/wrapper/dists/gradle-8.14-all/c2qonpi39x1mddn7hk5gh9iqj/gradle-8.14/bin/gradle
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.7818479Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.7826152Z Welcome to Gradle 8.14!
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.7826449Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.7826680Z Here are the highlights of this release:
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.7827019Z  - Java 24 support
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.7827306Z  - GraalVM Native Image toolchain selection
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.7827683Z  - Enhancements to test reporting
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.7827996Z  - Build Authoring improvements
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.7828172Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.7828433Z For more details see https://docs.gradle.org/8.14/release-notes.html
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.7828716Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:52.8814486Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:43:53.7812659Z Daemon will be stopped at the end of the build 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:26.4831983Z > Task :gradle:checkKotlinGradlePluginConfigurationErrors SKIPPED
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:35.6840517Z > Task :gradle:pluginDescriptors
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:35.7818373Z > Task :gradle:processResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:45.9820164Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:45.9834246Z > Task :gradle:compileKotlin
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:45.9835331Z w: file:///opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterPlugin.kt:11:37 'ApkVariant' is deprecated. Deprecated in Java
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:45.9836472Z w: file:///opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterPlugin.kt:614:69 'ApkVariant' is deprecated. Deprecated in Java
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:45.9837770Z w: file:///opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/flutter_tools/gradle/src/main/kotlin/plugins/PluginHandler.kt:186:64 Unchecked cast: NamedDomainObjectContainer<out BuildType> to NamedDomainObjectContainer<BuildType>
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:45.9839309Z w: file:///opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/flutter_tools/gradle/src/main/kotlin/plugins/PluginHandler.kt:187:69 Unchecked cast: NamedDomainObjectContainer<out BuildType> to NamedDomainObjectContainer<BuildType>
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:46.0815341Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:46.0816338Z > Task :gradle:compileJava NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:46.0817360Z > Task :gradle:compileGroovy NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:46.0817738Z > Task :gradle:classes
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:44:46.0818048Z > Task :gradle:jar
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:08.4819584Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:08.4820740Z > Configure project :app
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:08.4821837Z Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by plugin 'dev.flutter.flutter-gradle-plugin'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:08.4823106Z Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by plugin 'dev.flutter.flutter-gradle-plugin'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:08.4824341Z Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by plugin 'dev.flutter.flutter-gradle-plugin'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:08.4825585Z Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by plugin 'dev.flutter.flutter-gradle-plugin'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:10.8819401Z Checking the license for package NDK (Side by side) 28.2.13676358 in /usr/local/lib/android/sdk/licenses
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:10.8840569Z License for package NDK (Side by side) 28.2.13676358 accepted.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:10.8841426Z Preparing "Install NDK (Side by side) 28.2.13676358 v.28.2.13676358".
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:30.7812595Z "Install NDK (Side by side) 28.2.13676358 v.28.2.13676358" ready.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:30.7830311Z Installing NDK (Side by side) 28.2.13676358 in /usr/local/lib/android/sdk/ndk/28.2.13676358
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:30.7831114Z "Install NDK (Side by side) 28.2.13676358 v.28.2.13676358" complete.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:30.8813905Z "Install NDK (Side by side) 28.2.13676358 v.28.2.13676358" finished.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.1832201Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.1862002Z > Configure project :integration_test
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.1862896Z Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file '/opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/integration_test/android/build.gradle.kts'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.1864094Z Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file '/opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/integration_test/android/build.gradle.kts'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.1865219Z Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file '/opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/integration_test/android/build.gradle.kts'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.1866337Z Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file '/opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/integration_test/android/build.gradle.kts'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.1867457Z Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file '/opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/integration_test/android/build.gradle.kts'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.1868583Z Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file '/opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/integration_test/android/build.gradle.kts'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.1870207Z Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file '/opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/integration_test/android/build.gradle.kts'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.1872110Z Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file '/opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/integration_test/android/build.gradle.kts'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.9876671Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:42.9910934Z > Task :app:DebugMinSdkCheck
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:43.2813084Z > Task :app:generateKeyguardHeaderMaterial
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:43.2814106Z > Task :app:preBuild
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:43.2814483Z > Task :app:preDebugBuild
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:43.2814931Z > Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:45:43.2815442Z > Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:13.2814091Z > Task :app:compileFlutterBuildDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:28.1813228Z > Task :app:packJniLibsflutterBuildDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:28.1813978Z > Task :fluvi-core:preBuild UP-TO-DATE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:28.1814473Z > Task :fluvi-core:preDebugBuild UP-TO-DATE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:28.1814763Z > Task :integration_test:preBuild UP-TO-DATE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:28.1815192Z > Task :integration_test:preDebugBuild UP-TO-DATE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:28.1815520Z > Task :fluvi-core:writeDebugAarMetadata
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:28.1815792Z > Task :integration_test:writeDebugAarMetadata
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:28.1816169Z > Task :app:cleanMergeDebugAssets UP-TO-DATE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.2814360Z > Task :app:checkDebugAarMetadata
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.2816505Z > Task :app:mergeDebugShaders
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.2816972Z > Task :app:compileDebugShaders NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.2817454Z > Task :app:generateDebugAssets UP-TO-DATE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.3813907Z > Task :fluvi-core:mergeDebugShaders
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.3815207Z > Task :fluvi-core:compileDebugShaders NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.3815813Z > Task :fluvi-core:generateDebugAssets UP-TO-DATE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.3816277Z > Task :fluvi-core:mergeDebugAssets
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.3816714Z > Task :integration_test:mergeDebugShaders
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.3817211Z > Task :integration_test:compileDebugShaders NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.3818032Z > Task :integration_test:generateDebugAssets UP-TO-DATE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.3818506Z > Task :integration_test:mergeDebugAssets
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.3819133Z > Task :app:mergeDebugAssets
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.6816580Z > Task :app:copyFlutterAssetsDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.6817466Z > Task :app:generateDebugResValues
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.6819237Z > Task :fluvi-core:generateDebugResValues
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.6819944Z > Task :fluvi-core:generateDebugResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.6820485Z > Task :fluvi-core:packageDebugResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.6826265Z > Task :integration_test:generateDebugResValues
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.6827459Z > Task :integration_test:generateDebugResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.6828059Z > Task :integration_test:packageDebugResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.7813430Z > Task :app:mapDebugSourceSetPaths
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.7815064Z > Task :app:generateDebugResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:45.9814766Z > Task :app:packageDebugResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.2813189Z > Task :app:mergeDebugResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.8850467Z > Task :app:createDebugCompatibleScreenManifests
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.8884865Z > Task :app:extractDeepLinksDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.8889713Z > Task :fluvi-core:extractDeepLinksDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.8890336Z > Task :integration_test:extractDeepLinksDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.9813927Z > Task :app:parseDebugLocalResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.9814614Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.9815345Z > Task :integration_test:processDebugManifest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.9816122Z package="dev.flutter.integration_test" found in source AndroidManifest.xml: /opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/integration_test/android/src/main/AndroidManifest.xml.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.9816932Z Setting the namespace via the package attribute in the source AndroidManifest.xml is no longer supported, and the value is ignored.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.9817835Z Recommendation: remove package="dev.flutter.integration_test" from the source AndroidManifest.xml: /opt/hostedtoolcache/flutter/stable-3.41.4-x64/flutter/packages/integration_test/android/src/main/AndroidManifest.xml.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.9818362Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:46.9818488Z > Task :fluvi-core:processDebugManifest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:47.8840467Z > Task :fluvi-core:compileDebugLibraryResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:47.9832118Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:47.9850101Z > Task :app:processDebugMainManifest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:47.9880693Z [androidx.test.espresso:espresso-core:3.2.0] /home/runner/.gradle/caches/8.14/transforms/ab0f72c69738408f61f84e9fb522f612/transformed/espresso-core-3.2.0/AndroidManifest.xml Warning:
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:47.9921232Z 	Namespace 'androidx.test.espresso' is used in multiple modules and/or libraries: androidx.test.espresso:espresso-core:3.2.0, androidx.test.espresso:espresso-idling-resource:3.2.0. Please ensure that all modules and libraries have a unique namespace. For more information, See https://developer.android.com/studio/build/configure-app-module#set-namespace
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:47.9949338Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:47.9970607Z > Task :app:outputDebugAppLinkSettings
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:48.0811367Z > Task :app:processDebugManifest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:49.8812673Z > Task :fluvi-core:parseDebugLocalResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:49.8813079Z > Task :app:processDebugManifestForPackage
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:49.8813381Z > Task :integration_test:compileDebugLibraryResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:49.8813740Z > Task :fluvi-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:49.8814088Z > Task :fluvi-core:generateDebugRFile
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:49.9812034Z > Task :integration_test:parseDebugLocalResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:57.3814356Z > Task :fluvi-core:javaPreCompileDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:46:57.3815192Z > Task :integration_test:generateDebugRFile
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:01.9841280Z > Task :integration_test:javaPreCompileDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:02.1817640Z > Task :app:processDebugResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:11.6830023Z > Task :integration_test:compileDebugJavaWithJavac
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:11.6862354Z > Task :app:javaPreCompileDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:11.6882824Z > Task :integration_test:bundleLibCompileToJarDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:12.4845584Z > Task :integration_test:bundleLibRuntimeToJarDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:13.3830586Z > Task :app:compressDebugAssets
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:13.3860096Z > Task :app:desugarDebugFileDependencies
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:13.3884799Z > Task :integration_test:processDebugJavaRes NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:18.6814172Z > Task :fluvi-core:kspDebugKotlin
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:21.2812923Z > Task :app:checkDebugDuplicateClasses
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:51.2829180Z > Task :fluvi-core:compileDebugKotlin
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:55.7850153Z > Task :integration_test:bundleLibRuntimeToDirDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:56.4830336Z > Task :app:mergeExtDexDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.4839645Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.4870366Z > Task :app:configureCMakeDebug[arm64-v8a]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.4900272Z Checking the license for package CMake 3.22.1 in /usr/local/lib/android/sdk/licenses
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.4915256Z License for package CMake 3.22.1 accepted.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.4930180Z Preparing "Install CMake 3.22.1 v.3.22.1".
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.4939293Z "Install CMake 3.22.1 v.3.22.1" ready.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.4939920Z Installing CMake 3.22.1 in /usr/local/lib/android/sdk/cmake/3.22.1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.4940397Z "Install CMake 3.22.1 v.3.22.1" complete.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.4940791Z "Install CMake 3.22.1 v.3.22.1" finished.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.4941051Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.4941284Z > Task :app:buildCMakeDebug[arm64-v8a]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.7821653Z > Task :app:configureCMakeDebug[armeabi-v7a]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:58.7870193Z > Task :app:buildCMakeDebug[armeabi-v7a]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:59.0870431Z > Task :app:configureCMakeDebug[x86_64]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:59.0941539Z > Task :app:buildCMakeDebug[x86_64]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:59.0975479Z > Task :app:mergeDebugJniLibFolders
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:59.1014239Z > Task :fluvi-core:mergeDebugJniLibFolders
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:47:59.1042576Z > Task :fluvi-core:mergeDebugNativeLibs NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:00.7820396Z > Task :fluvi-core:copyDebugJniLibsProjectOnly
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:00.7880164Z > Task :integration_test:mergeDebugJniLibFolders
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:00.7930045Z > Task :integration_test:mergeDebugNativeLibs NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:00.7989961Z > Task :integration_test:copyDebugJniLibsProjectOnly
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:06.5830375Z > Task :app:validateSigningDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:06.5862450Z > Task :app:writeDebugAppMetadata
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:06.6818340Z > Task :app:writeDebugSigningConfigVersions
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:06.6841375Z > Task :app:preDebugAndroidTestBuild SKIPPED
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:07.2876127Z > Task :app:checkDebugAndroidTestAarMetadata
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:07.2876820Z > Task :app:generateDebugAndroidTestResValues
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:07.2877259Z > Task :app:mapDebugAndroidTestSourceSetPaths
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:07.2878194Z > Task :app:generateDebugAndroidTestResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:07.2910314Z > Task :app:mergeDebugAndroidTestResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:07.6860703Z > Task :app:processDebugAndroidTestManifest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:07.8820399Z > Task :app:processDebugAndroidTestResources
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:07.8840067Z > Task :app:javaPreCompileDebugAndroidTest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:07.8859967Z > Task :app:mergeDebugAndroidTestShaders
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:07.8889989Z > Task :app:compileDebugAndroidTestShaders NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:07.8909743Z > Task :app:generateDebugAndroidTestAssets UP-TO-DATE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:09.6861230Z > Task :app:mergeDebugNativeLibs
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:09.6909834Z > Task :app:mergeDebugAndroidTestAssets
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:09.6910545Z > Task :app:compressDebugAndroidTestAssets
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:09.6940085Z > Task :app:desugarDebugAndroidTestFileDependencies
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:09.9822462Z > Task :app:checkDebugAndroidTestDuplicateClasses
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:10.1824723Z > Task :app:stripDebugDebugSymbols
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:10.3813800Z > Task :app:mergeDebugAndroidTestJniLibFolders
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:10.3816548Z > Task :app:mergeDebugAndroidTestNativeLibs NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:10.3817200Z > Task :app:stripDebugAndroidTestDebugSymbols NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:10.3817852Z > Task :app:validateSigningDebugAndroidTest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:10.3818652Z > Task :app:mergeExtDexDebugAndroidTest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:10.3819326Z > Task :app:writeDebugAndroidTestSigningConfigVersions
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:13.8818546Z > Task :fluvi-core:compileDebugJavaWithJavac NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:13.8831189Z > Task :fluvi-core:processDebugJavaRes
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:13.8860307Z > Task :fluvi-core:bundleLibRuntimeToJarDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:13.8889914Z > Task :fluvi-core:bundleLibCompileToJarDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:14.0830261Z > Task :fluvi-core:bundleLibRuntimeToDirDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:22.9814735Z > Task :app:mergeLibDexDebugAndroidTest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:22.9817085Z > Task :app:mergeLibDexDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6811912Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6817451Z > Task :app:compileDebugKotlin
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6818530Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/FluviAutomationPlatform.kt:90:33 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6820030Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/FluviAutomationPlatform.kt:264:30 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6821150Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/MainActivity.kt:1836:39 Unchecked cast of 'Any!' to 'Map<String, Any?>'.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6822072Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/MainActivity.kt:2701:64 Unchecked cast of 'Any!' to 'Map<String, Any?>'.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6823178Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:1828:23 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6824294Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:1843:30 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6825537Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:1854:19 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6826666Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:1906:32 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6827983Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:1911:28 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6829231Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt:405:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6830357Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt:427:29 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6831470Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt:451:23 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6832528Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt:471:19 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6836023Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt:480:21 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6839916Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt:527:32 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6841507Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt:539:28 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6844389Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt:757:46 Condition is always 'true'.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6846452Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/runtime/FluviLockScreenCard.kt:555:82 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:36.6848233Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/main/kotlin/com/fluvi/app/runtime/FluviRuntimeMonitoring.kt:629:26 'constructor(p0: Context!): Notification.Builder' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:37.3819593Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:37.3849636Z > Task :app:compileDebugJavaWithJavac
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:40.2813066Z > Task :app:dexBuilderDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:40.2813595Z > Task :app:mergeDebugGlobalSynthetics
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:40.2814042Z > Task :app:processDebugJavaRes
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:45.7813696Z > Task :app:mergeProjectDexDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:45.7815482Z > Task :app:bundleDebugClassesToCompileJar
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:46.7840593Z > Task :app:mergeDebugJavaResource
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:47.6851655Z > Task :app:packageDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:47.7840566Z > Task :app:createDebugApkListingFileRedirect
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:47.8860318Z > Task :app:assembleDebug
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.5828432Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.5849138Z > Task :app:compileDebugAndroidTestKotlin
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.5881851Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFinancialSnapshotRemoteViewsInstrumentationTest.kt:41:69 The resulting type of this 'javaClass' call is 'Class<FluviFinancialSnapshotWidgetProvider.Companion>' and not 'Class<FluviFinancialSnapshotWidgetProvider>'. Use '::class.java' to access type 'Class<FluviFinancialSnapshotWidgetProvider>'.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.5910528Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR15ServiceContractInstrumentationTest.kt:906:85 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.5940557Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR15ServiceContractInstrumentationTest.kt:933:91 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.5968164Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR15ServiceContractInstrumentationTest.kt:935:26 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6000518Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardRecoveryAdmissionInstrumentationTest.kt:336:91 'val id: Long' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6030568Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardRecoveryAdmissionInstrumentationTest.kt:802:85 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6060485Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardRecoveryAdmissionInstrumentationTest.kt:807:87 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6090445Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:1689:48 'static fun obtain(p0: Int): AccessibilityEvent!' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6120448Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:1696:35 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6150637Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:1808:79 'static fun obtain(p0: Int): AccessibilityEvent!' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6179793Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:1810:81 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6210494Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:1870:75 'static fun obtain(p0: Int): AccessibilityEvent!' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6235408Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:1872:77 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6270520Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:1956:48 'static fun obtain(p0: Int): AccessibilityEvent!' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6290474Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:1961:35 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6292280Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:2389:37 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6294050Z w: file:///home/runner/work/exptv2/exptv2/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt:2566:47 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6294837Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:56.6295100Z > Task :app:compileDebugAndroidTestJavaWithJavac NO-SOURCE
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.3822331Z > Task :app:dexBuilderDebugAndroidTest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.3823353Z > Task :app:mergeDebugAndroidTestGlobalSynthetics
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.3824080Z > Task :app:processDebugAndroidTestJavaRes
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.4890725Z > Task :app:mergeDebugAndroidTestJavaResource
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.5825671Z > Task :app:mergeProjectDexDebugAndroidTest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6823010Z > Task :app:packageDebugAndroidTest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6850346Z > Task :app:createDebugAndroidTestApkListingFileRedirect
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6874659Z > Task :app:assembleDebugAndroidTest
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6876245Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6876947Z [Incubating] Problems report is available at: file:///home/runner/work/exptv2/exptv2/build/reports/problems/problems-report.html
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6888627Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6890434Z Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6891610Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6892417Z You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6893324Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6894773Z For more on this, please refer to https://docs.gradle.org/8.14/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6895450Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6895690Z BUILD SUCCESSFUL in 5m 10s
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:48:59.6896144Z 119 actionable tasks: 118 executed, 1 up-to-date
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.0821628Z ##[endgroup]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.0822643Z ##[group]Launch Emulator
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.0823012Z Starting emulator.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.0837978Z [command]/usr/bin/sh -c \/usr/local/lib/android/sdk/emulator/emulator -port 5554 -avd test -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096 &
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.1299084Z INFO         | Android emulator version 36.5.10.0 (build_id 15081367) (CL:N/A)
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.1299599Z INFO         | Graphics backend: gfxstream
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.1300060Z INFO         | Found systemPath /usr/local/lib/android/sdk/system-images/android-35/default/x86_64/
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5313800Z INFO         | Feature 'Vulkan' (21) is overridden to 'disabled'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5314335Z INFO         | Increasing RAM size to 2048MB
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5314743Z INFO         | Guest GLES Driver: Auto (ext controls)
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5315267Z INFO         | emuglConfig_init: vulkan_mode_selected:swiftshader gles_mode_selected:swangle
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5315746Z INFO         | Checking system compatibility:
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5316108Z INFO         |   Checking: hasSufficientDiskSpace
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5316513Z INFO         |      Ok: Disk space requirements to run avd: `test` are met
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5316886Z INFO         |   Checking: hasSufficientHwGpu
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5317237Z INFO         |      Ok: Hardware GPU compatibility checks are not required
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5317530Z INFO         |   Checking: hasSufficientSystem
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5317823Z INFO         |      Ok: System requirements to run avd: `test` are met
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5318153Z ERROR        | Unable to connect to adb daemon on port: 5037
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5330090Z INFO         | Storing crashdata in: /tmp/android-runner/emu-crash-36.5.10.db, detection is enabled for process: 3873
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5330871Z INFO         | Initializing gfxstream backend
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5449642Z INFO         | android_startOpenglesRenderer: gpu info
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5450083Z INFO         | 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5779467Z INFO         | SharedLibrary::open for [libX11]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5784457Z WARNING      | Could not open libX11.so, try libX11.so.6
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5784868Z INFO         | SharedLibrary::open for [libX11.so.6]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5785233Z INFO         | SharedLibrary::open for [libX11-xcb]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5785721Z WARNING      | Could not open libX11-xcb.so, try libX11-xcb.so.1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5786220Z INFO         | SharedLibrary::open for [libX11-xcb.so.1]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5943911Z INFO         | Graphics Adapter Vendor Google (Google Inc. (Google))
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5944585Z INFO         | Graphics Adapter Android Emulator OpenGL ES Translator (ANGLE (Google, Vulkan 1.2.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver-5.0.0))
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5945212Z INFO         | Graphics API Version OpenGL ES 3.0 (OpenGL ES 3.1.0 (ANGLE 2.1.17841 git hash: 5fa2e61da947))
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5947506Z INFO         | Graphics API Extensions GL_OES_EGL_sync GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_depth24 GL_OES_depth32 GL_OES_element_index_uint GL_OES_texture_float GL_OES_texture_float_linear GL_OES_compressed_paletted_texture GL_OES_compressed_ETC1_RGB8_texture GL_OES_depth_texture GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_packed_depth_stencil GL_OES_vertex_half_float GL_OES_standard_derivatives GL_OES_texture_npot GL_OES_rgb8_rgba8 GL_OVR_multiview2 GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_EXT_texture_format_BGRA8888 GL_APPLE_texture_format_BGRA8888 GL_EXT_draw_buffers_indexed GL_EXT_clip_cull_distance 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5949227Z INFO         | Graphics Device Extensions N/A
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5962196Z ERROR        | Setting read-only feature 'GLAsyncSwap' to '0'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5962646Z INFO         | Feature 'GLAsyncSwap' (50) is overridden to 'disabled'
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5974414Z INFO         | Sending adb public key [QAAAAMMvvG0VR1ucbHtTZ1YXEElcUahxKMW65bgtU/4A8Yfko/Az+JSNlzWez+B4XguK7p9PTXKCjXJzdNxmFxT/3ztTUin/lj+XsrbJTap2z5ctixllUtD+4agZ6OQH2OawLZTYRfE2rS8vnkqSDwqFgYytN209iZi/l9wH8GT7/0ZQYg177pqSyRGzcEF8Lf3WOPRVU18ZN0ZYZ7BVJSZE+o9pB4HmL7ebG/zptw15V8YNe8w4ZKcH2OJqxjMXx1S7zSin5Si6T7F+DT+JVfaDKJTEO6J0Nn4fJ93iSJ04B50a7xPLfxqo5jgDF/ewWo2NydD0py+VPLqdFJ/Y9p6QWg7m7kKpHvNIXJk2wWgeTZgNw9iJobEbnISmJp3ECyiHgwNwl/JP1NdLC34uxJszF56EB/Hd5GerKJMm/RItPNY3tSGpmETOg0CHCqsZqa+JFg1P4uTGrXFFAGMz3232QaSs7Ck3ttJ8Gve2+vaHyZtW6Gn5wyaBERRLzXLwqWVJTxFd62yR0zDJIlpYgOFp3HvYv5blvXRQ/3AS3xSA97xZ1bmAnp8VJBYRiNPyJUgTLtVmeugRNpxP1igQ1N8l/om3YfrfObx663QzZmoIgM1qjmcDWURPOizWDkOdaN+cRdoEEfK8GqxVNXkg10ESiBSw0nIWOAMxlSGsay8EBnBHjZGEegEAAQA= runner@unknown]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5976800Z INFO         | Userspace boot properties:
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5977169Z INFO         |   androidboot.boot_devices=pci0000:00/0000:00:03.0 pci0000:00/0000:00:06.0
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5977517Z INFO         |   androidboot.dalvik.vm.heapsize=512m
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5977818Z INFO         |   androidboot.debug.hwui.renderer=skiagl
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5978115Z INFO         |   androidboot.debug.sf.nobootanimation=1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5978385Z INFO         |   androidboot.hardware=ranchu
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5978662Z INFO         |   androidboot.hardware.gltransport=pipe
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5979053Z INFO         |   androidboot.logcat=*:V
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5979334Z INFO         |   androidboot.opengles.version=196609
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5979587Z INFO         |   androidboot.qemu=1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5982014Z INFO         |   androidboot.qemu.adb.pubkey=QAAAAMMvvG0VR1ucbHtTZ1YXEElcUahxKMW65bgtU/4A8Yfko/Az+JSNlzWez+B4XguK7p9PTXKCjXJzdNxmFxT/3ztTUin/lj+XsrbJTap2z5ctixllUtD+4agZ6OQH2OawLZTYRfE2rS8vnkqSDwqFgYytN209iZi/l9wH8GT7/0ZQYg177pqSyRGzcEF8Lf3WOPRVU18ZN0ZYZ7BVJSZE+o9pB4HmL7ebG/zptw15V8YNe8w4ZKcH2OJqxjMXx1S7zSin5Si6T7F+DT+JVfaDKJTEO6J0Nn4fJ93iSJ04B50a7xPLfxqo5jgDF/ewWo2NydD0py+VPLqdFJ/Y9p6QWg7m7kKpHvNIXJk2wWgeTZgNw9iJobEbnISmJp3ECyiHgwNwl/JP1NdLC34uxJszF56EB/Hd5GerKJMm/RItPNY3tSGpmETOg0CHCqsZqa+JFg1P4uTGrXFFAGMz3232QaSs7Ck3ttJ8Gve2+vaHyZtW6Gn5wyaBERRLzXLwqWVJTxFd62yR0zDJIlpYgOFp3HvYv5blvXRQ/3AS3xSA97xZ1bmAnp8VJBYRiNPyJUgTLtVmeugRNpxP1igQ1N8l/om3YfrfObx663QzZmoIgM1qjmcDWURPOizWDkOdaN+cRdoEEfK8GqxVNXkg10ESiBSw0nIWOAMxlSGsay8EBnBHjZGEegEAAQA= runner@unknown
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5984080Z INFO         |   androidboot.qemu.avd_name=test
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5984383Z INFO         |   androidboot.qemu.camera_hq_edge_processing=0
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5984685Z INFO         |   androidboot.qemu.camera_protocol_ver=1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5984973Z INFO         |   androidboot.qemu.cpuvulkan.version=4202496
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5985302Z INFO         |   androidboot.qemu.gltransport.drawFlushInterval=800
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5985624Z INFO         |   androidboot.qemu.gltransport.name=pipe
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5985899Z INFO         |   androidboot.qemu.hwcodec.avcdec=2
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5986171Z INFO         |   androidboot.qemu.hwcodec.hevcdec=2
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5986451Z INFO         |   androidboot.qemu.hwcodec.vpxdec=2
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5986883Z INFO         |   androidboot.qemu.settings.system.screen_off_timeout=2147483647
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5987255Z INFO         |   androidboot.qemu.skin=1080x2400
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5987514Z INFO         |   androidboot.qemu.virtiowifi=1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5987768Z INFO         |   androidboot.qemu.vsync=60
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5988031Z INFO         |   androidboot.serialno=EMULATOR36X5X10X0
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5988431Z INFO         |   androidboot.vbmeta.digest=602b0c809848f3be570a96601071931225108ec3b3739d99a1dc41db38efe83c
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5988816Z INFO         |   androidboot.vbmeta.hash_alg=sha256
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5989241Z INFO         |   androidboot.vbmeta.size=6720
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.5989507Z INFO         |   androidboot.veritymode=enforcing
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:00.6850572Z INFO         | Monitoring duration of emulator setup.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:03.6306296Z INFO         | Activated packet streamer for bluetooth emulation
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:03.6323877Z INFO         | Successfully initialized netsim WiFi
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:03.6370307Z INFO         | Setting display: 0 configuration to: 1080x2400, dpi: 420x420 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:03.6370738Z INFO         | setDisplayActiveConfig: id:0, 1080x2400
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:03.6371226Z INFO         | emulatorSetupEnvironment: Setting up screen background view and display layout at env:1080x2400, lcd:1080x2400
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:03.6371776Z INFO         | emulatorSetupEnvironment: Environment scene is not required
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:03.6445954Z USER_INFO    | Emulator is performing a full startup. This may take upto two minutes, or more.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:03.6447250Z WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:03.9518792Z WARNING      | Failed to process .ini file /home/runner/.android/emu-update-last-check.ini for reading.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:10.0940479Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:10.0995024Z * daemon not running; starting now at tcp:5037
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:10.1146008Z * daemon started successfully
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:10.1180445Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:10.1181047Z adb: device offline
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:12.1191602Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:12.1226541Z adb: device offline
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:12.1229857Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:14.1256471Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:14.1294945Z adb: device offline
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:14.1298830Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:16.1366871Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:16.1420166Z The process '/usr/local/lib/android/sdk/platform-tools/adb' failed with exit code 1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:16.1420787Z adb: device offline
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:18.1449916Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:18.1743589Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:20.1807808Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:20.2159853Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:22.2218569Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:22.2523831Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:24.2623630Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:24.3329922Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:26.3390300Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:26.3661260Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:28.3713539Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:28.4455240Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:30.4571225Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:30.5510502Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:31.0992518Z INFO         | Boot completed in 30917 ms
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:31.0994250Z INFO         | Increasing screen off timeout, logcat buffer size to 2M.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:32.5610290Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell getprop sys.boot_completed
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:32.6150511Z 1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:32.6178264Z Emulator booted.
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:32.6209957Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 shell input keyevent 82
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:38.1540545Z ##[endgroup]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:49:38.1610235Z [command]/usr/bin/sh -c bash scripts/test-keyguard-r16-panel.sh
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.2847238Z ##[error]The process '/usr/bin/sh' failed with exit code 1
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.2862762Z ##[group]Terminate Emulator
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.2863466Z [command]/usr/local/lib/android/sdk/platform-tools/adb -s emulator-5554 emu kill
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.2869999Z OK: killing emulator, bye bye
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.2870278Z OK
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.2871022Z INFO         | Wait for emulator (pid 3873) 20 seconds to shutdown gracefully before kill;you can set environment variable ANDROID_EMULATOR_WAIT_TIME_BEFORE_KILL(in seconds) to change the default value (20 seconds)
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.2871563Z 
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.2871809Z ##[endgroup]
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.3014482Z WARNING      | Not saving state: RAM not mapped as shared
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.3021684Z INFO         | Saving snapshot 'default_boot' using 1 ms
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.7434795Z ERROR        | stop: Not implemented
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.7435481Z WARNING      | Emulator client has not yet been configured.. Call configure me first!
+r16-owned-layer-panel	Run stock and owned real-panel controls	2026-11-20T16:50:41.8694106Z WARNING      | Netsim Wifi localhost:38201 is gone due to CANCELLED

@@ -1,0 +1,49 @@
+{
+  "application_sha": "7c49a22386296ed0285552384c519da87d0bd468",
+  "artifact_commit": "4b3f421a871a40cf7c9d7fa972b9057d63179429",
+  "artifact_id": 14648967150,
+  "download": {
+    "abis": [
+      "lib/arm64-v8a/libapp.so",
+      "lib/armeabi-v7a/libapp.so",
+      "lib/x86_64/libapp.so"
+    ],
+    "bytes": 120523203,
+    "package": "com.fluvi.app",
+    "r16_markers": [
+      "R16_LAYER",
+      "KeyguardOrbOwnedOutput",
+      "FluviOrb-"
+    ],
+    "sha256": "5837bcc8a2711396a38a3436d7f45e3b2f96f66302648c994ebe0736235345d9",
+    "signer_sha256": "faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb",
+    "version_code": 1,
+    "version_name": "0.1.0",
+    "zip_check": "No errors detected in compressed data of /proc/self/fd/5."
+  },
+  "downloaded_bytes": 120523203,
+  "local": {
+    "abis": [
+      "lib/arm64-v8a/libapp.so",
+      "lib/armeabi-v7a/libapp.so",
+      "lib/x86_64/libapp.so"
+    ],
+    "bytes": 120523203,
+    "package": "com.fluvi.app",
+    "r16_markers": [
+      "R16_LAYER",
+      "KeyguardOrbOwnedOutput",
+      "FluviOrb-"
+    ],
+    "sha256": "5837bcc8a2711396a38a3436d7f45e3b2f96f66302648c994ebe0736235345d9",
+    "signer_sha256": "faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb",
+    "version_code": 1,
+    "version_name": "0.1.0",
+    "zip_check": "No errors detected in compressed data of /proc/self/fd/3."
+  },
+  "orchestration_sha": "600531c446aec7f3e4d0909961eb9ec89e4f31f6",
+  "physical": "PENDING_USER_ONLY",
+  "qualification": "EXPERIMENTAL_PENDING",
+  "run_id": 44773968315,
+  "url": "https://media.githubusercontent.com/media/elizerpist/exptv2/4b3f421a871a40cf7c9d7fa972b9057d63179429/fluvi_R16_HUMAN_DIAGNOSTIC_7c49a2238629.apk"
+}
