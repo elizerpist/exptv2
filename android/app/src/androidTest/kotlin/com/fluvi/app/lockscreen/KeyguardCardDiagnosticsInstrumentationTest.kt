@@ -57,10 +57,12 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             // observed apply endpoints or synthesize a pixel presentation.
             edge("REVEAL_RECEIPT", base + 12, extra = mapOf("r18Commit" to base + 12))
             edge("REVEAL_RECEIPT", base + 10, extra = mapOf("r18ApplyBegin" to base + 8, "r18ApplyEnd" to base + 10))
-            edge("SEALED:window", base + 20)
             edge("RETIRE_RECEIPT", base + 23, extra = mapOf("r18Commit" to base + 23))
             edge("RETIRE_RECEIPT", base + 22, extra = mapOf("r18ApplyBegin" to base + 21, "r18ApplyEnd" to base + 22,
                 "r18LatchNs" to 234567890123L, "r18PresentState" to "PENDING"))
+            // The original seal occurrence remains earlier even when its
+            // diagnostic event is consumed after both native receipts.
+            edge("SEALED:window", base + 20)
             edge("OUTPUT_DRAINED", base + 24)
             if (wake == 0) {
                 edge("HOST_ADDED", base + 30, host = 99, output = 99)
@@ -76,7 +78,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         for (attempt in 1..4) assertTrue("missing R18 attempt $attempt in $mode", report.contains("R18_PIPELINE attempt=$attempt"))
         assertTrue(report.contains("proof=10077"))
         assertTrue(report.contains("revealApply=10008/10010 revealCommit=10012"))
-        assertTrue(report.contains("retireApply=10021/10022 retireCommit=10023"))
+        assertTrue(report.contains("seal=10020/SEALED:window retireApply=10021/10022 retireCommit=10023"))
         assertTrue(report.contains("physicalFirstPixel=UNOBSERVED physicalLastPixel=UNOBSERVED"))
         assertTrue(report.contains("omittedCriticalRecordIds="))
         KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", "REVEAL_RECEIPT", diagnosticContext = oldOwner,

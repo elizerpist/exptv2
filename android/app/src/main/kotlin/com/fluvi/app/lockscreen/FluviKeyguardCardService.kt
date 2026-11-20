@@ -688,8 +688,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         val identity = owner.identity
         val token = identity.token
         if (r18Coordinator.seal(token, authority, requestId, true) == null) return null
+        // Capture this boundary before the compositor can process its queued
+        // hide. Diagnostic delivery can occur later on a different thread.
+        val sealedAt = SystemClock.uptimeMillis()
         overlay.sealR18FromAnyThread(identity.preparation.attachment, identity.preparation.outputGeneration)
-        recordR18(owner, "SEALED:$reason")
+        recordR18(owner, "SEALED:$reason", observedAt = sealedAt)
         return owner
     }
 
