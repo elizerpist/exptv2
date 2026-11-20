@@ -21,8 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      APP_SHA: 64bf4f7042a77216fb5eddcaeecc85d5bb153aca
-      TOOLING_BASE: ca924d29bd5f0bd0be6d0ae61bae4489f178dca2
+      APP_SHA: bc41ec11b293923f664b50cd79ed36b5f6fad53b
+      TOOLING_BASE: 1fb0a2c5c7d51fc0f1a7b3806d120ea32af7fd47
     steps:
       - uses: actions/checkout@v5
         with:
@@ -86,14 +86,14 @@ jobs:
                   count+=1
           print('verified_shards=',count,'documents=',m['document_count'],'repo_symbols=',m['repository_defined_symbol_count'])
           PY
-          report="$tooling_dir/docs/codegraph-r19-presentation-pipeline-64bf4f70.md"
+          report="$tooling_dir/docs/codegraph-r19-presentation-pipeline-bc41ec11.md"
           printf '# R19 first-authorized ORB source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
           printf 'The Dart SCIP manifest is `docs/codegraph/manifest.json`; Kotlin has no SCIP coverage and the following is source navigation, not a generated call graph. The output/host lifecycle is Main-owned and visual presentation remains an independently measured outcome.\n\n' >> "$report"
           printf '```text\n' >> "$report"
           if command -v rg >/dev/null 2>&1; then search=(rg -n); else search=(grep -nE); fi
-          (cd "$source_dir" && "${search[@]}" 'reserveBeforeMain|startR18|applyInspection|readSystemWindows|R18_PIPELINE|R19_|firstAuthorizedOrb|advanceR19First|invalidateR19Scene|requireRead|sceneSerial|FirstPaintTicket|authorizeDirectFirst|prepareHiddenDirect|beginDirectPresentation|queueReveal|crossSubmitBoundary|sealR18|class KeyguardFirstAuthorizedOrb|class KeyguardOrbPresentationCoordinator|class KeyguardOrbInertHost|class KeyguardOrbDirectOutput|class KeyguardOrbR18Presenter|fun (stage|reveal|retire|seal|dispose|borrow|releaseBorrow)|addTransactionCompletedListener|presentFence|draw|surfaceReady' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardWindow,KeyguardCardSettings,KeyguardSystemState,KeyguardWindowSnapshotReader,KeyguardInspectionFreshness,KeyguardFirstAuthorizedOrb,KeyguardOrbInertHost,KeyguardOrbPresentationCoordinator}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardOrbDirectOutput,KeyguardOrbR18Presenter,KeyguardOrbSurfacePresenter,KeyguardOrbSurfaceWorker,KeyguardOrbSurfaceMetrics}.kt) >> "$report"
+          (cd "$source_dir" && "${search[@]}" 'reserveBeforeMain|startR18|applyInspection|readSystemWindows|R18_PIPELINE|R19_|firstPhysical|allocatedAt|r19AllocatedAt|reservedReq|firstAuthorizedOrb|advanceR19First|invalidateR19Scene|requireRead|sceneSerial|FirstPaintTicket|authorizeDirectFirst|prepareHiddenDirect|beginDirectPresentation|queueReveal|crossSubmitBoundary|sealR18|class KeyguardFirstAuthorizedOrb|class KeyguardOrbPresentationCoordinator|class KeyguardOrbInertHost|class KeyguardOrbDirectOutput|class KeyguardOrbR18Presenter|fun (stage|reveal|retire|seal|dispose|borrow|releaseBorrow)|addTransactionCompletedListener|presentFence|draw|surfaceReady' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardWindow,KeyguardCardSettings,KeyguardSystemState,KeyguardWindowSnapshotReader,KeyguardInspectionFreshness,KeyguardFirstAuthorizedOrb,KeyguardOrbInertHost,KeyguardOrbPresentationCoordinator}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardOrbDirectOutput,KeyguardOrbR18Presenter,KeyguardOrbSurfacePresenter,KeyguardOrbSurfaceWorker,KeyguardOrbSurfaceMetrics}.kt) >> "$report"
           printf '\n```\n' >> "$report"
-          cp "$RUNNER_TEMP/r19-graph-query.txt" "$tooling_dir/docs/codegraph-r19-query-64bf4f70.txt"
+          cp "$RUNNER_TEMP/r19-graph-query.txt" "$tooling_dir/docs/codegraph-r19-query-bc41ec11.txt"
           sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$RUNNER_TEMP/r19-manifest-sha256.txt"
       - name: Publish graph to independent immutable tooling branch
         shell: bash
@@ -102,17 +102,17 @@ jobs:
           cd tooling
           git config user.name 'Fluvi Graph Bot'
           git config user.email 'fluvi-graph@users.noreply.github.com'
-          git add docs/codegraph docs/codegraph-r19-presentation-pipeline-64bf4f70.md docs/codegraph-r19-query-64bf4f70.txt
+          git add docs/codegraph docs/codegraph-r19-presentation-pipeline-bc41ec11.md docs/codegraph-r19-query-bc41ec11.txt
           git diff --cached --check
           git commit -m 'graph: index R19 first-authorized ORB application source [skip ci]'
           git rev-parse HEAD | tee "$RUNNER_TEMP/r19-graph-commit.txt"
-          test -z "$(git ls-remote origin refs/heads/tooling/r19-presentation-pipeline-64bf4f7042a7)"
-          git push origin HEAD:refs/heads/tooling/r19-presentation-pipeline-64bf4f7042a7
+          test -z "$(git ls-remote origin refs/heads/tooling/r19-presentation-pipeline-bc41ec11b293)"
+          git push origin HEAD:refs/heads/tooling/r19-presentation-pipeline-bc41ec11b293
       - name: Preserve graph and receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r19-graph-64bf4f7042a7-run-${{ github.run_id }}
+          name: r19-graph-bc41ec11b293-run-${{ github.run_id }}
           path: |
             tooling/docs/codegraph/**
             tooling/docs/codegraph-r19-*.md
