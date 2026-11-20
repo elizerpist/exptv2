@@ -1,10 +1,22 @@
 {
   "schema_version": 1,
-  "source_head": "8a7186a4144822a25970079f3a2a374bddcfc737",
-  "base_head": "a4b36265ca7f168c964beac67e6ef69db4723a7a",
+  "source_head": "64bf4f7042a77216fb5eddcaeecc85d5bb153aca",
+  "base_head": "8a7186a4144822a25970079f3a2a374bddcfc737",
   "changed_files": [
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt"
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrb.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardInspectionFreshness.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbR18Presenter.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceMetrics.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfacePresenter.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorker.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbTest.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardInspectionFreshnessTest.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceMetricsTest.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
