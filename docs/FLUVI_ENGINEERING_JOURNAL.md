@@ -13177,3 +13177,161 @@ The four archived R15 videos were streamed and timestamp-mapped (181/162/174/178
 The five R14 recovery cases previously lacking typed extraction were independently replayed against their original `536987c2345bf0c0cc2cb297b68c7227a0aed3c8` source, real request/authority records, captures, image controls, process and package receipts. Tooling-only commit `d396604de01b89bceddc104223689d9813065095`, [run 44783960871](https://github.com/elizerpist/exptv2/actions/runs/44783960871), job `136453752682`: exclusion, fresh-main, late-only, real-return and terminal-stale each PASS their individual historical case; aggregate controls 15, prior manifest controls 4, and five archival/adversarial tests passed. Swapped UUID/capture, postdated B, copied green pixels as a supposed prior background, wrong successor and wrong terminal owner were rejected. Real-return ORB pixels remain UNOBSERVED; equal static samples are not treated as new independent variation. The five historical jobs used distinct debug app hashes. Do not combine these with another binary or present them as R16 qualification.
 
 [Independently verified durable replay ZIP](https://media.githubusercontent.com/media/elizerpist/exptv2/79e2b2acb97dd5f6a1b965cf7877b3de99848a96/evidence/run-44783960871-14653326620.zip), artifact `14653326620`, 10,131,099 bytes, SHA-256 `6ffb31ca384f8b8262e4beba8757707fcbfc4cd9e90a610850ae10047435dba5`. The R16 black panel result, missing calibrated route/holder evidence, unrun release gates and pending physical acceptance are unchanged.
+
+## 2026-11-20 — Nothing A142 R16 first appearance remains late; R17 first-window inspection and phone APK
+
+The owner tested the R16 experimental APK and reports severe lag as the lock screen appears. This is a negative physical result for first appearance on that build. The separate R16 held-panel black rectangle remains open. The owner did not report a separate physical verdict on that rectangle or unlock in this message. The following is the reviewer's implementation handoff for one experimental successor. Deliver its phone-test APK early.
+
+FLUVI_R17_FIRST_WINDOW_INSPECTION_BEGIN
+
+1. TITLE / TASK INTENT
+
+Implement a focused refactor of initial window acquisition for the standalone animated lock-screen ORB. For one eligible physical active-window root call at the beginning of a wake, request the root with interruptible hybrid descendant prefetch. Keep accepted child reads batched. Ship that runtime behavior and its bounded verification in the same installable Human profile APK. The question for the handset is whether the first correct ORB arrives sooner. The reviewer owns the choice and interpretation. The agent implements, measures and delivers.
+
+2. AUTHORITATIVE APPLICATION STATE
+
+Repository elizerpist/exptv2. Coordinate through fix/orb-v4-latency-lockscreen. The reviewed coordination head 67e6a5767220645132fae8f4118918cea64c8c3c contains the qualification report. Start the application experiment from 7c49a22386296ed0285552384c519da87d0bd468 on fluvi-r16-layer-retirement-7c49a2238629, parent 25a987bf03cafc536135d5797993145b649eee2b. Preserve the actual R16 renderer and original comparison build. R16 phone artifact 4b3f421a871a40cf7c9d7fa972b9057d63179429, 120523203 bytes, SHA-256 5837bcc8a2711396a38a3436d7f45e3b2f96f66302648c994ebe0736235345d9, profile/HUMAN_DIAGNOSTIC. Create an isolated candidate from the application SHA. Read current documentation independently of the candidate worktree.
+
+3. HARD PREFLIGHT
+
+Read the entire current docs/FLUVI_ENGINEERING_JOURNAL.md, MILESTONE_COMMITS.md, the keyguard/widget milestone entries in the journal, both R15 acquisition/visual reports and docs/R16_PHONE_APK_QUALIFICATION_2026-11-20.md at the coordination ref. Read the three complete original project assets. At the review workstation these are project_sources/02-FLUVI_PROMPT_WRITER_RULES-1-.md, project_sources/01-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md and project_sources/03-DEBUGGING_LOOP_VERY_IMPORTANT.txt. Portable copies are in the named FLUVI_RULE_ASSET_BEGIN/END blocks of the journal at 161f63675121302432be2026898bed07b23d7ded under FLUVI_PROMPT_WRITER_RULES.md, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md and DEBUGGING_LOOP_VERY_IMPORTANT.txt. Uploaded originals' SHA-256 in this order: ebf3629b7f723113ea9f13a89fc37c52ec2f9a4db2fc4e64b901dc1a622b61f2, c777abadfdfd6c778a37b7448cc8b7943a1ca3a086676e7b47360be008f62f4b, 5d85bad2c00e4a6ab680b843fe68cb9265dccb7d2af3e6acbe5d9e9528d4c674. Read source and current tests for every row in §12, including debug/profile/release source sets. Record branch, worktree, source and tooling.
+
+    git status --short --branch
+    git fetch origin fix/orb-v4-latency-lockscreen fluvi-r16-layer-retirement-7c49a2238629
+    git show -s --format='%H %P %s' 7c49a22386296ed0285552384c519da87d0bd468
+    git log -10 --format='%H %P %s' origin/fix/orb-v4-latency-lockscreen
+    git log -10 --format='%H %P %s' 7c49a22386296ed0285552384c519da87d0bd468
+    rg -n 'firstAcquisition|preparedInitialLiveOrb|batchedPrefetchFlags|initialRootOnly|KeyguardWindowAcquisitionCalls|physicalOverlayPresentation' android
+
+4. PHYSICAL USER EVIDENCE
+
+Nothing A142 API 35, profile, FULL *capture*, UUID 9a34ce08-2bd5-4810-8056-f98c86341ed2, process 20955-61a3f279, 2026-11-20 18:40:56.081 +0100. The capture-start snapshot says disconnected/full. The service subsequently connected inside this capture. All four exported showing inspections actually granted SHOW_DISCREET with MAIN_CONFIRMED, live Surface route and a poster cache hit. Financial preference at capture start does not identify the visual reference at admission.
+
+| Attempt / showing request | Wake callback to decision | Total showing inspection / active root | Decision to first cadence post | SCREEN_ON to first post / first distinct phase | Callback to first distinct phase |
+|---|---:|---:|---:|---:|---:|
+| 1 / 1 | 183 ms | 172 / 150 ms | 99 ms | 254 / 318 ms | 346 ms |
+| 3 / 70 | 173 ms | 65 / 29 ms | 77 ms | 250 / 263 ms | 263 ms |
+| 4 / 105 | 140 ms | 132 / 122 ms | 84 ms | 224 / 234 ms | 234 ms |
+| 5 / 139 | 194 ms | 189 / 174 ms | 123 ms | UNOBSERVED / UNOBSERVED | 326 ms |
+
+On 5 the callback-to-first-post interval was 317 ms. Its summary was omitted. On 3 the wake callback preceded enqueue by 84 ms; the wake system sample itself read for 1 ms and waited 56 ms from read end to Main. Across these episodes addView took 19/37/24/18 ms; add return to first root draw took 63/33/38/92 ms. Neither root draw nor a distinct submitted phase establishes visible output. Producer records cover 763 submissions, 759 intervals, one interval above 50 ms (64.092 ms in attempt 1). Actual callback-to-local-hide was 44/24/67/20 ms. All four measured holder posts ended before their corresponding revocation. No physical removal endpoint. Keep attempt 2 and all unavailable data outside the retained-sample claim.
+
+5. DRIVE LOG AUDIT
+
+The owner pasted the capture. Searches for the exact UUID and build in Drive returned no separate matching capture. Source file bytes/hash are unavailable for this paste. The device reports a 31447-byte truncated export, 1568 events, 248 retained, 1251 evicted, 69 coalesced and zero diagnostic producer drops. Raw omissions include all 248 event lines and seven critical records including a5:summary. Available EPISODE, SHOWING_INSPECTION, WITHDRAWAL, surface/cadence and layer rows retain the endpoints above. Four R13 summaries cover 47 scopes, 43 no-ops and zero fallback paints/binds. R14 phone data b6c71cfc used LIGHT capture and actual FULL. R16 FULL capture with actual discreet output cannot serve as its controlled pair. Archive new raw bytes before reduction.
+
+6. COMMIT / AGENT-EVIDENCE AUDIT
+
+Latest ten on the reviewed coordination branch, newest first: 67e6a576 historical R14 replay, a2f69ad0 R16 visual report, 24c35036 R16 APK receipt, b53df580 early delivery order, fe3da0f6 R16 plan, 8f9effaa R15 report, d2489877 R15 continuation, 5489dbcd R15 plan, 0a278ac1 R14 report, 0a9bed2f R14 test occluder/AndroidTest manifest/runner/workflow. Nine documentation-only, one test/CI, zero application runtime changes on that list. The ten commits reachable in the separately tested phone history are 7c49a223 (R16 LIVE retirement and stock profile reader), 25a987bf (merge of documentation into candidate), b53df580, fe3da0f6, 8f9effaa, 536987c2 (source-bound evidence), be3bdbac (service fixtures/test hooks), da1ff228 (comparison collection), 36c94f90 (debug/AndroidTest controls), 9a5a9be5 (motion eligibility invalidation). Review the exact diffs via the pinned tips in §2.
+
+R16 Human builder 44773968315 succeeded. Panel 44776020067 had an invalid white reference. Revised 44779828038 observed a complete black 168×168 region over a verified (8,18,32) background after child retirement under an intentional hold. Its exact layer cause, impact on the phone and post-release/G2 pixels are open. Revised JVM passed 195 app / 150 core tests; first revised Flutter harness changed its workflow fixture and failed, corrected Flutter 44780880035 passed. The R16 28-row, full native and ordinary release/dashboard gates were not run. Historical R14 replay 44783960871 succeeded on its own sources. R15 had 16 captured A/B slots and no qualifying warm paired speedup/first-correct-image verdict. Preserve these results and their identities.
+
+7. GRAPH PROVENANCE AND IMPACT
+
+Read tooling 534d1e7c1dbce1e7b0c23abdf6c06cba89b1069c at docs/codegraph/manifest.json and docs/codegraph-r16-owned-layer-7c49a223.md. It identifies app 7c49a223, Dart index SHA-256 c3d088574297a0384c80496dd583fde3d34788c36df84c58d98fc09b0d26757e. Kotlin uses source-verified inventory. Complete the targeted lookup against actual Kotlin for wake owner → request/freshness → reader/call → scan → classification → Main apply → window/presenter. The graph alone does not establish runtime timing. Below, K/J/I abbreviate android/app/src/{main,test,androidTest}/kotlin/com/fluvi/app/lockscreen respectively.
+
+8. CURRENT SOURCE FACTS
+
+FluviKeyguardCardService.beginOrJoinWakeCycle evaluates KeyguardCardWindow.preparedInitialLiveOrb on Main; it already considers detached state, effective route, animation and matching settings/profile. Queue ownership is serial, including R12 reserved reads. readSystemWindows currently calls firstAcquisition.take under queueLock before KeyguardWindowSnapshotReader.read obtains windows. The historical debug-only R15 control can select 0. In a normal R16 handset build the active-root argument is 36. Reader policy canUseBatchedActiveRoot requires API support, enabled cache, one qualified active primary window and established applicable freshness. It validates the returned identity, traverses all relevant windows and uses argument 36 for eligible child reads after acceptance. Per-window fallback uses window.root. KeyguardSurfaceClassifier.classifyDetailed and KeyguardCardVisibilityPolicy require a complete safe observation for either SHOW. Main applies current authority and requires a fresh system sample on new admission or a disclosure increase.
+
+9. PROVEN / UNPROVEN / MISSING
+
+PROVEN. On this phone the selected showing root calls used 36, consumed 122–174 ms on three of four, and were followed by 0 ms of measured child calls in those three samples (uptime-ms resolution). Admission itself was followed by a further 77–123 ms to first producer post. UNPROVEN. The uninterruptible root batch is the portion of the long call that can be recovered, or changing its delivery order improves the full inspection and first correct pixels. A short root with expensive children can make things worse. SystemUI scheduling/IPC, cache state, Main delivery, initial WindowManager traversal, first buffer and presentation are alternative contributors. MISSING. First independently seen correct ORB and first SystemUI lock-screen pixels on the handset, foreground workload during the call, actual cache hits within Android and a matched candidate comparison. A normal posted animation with one long interval cannot certify displayed animation smoothness.
+
+10. ROOT-CAUSE OR FORENSIC GATE
+
+Implement one bounded hypothesis. Android 15 AOSP AccessibilityInteractionController.findAccessibilityNodeInfoByAccessibilityIdUiThread and AccessibilityInteractionClient.findAccessibilityNodeInfoByAccessibilityId distinguish a result that waits for a prefetched list from an interruptible request that can deliver the requested root before the rest. For one eligible initial active-root call select FLAG_PREFETCH_DESCENDANTS_HYBRID (4); the existing call path for children retains HYBRID | UNINTERRUPTIBLE (36). AOSP android-15.0.0_r1 does not promise behavior or saved time on this OEM. See core/java/android/view/AccessibilityInteractionController.java and core/java/android/view/accessibility/AccessibilityInteractionClient.java in that tag. A named window.getRoot(36) follows a different bypass-cache path and is not a substitute.
+
+6750d2ba530c6b2e955852f9caaca4d125d7e4e0 applied interruptible prefetch across root, children and fallback together with other changes. A subsequent phone regression led to restoration at 92afad1cdea7d6b48d229585819c29b2d97dac91. R15 used 0/36, with an eligibility opportunity consumed even if no root was called. Neither is the 4/36 experiment below. Publish the actual argument and charge all shifted cost, zero-opportunity wakes and missing output to the experiment. A transfer of delay or absent physical benefit ends this candidate as a performance recommendation. No additional flag sweep is authorized.
+
+11. SCOPE LOCK / NO-TOUCH
+
+First actual root acquisition in a genuinely new wake with the already prepared, eligible standalone animated SURFACE_LIVE ORB on API 35. Use the stock policy on other API levels, routes, CARD, motion-off, configurations which could not arm, ordinary visible updates and post-withdrawal readmission. FULL and discreet retain their existing authorization. R16 renderer, window creation, R14 recovery, R13 financial laziness and first/last-pixel qualification are controls. Do not pre-attach any window or use a prior decision, partial tree, window-event type, timeout, new poll or reduced privacy to authorize output.
+
+12. LAYERS / BOUNDS / OWNERSHIP
+
+| File / symbol | Caller and consumer | Transition and guard | Specific regression and check |
+|---|---|---|---|
+| K/KeyguardFirstAcquisition.kt; service.beginOrJoinWakeCycle, publishInspectionAuthority, publishReadAheadState, settings/profile/motion and end-wake paths | Main publishes configuration and the complete inspection authority; single physical reader selects acquisition | Arm once on the existing qualified new-wake edge; reserve the strategy for the first actual eligible root. Only scalar state under queueLock. No late work may consume another owner's opportunity | Empty inventory, join, disabled route, failed clear, actual fallback, stale worker, wake replacement, no show and readmission. T1/T2 |
+| K/FluviKeyguardCardService.kt readSystemWindows; K/KeyguardWindowSnapshotReader.kt Request, read, KeyguardWindowAcquisitionCalls, activeRootPrefetchFlags | Ordinary and R12 reserved inspection; classifier and Main admission | Select strategy immediately before the platform root call after current cache/window gates. Accepted children keep 36, fallback and recycling follow current paths | Wrong window, null/foreign/missing root package, duplicate active candidate, other display, truncated tree, unsafe late result. T1/T2 |
+| K/KeyguardCardInspectionQueue.kt and K/KeyguardInspectionFreshness.kt | Worker, Main reconciliation and final gates | Existing request/authority and one physical reader, freshness acknowledgement only on actual establishment | No extra scan, new retry, double clear, lock over framework IPC or authority resurrection. T2 |
+| K/KeyguardCardSettings.kt diagnostic reduction/export, existing inspection timings and R12/R16 evidence | Worker reduction → frozen FULL/LIGHT report | Retain compact operation-linked rows before optional duplicate verbose blocks; preserve OFF and existing omission ledger | A missing summary cannot replace SCREEN_ON with a callback; two generations cannot exchange pixels/times. T3 |
+| K/KeyguardCardWindow.kt, material/KeyguardOrbSurfacePresenter/Worker, owned output, visibility policy and real service instrumentation | Existing overlay root with tap/drag and compositor output | Same geometry/semantics, one render worker, one window and existing safe add/remove sequence | Credential, shade, foreign-above, downgrade, screen off/unlock, moving discreet/FULL, known black shell. T4 |
+
+13. REQUIRED RED TESTS
+
+T1. Drive the actual policy-to-framework-call adapter with recorded arguments. The R16 counterpart calls (36,36) on the chosen eligible path. New first root (4) and accepted children (36) are observable; subsequent roots take 36. Exercise a first empty inventory followed by a genuine eligible root in the same still-valid wake, an eligible null/mismatched result with the ordinary fallback, and a fallback root before any candidate. A null active-root result consumes the opportunity. Assert child order, call counts, actual snapshot and classification. An all-green fake timing trace is insufficient.
+
+T2. Exercise ordinary and reserved-read paths, including initial stale work from another wake next to the real request, motion/settings change after arm, cache disabled/failed clear, already-attached/withdrawn state, unlock during the Binder call and natural new-wake rearm. Assert unchanged final safe admission, zero additional framework calls and correct termination. Keep R15's explicit historical debug 0/36 and its original control contract reproducible. When using its historical fixture, port the explicit opt-in fixture correction from 9c88147bc6cb737b9369775a291f921478e3d9ab and restore flags in finally. Keep all original failed specimens.
+
+T3. FULL and LIGHT under the existing 32 KiB pressure with four selected wakes, no SCREEN_ON on one, eligible root, fallback, no actual root, and suppressed stale work. Prove exact owner identity, actual arguments, first decision, cadence and visual availability plus honest omissions. Measured bytes must include header and footer. Zero new diagnostic scheduling in OFF, no per-frame Main logging.
+
+T4. The real running API 35 service must demonstrate a genuinely reached candidate argument, and the independent ROI/underlay must show the correct privacy-specific first image where sampling permits. Include a real non-main exclusion and a normal lock return, preserve screen interaction and terminal hide. Reuse R16's black-panel specimen as a separate open control. A missing/failing independent pixel control remains in the report and is not an obstacle to building the experimental phone APK.
+
+14. IMPLEMENTATION CONTRACT
+
+Separate acquisition strategy from the decision whether to show. Replace the ambiguous production boolean at the call boundary with explicit stock batched, initial interruptible hybrid, and historical debug root-only modes. Map these to platform constants in one place. Keep the historical debug arm explicit and impossible to enable through the profile/release app. A normal eligible profile must actually run R17. A comparison arm may select stock only from AndroidTest/debug setup. Neither arm may affect the authority or data returned by tests of actual system transitions.
+
+Use the existing main-owned eligibility and queueLock discipline. Give the R17 opportunity one owner, one use and normal invalidation. Do not clear a freshness obligation merely by arming, taking or expiring the strategy. Mark the initial lifecycle cache boundary as established from its existing successful acknowledgement for this exact owner. A later request may use the remaining opportunity only after an empty/no-physical-root pass, under the identical authority, matching configuration, a current ticket and the reader's current canBatch/freshness checks. The original lifecycle clear need not be repeated on a normal framework-managed event. A fresh missing/contradictory obligation or failed initial clear invalidates this optimization; continue ordinary reconciliation. A stale owner cannot mutate the new owner's state. Close on first fallback per-window platform root call under this owner, even when no root is returned. Do not scan a later subtree looking for the first successful result. Preserve previous R15 debug accounting separately when its historical fixture explicitly requests it.
+
+The physical reader invokes a small scalar selection operation under queueLock only at the first actual candidate/fallback boundary. Compare the current published full authority, ticket/revision and eligible state, including Main invalidation for motion/config changes. Release the lock before calling any platform API. Maintain all existing authority checks after IPC, fallback, node recycling, traversal bounds, all-window exclusion and final Main/system snapshot checks. Ordinary stock form remains the default for source/test callers outside the selected path. A second consumer/reader, second visibility authority or new timer has no role.
+
+Reuse existing root/child timings and classification evidence. Add only the data needed to correlate a zero-call pass, actual first root path/argument, cause of bypass and owner with the showing or negative inspection. Retain a compact first-appearance record per selected attempt with real SCREEN_ON, wake callback, decision and first post/distinct endpoints where observed, plus request/show/attach identity, classification and applicable clocks. Prefer extending existing bounded summaries to duplicating long inspection blocks. Emit unavailable evidence explicitly. No accessibility text, financial content or new serial work on the draw path.
+
+15. PERFORMANCE GATE
+
+Predeclare one paired comparison block on the existing hosted API 35 lane. Use four fresh service processes in stock / candidate / candidate / stock order, one initial then three warm lock-wake-unlock slots per process (16 slots). Use identical fixture binaries with a debug-only selector and separate verified install/process/arm receipts. Keep natural slots even if a root is absent, returns null or does not authorize the first show. A deterministic reachability test is separate from this comparison. Match by preassigned cold/warm ordinal and configuration, actual privacy/route and compatible window/marker class. Publish all slot outcomes, eligible and bypassed counts, matched and unmatched reasons, including candidate-only negatives. Do not choose favorable pairs retrospectively. Timing resolution and independent visual brackets bound the claim.
+
+Report callback/SCREEN_ON → queue → inspection start → end → Main → decision → add → first root → producer first/distinct → first correct composite. Report active root, per-window root, children and first child, complete scan, number of checks through first correct output, steady p95/worst producer intervals and callback-to-local-hide. Do not add nested clocks. If root improves but total scan, time through a later positive, correct-pixel bracket or visible experience does not, report precisely which endpoint improved. Missing comparable pairs, overlapping visual uncertainty or a safety regression do not establish a fix. If time is mostly after admission, return those measured intervals to the reviewer; do not add a second fix to this candidate.
+
+16. IMPLEMENTATION ORDER
+
+Pin source and fixtures; retain the baseline behavior/RED; implement the acquisition boundary, diagnostics and regression tests together. On the first coherent candidate, build, sign, verify, publish and send the phone APK link. Run applicable cheap checks and independent qualification alongside packaging. The owner explicitly requests the APK to perform the physical test. Open visual/performance/fixture gates do not withhold this experimental artifact. Keep promotion pending when qualification fails. Preserve failures together and correct mechanical build/fixture problems on their responsible source. No unchanged full-CI repetitions.
+
+17. VALIDATION
+
+Use JDK 17, the project Flutter 3.41.4 setup and installed Android SDK/API 35; use the previously proven hosted route if local disk/SDK/KVM is insufficient. From candidate checkout run:
+
+    git diff --check
+    bash scripts/verify-fluvi-boundaries.sh
+    bash scripts/test-keyguard-lower-environment.sh
+    python3 scripts/test-keyguard-r12-harness.py
+    python3 scripts/test-keyguard-r12-candidate-oracle.py
+    (cd android && ./gradlew :app:testDebugUnitTest --tests '*KeyguardFirstAcquisitionTest' --tests '*KeyguardWindowSnapshotReaderPolicyTest' --tests '*KeyguardInspectionFreshnessTest' --tests '*KeyguardR17FirstWindowInspectionTest' --no-daemon --max-workers=3 --console=plain)
+    (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
+    flutter test test/core/diagnostics/keyguard_timing_capture_bridge_test.dart test/core/debug/keyguard_timing_capture_console_test.dart test/boundary/keyguard_first_render_architecture_boundary_test.dart --reporter expanded
+    flutter analyze --no-fatal-infos
+    bash scripts/test-fluvi-fast.sh --reporter expanded
+
+Add the named JVM class for the new normal-build contract; put the real-service T2/T4 and bounded export T3 cases in I/KeyguardR17FirstWindowInspectionInstrumentationTest.kt, calling existing real service, collector and pressure fixtures. Run on the provisioned API 35 runner (R16 sample harness 9c88147b, final Flutter fixture edb30503). Keep default registered workflow and source-under-test distinct from orchestration. After installing exact debug app + androidTest packages:
+
+    adb shell pm list instrumentation
+    adb shell am instrument -w -r -e class com.fluvi.app.lockscreen.KeyguardR17FirstWindowInspectionInstrumentationTest com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner
+
+Require named executed methods, counts and exported evidence. Reuse the existing R15 sampled recording collectors and R16 calibrated background control. Archive timing origin, visible SystemUI transition, display/window/ROI and earliest/latest possible correct pixels using the independently measured frame timestamps. If sampling misses onset, leave the interval open or bracketed. Fix known fixture-only opt-in/workflow errors in the harness before dispatch. Use a single comparison block. Keep cold/warm states, immediate/delayed outcomes, cancellation, cache and stale callbacks in the specified controls.
+
+18. COMMIT DISCIPLINE
+
+Use one coherent candidate runtime change with corresponding tests and diagnostics. Name every application SHA, parent, exact diff, behavioral contract, risks, tests and known gaps in its body and journal. Keep orchestration, artifact, tooling and publication commits separately attributable. Preserve parallel work and newer journal appends. No release merge based on a successful package build.
+
+19. PUSH / BUILD / GRAPH REGENERATION
+
+Push a candidate ref and match its remote SHA to the clean checkout. Build with the existing scripts/build-human-diagnostic-apk.sh. If using the separate hosted Human builder, adapt orchestration 600531c446aec7f3e4d0909961eb9ec89e4f31f6 to check out the new full R17 application SHA, verify HEAD, build, and preserve the update signer. Its existing hardcoded R16 ref would build the wrong APK.
+
+    app_sha=$(git rev-parse HEAD)
+    FLUVI_BUILD_COMMIT="$app_sha" bash scripts/build-human-diagnostic-apk.sh
+    test -s build/app/outputs/flutter-apk/app-profile.apk
+
+Publish signed installable com.fluvi.app, arm64-v8a compatible, on an immutable direct HTTPS .apk link via the proven Git LFS media route or a pinned prerelease asset. Independently download the link, verify full bytes/ZIP, size, SHA-256, package/version/ABI, embedded full source/purpose and apksigner verify --verbose --print-certs. The handset update signer SHA-256 is faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. A runner-signed intermediate, an LFS pointer, a CI link, the old R16 APK or a report alone does not satisfy this deliverable. Send the user the verified download immediately, with known visual issues and demo-data testing. Recover packaging failures on the known signing-capable route; preserve the prior APK and evidence. Do not require uninstall/data loss.
+
+Regenerate exact-source Dart graph and Kotlin inventory using the successful graph orchestration 44777039951; verify manifest and byte hashes. For release qualification reuse normal-ref scopes r12_contract, r12_live, r12_static, r12_legacy; dispatch once per justified exact-source scope with gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$candidate_ref" -f native_diagnostic=true -f native_scope=<scope>, replacing the placeholder with the scope name. Full native 2×30 and ordinary Human/dashboard gates follow their proven entry conditions; label any unrun gate. The early signed handset package is independent of those jobs.
+
+20. COMPLETION REPORT
+
+Lead with the direct experimental R17 phone APK, full source, purpose, bytes, digest, signer and known issues. Return baseline/candidate/graph/artifact/harness SHAs and actual job IDs, all 16 rows and reachability/negative controls, warm/cold pair coverage, visual brackets, all failed/incomplete/not-run gates and a single reviewer decision ledger. Do not substitute debug-profile results or differently authorized first images for physical comparison. Send the user this short check: update the existing app on the Nothing A142; keep the same ORB/animation/route, demo data, effective privacy and FULL capture as this R16 sample; do one initial plus three warm lock/wake/unlock cycles; note by cycle late appearance, late motion, flicker or black square and late disappearance. Freeze and export the UUID/build. A short screen video is optional. An actual SHA-specific capture showing the candidate branch decides whether the reader change was exercised on the phone. The owner's observation decides whether the experience improved.
+
+21. DEFINITION OF DONE
+
+Phone delivery is complete when the owner receives the directly downloadable, verified signed candidate containing this change and its diagnostics. Report separately: implementation, automated validation, phone-test APK delivery, physical acceptance. The prior R16 update was tested and first appearance was rejected. R17 implementation, automated tests and APK are pending at this reviewer handoff. Release promotion requires the independent visual/privacy/performance evidence, including the still-open R16 black-background gate. An unsuccessful experiment with a delivered test APK remains a negative experiment. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+FLUVI_R17_FIRST_WINDOW_INSPECTION_END
