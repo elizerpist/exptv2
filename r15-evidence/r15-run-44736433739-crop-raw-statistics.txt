@@ -1,0 +1,7 @@
+background-before-service-crop sha256=4ecbeb2187d8d0af46323857bc8501b5fbee0774005ba1275c35314ed20ced3b size=(168, 168) distinct_rgb=1
+visible-before-hold-crop sha256=e836556f3a1bafe2559321ceb82896841c62635e87eb62411bdc74238a937d81 size=(168, 168) distinct_rgb=117
+screen-after-local-hide-worker-held-crop sha256=d7406efb112192fbe3d006c04ebb84cf6a1c193ffebb24fc581fac290cec40f4 size=(168, 168) distinct_rgb=930
+screen-after-remove-crop sha256=1d8ddaefed7f55b214fc789e02d426d2c798744324af35dd57e80d538b96a289 size=(168, 168) distinct_rgb=158
+raw_vs_visible screen-after-local-hide-worker-held-crop changed_gt6=22413 total_max_channel_delta=4219748 max=202
+raw_vs_visible screen-after-remove-crop changed_gt6=0 total_max_channel_delta=113951 max=6
+classification=UNCLASSIFIED independent_calibration=UNAVAILABLE physical_presentation=UNOBSERVED
