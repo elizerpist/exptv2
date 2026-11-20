@@ -430,6 +430,9 @@ internal class KeyguardOrbSurfaceWorker(
         try {
             canvas = target.holder.lockHardwareCanvas()
             if (measure) { lockEnd = System.nanoTime(); cpuLockEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderLockReturned(SystemClock.uptimeMillis()) }
+            if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+                KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock?.invoke(target)
+            }
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
             if (!firstPosted || !target.live) {
                 canvas.drawBitmap(checkNotNull(currentPoster).bitmap, 0f, 0f, bitmapPaint)
