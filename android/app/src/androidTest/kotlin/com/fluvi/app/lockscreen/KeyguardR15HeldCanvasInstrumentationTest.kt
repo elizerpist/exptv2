@@ -52,7 +52,14 @@ class KeyguardR15HeldCanvasInstrumentationTest {
     private lateinit var automation: UiAutomation
     private val evidence = StringBuilder()
 
-    @Test fun r15EnteredCanvasSurvivesActualServiceWithdrawal() {
+    @Test fun r15EnteredCanvasSurvivesActualServiceWithdrawal() = runHeldCanvasScenario(false)
+
+    /** A forced observer timeout exercises a real already-locked holder. The
+     * independent release owner prevents the negative control from deadlocking
+     * Main and its output is deliberately incomplete, never a privacy pass. */
+    @Test fun r15HeldCanvasTimeoutIsIncompleteAndReleasesIndependently() = runHeldCanvasScenario(true)
+
+    private fun runHeldCanvasScenario(timeoutControl: Boolean) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val arguments = InstrumentationRegistry.getArguments()
         val source = requireNotNull(arguments.getString("sourceSha"))
@@ -174,6 +181,28 @@ class KeyguardR15HeldCanvasInstrumentationTest {
             check(held.coherent && held.lockReturn != null && held.postEnter == null)
             record("HELD", "attachment=${target.attachment} generation=${target.generation} " +
                 "holder=${System.identityHashCode(target.holder)} op=${held.id} lock=${held.lockEnter}/${held.lockReturn}")
+            if (timeoutControl) {
+                // The missing observer is intentional: it is not a claim that
+                // an Android visibility transition did or did not happen.
+                val missingSample = CountDownLatch(1)
+                var timedOut = false
+                val independent = Thread({
+                    try {
+                        timedOut = !missingSample.await(100, TimeUnit.MILLISECONDS)
+                    } finally {
+                        release.countDown()
+                    }
+                }, "r15-timeout-release-owner")
+                independent.start()
+                independent.join(5_000)
+                check(!independent.isAlive && timedOut && release.count == 0L)
+                await("worker resumed after independent release", 10_000) {
+                    target.metrics?.holderSnapshot()?.let { it.id >= held.id && it.postReturn != null } == true
+                }
+                record("RESULT", "INCOMPLETE forcedObserverTimeout=true independentRelease=true " +
+                    "pixelClassification=UNCLASSIFIED privacy=NOT_ESTABLISHED physicalPresentation=UNOBSERVED")
+                return
+            }
             val unlockFailure = AtomicReference<Throwable?>()
             val unlock = Thread({ runCatching { shell("wm dismiss-keyguard") }.onFailure(unlockFailure::set) }, "r15-unlock")
             unlockThread = unlock
