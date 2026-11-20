@@ -36,15 +36,21 @@ void main() {
         reason: 'the R11 legacy comparison remains available');
   });
 
-  test('the keyguard keeps one owner for child surfaces and window admission', () {
+  test('the keyguard bounds child surface owners and keeps one window admission', () {
     final root = Directory('android/app/src/main/kotlin/com/fluvi/app/lockscreen');
     expect(root.existsSync(), isTrue);
     final kotlin = root.listSync(recursive: true).whereType<File>()
         .where((file) => file.path.endsWith('.kt')).toList();
     final builders = kotlin.where((file) => file.readAsStringSync()
         .contains('SurfaceControl.Builder()')).map((file) => file.path).toList();
-    expect(builders, hasLength(1));
-    expect(builders.single, endsWith('/material/KeyguardOrbBufferRenderer.kt'));
+    expect(builders, hasLength(2));
+    expect(builders.where((path) => path.endsWith('/material/KeyguardOrbBufferRenderer.kt')), hasLength(1));
+    expect(builders.where((path) => path.endsWith('/material/KeyguardOrbOwnedOutput.kt')), hasLength(1));
+    final owned = File('${root.path}/material/KeyguardOrbOwnedOutput.kt').readAsStringSync();
+    expect(owned, contains('.setParent(parent)'));
+    expect(owned, contains('.setVisibility(child, false)'));
+    expect(owned, isNot(contains('.setVisibility(parent')));
+    expect(owned, isNot(contains('TYPE_ACCESSIBILITY_OVERLAY')));
     for (final file in kotlin) {
       final source = file.readAsStringSync();
       expect(source, isNot(contains('import com.fluvi.app.features.dashboard')),

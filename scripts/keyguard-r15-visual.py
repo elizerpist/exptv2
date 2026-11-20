@@ -167,7 +167,8 @@ def _load(path: Path, roi: tuple[int, int, int, int]) -> Image.Image:
 
 def calibrate(training: dict[str, list[Path]], heldout: dict[str, list[Path]],
               roi: tuple[int, int, int, int], canonical_full: Path,
-              observed_bounds: tuple[int, int, int, int], codec_tolerance: float = 8.0) -> dict:
+              observed_bounds: tuple[int, int, int, int], codec_tolerance: float = 8.0,
+              reference_provenance: dict[Path, dict] | None = None) -> dict:
     """Train on independent frames and reject overlapping or blank references.
 
     The caller must independently establish each reference's scene and owner;
@@ -182,9 +183,45 @@ def calibrate(training: dict[str, list[Path]], heldout: dict[str, list[Path]],
     if len(set(all_paths)) != len(all_paths) or any(len(training[c]) < 2 or len(heldout[c]) < 1 for c in classes):
         raise ValueError("reference_samples_not_disjoint")
     reference_paths = all_paths + [canonical_full.resolve()]
-    reference_hashes = [hashlib.sha256(path.read_bytes()).digest() for path in reference_paths]
-    if len(set(reference_paths)) != len(reference_paths) or len(set(reference_hashes)) != len(reference_hashes):
+    if len(set(reference_paths)) != len(reference_paths):
         raise ValueError("copied_reference_frame")
+    if reference_provenance is None:
+        # Historic callers lack native frame identities, so identical bytes
+        # remain ambiguous and cannot establish independent observations.
+        reference_hashes = [hashlib.sha256(path.read_bytes()).digest() for path in reference_paths]
+        if len(set(reference_hashes)) != len(reference_hashes):
+            raise ValueError("copied_reference_frame")
+    else:
+        # The caller must first validate these records against its actual
+        # decoded media, owner and clock evidence. Equal pixels from two
+        # genuinely distinct static native frames are legitimate; two PNG
+        # encodings of the same native frame are not two observations.
+        if set(reference_provenance) != set(reference_paths):
+            raise ValueError("reference_provenance_missing")
+        identities = set(); timestamps = set(); sources = set()
+        for path in reference_paths:
+            record = reference_provenance[path]
+            try:
+                source = record["source"]; media = record["video_sha256"]
+                index = record["index"]; timestamp = record["presentation_ns"]
+                if (not re.fullmatch(r"[0-9a-f]{40}", source) or
+                        not re.fullmatch(r"[0-9a-f]{64}", media) or
+                        str(uuid.UUID(record["capture"])) != record["capture"] or
+                        record["display"] != 0 or record["roi"] != list(roi) or
+                        not all(isinstance(record[k], int) and record[k] > 0 for k in ("window_id", "attachment", "generation")) or
+                        not isinstance(index, int) or index < 0 or not isinstance(timestamp, int) or timestamp < 0 or
+                        hashlib.sha256(path.read_bytes()).hexdigest() != record["sha256"]):
+                    raise ValueError("reference_provenance_invalid")
+                with Image.open(path) as image:
+                    if list(image.size) != record["size"]: raise ValueError("reference_provenance_invalid")
+                identity = (media, index); time_key = (media, timestamp)
+                if identity in identities or time_key in timestamps:
+                    raise ValueError("copied_reference_frame")
+                identities.add(identity); timestamps.add(time_key); sources.add(source)
+            except (KeyError, TypeError, AttributeError) as exc:
+                raise ValueError("reference_provenance_invalid") from exc
+        if len(sources) != 1:
+            raise ValueError("reference_sources_mismatch")
     samples = {c: [_load(p, roi) for p in training[c]] for c in classes}
     checks = {c: [_load(p, roi) for p in heldout[c]] for c in classes}
     canonical = _load(canonical_full, roi)

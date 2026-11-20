@@ -24,8 +24,8 @@ if ! bash "$root/scripts/prepare-keyguard-lower-environment.sh" "$evidence/prefl
  printf 'PANEL_PREFLIGHT=FAIL\n' > "$evidence/status.txt"; exit 1
 fi
 result=0
-for spec in 'stock:stockHolderRetainsItsOldFrameWhileWorkerIsHeld' 'candidate:ownedLayerRetiresWhileWorkerIsHeld'; do
- IFS=: read -r label method <<< "$spec"
+for spec in 'stock:KeyguardR16OrbLayerRetirementInstrumentationTest:stockHolderRetainsItsOldFrameWhileWorkerIsHeld' 'candidate:KeyguardR16OrbLayerRetirementInstrumentationTest:ownedLayerRetiresWhileWorkerIsHeld' 'diagnostics:KeyguardR16DiagnosticInstrumentationTest:lightAndFullKeepOwnedRetirementAndFreezeItsOwner'; do
+ IFS=: read -r label class method <<< "$spec"
  dir="$evidence/$label"; mkdir -p "$dir"
  uuid=$(cat /proc/sys/kernel/random/uuid)
  printf 'uuid=%s\nmethod=%s\napp_source=%s\nharness_source=%s\n' "$uuid" "$method" "$app_sha" "$harness_sha" > "$dir/identity.txt"
@@ -35,7 +35,7 @@ for spec in 'stock:stockHolderRetainsItsOldFrameWhileWorkerIsHeld' 'candidate:ow
  done
  adb shell am force-stop com.fluvi.app > "$dir/force-stop.txt" 2>&1 || result=1
  rc=0
- timeout -k 5s 150s adb shell am instrument -w -r -e sourceSha "$app_sha" -e harnessSha "$harness_sha" -e runUuid "$uuid" -e r12Mode SURFACE_LIVE -e class "com.fluvi.app.lockscreen.KeyguardR16OrbLayerRetirementInstrumentationTest#$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$dir/instrumentation.txt" 2>&1 || rc=$?
+ timeout -k 5s 150s adb shell am instrument -w -r -e sourceSha "$app_sha" -e harnessSha "$harness_sha" -e runUuid "$uuid" -e r12Mode SURFACE_LIVE -e class "com.fluvi.app.lockscreen.$class#$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$dir/instrumentation.txt" 2>&1 || rc=$?
  printf '%s\n' "$rc" > "$dir/instrumentation.exit"
  if [[ $rc != 0 ]] || ! grep -Fxq "INSTRUMENTATION_STATUS: test=$method" "$dir/instrumentation.txt" || ! grep -Eq '^OK \(1 test\)' "$dir/instrumentation.txt"; then result=1; fi
  adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r16/$uuid" > "$dir/probe.tar" 2> "$dir/probe.stderr" || result=1

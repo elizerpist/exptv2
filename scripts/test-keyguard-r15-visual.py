@@ -130,6 +130,32 @@ class VisualControls(unittest.TestCase):
         moving = [Image.new("RGB", (64, 64), (v, 50, 80)) for v in (20, 40, 60)]
         self.assertTrue(visual.motion_observed(moving, 2.0))
 
+    def test_distinct_static_native_frames_are_not_the_same_copied_observation(self):
+        training, heldout, canonical = self.references()
+        for label in ("FULL", "DISCREET", "BACKGROUND"):
+            content = training[label][0].read_bytes()
+            training[label][1].write_bytes(content)
+            heldout[label][0].write_bytes(content)
+        canonical.write_bytes(training["FULL"][0].read_bytes())
+        paths = [p.resolve() for group in (training, heldout) for values in group.values() for p in values] + [canonical.resolve()]
+        capture = str(uuid.uuid4())
+        evidence = {path: dict(source="a"*40, video_sha256="b"*64, capture=capture,
+                    index=index, presentation_ns=index*1_000_000, display=0, window_id=5,
+                    attachment=1, generation=2, roi=[0, 0, 64, 64], size=[64, 64],
+                    sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for index, path in enumerate(paths)}
+        result = visual.calibrate(training, heldout, (0, 0, 64, 64), canonical, (0, 0, 64, 64),
+                                  reference_provenance=evidence)
+        self.assertEqual("FULL", visual.classify(visual._load(heldout["FULL"][0], (0, 0, 64, 64)), result))
+        # Different PNG encoding of the *same native frame* is still a copy.
+        duplicate = paths[1]
+        with Image.open(duplicate) as image:
+            image.save(duplicate, compress_level=0)
+        evidence[duplicate]["sha256"] = hashlib.sha256(duplicate.read_bytes()).hexdigest()
+        evidence[duplicate]["index"] = evidence[paths[0]]["index"]
+        with self.assertRaisesRegex(ValueError, "copied_reference_frame"):
+            visual.calibrate(training, heldout, (0, 0, 64, 64), canonical, (0, 0, 64, 64),
+                             reference_provenance=evidence)
+
     def test_black_reference_is_not_a_privacy_baseline(self):
         training, heldout, canonical = self.references()
         for index, path in enumerate(training["BACKGROUND"] + heldout["BACKGROUND"]):

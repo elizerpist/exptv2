@@ -6,8 +6,11 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
+import android.view.PixelCopy
 import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -22,6 +25,7 @@ import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
@@ -78,9 +82,32 @@ class KeyguardR16OrbLayerRetirementInstrumentationTest {
                 a.setContentView(root)
             }
             inst.waitForIdleSync()
-            baseline = requireNotNull(inst.uiAutomation.takeScreenshot()); save("baseline", baseline)
+            // An idle message queue can precede the Activity's first frame;
+            // a white launch screen is not the dark background reference.
+            var rootCenterX = 0; var rootCenterY = 0
+            val rootDeadline = SystemClock.uptimeMillis() + 10_000
+            while (rootCenterX == 0 && SystemClock.uptimeMillis() < rootDeadline) {
+                inst.runOnMainSync {
+                    if (root.isAttachedToWindow && root.width > 0 && root.height > 0) {
+                        val xy = IntArray(2); root.getLocationOnScreen(xy)
+                        rootCenterX = xy[0] + root.width / 2; rootCenterY = xy[1] + root.height / 2
+                    }
+                }
+                if (rootCenterX == 0) SystemClock.sleep(50)
+            }
+            assertTrue("background fixture has no attached measured root", rootCenterX > 0 && rootCenterY > 0)
+            for (index in 0 until 30) {
+                val sample = requireNotNull(inst.uiAutomation.takeScreenshot())
+                if (sample.getPixel(rootCenterX, rootCenterY) == Color.rgb(8, 18, 32)) {
+                    baseline = sample; break
+                }
+                save("baseline-rejected-$index", sample); sample.recycle(); SystemClock.sleep(100)
+            }
+            assertNotNull("background was never independently observed", baseline)
+            save("baseline", baseline!!)
             val size = a.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
             val profile = profile()
+            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock = { target -> targetRef.compareAndSet(null, target) }
             inst.runOnMainSync {
                 presenter = KeyguardOrbSurfacePresenter(a, root,
                     onFirstPosted = { _, _ -> event("FIRST_POST"); started.countDown() },
@@ -91,6 +118,8 @@ class KeyguardR16OrbLayerRetirementInstrumentationTest {
             }
             assertTrue("real first producer post was not reached", started.await(30, TimeUnit.SECONDS))
             failure.get()?.let { fail("producer failure before held boundary: $it") }
+            val firstTarget = requireNotNull(targetRef.get())
+            assertEquals("actual output path does not match arm", !stock, firstTarget.ownsOutput)
             val roi = AtomicReference<Rect>()
             inst.runOnMainSync {
                 val view = requireNotNull(presenter!!.surfaceForTest())
@@ -99,11 +128,47 @@ class KeyguardR16OrbLayerRetirementInstrumentationTest {
                 roi.set(Rect(location[0], location[1], location[0]+view.width, location[1]+view.height))
                 event("ROI ${roi.get()} view=${view.width}x${view.height}")
             }
-            SystemClock.sleep(200)
-            before = requireNotNull(inst.uiAutomation.takeScreenshot()); save("before", before)
-            val rect = roi.get(); val initialDiff = difference(before, baseline, rect)
-            event("BEFORE_INNER_DIFF $initialDiff")
-            assertTrue("precondition: independently sampled orb must differ from baseline", initialDiff > size*size/10)
+            runCatching {
+                val descriptor = inst.uiAutomation.executeShellCommand("dumpsys SurfaceFlinger")
+                android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { input ->
+                    File(dir, "surfaceflinger-before.txt").outputStream().use { input.copyTo(it) }
+                }
+            }.onFailure { event("SURFACEFLINGER_UNAVAILABLE ${it.javaClass.simpleName}") }
+            val producer = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+            val producerDone = CountDownLatch(1); val producerResult = AtomicInteger(-1)
+            val owned = firstTarget.ownedOutput
+            val producerSurface = if (firstTarget.ownsOutput) requireNotNull(owned?.borrow()) else null
+            val producerCallback = PixelCopy.OnPixelCopyFinishedListener { result ->
+                producerResult.set(result)
+                if (producerSurface != null) owned?.releaseBorrow()
+                producerDone.countDown()
+            }
+            try {
+                inst.runOnMainSync {
+                    if (producerSurface != null) PixelCopy.request(producerSurface, producer, producerCallback, Handler(Looper.getMainLooper()))
+                    else PixelCopy.request(requireNotNull(presenter!!.surfaceForTest()), producer, producerCallback, Handler(Looper.getMainLooper()))
+                }
+            } catch (error: Throwable) {
+                if (producerSurface != null) owned?.releaseBorrow()
+                producer.recycle(); throw error
+            }
+            val producerCompleted = producerDone.await(8, TimeUnit.SECONDS)
+            event("PRODUCER_COPY completed=$producerCompleted result=${producerResult.get()}")
+            if (producerCompleted) {
+                if (producerResult.get() == PixelCopy.SUCCESS) save("producer-first", producer)
+                producer.recycle()
+            }
+            val rect = roi.get()
+            for (index in 0 until 16) {
+                val sample = requireNotNull(inst.uiAutomation.takeScreenshot())
+                val initialDiff = difference(sample, baseline!!, rect)
+                save("first-sample-$index", sample)
+                event("FIRST_SAMPLE index=$index innerDiff=$initialDiff")
+                if (initialDiff > size*size/10) { before = sample; break }
+                sample.recycle(); SystemClock.sleep(250)
+            }
+            assertNotNull("precondition: first compositor image was not observed", before)
+            save("before", before!!)
             KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock = { target ->
                 if (target.attachment == 1L && armed.compareAndSet(true, false)) {
                     targetRef.set(target); event("WORKER_HELD generation=${target.generation} owns=${target.ownsOutput}"); locked.countDown()
