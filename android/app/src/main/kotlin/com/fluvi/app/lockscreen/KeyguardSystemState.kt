@@ -44,6 +44,8 @@ internal data class KeyguardSystemGateRequest(
     val completedInspectionId: Long? = null,
     val evaluationReason: String = reason,
     val evaluationReceivedAt: Long = receivedAt,
+    /** Optional diagnostic owner; it never changes sampler admission. */
+    val diagnosticCaptureId: String? = null,
 )
 
 /** Main owns this queue, including completion. The worker owns only read().

@@ -16,6 +16,8 @@ class KeyguardCardInspectionQueueTest {
             queuedAtUptimeMs = 171291, eventTimeUptimeMs = 171287,
             triggerReceivedUptimeMs = 171291, diagnosticContext = context,
             windowFreshness = KeyguardWindowFreshness.MISSING_FRESHNESS_EVIDENCE,
+            latestSamplerEvidence = KeyguardSamplerEvidence(10, owner, 171280, 171282, 171283,
+                eligible = true, excluded = false, captureId = "capture"),
         )
         val queue = KeyguardCardInspectionQueue()
         queue.offer(cause)
@@ -30,12 +32,23 @@ class KeyguardCardInspectionQueueTest {
         assertEquals(event.eventTimeUptimeMs, next.eventTimeUptimeMs)
         assertEquals(event.triggerReceivedUptimeMs, next.triggerReceivedUptimeMs)
         assertEquals(event.diagnosticContext, next.diagnosticContext)
+        assertNull(next.latestSamplerEvidence) // old observation must not acquire a new authority
         assertEquals(171292L, next.queuedAtUptimeMs)
         assertEquals(KeyguardWindowFreshness.CONTRADICTORY_OBSERVATION, next.windowFreshness)
         assertFalse(queue.offer(next)) // one worker, never a parallel walk
         assertEquals(next, queue.complete(cause))
         assertNull(queue.pendingRequest())
         assertNull(queue.complete(cause)) // late completion cannot release the successor
+    }
+
+    @Test fun `independent sampler observation is bound to its authority and capture`() {
+        val owner = KeyguardInspectionAuthority(1, 2, 3, 4, 5)
+        val evidence = KeyguardSamplerEvidence(10, owner, 100, 101, 102,
+            eligible = true, excluded = false, captureId = "capture-one")
+        assertTrue(evidence.belongsTo(owner, "capture-one"))
+        assertFalse(evidence.belongsTo(owner, "capture-two"))
+        assertFalse(evidence.belongsTo(owner, null))
+        assertFalse(evidence.belongsTo(owner.copy(visibilityEpoch = 6), "capture-one"))
     }
 
     @Test fun `reconciliation cannot carry an event across terminal session or wake boundaries`() {

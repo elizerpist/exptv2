@@ -4,7 +4,19 @@ package com.fluvi.app.lockscreen
 internal data class KeyguardWakeEligibilityEvidence(
     val sampleRequestId: Long?, val sampleAuthority: KeyguardInspectionAuthority?,
     val callbackAt: Long, val startedAt: Long, val finishedAt: Long, val deliveredAt: Long,
+    val captureId: String,
 )
+
+/** A completed independent sampler observation, not reusable show authority. */
+internal data class KeyguardSamplerEvidence(
+    val requestId: Long, val authority: KeyguardInspectionAuthority,
+    val startedAt: Long, val finishedAt: Long, val deliveredAt: Long,
+    val eligible: Boolean, val excluded: Boolean,
+    val captureId: String,
+) {
+    fun belongsTo(authority: KeyguardInspectionAuthority, captureId: String?): Boolean =
+        captureId != null && this.captureId == captureId && this.authority == authority
+}
 
 /** Immutable authority captured when an inspection is requested, rather than
  * when its worker eventually gets CPU time. */
@@ -28,6 +40,7 @@ internal data class KeyguardCardInspectionRequest(
     /** Original scalar ingress identity; copies retain it across reacquisition. */
     val r14Ingress: KeyguardR14Ingress? = null,
     val wakeEligibility: KeyguardWakeEligibilityEvidence? = null,
+    val latestSamplerEvidence: KeyguardSamplerEvidence? = null,
 ) {
     /** Carry an unserved event, never an acquired answer, across a local
      * withdrawal in the SAME service/wake. The new request must reacquire
@@ -46,6 +59,7 @@ internal data class KeyguardCardInspectionRequest(
             interactionEpoch = authority.interactionEpoch,
             attachGeneration = authority.attachGeneration,
             queuedAtUptimeMs = queuedAt,
+            latestSamplerEvidence = null,
             windowFreshness = if (windowFreshness.requiresCacheClear && !freshness.requiresCacheClear) windowFreshness else freshness,
         )
     }

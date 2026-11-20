@@ -717,6 +717,8 @@ internal object KeyguardCardDiagnostics {
         var wakeSampleMain: String? = null,
         var wakeSampleRequest: String? = null,
         var wakeSampleAuthority: String? = null,
+        var latestSampler: String? = null,
+        var latestSamplerAuthority: String? = null,
         var visibilityEpochAtRequest: Long? = null,
         var visibilityEpochAtApply: Long? = null,
         var pendingRequestIdAtApply: Long? = null,
@@ -1171,6 +1173,9 @@ internal object KeyguardCardDiagnostics {
      * Attachment-owned numeric probes use it to avoid crossing captures. */
     fun drawEvidenceOwner(): Any? = ingress
 
+    /** Capture-qualified scalar for observations already made by the service. */
+    fun activeCaptureId(): String? = ingress?.id
+
     /** Check before constructing optional verbose fields. LIGHT keeps the
      * complete INSPECTION_FINISHED aggregate instead of three copies. */
     fun wantsEvent(stage: String): Boolean {
@@ -1550,6 +1555,8 @@ internal object KeyguardCardDiagnostics {
                     wakeSampleMain = fields["wakeSampleMain"]
                     wakeSampleRequest = fields["wakeSampleRequest"]
                     wakeSampleAuthority = fields["wakeSampleAuthority"]
+                    latestSampler = fields["latestSampler"]
+                    latestSamplerAuthority = fields["latestSamplerAuthority"]
                     visibilityEpochAtRequest = fields["requestVisibilityEpoch"]?.toLongOrNull() ?: visibilityEpochAtRequest
                     finishedAtUptimeMs = event.uptimeMs
                     windowsReadMs = fields["windowsReadMs"]?.toLongOrNull()
@@ -2133,12 +2140,18 @@ internal object KeyguardCardDiagnostics {
             }, attempt.id)
         }
         attemptsForCausalEvidence.forEach { attempt ->
-            select("a${attempt.id}:summary", attemptSummary(attempt), attempt.id)
+            select("a${attempt.id}:summary", compactAttemptSummary(attempt), attempt.id)
         }
         attemptsForCausalEvidence.forEach { attempt ->
             if (attempt.r14RecoveryEvents.isNotEmpty() || attempt.r14RecoveryOmitted > 0) {
                 select("a${attempt.id}:r14Meta", " R14_RECOVERY_META attempt=${attempt.id} retained=${attempt.r14RecoveryEvents.size} omitted=${attempt.r14RecoveryOmitted}\n", attempt.id)
-                attempt.r14RecoveryEvents.forEachIndexed { index, event ->
+            }
+        }
+        // Recovery events, like show/hide cores, share the available budget
+        // across attempts so a busy earlier wake cannot monopolize it.
+        repeat(attemptsForCausalEvidence.maxOfOrNull { it.r14RecoveryEvents.size } ?: 0) { index ->
+            attemptsForCausalEvidence.forEach { attempt ->
+                attempt.r14RecoveryEvents.elementAtOrNull(index)?.let { event ->
                     select("a${attempt.id}:r14Recovery$index", buildString {
                         append(" R14_RECOVERY attempt=${attempt.id} seq=${event.seq} up=${event.uptimeMs} phase=${event.reason}")
                         event.fields.forEach { (key, value) -> append(" $key=$value") }
@@ -2146,6 +2159,19 @@ internal object KeyguardCardDiagnostics {
                     }, attempt.id)
                 }
             }
+        }
+        // Expand summaries only after every selected attempt's first cause,
+        // show/withdrawal, financial core and recovery records had a chance
+        // to fit. The compact record remains intact when detail is omitted.
+        attemptsForCausalEvidence.forEach { attempt ->
+            val id = "a${attempt.id}:summary"
+            val core = selected[id] ?: return@forEach
+            val detail = attemptSummary(attempt)
+            val difference = detail.toByteArray(Charsets.UTF_8).size - core.toByteArray(Charsets.UTF_8).size
+            if (difference <= 0 || KeyguardExportBudget.canAppend(bytes, difference, contentLimit)) {
+                selected[id] = detail
+                bytes += difference
+            } else omittedRecords += "$id:detail"
         }
         val optionalDetails = mutableListOf<Pair<String, String>>()
         fun deferDetail(id: String, text: String) { optionalDetails += "$id:detail" to text }
@@ -2355,6 +2381,22 @@ internal object KeyguardCardDiagnostics {
 
     /** Compact cycle aggregates are independent of every attachment's own
      * evidence. Missing/omitted episodes never overwrite the earliest draw. */
+    private fun compactAttemptSummary(attempt: TimingAttempt): String = buildString {
+        val show = firstPresentation(attempt)
+        val firstRoot = firstDrawEpisode(attempt) { it.firstRootDrawAtUptimeMs }
+        val firstShader = firstDrawEpisode(attempt) { it.firstShaderDrawAtUptimeMs }
+        val firstLive = firstDrawEpisode(attempt) { it.firstLiveDrawAtUptimeMs }
+        val withdrawal = show?.let { actualWithdrawal(attempt, it) }
+            ?: attempt.hides.lastOrNull { it.attachedBefore == true && it.removeReturnAtUptimeMs != null }
+        val firstInspection = attempt.firstInspectionRequestId?.let(attempt.inspections::get)
+        appendLine("attemptId=${attempt.id} wakeSource=${attempt.wakeSource} wakeCycleStartedAt=${attempt.startedUptimeMs} screenOnReceivedAt=${attempt.screenOnReceivedAtUptimeMs ?: "NA"} presentationMode=${attempt.presentationMode} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
+        appendLine(" firstInspectionRequestId=${attempt.firstInspectionRequestId ?: "NA"} showingInspectionRequestId=${show?.requestId ?: "NA"} requestsReceived=${attempt.requestsReceived} requestsReplaced=${attempt.requestsReplaced} inspectionsStarted=${attempt.inspectionsStarted} inspectionsApplied=${attempt.inspectionsApplied} inspectionsRejected=${attempt.inspectionsRejected} finalState=${attempt.finalState}")
+        appendLine(" cycleFirstRootShowOp=${firstRoot?.operationId ?: "NA"} cycleFirstShaderShowOp=${firstShader?.operationId ?: "NA"} cycleFirstLiveShowOp=${firstLive?.operationId ?: "NA"} firstRootDrawObserved=${firstRoot != null} firstShaderDrawObserved=${firstShader != null} cycleToFirstLiveDrawMs=${delta(firstLive?.firstLiveDrawAtUptimeMs, attempt.startedUptimeMs)}")
+        appendLine(" actualWithdrawalHideOp=${withdrawal?.operationId ?: "NA"} terminalCleanupHideOp=${attempt.hides.lastOrNull()?.operationId ?: "NA"} triggerToLocalHideMs=${delta(withdrawal?.localHideAppliedAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} triggerToRemoveReturnMs=${delta(withdrawal?.removeReturnAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)}")
+        appendLine(" causalSpineComplete=${causalSpineComplete(attempt)} causalSpineIndependentOfRawRing=true retainedShowEpisodes=${attempt.shows.size} retainedHideEpisodes=${attempt.hides.size} omittedShowEpisodes=${attempt.omittedShowEpisodes} omittedHideEpisodes=${attempt.omittedHideEpisodes} omittedSpineEvents=${attempt.omittedSpineEvents}")
+        append(compactInspectionCause("FIRST_INSPECTION", firstInspection))
+    }
+
     private fun attemptSummary(attempt: TimingAttempt): String = buildString {
         val show = firstPresentation(attempt)
         val firstRoot = firstDrawEpisode(attempt) { it.firstRootDrawAtUptimeMs }
@@ -2383,6 +2425,7 @@ internal object KeyguardCardDiagnostics {
         if (cause == null) { appendLine(" evidence=MISSING_REQUEST"); return@buildString }
         append(" trigger=${cause.trigger ?: "NA"} callbackReceived=${cause.triggerReceivedUptimeMs ?: "NA(missingTrigger)"} eventTime=${cause.eventTimeUptimeMs ?: "NA(sourceUnavailable)"}")
         append(" eventType=${cause.eventType ?: "UNOBSERVED"} wakeCallback=${cause.wakeCallbackAt ?: "UNOBSERVED"} wakeSampler=${cause.wakeSampleRequest ?: "UNOBSERVED"}@${cause.wakeSampleStart ?: "UNOBSERVED"}/${cause.wakeSampleEnd ?: "UNOBSERVED"}/${cause.wakeSampleMain ?: "UNOBSERVED"} samplerAuthority=${cause.wakeSampleAuthority ?: "UNOBSERVED"}")
+        append(" latestSampler=${cause.latestSampler ?: "UNOBSERVED"} latestSamplerAuthority=${cause.latestSamplerAuthority ?: "UNOBSERVED"}")
         append(" queued=${cause.queuedAtUptimeMs ?: "NA"} started=${cause.startedAtUptimeMs ?: "NA"} finished=${cause.finishedAtUptimeMs ?: "NA"} handoff=${cause.mainHandoffRequestedAtUptimeMs ?: "NA"} mainApply=${cause.mainApplyStartedAtUptimeMs ?: "NA"} applied=${cause.appliedAtUptimeMs ?: "NA"}")
         append(" authorityAtStart=${cause.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${cause.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${cause.visibilityEpochAtApply ?: "NA"} pendingAtApply=${cause.pendingRequestIdAtApply ?: "NA"}")
         append(" classification=${cause.surfaceClassification ?: "NA"} reason=${cause.surfaceReason ?: "NA"} markers=${cause.surfaceMarkers ?: "NA"} rootUnavailable=${cause.rootUnavailable ?: "NA"} walkTruncated=${cause.walkTruncated ?: "NA"} truncationReasons=${cause.walkTruncationReasons ?: "UNOBSERVED"} visited=${cause.visitedNodeCount ?: "NA"}")
@@ -2399,11 +2442,14 @@ internal object KeyguardCardDiagnostics {
         if (cause == null) { appendLine(" evidence=MISSING_REQUEST"); return@buildString }
         append(" trigger=${cause.trigger ?: "NA"} callbackReceived=${cause.triggerReceivedUptimeMs ?: "NA(missingTrigger)"} eventTime=${cause.eventTimeUptimeMs ?: "NA(sourceUnavailable)"}")
         append(" eventType=${cause.eventType ?: "UNOBSERVED"} wakeCallback=${cause.wakeCallbackAt ?: "UNOBSERVED"} wakeSampler=${cause.wakeSampleRequest ?: "UNOBSERVED"}@${cause.wakeSampleStart ?: "UNOBSERVED"}/${cause.wakeSampleEnd ?: "UNOBSERVED"}/${cause.wakeSampleMain ?: "UNOBSERVED"} samplerAuthority=${cause.wakeSampleAuthority ?: "UNOBSERVED"}")
+        append(" latestSampler=${cause.latestSampler ?: "UNOBSERVED"} latestSamplerAuthority=${cause.latestSamplerAuthority ?: "UNOBSERVED"}")
         append(" queued=${cause.queuedAtUptimeMs ?: "NA"} started=${cause.startedAtUptimeMs ?: "NA"} finished=${cause.finishedAtUptimeMs ?: "NA"}")
+        append(" handoff=${cause.mainHandoffRequestedAtUptimeMs ?: "UNOBSERVED"} mainApply=${cause.mainApplyStartedAtUptimeMs ?: "UNOBSERVED"} applied=${cause.appliedAtUptimeMs ?: "UNOBSERVED"}")
         append(" authorityAtStart=${cause.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${cause.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${cause.visibilityEpochAtApply ?: "NA"} pendingAtApply=${cause.pendingRequestIdAtApply ?: "NA"}")
         append(" classification=${cause.surfaceClassification ?: "NA"} reason=${cause.surfaceReason ?: "NA"} markers=${cause.surfaceMarkers ?: "NA"}")
         append(" rootUnavailable=${cause.rootUnavailable ?: "NA"} walkTruncated=${cause.walkTruncated ?: "NA"} truncationReasons=${cause.walkTruncationReasons ?: "UNOBSERVED"}")
         append(" rootFlags=${cause.activeRootFlags ?: "UNOBSERVED"} acceptedChildFlags=${cause.acceptedChildFlags ?: "UNOBSERVED"} activeRootMs=${cause.activeRootTotalMs ?: "UNOBSERVED"} perWindowRootMs=${cause.perWindowRootTotalMs ?: "UNOBSERVED"} firstChildMs=${cause.firstChildAcquisitionMs ?: "UNOBSERVED"} childMs=${cause.childAcquisitionTotalMs ?: "UNOBSERVED"} childMaxMs=${cause.childAcquisitionMaxMs ?: "UNOBSERVED"}")
+        append(" visited=${cause.visitedNodeCount ?: "UNOBSERVED"} calls=${cause.activeRootCallCount ?: "UNOBSERVED"}/${cause.perWindowRootCallCount ?: "UNOBSERVED"}/${cause.childAcquisitionCount ?: "UNOBSERVED"} windowsMs=${cause.getWindowsMs ?: "UNOBSERVED"} perWindowRootMaxMs=${cause.rootAcquisitionMaxMs ?: "UNOBSERVED"} cache=${cause.cacheEnabled ?: "UNOBSERVED"}")
         append(" firstNullRoot=${cause.firstNullRootId ?: "UNOBSERVED"}/${cause.firstNullRootType ?: "UNOBSERVED"}/${cause.firstNullRootDisplay ?: "UNOBSERVED"}/${cause.firstNullRootLayer ?: "UNOBSERVED"}/${cause.firstNullRootSource ?: "UNOBSERVED"}")
         appendLine(" freshness=${cause.freshnessPolicy ?: "NA"} cacheClear=${cause.cacheClearResult ?: "NA"} rejected=${cause.rejectionReason ?: "NA"} followup=${cause.followupAction ?: "NA"}")
     }

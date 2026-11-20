@@ -744,7 +744,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                 diagnosticContext = owner, observedUptimeMs = base + 10,
                 fields = readerFields(main = true) + mapOf("activeRootFlags" to 0, "acceptedChildFlags" to 36,
                     "firstChildAcquisitionMs" to 2, "firstNullRootId" to 735, "firstNullRootType" to 3,
-                    "firstNullRootDisplay" to 0, "firstNullRootLayer" to -1, "firstNullRootSource" to "window"))
+                    "firstNullRootDisplay" to 0, "firstNullRootLayer" to -1, "firstNullRootSource" to "window",
+                    "latestSampler" to "123456789:${base - 7}/${base - 5}/${base - 4}:true/false",
+                    "latestSamplerAuthority" to "91/${index + 1}/123456/123456/$attach"))
             val show = KeyguardCardDiagnostics.newShowOperation(owner, attach, request)
             KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", operation = show, observedUptimeMs = base + 11)
             KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_RETURN", "wake", operation = show, observedUptimeMs = base + 12)
@@ -759,7 +761,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                 observedUptimeMs = base + 13, fields = mapOf("r12Generation" to attach, "r12Detail" to "SURFACE_LIVE"), surfaceMetrics = metrics)
             val hideRequest = base + 2
             KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_FINISHED", "FOREIGN_ABOVE", requestId = hideRequest,
-                diagnosticContext = owner, observedUptimeMs = base + 19, fields = readerFields())
+                diagnosticContext = owner, observedUptimeMs = base + 19, fields = readerFields() + mapOf(
+                    "latestSampler" to "123456790:${base + 13}/${base + 15}/${base + 16}:true/false",
+                    "latestSamplerAuthority" to "91/${index + 1}/123456/123456/$attach"))
             val hide = KeyguardCardDiagnostics.newHideOperation(owner, attach, hideRequest, base + 18)
             KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "window", operation = hide, observedUptimeMs = base + 20)
             KeyguardCardDiagnostics.captureEvent(context, "R15_SURFACE_REVOKED", "synchronousAccessClosure", operation = hide,
@@ -805,6 +809,8 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("build=$source\n"))
         assertTrue(report.contains("retainedAttemptIds=1,6,7,8"))
         val omissions = report.lineSequence().first { it.startsWith("omittedCriticalRecordIds=") }
+        assertTrue("critical record lost under phone-shaped pressure: $omissions", omissions == "omittedCriticalRecordIds=none")
+        assertTrue(report.contains("incompleteExportAttemptIds=none"))
         for (id in listOf(1, 6, 7, 8)) {
             assertTrue("missing financial core for attempt $id", report.contains("R13_FINANCIAL attempt=$id coverage=keyguardScopesOnly scopes=40"))
             assertFalse("incorrectly omitted a$id:r13Financial", omissions.contains("a$id:r13Financial"))
@@ -812,6 +818,8 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             assertTrue(report.contains("holderTarget=$id/$id"))
         }
         assertTrue(report.contains("rootFlags=0 acceptedChildFlags=36"))
+        assertTrue(report.contains("latestSampler=123456789:"))
+        assertTrue(report.contains("latestSampler=123456790:"))
         assertTrue(report.contains("physical=UNOBSERVED"))
         metricOwners.last().holderPostReturned(999_999)
         assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])

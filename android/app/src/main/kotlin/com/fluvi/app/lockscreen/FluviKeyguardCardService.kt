@@ -117,6 +117,9 @@ class FluviKeyguardCardService : AccessibilityService() {
     private val queueLock = Any()
     private val inspectionQueue = KeyguardCardInspectionQueue()
     private val firstAcquisition = KeyguardFirstAcquisition()
+    // Main-owned diagnostic observation only. It never grants visibility or
+    // initiates another system read, and carries its own original authority.
+    private var latestSamplerEvidence: KeyguardSamplerEvidence? = null
     // Published only by Main, guarded by the same lock as reservation. The
     // reader may consume this immutable snapshot but cannot change a View.
     private var readAheadStateRevision = 0L
@@ -949,9 +952,11 @@ class FluviKeyguardCardService : AccessibilityService() {
             rootWasPrepared = ::overlay.isInitialized && overlay.hasPreparedRoot,
             profileWasDecoded = lastMaterialProfile != null,
             presentationMode = settings.presentationMode.wireValue,
-            eligibility = if (KeyguardCardDiagnostics.wantsEvent("INSPECTION_FINISHED"))
+            eligibility = if (sampleRequest?.diagnosticCaptureId != null &&
+                sampleRequest.diagnosticCaptureId == KeyguardCardDiagnostics.activeCaptureId())
                 KeyguardWakeEligibilityEvidence(sampleRequest?.id, sampleRequest?.authority,
-                    receivedAtUptimeMs, freshState.startedAt, freshState.finishedAt, SystemClock.uptimeMillis())
+                    receivedAtUptimeMs, freshState.startedAt, freshState.finishedAt, SystemClock.uptimeMillis(),
+                    sampleRequest.diagnosticCaptureId)
             else null,
         )
         currentDiagnosticAttempt = KeyguardCardDiagnostics.beginLockAttempt(
@@ -1012,12 +1017,18 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (!FluviKeyguardCardServiceRegistry.connected || lastSettings?.requested != true) return
         systemSampler.offer(KeyguardSystemGateRequest(++nextSystemGateId, inspectionAuthority,
             reason, receivedAt, SystemClock.uptimeMillis(), evaluate, wakeSource,
-            eventTime = eventTime, retry = retry, freshness = freshness, completedInspectionId = completedInspectionId))
+            eventTime = eventTime, retry = retry, freshness = freshness, completedInspectionId = completedInspectionId,
+            diagnosticCaptureId = KeyguardCardDiagnostics.activeCaptureId()))
     }
 
     private fun applySystemState(request: KeyguardSystemGateRequest, state: KeyguardSystemState) {
         // The sampler checks every identity, even for a negative answer.
         if (!FluviKeyguardCardServiceRegistry.connected || lastSettings?.requested != true) return
+        latestSamplerEvidence = if (request.diagnosticCaptureId != null &&
+            request.diagnosticCaptureId == KeyguardCardDiagnostics.activeCaptureId())
+            KeyguardSamplerEvidence(request.id, request.authority, state.startedAt, state.finishedAt,
+                SystemClock.uptimeMillis(), state.eligible, state.excluded, request.diagnosticCaptureId)
+        else null
         if (state.excluded) {
             hideImmediately("systemGate:${request.reason}", triggerReceivedUptimeMs = request.receivedAt)
             return
@@ -1193,7 +1204,11 @@ class FluviKeyguardCardService : AccessibilityService() {
             diagnosticContext = currentDiagnosticAttempt,
             triggerReceivedUptimeMs = triggerReceivedUptimeMs,
             r14Ingress = ingress,
-            wakeEligibility = wakeTiming?.takeIf { it.wakeGeneration == authority.wakeGeneration }?.eligibility,
+            wakeEligibility = wakeTiming?.takeIf { it.wakeGeneration == authority.wakeGeneration }?.eligibility
+                ?.takeIf { it.captureId == currentDiagnosticAttempt?.captureId && it.captureId == KeyguardCardDiagnostics.activeCaptureId() },
+            latestSamplerEvidence = latestSamplerEvidence?.takeIf {
+                it.belongsTo(authority, currentDiagnosticAttempt?.captureId) && it.captureId == KeyguardCardDiagnostics.activeCaptureId()
+            },
         )
         if (request.trigger != "surfaceRetry") cancelWakeRetry("supersededBy:${request.trigger}")
         wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.let {
@@ -1463,6 +1478,12 @@ class FluviKeyguardCardService : AccessibilityService() {
             "wakeSampleMain" to (request.wakeEligibility?.deliveredAt ?: "UNOBSERVED"),
             "wakeSampleRequest" to (request.wakeEligibility?.sampleRequestId ?: "UNOBSERVED"),
             "wakeSampleAuthority" to (request.wakeEligibility?.sampleAuthority?.let {
+                "${it.serviceSession}/${it.wakeGeneration}/${it.visibilityEpoch}/${it.interactionEpoch}/${it.attachGeneration}"
+            } ?: "UNOBSERVED"),
+            "latestSampler" to (request.latestSamplerEvidence?.let {
+                "${it.requestId}:${it.startedAt}/${it.finishedAt}/${it.deliveredAt}:${it.eligible}/${it.excluded}"
+            } ?: "UNOBSERVED"),
+            "latestSamplerAuthority" to (request.latestSamplerEvidence?.authority?.let {
                 "${it.serviceSession}/${it.wakeGeneration}/${it.visibilityEpoch}/${it.interactionEpoch}/${it.attachGeneration}"
             } ?: "UNOBSERVED"),
             "requestVisibilityEpoch" to request.visibilityEpoch,
