@@ -158,10 +158,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 org.junit.Assert.assertSame(discreet.orb, neutralBitmap)
                 assertTrue("neutral and full fallback must differ", fullBitmap.getPixel(48, 48) != neutralBitmap.getPixel(48, 48))
 
+                val clearVisibilities = mutableListOf<Int>()
+                view.onStaticBitmapClearedForTest = { clearVisibilities += it }
                 target.showOrUpdate(discreet, settings.copy(showFinancialDetails = false))
                 assertTrue("transition must select Surface", target.surfaceForTest() != null)
                 assertEquals(View.GONE, view.visibility)
                 assertEquals("retired legacy View must release fallback", null, view.staticBitmapForTest())
+                assertEquals("the old fallback must be cleared once, while its View is hidden",
+                    listOf(View.GONE), clearVisibilities)
+                view.onStaticBitmapClearedForTest = null
                 val authorizedNeutral = FluviFinancialCardPresenter.discreet()
                 target.showOrUpdate(authorizedNeutral, legacy.copy(showFinancialDetails = false))
                 org.junit.Assert.assertSame("legacy must synchronously receive current neutral fallback",

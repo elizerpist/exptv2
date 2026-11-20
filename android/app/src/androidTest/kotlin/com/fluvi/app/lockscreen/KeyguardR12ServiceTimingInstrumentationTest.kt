@@ -121,8 +121,9 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                     val wake = SystemClock.uptimeMillis()
                     synchronizedKey(KeyEvent.KEYCODE_WAKEUP)
                     await("$name public wake eligibility", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
-                    automation.waitForIdle(500L, 5_000L)
-                    check(power.isInteractive && keyguard.isKeyguardLocked) { "$name public wake lost eligibility after input idle" }
+                    // The injected input is synchronous. Global accessibility
+                    // idle is not the service's admission or visibility gate.
+                    check(power.isInteractive && keyguard.isKeyguardLocked) { "$name public wake lost eligibility after input" }
                     await("$name actual locked service window", 20_000) {
                         val state = sample().first
                         power.isInteractive && keyguard.isKeyguardLocked && state?.visible == true && state.effective == mode

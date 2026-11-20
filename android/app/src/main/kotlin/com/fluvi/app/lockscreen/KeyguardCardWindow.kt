@@ -171,6 +171,10 @@ internal class KeyguardCardWindow(
             orb.visibility = View.GONE
             materialController?.let {
                 it.dispose()
+                // Legacy disposal restores View visibility for its ordinary
+                // fallback path. Surface is the new owner, so hide it again
+                // before clearing any retained bitmap reference.
+                orb.visibility = View.GONE
                 materialController = null
                 val background = current.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_keyguard_material_background)
                 for (view in listOf(orb, background)) {
