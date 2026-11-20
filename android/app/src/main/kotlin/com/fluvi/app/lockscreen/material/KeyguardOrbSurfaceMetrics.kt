@@ -20,6 +20,25 @@ internal class KeyguardOrbSurfaceMetrics {
     private var maxLockCpu = 0L
     private var maxDrawCpu = 0L
     private var maxPostCpu = 0L
+    // One worker writes the latest holder operation. These scalar fields are
+    // sampled only for an active capture, and never retain a Canvas or View.
+    @Volatile private var operationVersion = 0L
+    private var operationId = 0L
+    private var lockEnter = 0L
+    private var lockReturn = 0L
+    private var drawReturn = 0L
+    private var postEnter = 0L
+    private var postReturn = 0L
+    private var recordAt = 0L
+    // Main's revocation bracket has a separate writer from the worker.
+    @Volatile private var revokeBegin = 0L
+    @Volatile private var revokeReturn = 0L
+
+    data class HolderOperation(
+        val coherent: Boolean, val id: Long, val lockEnter: Long?, val lockReturn: Long?,
+        val drawReturn: Long?, val postEnter: Long?, val postReturn: Long?, val recordAt: Long?,
+        val revokeBegin: Long?, val revokeReturn: Long?,
+    )
 
     data class Snapshot(
         val coherent: Boolean,
@@ -37,7 +56,41 @@ internal class KeyguardOrbSurfaceMetrics {
         val maxLockCpuNs: Long,
         val maxDrawCpuNs: Long,
         val maxPostCpuNs: Long,
+        val holderOperation: HolderOperation,
     )
+
+    fun beginHolderOperation(at: Long) {
+        operationVersion += 1L
+        operationId += 1L
+        lockEnter = at; lockReturn = 0L; drawReturn = 0L
+        postEnter = 0L; postReturn = 0L; recordAt = 0L
+        operationVersion += 1L
+    }
+
+    fun holderLockReturned(at: Long) { operationVersion += 1L; lockReturn = at; operationVersion += 1L }
+    fun holderDrawReturned(at: Long) { operationVersion += 1L; drawReturn = at; operationVersion += 1L }
+    fun holderPostEntered(at: Long) { operationVersion += 1L; postEnter = at; operationVersion += 1L }
+    fun holderPostReturned(at: Long) { operationVersion += 1L; postReturn = at; operationVersion += 1L }
+    fun holderRecordObserved(at: Long) { operationVersion += 1L; recordAt = at; operationVersion += 1L }
+    fun revokeStarted(at: Long) { if (revokeBegin == 0L) revokeBegin = at }
+    fun revokeReturned(at: Long) { if (revokeReturn == 0L) revokeReturn = at }
+
+    fun holderSnapshot(): HolderOperation {
+        repeat(3) {
+            val before = operationVersion
+            if (before and 1L != 0L) return@repeat
+            val id = operationId
+            val a = lockEnter; val b = lockReturn; val c = drawReturn
+            val d = postEnter; val e = postReturn; val f = recordAt
+            val revokeA = revokeBegin; val revokeB = revokeReturn
+            if (before == operationVersion) return HolderOperation(true, id,
+                a.takeIf { it > 0 }, b.takeIf { it > 0 }, c.takeIf { it > 0 },
+                d.takeIf { it > 0 }, e.takeIf { it > 0 }, f.takeIf { it > 0 },
+                revokeA.takeIf { it > 0 }, revokeB.takeIf { it > 0 })
+        }
+        return HolderOperation(false, 0L, null, null, null, null, null, null,
+            revokeBegin.takeIf { it > 0 }, revokeReturn.takeIf { it > 0 })
+    }
 
     fun record(postUptimeMs: Long, postNs: Long, distinct: Boolean,
                lockWallNs: Long, drawWallNs: Long, postWallNs: Long,
@@ -81,8 +134,8 @@ internal class KeyguardOrbSurfaceMetrics {
             val lockCpu = maxLockCpu; val drawCpu = maxDrawCpu; val postCpu = maxPostCpu
             if (before == sequence) return Snapshot(true, count, first, distinct, last, retained,
                 values.takeIf { it.isNotEmpty() }?.get(((values.size - 1) * .95).toInt()), worst, over,
-                lockWall, drawWall, postWall, lockCpu, drawCpu, postCpu)
+                lockWall, drawWall, postWall, lockCpu, drawCpu, postCpu, holderSnapshot())
         }
-        return Snapshot(false, 0, null, null, null, 0, null, null, 0, 0, 0, 0, 0, 0, 0)
+        return Snapshot(false, 0, null, null, null, 0, null, null, 0, 0, 0, 0, 0, 0, 0, holderSnapshot())
     }
 }

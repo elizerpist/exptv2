@@ -30,6 +30,7 @@ import com.fluvi.app.lockscreen.material.KeyguardOrbMaterialTimeSource
 import com.fluvi.app.runtime.FluviFinancialCardPresentation
 import com.fluvi.app.lockscreen.material.KeyguardOrbFirstOfferObservation
 import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceObservation
+import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceMetrics
 import com.fluvi.app.lockscreen.material.KeyguardOrbSurfacePresenter
 
 /** Main-thread owner of one, and only one, accessibility overlay root. Drag
@@ -143,6 +144,16 @@ internal class KeyguardCardWindow(
     val currentAttachGeneration: Long get() = attachGeneration
     fun visibleRootForReadmission(): Boolean = lifecycle.isAttached() && root?.visibility == View.VISIBLE
     fun currentPresentationFull(): Boolean? = appliedPresentation?.full
+    /** Main-owned prepared route only. This is a scalar observation of the
+     * already selected owner, never another preference or system-state read. */
+    fun preparedInitialLiveOrb(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?): Boolean {
+        checkMainThread()
+        return settings.requested && !lifecycle.isAttached() && root != null &&
+            materialSettings == settings && materialProfile === profile && profile?.animated == true &&
+            settings.presentationMode == KeyguardCardPresentationMode.ORB &&
+            settings.animationMode == KeyguardCardAnimationMode.ORB_ONLY &&
+            effectiveRenderMode == KeyguardOrbRenderMode.SURFACE_LIVE && surfacePresenter != null
+    }
     fun attachmentRenderSummary() = materialController?.attachmentRenderSummary()
     fun displayRefreshRate(): Float? = root?.display?.refreshRate
 
@@ -463,13 +474,14 @@ internal class KeyguardCardWindow(
     /** Terminal hide: stop local visibility first and never restore a drag
      * preview before removeViewImmediate. Normal CANCEL still restores. */
     fun hide(onIsolatedLayerHideCommitted: ((Long) -> Unit)? = null,
-             onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null): Boolean {
+             onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null,
+             onSurfaceRevoked: ((Long, Long, KeyguardOrbSurfaceMetrics, KeyguardOrbSurfaceMetrics.HolderOperation) -> Unit)? = null): Boolean {
         checkMainThread()
         val current = root ?: return false
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REVOKE, attachment = attachGeneration)
         // Revoke the worker first, then change the root's visibility before
         // any child-destruction callback can wait for an entered holder call.
-        surfacePresenter?.revokeCurrent(hideChild = false)
+        surfacePresenter?.revokeCurrent(hideChild = false, onRevoked = onSurfaceRevoked)
         if (lifecycle.isAttached()) {
             current.visibility = View.INVISIBLE
             KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.INVISIBLE, attachment = attachGeneration)

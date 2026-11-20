@@ -33,6 +33,10 @@ paired-light com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
 paired-full com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r14PairedEpisodesWithFinancialPressureFull
 deferred-light com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r14DeferredRecoveryWithoutShowLight
 deferred-full com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r14DeferredRecoveryWithoutShowFull
+r15-phone-light com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r15PhoneShapeKeepsFinancialAndActualWithdrawalLight
+r15-phone-full com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r15PhoneShapeKeepsFinancialAndActualWithdrawalFull
+r15-stale-owner com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r15WrongRetiredAttachmentNeverInheritsHolderEvidence
+r15-first-live com.fluvi.app.lockscreen.KeyguardR12ServiceTimingInstrumentationTest#r15FirstReadIsRootOnlyAndLaterReadRemainsStock
 CASES
 cat "$evidence/case-list.txt"
 selector=$(awk -v label="$requested" '$1==label {print $2}' "$evidence/case-list.txt")
@@ -86,6 +90,18 @@ timeout -k 2s 20s adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-ser
 mkdir -p "$evidence/probe"
 tar -xf "$evidence/service-probe.tar" -C "$evidence/probe" 2> "$evidence/untar.stderr" || true
 sha256sum --check "$evidence/apks.sha256" > "$evidence/apks-after-check.txt" 2>&1 || true
+identity_rc=0
+for pair in "com.fluvi.app:$app:app" "com.fluvi.app.test:$test_apk:test"; do
+ IFS=: read -r package binary label <<< "$pair"
+ path=$(adb shell pm path "$package" 2>/dev/null | tr -d '\r' | sed -n 's/^package://p') || path=
+ expected=$(sha256sum "$binary" | cut -d ' ' -f 1)
+ actual=
+ if [[ $path == /*/base.apk ]]; then
+  actual=$(timeout -k 2s 30s adb exec-out cat "$path" | sha256sum | cut -d ' ' -f 1) || actual=
+ fi
+ printf 'expected=%s installed=%s path=%s\n' "$expected" "${actual:-UNOBSERVED}" "${path:-UNOBSERVED}" > "$evidence/installed-$label-after-sha256.txt"
+ [[ -n $actual && $expected == "$actual" ]] || identity_rc=1
+done
 method=${selector##*#}
 if ! grep -Fxq "INSTRUMENTATION_STATUS: test=$method" "$evidence/instrumentation.txt"; then
  echo 'NOT_ESTABLISHED_NO_NAMED_TEST' > "$evidence/status.txt"; exit 1
@@ -98,7 +114,7 @@ if [[ $requested == exclusion || $requested == fresh-main || $requested == late-
    echo 'INVALID_OR_NOT_ESTABLISHED' > "$evidence/status.txt"; exit 1
  fi
 fi
-if [[ $rc == 0 ]] && grep -Eq '^OK \(1 test\)' "$evidence/instrumentation.txt"; then
+if [[ $rc == 0 && $identity_rc == 0 ]] && grep -Eq '^OK \(1 test\)' "$evidence/instrumentation.txt"; then
  echo 'CASE_PASS_NOT_FULL_QUALIFICATION' > "$evidence/status.txt"
 else
  echo 'FAIL_OR_NOT_ESTABLISHED' > "$evidence/status.txt"; exit 1

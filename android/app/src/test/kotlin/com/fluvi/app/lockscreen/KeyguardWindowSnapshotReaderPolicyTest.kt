@@ -133,6 +133,35 @@ class KeyguardWindowSnapshotReaderPolicyTest {
         assertEquals(0, KeyguardWindowSnapshotReaderPolicy.batchedPrefetchFlags(apiLevel = 32))
     }
 
+    @Test fun only_the_qualified_active_root_changes_its_acquisition_flags() {
+        val childFlags = KeyguardWindowSnapshotReaderPolicy.batchedPrefetchFlags(apiLevel = 35)
+        assertEquals(36, childFlags)
+        assertEquals(0, KeyguardWindowSnapshotReaderPolicy.activeRootPrefetchFlags(true, apiLevel = 35))
+        assertEquals(childFlags, KeyguardWindowSnapshotReaderPolicy.activeRootPrefetchFlags(false, apiLevel = 35))
+        assertEquals(0, KeyguardWindowSnapshotReaderPolicy.activeRootPrefetchFlags(true, apiLevel = 32))
+    }
+
+    @Test fun acquisition_boundary_calls_once_and_keeps_child_and_fallback_routes() {
+        fun read(initial: Boolean): List<String> {
+            val calls = mutableListOf<String>()
+            val result = KeyguardWindowAcquisitionCalls.activeRoot(initial, 35) { flags ->
+                calls += "root:$flags"
+                "accepted-root"
+            }
+            assertEquals("accepted-root", result)
+            repeat(2) { child ->
+                KeyguardWindowAcquisitionCalls.child(36, 35,
+                    batched = { flags -> calls += "child$child:$flags" },
+                    legacy = { calls += "unexpected-legacy" })
+            }
+            KeyguardWindowAcquisitionCalls.child(null, 35,
+                batched = { calls += "unexpected-batch:$it" }, legacy = { calls += "fallback:legacy" })
+            return calls
+        }
+        assertEquals(listOf("root:0", "child0:36", "child1:36", "fallback:legacy"), read(true))
+        assertEquals(listOf("root:36", "child0:36", "child1:36", "fallback:legacy"), read(false))
+    }
+
     private fun window(
         id: Int,
         active: Boolean,

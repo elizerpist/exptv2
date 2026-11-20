@@ -1,5 +1,11 @@
 package com.fluvi.app.lockscreen
 
+/** Wake-opening sampler observation, not permission to reuse a system state. */
+internal data class KeyguardWakeEligibilityEvidence(
+    val sampleRequestId: Long?, val sampleAuthority: KeyguardInspectionAuthority?,
+    val callbackAt: Long, val startedAt: Long, val finishedAt: Long, val deliveredAt: Long,
+)
+
 /** Immutable authority captured when an inspection is requested, rather than
  * when its worker eventually gets CPU time. */
 internal data class KeyguardCardInspectionRequest(
@@ -21,6 +27,7 @@ internal data class KeyguardCardInspectionRequest(
     val triggerReceivedUptimeMs: Long? = null,
     /** Original scalar ingress identity; copies retain it across reacquisition. */
     val r14Ingress: KeyguardR14Ingress? = null,
+    val wakeEligibility: KeyguardWakeEligibilityEvidence? = null,
 ) {
     /** Carry an unserved event, never an acquired answer, across a local
      * withdrawal in the SAME service/wake. The new request must reacquire

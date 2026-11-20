@@ -653,6 +653,11 @@ internal object KeyguardCardDiagnostics {
         var attachedBefore: Boolean? = null,
         var detachFailed: Boolean = false,
         var cause: InspectionTimeline? = null,
+        var r15Generation: String? = null,
+        var r15TargetAttachment: String? = null,
+        var r15AtRevoke: String? = null,
+        var r15Metrics: KeyguardOrbSurfaceMetrics? = null,
+        var r15MetricSnapshot: KeyguardOrbSurfaceMetrics.Snapshot? = null,
         val retirementEvents: ArrayDeque<RetirementMilestone> = ArrayDeque(),
         var retirementEventsOmitted: Int = 0,
     )
@@ -677,6 +682,8 @@ internal object KeyguardCardDiagnostics {
         var getWindowsMs: Long? = null,
         var readerStrategy: String? = null,
         var prefetchFlags: String? = null,
+        var activeRootFlags: String? = null,
+        var acceptedChildFlags: String? = null,
         var cacheEnabled: String? = null,
         var freshnessPolicy: String? = null,
         var cacheClearResult: String? = null,
@@ -691,12 +698,25 @@ internal object KeyguardCardDiagnostics {
         var rootAcquisitionTotalMs: Long? = null,
         var rootAcquisitionMaxMs: Long? = null,
         var childAcquisitionTotalMs: Long? = null,
+        var firstChildAcquisitionMs: Long? = null,
         var childAcquisitionMaxMs: Long? = null,
         var childAcquisitionCount: Long? = null,
+        var firstNullRootId: String? = null,
+        var firstNullRootType: String? = null,
+        var firstNullRootDisplay: String? = null,
+        var firstNullRootLayer: String? = null,
+        var firstNullRootSource: String? = null,
         var localProcessingMs: Long? = null,
         var trigger: String? = null,
         var triggerReceivedUptimeMs: Long? = null,
         var eventTimeUptimeMs: Long? = null,
+        var eventType: String? = null,
+        var wakeCallbackAt: String? = null,
+        var wakeSampleStart: String? = null,
+        var wakeSampleEnd: String? = null,
+        var wakeSampleMain: String? = null,
+        var wakeSampleRequest: String? = null,
+        var wakeSampleAuthority: String? = null,
         var visibilityEpochAtRequest: Long? = null,
         var visibilityEpochAtApply: Long? = null,
         var pendingRequestIdAtApply: Long? = null,
@@ -878,7 +898,7 @@ internal object KeyguardCardDiagnostics {
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
         "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
-        "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
+        "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "R15_SURFACE_REVOKED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
     private val CAUSAL_SPINE_FIELD_KEYS = setOf(
         "queueMs", "inspectionTotalMs", "windowsReadMs", "treeScanMs", "mainApplyQueueMs",
@@ -1523,6 +1543,13 @@ internal object KeyguardCardDiagnostics {
                     startedAtUptimeMs = fields["startedAtUptimeMs"]?.toLongOrNull() ?: startedAtUptimeMs
                     triggerReceivedUptimeMs = fields["triggerReceivedUptimeMs"]?.toLongOrNull() ?: triggerReceivedUptimeMs
                     eventTimeUptimeMs = fields["eventTimeUptimeMs"]?.toLongOrNull() ?: eventTimeUptimeMs
+                    eventType = fields["eventType"]
+                    wakeCallbackAt = fields["wakeCallbackAt"]
+                    wakeSampleStart = fields["wakeSampleStart"]
+                    wakeSampleEnd = fields["wakeSampleEnd"]
+                    wakeSampleMain = fields["wakeSampleMain"]
+                    wakeSampleRequest = fields["wakeSampleRequest"]
+                    wakeSampleAuthority = fields["wakeSampleAuthority"]
                     visibilityEpochAtRequest = fields["requestVisibilityEpoch"]?.toLongOrNull() ?: visibilityEpochAtRequest
                     finishedAtUptimeMs = event.uptimeMs
                     windowsReadMs = fields["windowsReadMs"]?.toLongOrNull()
@@ -1530,6 +1557,8 @@ internal object KeyguardCardDiagnostics {
                     getWindowsMs = fields["getWindowsMs"]?.toLongOrNull()
                     readerStrategy = fields["readerStrategy"]
                     prefetchFlags = fields["prefetchFlags"]
+                    activeRootFlags = fields["activeRootFlags"]
+                    acceptedChildFlags = fields["acceptedChildFlags"]
                     cacheEnabled = fields["cacheEnabled"]
                     freshnessPolicy = fields["freshnessPolicy"]
                     cacheClearResult = fields["cacheClearResult"]
@@ -1544,8 +1573,14 @@ internal object KeyguardCardDiagnostics {
                     rootAcquisitionTotalMs = fields["rootAcquisitionTotalMs"]?.toLongOrNull()
                     rootAcquisitionMaxMs = fields["rootAcquisitionMaxMs"]?.toLongOrNull()
                     childAcquisitionTotalMs = fields["childAcquisitionTotalMs"]?.toLongOrNull()
+                    firstChildAcquisitionMs = fields["firstChildAcquisitionMs"]?.toLongOrNull()
                     childAcquisitionMaxMs = fields["childAcquisitionMaxMs"]?.toLongOrNull()
                     childAcquisitionCount = fields["childAcquisitionCount"]?.toLongOrNull()
+                    firstNullRootId = fields["firstNullRootId"]
+                    firstNullRootType = fields["firstNullRootType"]
+                    firstNullRootDisplay = fields["firstNullRootDisplay"]
+                    firstNullRootLayer = fields["firstNullRootLayer"]
+                    firstNullRootSource = fields["firstNullRootSource"]
                     localProcessingMs = fields["localProcessingMs"]?.toLongOrNull()
                     surfaceReason = reason
                     surfaceClassification = fields["surfaceClassification"]
@@ -1579,6 +1614,16 @@ internal object KeyguardCardDiagnostics {
                     attempt.inspectionsRejected += 1
                     attempt.staleInspectionCount += 1
                     inspectionTimeline()?.rejectionReason = fields["rejectionReason"] ?: reason
+                }
+                "R15_SURFACE_REVOKED" -> hideEpisode()?.let { hide ->
+                    if (hide.r15Metrics == null) {
+                        hide.r15Generation = fields["r15Generation"]
+                        hide.r15TargetAttachment = fields["r15TargetAttachment"]
+                        hide.r15AtRevoke = fields["r15AtRevoke"]
+                        if (fields["r15TargetAttachment"]?.toLongOrNull() == hide.attachGeneration) {
+                            hide.r15Metrics = event.surfaceMetrics
+                        }
+                    }
                 }
                 "RETRY_SCHEDULED" -> attempt.retryScheduledCount += 1
                 "RETRY_FIRED" -> attempt.retryFiredCount += 1
@@ -1885,7 +1930,8 @@ internal object KeyguardCardDiagnostics {
             recent = ArrayDeque(work.recent.map { it.copy(fields = it.fields.toMap()) }),
         ) },
         shows = ArrayDeque(attempt.shows.map { it.copy(cause = it.cause?.copy(), renderSummary = it.renderSummary.toMap(), r11Evidence = it.r11Evidence.toMap(), r12Evidence = it.r12Evidence.toMap(), r12MetricSnapshot = it.r12Metrics?.snapshot() ?: it.r12MetricSnapshot, r12Metrics = null, r12LatestMetricSnapshot = it.r12LatestMetrics?.snapshot() ?: it.r12LatestMetricSnapshot, r12LatestMetrics = null) }),
-        hides = ArrayDeque(attempt.hides.map { it.copy(cause = it.cause?.copy()) }),
+        hides = ArrayDeque(attempt.hides.map { it.copy(cause = it.cause?.copy(),
+            r15MetricSnapshot = it.r15Metrics?.snapshot() ?: it.r15MetricSnapshot, r15Metrics = null) }),
         pendingHideCommits = ArrayDeque(attempt.pendingHideCommits),
         pendingR11 = ArrayDeque(attempt.pendingR11.map { it.copy(fields = it.fields.toMap()) }),
         pendingR12 = ArrayDeque(attempt.pendingR12.map { it.copy(fields = it.fields.toMap()) }),
@@ -2068,6 +2114,24 @@ internal object KeyguardCardDiagnostics {
                 episodeCores.getValue(attempt).getOrNull(index)?.let { (id, text) -> select(id, text, attempt.id) }
             }
         }
+        // Each selected attempt's financial core precedes verbose summaries,
+        // recovery histories and detailed samples. In particular, a busy
+        // earlier wake must not consume the later attempts' reserved cores.
+        attemptsForCausalEvidence.forEach { attempt ->
+            val financial = attempt.r13Work
+            select("a${attempt.id}:r13Financial", buildString {
+                if (financial == null) {
+                    appendLine(" R13_FINANCIAL attempt=${attempt.id} coverage=UNOBSERVED")
+                } else {
+                    append(" R13_FINANCIAL attempt=${attempt.id} coverage=keyguardScopesOnly")
+                    append(" scopes=${financial.scopes} invalid=${financial.invalid} returned=${financial.returned} noops=${financial.noops}")
+                    append(" constructions=${financial.constructions} demands=${financial.demands} paints=${financial.paints} paintCompleted=${financial.paintCompletions} legacyBinds=${financial.binds}")
+                    append(" pixelPayloadEstimateBytes=${financial.paintCompletions * 36_864L} wallNs=${financial.wallNs} cpuNs=${financial.cpuNs}")
+                    append(" paintWallNs=${financial.paintWallNs} paintCpuNs=${financial.paintCpuNs} paintMaxWallNs=${financial.paintMaxWallNs} paintMaxCpuNs=${financial.paintMaxCpuNs}")
+                    appendLine(" intervalClock=uptimeMs durationClock=System.nanoTime cpuClock=threadCPU overlap=UNOBSERVED physical=UNOBSERVED")
+                }
+            }, attempt.id)
+        }
         attemptsForCausalEvidence.forEach { attempt ->
             select("a${attempt.id}:summary", attemptSummary(attempt), attempt.id)
         }
@@ -2090,7 +2154,7 @@ internal object KeyguardCardDiagnostics {
         // same export limit as every other record.
         attemptsForCausalEvidence.forEach { attempt ->
             val financial = attempt.r13Work
-            select("a${attempt.id}:r13Financial", buildString {
+            deferDetail("a${attempt.id}:r13Financial", buildString {
                 if (financial == null) {
                     appendLine(" R13_FINANCIAL attempt=${attempt.id} coverage=UNOBSERVED")
                 } else {
@@ -2108,7 +2172,7 @@ internal object KeyguardCardDiagnostics {
                             appendLine(" R13_FINANCIAL_SCOPE kind=$label req=${sample.requestId ?: "UNOBSERVED"} showOp=${sample.showOperationId ?: "UNOBSERVED"} attach=${sample.attachGeneration ?: "UNOBSERVED"} route=$route start=${f["r13Start"] ?: "UNOBSERVED"} end=${f["r13End"] ?: "UNOBSERVED"} wallNs=${f["r13WallNs"] ?: "UNOBSERVED"} cpuNs=${f["r13CpuNs"] ?: "UNOBSERVED"} construct=${f["r13Construct"] ?: "UNOBSERVED"} demand=${f["r13Demand"] ?: "UNOBSERVED"} paint=${f["r13Paint"] ?: "UNOBSERVED"} bind=${f["r13Bind"] ?: "UNOBSERVED"} noop=${f["r13Noop"] ?: "UNOBSERVED"} returned=${f["r13Returned"] ?: "UNOBSERVED"}")
                         }
                 }
-            }, attempt.id)
+            })
             val first = attempt.shows.firstOrNull()
             val cold = first?.renderSummary
             val offer = first?.r11Evidence ?: emptyMap()
@@ -2318,12 +2382,15 @@ internal object KeyguardCardDiagnostics {
         append(" $label req=${cause?.requestId ?: "NA"}")
         if (cause == null) { appendLine(" evidence=MISSING_REQUEST"); return@buildString }
         append(" trigger=${cause.trigger ?: "NA"} callbackReceived=${cause.triggerReceivedUptimeMs ?: "NA(missingTrigger)"} eventTime=${cause.eventTimeUptimeMs ?: "NA(sourceUnavailable)"}")
+        append(" eventType=${cause.eventType ?: "UNOBSERVED"} wakeCallback=${cause.wakeCallbackAt ?: "UNOBSERVED"} wakeSampler=${cause.wakeSampleRequest ?: "UNOBSERVED"}@${cause.wakeSampleStart ?: "UNOBSERVED"}/${cause.wakeSampleEnd ?: "UNOBSERVED"}/${cause.wakeSampleMain ?: "UNOBSERVED"} samplerAuthority=${cause.wakeSampleAuthority ?: "UNOBSERVED"}")
         append(" queued=${cause.queuedAtUptimeMs ?: "NA"} started=${cause.startedAtUptimeMs ?: "NA"} finished=${cause.finishedAtUptimeMs ?: "NA"} handoff=${cause.mainHandoffRequestedAtUptimeMs ?: "NA"} mainApply=${cause.mainApplyStartedAtUptimeMs ?: "NA"} applied=${cause.appliedAtUptimeMs ?: "NA"}")
         append(" authorityAtStart=${cause.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${cause.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${cause.visibilityEpochAtApply ?: "NA"} pendingAtApply=${cause.pendingRequestIdAtApply ?: "NA"}")
         append(" classification=${cause.surfaceClassification ?: "NA"} reason=${cause.surfaceReason ?: "NA"} markers=${cause.surfaceMarkers ?: "NA"} rootUnavailable=${cause.rootUnavailable ?: "NA"} walkTruncated=${cause.walkTruncated ?: "NA"} truncationReasons=${cause.walkTruncationReasons ?: "UNOBSERVED"} visited=${cause.visitedNodeCount ?: "NA"}")
         append(" reader=${cause.readerStrategy ?: "NA"} freshness=${cause.freshnessPolicy ?: "NA"} cacheClear=${cause.cacheClearResult ?: "NA"} fallback=${cause.fallbackReason ?: "NA"}")
         append(" readAhead=${cause.readAheadReason ?: "UNOBSERVED"}:${cause.readAheadPending ?: "UNOBSERVED"}/${cause.readAheadReserved ?: "UNOBSERVED"}:rev${cause.readAheadRevision ?: "UNOBSERVED"}:applyQueued${cause.readAheadPriorApplyQueued ?: "UNOBSERVED"}")
         append(" activeCandidate=${cause.activeCandidateWindowId ?: "NA"} returnedRoot=${cause.returnedRootWindowId ?: "NA"} activeAccepted=${cause.activeRootAccepted ?: "NA"} activeRootMs=${cause.activeRootTotalMs ?: "NA"} perWindowRootMs=${cause.perWindowRootTotalMs ?: "NA"} childCalls=${cause.childAcquisitionCount ?: "NA"} childMs=${cause.childAcquisitionTotalMs ?: "NA"} childMaxMs=${cause.childAcquisitionMaxMs ?: "NA"} localMs=${cause.localProcessingMs ?: "NA"}")
+        append(" rootFlags=${cause.activeRootFlags ?: "UNOBSERVED"} acceptedChildFlags=${cause.acceptedChildFlags ?: "UNOBSERVED"} firstChildMs=${cause.firstChildAcquisitionMs ?: "UNOBSERVED"}")
+        append(" firstNullRoot=${cause.firstNullRootId ?: "UNOBSERVED"}/${cause.firstNullRootType ?: "UNOBSERVED"}/${cause.firstNullRootDisplay ?: "UNOBSERVED"}/${cause.firstNullRootLayer ?: "UNOBSERVED"}/${cause.firstNullRootSource ?: "UNOBSERVED"}")
         appendLine(" slowCalls=${cause.slowWindowCalls ?: "NA"} rejected=${cause.rejectionReason ?: "NA"} followup=${cause.followupAction ?: "NA"}")
     }
 
@@ -2331,15 +2398,20 @@ internal object KeyguardCardDiagnostics {
         append(" $label req=${cause?.requestId ?: "NA"}")
         if (cause == null) { appendLine(" evidence=MISSING_REQUEST"); return@buildString }
         append(" trigger=${cause.trigger ?: "NA"} callbackReceived=${cause.triggerReceivedUptimeMs ?: "NA(missingTrigger)"} eventTime=${cause.eventTimeUptimeMs ?: "NA(sourceUnavailable)"}")
+        append(" eventType=${cause.eventType ?: "UNOBSERVED"} wakeCallback=${cause.wakeCallbackAt ?: "UNOBSERVED"} wakeSampler=${cause.wakeSampleRequest ?: "UNOBSERVED"}@${cause.wakeSampleStart ?: "UNOBSERVED"}/${cause.wakeSampleEnd ?: "UNOBSERVED"}/${cause.wakeSampleMain ?: "UNOBSERVED"} samplerAuthority=${cause.wakeSampleAuthority ?: "UNOBSERVED"}")
         append(" queued=${cause.queuedAtUptimeMs ?: "NA"} started=${cause.startedAtUptimeMs ?: "NA"} finished=${cause.finishedAtUptimeMs ?: "NA"}")
         append(" authorityAtStart=${cause.authorityCurrentAtStart ?: "NA"} visibilityEpochAtRequest=${cause.visibilityEpochAtRequest ?: "NA"} visibilityEpochAtApply=${cause.visibilityEpochAtApply ?: "NA"} pendingAtApply=${cause.pendingRequestIdAtApply ?: "NA"}")
         append(" classification=${cause.surfaceClassification ?: "NA"} reason=${cause.surfaceReason ?: "NA"} markers=${cause.surfaceMarkers ?: "NA"}")
         append(" rootUnavailable=${cause.rootUnavailable ?: "NA"} walkTruncated=${cause.walkTruncated ?: "NA"} truncationReasons=${cause.walkTruncationReasons ?: "UNOBSERVED"}")
+        append(" rootFlags=${cause.activeRootFlags ?: "UNOBSERVED"} acceptedChildFlags=${cause.acceptedChildFlags ?: "UNOBSERVED"} activeRootMs=${cause.activeRootTotalMs ?: "UNOBSERVED"} perWindowRootMs=${cause.perWindowRootTotalMs ?: "UNOBSERVED"} firstChildMs=${cause.firstChildAcquisitionMs ?: "UNOBSERVED"} childMs=${cause.childAcquisitionTotalMs ?: "UNOBSERVED"} childMaxMs=${cause.childAcquisitionMaxMs ?: "UNOBSERVED"}")
+        append(" firstNullRoot=${cause.firstNullRootId ?: "UNOBSERVED"}/${cause.firstNullRootType ?: "UNOBSERVED"}/${cause.firstNullRootDisplay ?: "UNOBSERVED"}/${cause.firstNullRootLayer ?: "UNOBSERVED"}/${cause.firstNullRootSource ?: "UNOBSERVED"}")
         appendLine(" freshness=${cause.freshnessPolicy ?: "NA"} cacheClear=${cause.cacheClearResult ?: "NA"} rejected=${cause.rejectionReason ?: "NA"} followup=${cause.followupAction ?: "NA"}")
     }
 
-    private fun compactHideRecord(hide: HideEpisode): String =
-        " WITHDRAWAL hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "NA"} req=${hide.requestId ?: "NA"} attachedBefore=${hide.attachedBefore ?: "NA"} trigger=${hide.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "NA"} layerSubmit=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${hide.isolatedLayerTransactionApplied ?: "NA"} layerApplyReturn=${hide.isolatedLayerApplyReturnedAtUptimeMs ?: "UNOBSERVED"} layerCommit=${hide.isolatedLayerCommitReceivedAtUptimeMs ?: "UNOBSERVED"} remove=${hide.removeBeginAtUptimeMs ?: "NA"}/${hide.removeReturnAtUptimeMs ?: "NA"} detachFailed=${hide.detachFailed}\n"
+    private fun compactHideRecord(hide: HideEpisode): String {
+        val op = hide.r15MetricSnapshot?.holderOperation
+        return " WITHDRAWAL hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "NA"} req=${hide.requestId ?: "NA"} attachedBefore=${hide.attachedBefore ?: "NA"} trigger=${hide.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "NA"} layerSubmit=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${hide.isolatedLayerTransactionApplied ?: "NA"} layerApplyReturn=${hide.isolatedLayerApplyReturnedAtUptimeMs ?: "UNOBSERVED"} layerCommit=${hide.isolatedLayerCommitReceivedAtUptimeMs ?: "UNOBSERVED"} remove=${hide.removeBeginAtUptimeMs ?: "NA"}/${hide.removeReturnAtUptimeMs ?: "NA"} detachFailed=${hide.detachFailed} holderTarget=${hide.r15TargetAttachment ?: "UNOBSERVED"}/${hide.r15Generation ?: "UNOBSERVED"} holderAtRevoke=${hide.r15AtRevoke ?: "UNOBSERVED"} holderClock=uptimeMs holderCoherent=${op?.coherent ?: "UNOBSERVED"} holderOp=${op?.id ?: "UNOBSERVED"} lock=${op?.lockEnter ?: "UNOBSERVED"}/${op?.lockReturn ?: "UNOBSERVED"} drawReturn=${op?.drawReturn ?: "UNOBSERVED"} post=${op?.postEnter ?: "UNOBSERVED"}/${op?.postReturn ?: "UNOBSERVED"} record=${op?.recordAt ?: "UNOBSERVED"} revoke=${op?.revokeBegin ?: "UNOBSERVED"}/${op?.revokeReturn ?: "UNOBSERVED"} physical=UNOBSERVED\n"
+    }
 
     private val compactRenderKeys = setOf(
         "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped",
@@ -2369,7 +2441,7 @@ internal object KeyguardCardDiagnostics {
                 if (episode.renderSummary.isEmpty()) append(" evidence=UNOBSERVED")
                 else episode.renderSummary.filterKeys { it in compactRenderKeys }.forEach { (key, value) -> append(" $key=$value") }
                 appendLine()
-                if (episode.r12Evidence.isNotEmpty()) append(r12SurfaceRecord(attempt, episode))
+                if (episode.r12Evidence.isNotEmpty()) append(r12SurfaceRecord(attempt, episode, includeHolderDetail = false))
             }
         }.toMutableList()
         attempt.hides.filter { it.operationId !in pairedHides }.forEach { hide ->
@@ -2406,15 +2478,22 @@ internal object KeyguardCardDiagnostics {
         return records
     }
 
-    private fun r12SurfaceRecord(attempt: TimingAttempt, episode: ShowEpisode): String = buildString {
+    private fun r12SurfaceRecord(attempt: TimingAttempt, episode: ShowEpisode, includeHolderDetail: Boolean = true): String = buildString {
         val evidence = episode.r12Evidence
+        val needHolderRow = includeHolderDetail || actualWithdrawal(attempt, episode) == null
         fun value(key: String) = evidence[key] ?: "UNOBSERVED"
+        fun holder(metrics: KeyguardOrbSurfaceMetrics.Snapshot, generation: String, which: String) {
+            val op = metrics.holderOperation
+            appendLine(" R15_HOLDER attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "UNOBSERVED"} generation=$generation owner=$which clock=uptimeMs coherent=${op.coherent} op=${op.id} lock=${op.lockEnter ?: "UNOBSERVED"}/${op.lockReturn ?: "UNOBSERVED"} drawReturn=${op.drawReturn ?: "UNOBSERVED"} post=${op.postEnter ?: "UNOBSERVED"}/${op.postReturn ?: "UNOBSERVED"} record=${op.recordAt ?: "UNOBSERVED"} revoke=${op.revokeBegin ?: "UNOBSERVED"}/${op.revokeReturn ?: "UNOBSERVED"} screenPresentation=UNOBSERVED")
+        }
         appendLine(" R12_SURFACE attempt=${attempt.id} showOp=${episode.operationId} attach=${episode.attachGeneration ?: "UNOBSERVED"} route=${value("route")} privacy=${value("privacy")} generation=${value("generation")} created=${value("created")} changed=${value("changed")}/${value("size")} poster=${value("poster")}@${value("posterAt")} firstPost=${value("firstPost")} firstPostMainDelivery=${value("firstPostMain")} guardRetired=${value("guardRetired")} revoked=${value("revoked")} destroyed=${value("destroyed")} destroyDetail=${value("destroyDetail")} degraded=${value("degraded")} latest=${value("latestGeneration")}/${value("latestPrivacy")}/${value("latestStage")}@${value("latestAt")} pendingOmitted=${attempt.pendingR12Omitted} physical=UNOBSERVED")
         episode.r12MetricSnapshot?.let { metrics ->
             appendLine(" R12_CADENCE attempt=${attempt.id} showOp=${episode.operationId} clock=System.nanoTime cpu=threadCPU coherent=${metrics.coherent} submissions=${metrics.submissions} firstPost=${metrics.firstPostUptimeMs ?: "UNOBSERVED"} distinct=${metrics.firstDistinctUptimeMs ?: "UNOBSERVED"} lastPost=${metrics.lastPostUptimeMs ?: "UNOBSERVED"} retainedGaps=${metrics.retainedGaps} p95GapNs=${metrics.p95GapNs ?: "UNOBSERVED"} worstGapNs=${metrics.worstGapNs ?: "UNOBSERVED"} over50ms=${metrics.gapsOver50Ms} maxLockWallCpuNs=${metrics.maxLockWallNs}/${metrics.maxLockCpuNs} maxDrawWallCpuNs=${metrics.maxDrawWallNs}/${metrics.maxDrawCpuNs} maxPostWallCpuNs=${metrics.maxPostWallNs}/${metrics.maxPostCpuNs} presentation=UNOBSERVED")
+            if (needHolderRow) holder(metrics, value("generation"), "first")
         }
         episode.r12LatestMetricSnapshot?.let { metrics ->
             appendLine(" R12_CADENCE_LATEST attempt=${attempt.id} showOp=${episode.operationId} generation=${value("latestGeneration")} coherent=${metrics.coherent} submissions=${metrics.submissions} firstPost=${metrics.firstPostUptimeMs ?: "UNOBSERVED"} distinct=${metrics.firstDistinctUptimeMs ?: "UNOBSERVED"} lastPost=${metrics.lastPostUptimeMs ?: "UNOBSERVED"} worstGapNs=${metrics.worstGapNs ?: "UNOBSERVED"} presentation=UNOBSERVED")
+            if (needHolderRow) holder(metrics, value("latestGeneration"), "latest")
         }
     }
 
@@ -2457,7 +2536,7 @@ internal object KeyguardCardDiagnostics {
     }
 
     private fun hideRecord(hide: HideEpisode): String =
-        " WITHDRAWAL hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "NA"} req=${hide.requestId ?: "NA"} attachedBefore=${hide.attachedBefore ?: "NA"} trigger=${hide.triggerReceivedAtUptimeMs ?: "NA(missingTrigger)"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "NA"} layerSubmit=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "NA"}/${hide.isolatedLayerTransactionApplied ?: "NA"} layerApplyReturn=${hide.isolatedLayerApplyReturnedAtUptimeMs ?: "UNOBSERVED"} layerCommit=${hide.isolatedLayerCommitReceivedAtUptimeMs ?: "UNOBSERVED"} r09Retire=${hide.retirementEvents.joinToString("|") { "${it.stage}@${it.at}:${it.lease}:${it.child}:${it.slot}/${it.use}" }.ifBlank { "UNOBSERVED" }} r09RetireOmitted=${hide.retirementEventsOmitted} remove=${hide.removeBeginAtUptimeMs ?: "NA"}/${hide.removeReturnAtUptimeMs ?: "NA"} detachFailed=${hide.detachFailed}\n"
+        compactHideRecord(hide).trimEnd('\n') + " r09Retire=${hide.retirementEvents.joinToString("|") { "${it.stage}@${it.at}:${it.lease}:${it.child}:${it.slot}/${it.use}" }.ifBlank { "UNOBSERVED" }} r09RetireOmitted=${hide.retirementEventsOmitted}\n"
 
     private fun causalSpineComplete(attempt: TimingAttempt): Boolean {
         fun has(stage: String, show: Long? = null, hide: Long? = null, attach: Long? = null) = attempt.causalSpine.any {

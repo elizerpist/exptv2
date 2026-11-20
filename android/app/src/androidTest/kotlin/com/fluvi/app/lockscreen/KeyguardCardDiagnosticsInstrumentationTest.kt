@@ -703,6 +703,120 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r14DeferredRecoveryWithoutShowLight() = deferredRecoveryWithoutShow("LIGHT")
     @Test fun r14DeferredRecoveryWithoutShowFull() = deferredRecoveryWithoutShow("FULL")
 
+    @Test fun r15PhoneShapeKeepsFinancialAndActualWithdrawalLight() = r15PhoneShape("LIGHT")
+    @Test fun r15PhoneShapeKeepsFinancialAndActualWithdrawalFull() = r15PhoneShape("FULL")
+    @Test fun r15WrongRetiredAttachmentNeverInheritsHolderEvidence() {
+        for (mode in listOf("LIGHT", "FULL")) {
+            KeyguardCardDiagnostics.startCapture(context, "r15-owner", "profile", mode)
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 30, 1, "wake", 100))
+            val hide = KeyguardCardDiagnostics.newHideOperation(owner, 4, 1, 101)
+            val metrics = KeyguardOrbSurfaceMetrics().apply {
+                beginHolderOperation(111); holderLockReturned(112); revokeStarted(113); revokeReturned(114)
+                holderPostEntered(115); holderPostReturned(116)
+            }
+            KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "window", operation = hide, observedUptimeMs = 105)
+            KeyguardCardDiagnostics.captureEvent(context, "R15_SURFACE_REVOKED", "mismatch", operation = hide,
+                observedUptimeMs = 117, fields = mapOf("r15TargetAttachment" to 5, "r15Generation" to 9,
+                    "r15AtRevoke" to "test-mismatch"), surfaceMetrics = metrics)
+            val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            val row = report.lineSequence().first { it.startsWith(" WITHDRAWAL ") }
+            assertTrue(row.contains("attach=4") && row.contains("holderTarget=5/9"))
+            assertTrue(row.contains("holderCoherent=UNOBSERVED") && row.contains("post=UNOBSERVED/UNOBSERVED"))
+            metrics.holderPostReturned(999_999)
+            assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+        }
+    }
+
+    /** Four retained phone-shaped attempts with raw pressure. Attempts 1, 6,
+     * 7 and 8 reproduce the identifiers omitted by the R14 phone export. */
+    private fun r15PhoneShape(mode: String) {
+        val source = androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("sourceSha") ?: "r15-phone-shape"
+        KeyguardCardDiagnostics.startCapture(context, source, "profile", mode)
+        val metricOwners = mutableListOf<KeyguardOrbSurfaceMetrics>()
+        repeat(8) { index ->
+            val base = (index + 1L) * 10_000L
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 91, index + 1L, "wake", base))
+            val request = base + 1
+            val attach = index + 1L
+            KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "wake", requestId = request,
+                diagnosticContext = owner, observedUptimeMs = base + 1)
+            KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_FINISHED", "MAIN_CONFIRMED", requestId = request,
+                diagnosticContext = owner, observedUptimeMs = base + 10,
+                fields = readerFields(main = true) + mapOf("activeRootFlags" to 0, "acceptedChildFlags" to 36,
+                    "firstChildAcquisitionMs" to 2, "firstNullRootId" to 735, "firstNullRootType" to 3,
+                    "firstNullRootDisplay" to 0, "firstNullRootLayer" to -1, "firstNullRootSource" to "window"))
+            val show = KeyguardCardDiagnostics.newShowOperation(owner, attach, request)
+            KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", operation = show, observedUptimeMs = base + 11)
+            KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_RETURN", "wake", operation = show, observedUptimeMs = base + 12)
+            val metrics = KeyguardOrbSurfaceMetrics()
+            metricOwners += metrics
+            metrics.beginHolderOperation(base + 13); metrics.holderLockReturned(base + 14)
+            metrics.revokeStarted(base + 20); metrics.revokeReturned(base + 21)
+            metrics.holderDrawReturned(base + 22); metrics.holderPostEntered(base + 23)
+            metrics.holderPostReturned(base + 24); metrics.holderRecordObserved(base + 25)
+            metrics.record(base + 25, (base + 25) * 1_000_000, true, 1, 2, 3, 4, 5, 6)
+            KeyguardCardDiagnostics.captureEvent(context, "R12_SURFACE", "ROUTE_SELECTED", operation = show,
+                observedUptimeMs = base + 13, fields = mapOf("r12Generation" to attach, "r12Detail" to "SURFACE_LIVE"), surfaceMetrics = metrics)
+            val hideRequest = base + 2
+            KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_FINISHED", "FOREIGN_ABOVE", requestId = hideRequest,
+                diagnosticContext = owner, observedUptimeMs = base + 19, fields = readerFields())
+            val hide = KeyguardCardDiagnostics.newHideOperation(owner, attach, hideRequest, base + 18)
+            KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "window", operation = hide, observedUptimeMs = base + 20)
+            KeyguardCardDiagnostics.captureEvent(context, "R15_SURFACE_REVOKED", "synchronousAccessClosure", operation = hide,
+                observedUptimeMs = base + 21, fields = mapOf("r15TargetAttachment" to attach, "r15Generation" to attach,
+                    "r15AtRevoke" to "true:1:${base + 13}/${base + 14}:UNOBSERVED:UNOBSERVED/UNOBSERVED:UNOBSERVED"), surfaceMetrics = metrics)
+            KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "window", operation = hide,
+                observedUptimeMs = base + 21, fields = mapOf("attachedBefore" to true))
+            KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_APPLIED", "window", operation = hide, observedUptimeMs = base + 22)
+            KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_RETURN", "window", operation = hide, observedUptimeMs = base + 26)
+            val recovery = mapOf("r14Recovery" to attach, "r14PreviousHide" to hide.hideOperationId,
+                "r14PreviousAttach" to attach, "r14Physical" to "UNOBSERVED")
+            for ((phase, at) in listOf("WITHDRAWN" to 27L, "END_terminal" to 28L)) {
+                KeyguardCardDiagnostics.captureEvent(context, "R14_RECOVERY", phase, diagnosticContext = owner,
+                    observedUptimeMs = base + at, fields = recovery)
+            }
+            val cleanup = KeyguardCardDiagnostics.newHideOperation(owner, attach, null, base + 29)
+            KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "cleanup", operation = cleanup, observedUptimeMs = base + 30)
+            KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "cleanup", operation = cleanup,
+                observedUptimeMs = base + 31, fields = mapOf("attachedBefore" to false))
+            repeat(40) { sample ->
+                val at = base + 100 + sample
+                KeyguardCardDiagnostics.captureEvent(context, "R13_FINANCIAL", "scoped", diagnosticContext = owner,
+                    requestId = base + 1000 + sample, attachGeneration = attach, observedUptimeMs = at + 1,
+                    fields = mapOf("r13Start" to at, "r13End" to at + 1, "r13WallNs" to 123456789012L,
+                        "r13CpuNs" to 12345678901L, "r13Construct" to 1, "r13Demand" to 0, "r13Paint" to 0,
+                        "r13PaintDone" to 0, "r13Bind" to 0, "r13PaintWallNs" to 0, "r13PaintCpuNs" to 0,
+                        "r13PaintMaxWallNs" to 0, "r13PaintMaxCpuNs" to 0, "r13Returned" to true,
+                        "r13Noop" to true, "r13Success" to true, "r13Route" to 0))
+            }
+            repeat(80) { sample ->
+                KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure", requestId = base + 2000 + sample,
+                    diagnosticContext = owner, observedUptimeMs = base + 500 + sample)
+                if (sample % 40 == 39) KeyguardCardDiagnostics.captureSnapshot(context)
+            }
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("runUuid")?.let { runId ->
+            val directory = java.io.File(context.filesDir, "keyguard-service-probe/r15/$runId/phone-pressure")
+            check(directory.mkdirs() || directory.isDirectory)
+            java.io.File(directory, "$mode-report.txt").writeText(report)
+        }
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        assertTrue(report.contains("build=$source\n"))
+        assertTrue(report.contains("retainedAttemptIds=1,6,7,8"))
+        val omissions = report.lineSequence().first { it.startsWith("omittedCriticalRecordIds=") }
+        for (id in listOf(1, 6, 7, 8)) {
+            assertTrue("missing financial core for attempt $id", report.contains("R13_FINANCIAL attempt=$id coverage=keyguardScopesOnly scopes=40"))
+            assertFalse("incorrectly omitted a$id:r13Financial", omissions.contains("a$id:r13Financial"))
+            assertTrue(report.contains("R14_RECOVERY_META attempt=$id retained=2 omitted=0"))
+            assertTrue(report.contains("holderTarget=$id/$id"))
+        }
+        assertTrue(report.contains("rootFlags=0 acceptedChildFlags=36"))
+        assertTrue(report.contains("physical=UNOBSERVED"))
+        metricOwners.last().holderPostReturned(999_999)
+        assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+    }
+
     private fun deferredRecoveryWithoutShow(mode: String) {
         KeyguardCardDiagnostics.clearCapture(context)
         val source = androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("sourceSha") ?: "r14-deferred"

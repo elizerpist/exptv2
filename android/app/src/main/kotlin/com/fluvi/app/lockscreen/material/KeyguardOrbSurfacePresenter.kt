@@ -124,10 +124,16 @@ internal class KeyguardOrbSurfacePresenter(
     }
 
     /** Called before root hide/remove. It never joins the render worker. */
-    fun revokeCurrent(discardFull: Boolean = false, hideChild: Boolean = true) {
+    fun revokeCurrent(discardFull: Boolean = false, hideChild: Boolean = true,
+                      onRevoked: ((Long, Long, KeyguardOrbSurfaceMetrics, KeyguardOrbSurfaceMetrics.HolderOperation) -> Unit)? = null) {
         checkMain()
         val old = current ?: return
         worker.revoke(old, discardFull)
+        if (onRevoked != null) old.metrics?.let { metrics ->
+            // Diagnostics must never prevent the already-revoked root from
+            // becoming invisible or being removed.
+            runCatching { onRevoked(old.attachment, old.generation, metrics, metrics.holderSnapshot()) }
+        }
         if (hideChild) surface?.visibility = View.INVISIBLE
     }
 

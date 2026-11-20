@@ -27,6 +27,12 @@ def png(white=False, green=False):
 
 
 class AggregateControls(unittest.TestCase):
+    def test_legacy_service_controls_cannot_be_relabelled_as_live(self):
+        self.assertIn(("r12_ordered", "LEGACY_R11"), r14.REQUIRED)
+        self.assertIn(("r12_occlusion", "LEGACY_R11"), r14.REQUIRED)
+        self.assertNotIn(("r12_ordered", "SURFACE_LIVE"), r14.REQUIRED)
+        self.assertNotIn(("r12_occlusion", "SURFACE_LIVE"), r14.REQUIRED)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)

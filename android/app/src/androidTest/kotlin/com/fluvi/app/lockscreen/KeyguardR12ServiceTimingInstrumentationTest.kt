@@ -46,6 +46,23 @@ class KeyguardR12ServiceTimingInstrumentationTest {
     private lateinit var output: File
     private val evidence = StringBuilder()
 
+    /** A real-service acquisition control only. This does not qualify first
+     * composited pixels, device-visible motion or a performance improvement. */
+    @Test fun r15FirstReadIsRootOnlyAndLaterReadRemainsStock() {
+        assertEquals("SURFACE_LIVE", InstrumentationRegistry.getArguments().getString("r12Mode"))
+        fourRealWakeCyclesUseRequestedRoute()
+        val report = File(output, "capture.txt").readText()
+        val causes = report.lineSequence().filter {
+            it.startsWith(" FIRST_INSPECTION ") || it.startsWith(" SHOWING_INSPECTION ") ||
+                it.startsWith(" ACTUAL_WITHDRAWAL_INSPECTION ")
+        }.toList()
+        File(output, "r15-acquisition-causes.txt").writeText(causes.joinToString("\n", postfix = "\n"))
+        assertTrue("no first physical active-root call used 0 with accepted children 36",
+            causes.any { it.startsWith(" FIRST_INSPECTION ") && it.contains("rootFlags=0 ") && it.contains("acceptedChildFlags=36 ") })
+        assertTrue("no later physical active-root call retained the stock strategy",
+            causes.any { !it.startsWith(" FIRST_INSPECTION ") && it.contains("rootFlags=36 ") })
+    }
+
     @Test fun fourRealWakeCyclesUseRequestedRoute() {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()

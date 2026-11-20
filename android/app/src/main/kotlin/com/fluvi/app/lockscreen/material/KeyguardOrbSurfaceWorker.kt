@@ -268,8 +268,11 @@ internal class KeyguardOrbSurfaceWorker(
     /** Revocation is synchronous and never waits for a holder operation. */
     fun revoke(target: KeyguardOrbSurfaceTarget, discardFull: Boolean = false) {
         if (discardFull) target.discardFullOnRetire = true
+        val measuredRevoke = !target.revoked && target.metrics != null && isCaptureActive()
+        if (measuredRevoke) target.metrics?.revokeStarted(SystemClock.uptimeMillis())
         target.revoked = true
         target.access.revoke()
+        if (measuredRevoke) target.metrics?.revokeReturned(SystemClock.uptimeMillis())
         if (authorizedTarget.compareAndSet(target, null)) preparationGeneration.incrementAndGet()
         handler.postAtFrontOfQueue {
             val retiredScene = currentScene.takeIf { currentTarget === target }
@@ -419,13 +422,14 @@ internal class KeyguardOrbSurfaceWorker(
         var canvas: Canvas? = null
         var posted = false
         val measure = target.metrics != null && isCaptureActive()
+        if (measure) target.metrics?.beginHolderOperation(SystemClock.uptimeMillis())
         val lockStart = if (measure) System.nanoTime() else 0L
         val cpuStart = if (measure) Debug.threadCpuTimeNanos() else 0L
         var lockEnd = 0L; var drawEnd = 0L; var postEnd = 0L
         var cpuLockEnd = 0L; var cpuDrawEnd = 0L; var cpuPostEnd = 0L
         try {
             canvas = target.holder.lockHardwareCanvas()
-            if (measure) { lockEnd = System.nanoTime(); cpuLockEnd = Debug.threadCpuTimeNanos() }
+            if (measure) { lockEnd = System.nanoTime(); cpuLockEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderLockReturned(SystemClock.uptimeMillis()) }
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
             if (!firstPosted || !target.live) {
                 canvas.drawBitmap(checkNotNull(currentPoster).bitmap, 0f, 0f, bitmapPaint)
@@ -433,22 +437,26 @@ internal class KeyguardOrbSurfaceWorker(
                 previousForFrame?.drawPrepared(canvas)
                 painter.drawPrepared(canvas)
             }
-            if (measure) { drawEnd = System.nanoTime(); cpuDrawEnd = Debug.threadCpuTimeNanos() }
+            if (measure) { drawEnd = System.nanoTime(); cpuDrawEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderDrawReturned(SystemClock.uptimeMillis()) }
             val submitted = canvas
             canvas = null
+            if (measure) target.metrics?.holderPostEntered(SystemClock.uptimeMillis())
             target.holder.unlockCanvasAndPost(submitted)
             posted = true
-            if (measure) { postEnd = System.nanoTime(); cpuPostEnd = Debug.threadCpuTimeNanos() }
+            if (measure) { postEnd = System.nanoTime(); cpuPostEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderPostReturned(SystemClock.uptimeMillis()) }
         } catch (error: Throwable) {
             fail(target, "draw:${error.javaClass.simpleName}")
         } finally {
             if (canvas != null) runCatching { target.holder.unlockCanvasAndPost(canvas) }
             target.access.leave()
         }
-        if (posted && measure) target.metrics?.record(SystemClock.uptimeMillis(), postEnd, !first && distinct,
-            (lockEnd - lockStart).coerceAtLeast(0L), (drawEnd - lockEnd).coerceAtLeast(0L),
-            (postEnd - drawEnd).coerceAtLeast(0L), (cpuLockEnd - cpuStart).coerceAtLeast(0L),
-            (cpuDrawEnd - cpuLockEnd).coerceAtLeast(0L), (cpuPostEnd - cpuDrawEnd).coerceAtLeast(0L))
+        if (posted && measure) {
+            target.metrics?.record(SystemClock.uptimeMillis(), postEnd, !first && distinct,
+                (lockEnd - lockStart).coerceAtLeast(0L), (drawEnd - lockEnd).coerceAtLeast(0L),
+                (postEnd - drawEnd).coerceAtLeast(0L), (cpuLockEnd - cpuStart).coerceAtLeast(0L),
+                (cpuDrawEnd - cpuLockEnd).coerceAtLeast(0L), (cpuPostEnd - cpuDrawEnd).coerceAtLeast(0L))
+            target.metrics?.holderRecordObserved(SystemClock.uptimeMillis())
+        }
         if (!posted || currentTarget !== target || target.revoked) return
         if (!firstPosted) {
             firstPosted = true

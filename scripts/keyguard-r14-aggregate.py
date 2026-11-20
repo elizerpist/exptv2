@@ -25,8 +25,10 @@ REQUIRED = {
     ("r14_pressure", "LIGHT"): "r14PairedRecoveryEdgesRemainOwnedUnderPressureAndRotation",
     ("r14_pressure", "FULL"): "r14PairedRecoveryEdgesRemainOwnedUnderPressureAndRotation",
     ("r12_pressure", "LIGHT_FULL"): "lightAndFullPressureRetainEverySelectedEpisodeCauseAndFitTheWholeUtf8Budget",
-    ("r12_ordered", "SURFACE_LIVE"): "r12DetachedNegativeCanReadOneSuccessorBeforeOrderedApply",
-    ("r12_occlusion", "SURFACE_LIVE"): "connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles",
+    # These two historical service methods explicitly set LEGACY_R11 in
+    # @Before; their source and runner arguments cannot relabel them LIVE.
+    ("r12_ordered", "LEGACY_R11"): "r12DetachedNegativeCanReadOneSuccessorBeforeOrderedApply",
+    ("r12_occlusion", "LEGACY_R11"): "connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles",
     ("r14_real_occlusion", "SURFACE_LIVE"): "temporaryRealOcclusionReturnsToMain",
     ("r14_terminal_stale", "SURFACE_LIVE"): "terminalWithdrawalDiscardsPendingWork",
 }

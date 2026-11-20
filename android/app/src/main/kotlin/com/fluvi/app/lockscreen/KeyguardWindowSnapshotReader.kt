@@ -50,6 +50,11 @@ internal object KeyguardWindowSnapshotReaderPolicy {
                 AccessibilityNodeInfo.FLAG_PREFETCH_UNINTERRUPTIBLE
         } else 0
 
+    /** Only the separately authorized initial active-root call changes.
+     * Child traversal and per-window fallback keep their existing strategy. */
+    fun activeRootPrefetchFlags(initialRootOnly: Boolean, apiLevel: Int = Build.VERSION.SDK_INT): Int =
+        if (initialRootOnly && apiLevel >= Build.VERSION_CODES.TIRAMISU) 0 else batchedPrefetchFlags(apiLevel)
+
     fun shouldClearCache(freshness: KeyguardWindowFreshness): Boolean =
         freshness.requiresCacheClear
 
@@ -119,6 +124,17 @@ internal object KeyguardWindowSnapshotReaderPolicy {
     }
 }
 
+/** Tiny inlined acquisition boundary: test callbacks can record the same
+ * arguments and ordering as the framework calls without replacing any
+ * classifier, cache or visibility policy. */
+internal object KeyguardWindowAcquisitionCalls {
+    inline fun <T> activeRoot(initialRootOnly: Boolean, apiLevel: Int, call: (Int) -> T): T =
+        call(KeyguardWindowSnapshotReaderPolicy.activeRootPrefetchFlags(initialRootOnly, apiLevel))
+
+    inline fun <T> child(prefetchFlags: Int?, apiLevel: Int, batched: (Int) -> T, legacy: () -> T): T =
+        if (prefetchFlags != null && apiLevel >= Build.VERSION_CODES.TIRAMISU) batched(prefetchFlags) else legacy()
+}
+
 /**
  * One bounded, data-minimising boundary for reading the accessibility window
  * tree.  The API 33 active-root route is an optimisation only: every result is
@@ -133,11 +149,16 @@ internal class KeyguardWindowSnapshotReader(
         val knownOwn: KeyguardOwnOverlayIdentity?,
         val attachGeneration: Long,
         val freshness: KeyguardWindowFreshness = KeyguardWindowFreshness.FRAMEWORK_EVENT,
+        val initialRootOnly: Boolean = false,
     )
 
     data class Timing(
         val readerStrategy: String = "LEGACY_PER_WINDOW",
         val prefetchFlags: Int = 0,
+        /** Actual active-root argument; null means that API was not called. */
+        val activeRootPrefetchFlags: Int? = null,
+        /** Child argument selected after active-root acceptance, not proof a child existed. */
+        val acceptedChildPrefetchFlags: Int? = null,
         val cacheEnabled: Boolean? = null,
         val freshnessPolicy: String = KeyguardWindowFreshness.FRAMEWORK_EVENT.name,
         val cacheClearResult: String = "notAttempted",
@@ -154,7 +175,13 @@ internal class KeyguardWindowSnapshotReader(
         val rootAcquisitionMaxMs: Long = 0L,
         val childAcquisitionCount: Int = 0,
         val childAcquisitionTotalMs: Long = 0L,
+        val firstChildAcquisitionMs: Long? = null,
         val childAcquisitionMaxMs: Long = 0L,
+        val firstNullRootId: Int? = null,
+        val firstNullRootType: Int? = null,
+        val firstNullRootDisplay: Int? = null,
+        val firstNullRootRelativeLayer: Long? = null,
+        val firstNullRootSource: String? = null,
         val localProcessingMs: Long = 0L,
         val slowCalls: List<String> = emptyList(),
         val walkTruncationReasons: Set<String> = emptySet(),
@@ -183,6 +210,8 @@ internal class KeyguardWindowSnapshotReader(
     private class Accumulator(private val getWindowsMs: Long) {
         var strategy = "LEGACY_PER_WINDOW"
         var prefetchFlags = 0
+        var activeRootPrefetchFlags: Int? = null
+        var acceptedChildPrefetchFlags: Int? = null
         var cacheEnabled: Boolean? = null
         var freshnessPolicy = KeyguardWindowFreshness.FRAMEWORK_EVENT.name
         var cacheClearResult = "notAttempted"
@@ -198,7 +227,13 @@ internal class KeyguardWindowSnapshotReader(
         var rootMax = 0L
         var childCount = 0
         var childTotal = 0L
+        var firstChildMs: Long? = null
         var childMax = 0L
+        var firstNullRootId: Int? = null
+        var firstNullRootType: Int? = null
+        var firstNullRootDisplay: Int? = null
+        var firstNullRootRelativeLayer: Long? = null
+        var firstNullRootSource: String? = null
         val truncationReasons = linkedSetOf<String>()
         private val slow = mutableListOf<Pair<Long, String>>()
 
@@ -217,14 +252,26 @@ internal class KeyguardWindowSnapshotReader(
 
         fun child(windowId: Int, index: Int, elapsed: Long) {
             childCount += 1
+            if (firstChildMs == null) firstChildMs = elapsed
             childTotal += elapsed
             childMax = maxOf(childMax, elapsed)
             slow += elapsed to "child:w=$windowId,i=$index,$elapsed"
         }
 
+        fun nullRoot(id: Int, type: Int, display: Int, relativeLayer: Long?, source: String) {
+            if (firstNullRootId != null) return
+            firstNullRootId = id
+            firstNullRootType = type
+            firstNullRootDisplay = display
+            firstNullRootRelativeLayer = relativeLayer
+            firstNullRootSource = source
+        }
+
         fun snapshot(treeElapsed: Long) = Timing(
             readerStrategy = strategy,
             prefetchFlags = prefetchFlags,
+            activeRootPrefetchFlags = activeRootPrefetchFlags,
+            acceptedChildPrefetchFlags = acceptedChildPrefetchFlags,
             cacheEnabled = cacheEnabled,
             freshnessPolicy = freshnessPolicy,
             cacheClearResult = cacheClearResult,
@@ -241,7 +288,13 @@ internal class KeyguardWindowSnapshotReader(
             rootAcquisitionMaxMs = rootMax,
             childAcquisitionCount = childCount,
             childAcquisitionTotalMs = childTotal,
+            firstChildAcquisitionMs = firstChildMs,
             childAcquisitionMaxMs = childMax,
+            firstNullRootId = firstNullRootId,
+            firstNullRootType = firstNullRootType,
+            firstNullRootDisplay = firstNullRootDisplay,
+            firstNullRootRelativeLayer = firstNullRootRelativeLayer,
+            firstNullRootSource = firstNullRootSource,
             localProcessingMs = (treeElapsed - activeRootTotal - rootTotal - childTotal).coerceAtLeast(0L),
             slowCalls = slow.sortedByDescending { it.first }.take(3).map { it.second },
             walkTruncationReasons = truncationReasons.toSet(),
@@ -301,6 +354,7 @@ internal class KeyguardWindowSnapshotReader(
         val activeCandidate = KeyguardWindowSnapshotReaderPolicy.activeCandidate(
             metadata, request.knownOwn, request.attachGeneration,
         )
+        val activeLayer = primary.firstOrNull { it.id == activeCandidate?.id }?.layer
         // The active-root route is an acquisition strategy, not a reward for
         // having just cleared the whole cache. A connected enabled cache and
         // a validated candidate are sufficient; explicit invalidation above
@@ -320,9 +374,16 @@ internal class KeyguardWindowSnapshotReader(
             val candidate = requireNotNull(activeCandidate)
             timing.activeCandidateWindowId = candidate.id
             val startedAt = SystemClock.uptimeMillis()
-            activeRoot = runCatching { service.getRootInActiveWindow(prefetch) }.getOrNull()
+            activeRoot = runCatching {
+                KeyguardWindowAcquisitionCalls.activeRoot(request.initialRootOnly, Build.VERSION.SDK_INT) { flags ->
+                    timing.activeRootPrefetchFlags = flags
+                    service.getRootInActiveWindow(flags)
+                }
+            }.getOrNull()
             timing.activeRoot(candidate.id, SystemClock.uptimeMillis() - startedAt)
             val returned = activeRoot
+            if (returned == null) timing.nullRoot(candidate.id, candidate.type, candidate.displayId,
+                activeLayer?.let { 0L }, "active")
             timing.returnedRootWindowId = returned?.windowId
             val accepted = authorityIsCurrent() && KeyguardWindowSnapshotReaderPolicy.acceptsActiveRoot(
                 candidate, returned?.windowId, returned?.packageName, metadata,
@@ -330,6 +391,7 @@ internal class KeyguardWindowSnapshotReader(
             if (accepted) {
                 timing.strategy = "ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW"
                 timing.activeRootAccepted = true
+                timing.acceptedChildPrefetchFlags = prefetch
                 activeWindowId = candidate.id
             } else {
                 timing.fallbackReason = when {
@@ -391,7 +453,11 @@ internal class KeyguardWindowSnapshotReader(
                     SystemClock.uptimeMillis() - treeStartedAt, visited,
                     timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), true, readsAfterInvalidation)
             }
-            if (root == null) unavailableRoot = true
+            if (root == null) {
+                unavailableRoot = true
+                timing.nullRoot(window.id, window.type, displayId(window),
+                    activeLayer?.let { window.layer.toLong() - it.toLong() }, "perWindow")
+            }
             val rootPackage = root?.packageName?.toString()
             val own = rootPackage == ownPackageName && window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
             val visible = if (rootPackage in SYSTEM_PACKAGES && root != null) {
@@ -444,9 +510,9 @@ internal class KeyguardWindowSnapshotReader(
                     if (!authorityIsCurrent()) { aborted = true; return }
                     val startedAt = SystemClock.uptimeMillis()
                     val acquisition = runCatching {
-                        if (prefetchFlags != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            node.getChild(index, prefetchFlags)
-                        } else node.getChild(index)
+                        KeyguardWindowAcquisitionCalls.child(prefetchFlags, Build.VERSION.SDK_INT,
+                            batched = { flags -> node.getChild(index, flags) },
+                            legacy = { node.getChild(index) })
                     }
                     val child = acquisition.getOrNull()
                     timing.child(windowId, index, SystemClock.uptimeMillis() - startedAt)

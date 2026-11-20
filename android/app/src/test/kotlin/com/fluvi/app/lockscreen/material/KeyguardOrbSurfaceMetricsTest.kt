@@ -29,4 +29,27 @@ class KeyguardOrbSurfaceMetricsTest {
         repeat(1000) { index -> metrics.record(6L + index, 6_000_000L + index * 1_000_000L, false, 1, 1, 1, 1, 1, 1) }
         assertTrue(metrics.snapshot().retainedGaps <= 720)
     }
+
+    @Test fun holderSnapshotSeparatesRevocationFromAnEnteredOperationFinishingLater() {
+        val metrics = KeyguardOrbSurfaceMetrics()
+        metrics.beginHolderOperation(100)
+        metrics.holderLockReturned(101)
+        metrics.revokeStarted(102)
+        metrics.revokeReturned(103)
+        val during = metrics.snapshot().holderOperation
+        assertTrue(during.coherent)
+        assertEquals(1L, during.id)
+        assertNull(during.postReturn)
+        assertEquals(102L, during.revokeBegin)
+        assertEquals(103L, during.revokeReturn)
+        metrics.holderDrawReturned(104)
+        metrics.holderPostEntered(105)
+        metrics.holderPostReturned(106)
+        metrics.holderRecordObserved(107)
+        val after = metrics.snapshot().holderOperation
+        assertEquals(101L, after.lockReturn)
+        assertEquals(106L, after.postReturn)
+        assertEquals(107L, after.recordAt)
+        assertEquals(103L, after.revokeReturn)
+    }
 }

@@ -83,6 +83,7 @@ class FluviKeyguardCardService : AccessibilityService() {
      * use the new choice before the next independently authorized show. */
     internal fun onOrbRenderModeChanged() {
         check(Looper.myLooper() == Looper.getMainLooper())
+        synchronized(queueLock) { firstAcquisition.invalidate() }
         clearR14Recovery("routeChanged")
         if (::overlay.isInitialized && !overlay.isAttached) {
             overlay.prepareRetainedView(lastSettings ?: FluviKeyguardCardSettings.read(applicationContext), lastMaterialProfile)
@@ -115,6 +116,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     private val financialScope = CoroutineScope(serviceJob + financialDispatcher)
     private val queueLock = Any()
     private val inspectionQueue = KeyguardCardInspectionQueue()
+    private val firstAcquisition = KeyguardFirstAcquisition()
     // Published only by Main, guarded by the same lock as reservation. The
     // reader may consume this immutable snapshot but cannot change a View.
     private var readAheadStateRevision = 0L
@@ -205,7 +207,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             attachGeneration = overlayAttachGeneration,
         )
         synchronized(queueLock) {
-            if (inspectionAuthority != current) readAheadStateRevision += 1L
+            if (inspectionAuthority != current) {
+                readAheadStateRevision += 1L
+                firstAcquisition.invalidate()
+            }
             inspectionFreshness.publish(current)
             inspectionAuthority = current
             publishReadAheadSnapshotLocked()
@@ -233,7 +238,10 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     private fun publishReadAheadState(invalidate: Boolean = false) {
         synchronized(queueLock) {
-            if (invalidate) readAheadStateRevision += 1L
+            if (invalidate) {
+                readAheadStateRevision += 1L
+                firstAcquisition.invalidate()
+            }
             publishReadAheadSnapshotLocked()
         }
     }
@@ -316,6 +324,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         operation: KeyguardDiagnosticOperation? = null,
         fields: Map<String, Any?> = emptyMap(),
         deferredFields: (() -> Map<String, Any?>)? = null,
+        surfaceMetrics: com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceMetrics? = null,
     ) {
         if (!KeyguardCardDiagnostics.wantsEvent(stage)) return
         withMainWorkEvidence(
@@ -336,6 +345,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 operation = operation,
                 fields = fields,
                 deferredFields = deferredFields,
+                surfaceMetrics = surfaceMetrics,
             )
         }
     }
@@ -396,6 +406,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val rootWasPrepared: Boolean,
         val profileWasDecoded: Boolean,
         val presentationMode: String,
+        val eligibility: KeyguardWakeEligibilityEvidence? = null,
         var inspectionQueuedAt: Long? = null,
         var inspectionStartedAt: Long? = null,
         var inspectionFinishedAt: Long? = null,
@@ -406,6 +417,12 @@ class FluviKeyguardCardService : AccessibilityService() {
         var retryCount: Int = 0,
         var rejectedLateResults: Int = 0,
         var eventAgeMs: Long? = null,
+    )
+
+    private data class RetiredSurfaceEvidence(
+        val attachment: Long, val generation: Long,
+        val metrics: com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceMetrics,
+        val atRevoke: com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceMetrics.HolderOperation,
     )
 
     /** A retry is tied to the exact hidden result which requested it. The
@@ -842,6 +859,7 @@ class FluviKeyguardCardService : AccessibilityService() {
      * cause an inspection, financial resolve, or WindowManager operation. */
     internal fun onMaterialProfileChangedFromApplication(profile: KeyguardMaterialProfile) {
         mainHandler.post {
+            synchronized(queueLock) { firstAcquisition.invalidate() }
             clearR14Recovery("materialChanged")
             lastMaterialProfile = profile
             if (!::overlay.isInitialized) return@post
@@ -879,6 +897,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         schedule: Boolean = true,
         freshState: KeyguardSystemState? = null,
         eventTime: Long? = null,
+        sampleRequest: KeyguardSystemGateRequest? = null,
     ): KeyguardWakeCycleTransition? {
         val existing = wakeCycleOwner.current()
         if (existing != null) {
@@ -921,12 +940,19 @@ class FluviKeyguardCardService : AccessibilityService() {
         retryCount = 0
         cancelWakeRetry()
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)
+        val preparedInitialLive = ::overlay.isInitialized &&
+            overlay.preparedInitialLiveOrb(settings, lastMaterialProfile)
+        synchronized(queueLock) { firstAcquisition.begin(inspectionAuthority, preparedInitialLive) }
         wakeTiming = WakeTiming(
             wakeGeneration = wakeEpoch,
             wakeReceivedAt = receivedAtUptimeMs,
             rootWasPrepared = ::overlay.isInitialized && overlay.hasPreparedRoot,
             profileWasDecoded = lastMaterialProfile != null,
             presentationMode = settings.presentationMode.wireValue,
+            eligibility = if (KeyguardCardDiagnostics.wantsEvent("INSPECTION_FINISHED"))
+                KeyguardWakeEligibilityEvidence(sampleRequest?.id, sampleRequest?.authority,
+                    receivedAtUptimeMs, freshState.startedAt, freshState.finishedAt, SystemClock.uptimeMillis())
+            else null,
         )
         currentDiagnosticAttempt = KeyguardCardDiagnostics.beginLockAttempt(
             this,
@@ -998,10 +1024,10 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         if (!state.eligible || !request.evaluate) return
         val cycle = request.wakeSource?.let {
-            beginOrJoinWakeCycle(it, request.evaluationReceivedAt, schedule = false, freshState = state)
+            beginOrJoinWakeCycle(it, request.evaluationReceivedAt, schedule = false, freshState = state, sampleRequest = request)
         }
         if (request.wakeSource != "wake") request.screenOnReceivedAt?.let {
-            beginOrJoinWakeCycle("wake", it, schedule = false, freshState = state)
+            beginOrJoinWakeCycle("wake", it, schedule = false, freshState = state, sampleRequest = request)
         }
         if (wakeCycleOwner.current() == null) return
         if (request.retry && hasCompatibleCycleInspection(request.completedInspectionId)) return
@@ -1167,6 +1193,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             diagnosticContext = currentDiagnosticAttempt,
             triggerReceivedUptimeMs = triggerReceivedUptimeMs,
             r14Ingress = ingress,
+            wakeEligibility = wakeTiming?.takeIf { it.wakeGeneration == authority.wakeGeneration }?.eligibility,
         )
         if (request.trigger != "surfaceRetry") cancelWakeRetry("supersededBy:${request.trigger}")
         wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.let {
@@ -1429,6 +1456,15 @@ class FluviKeyguardCardService : AccessibilityService() {
             "startedAtUptimeMs" to startedAt,
             "triggerReceivedUptimeMs" to (request.triggerReceivedUptimeMs ?: "NA"),
             "eventTimeUptimeMs" to (request.eventTimeUptimeMs ?: "NA"),
+            "eventType" to (request.r14Ingress?.eventType ?: "UNOBSERVED"),
+            "wakeCallbackAt" to (request.wakeEligibility?.callbackAt ?: "UNOBSERVED"),
+            "wakeSampleStart" to (request.wakeEligibility?.startedAt ?: "UNOBSERVED"),
+            "wakeSampleEnd" to (request.wakeEligibility?.finishedAt ?: "UNOBSERVED"),
+            "wakeSampleMain" to (request.wakeEligibility?.deliveredAt ?: "UNOBSERVED"),
+            "wakeSampleRequest" to (request.wakeEligibility?.sampleRequestId ?: "UNOBSERVED"),
+            "wakeSampleAuthority" to (request.wakeEligibility?.sampleAuthority?.let {
+                "${it.serviceSession}/${it.wakeGeneration}/${it.visibilityEpoch}/${it.interactionEpoch}/${it.attachGeneration}"
+            } ?: "UNOBSERVED"),
             "requestVisibilityEpoch" to request.visibilityEpoch,
             "requestInteractionEpoch" to request.interactionEpoch,
             "requestWakeGeneration" to request.wakeGeneration,
@@ -1446,6 +1482,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             "rootAcquisitionMaxMs" to result.windowTiming.rootAcquisitionMaxMs,
             "readerStrategy" to result.windowTiming.readerStrategy,
             "prefetchFlags" to result.windowTiming.prefetchFlags,
+            "activeRootFlags" to (result.windowTiming.activeRootPrefetchFlags ?: "UNOBSERVED"),
+            "acceptedChildFlags" to (result.windowTiming.acceptedChildPrefetchFlags ?: "UNOBSERVED"),
             "cacheEnabled" to (result.windowTiming.cacheEnabled ?: "NA"),
             "freshnessPolicy" to result.windowTiming.freshnessPolicy,
             "cacheClearResult" to result.windowTiming.cacheClearResult,
@@ -1459,7 +1497,13 @@ class FluviKeyguardCardService : AccessibilityService() {
             "perWindowRootTotalMs" to result.windowTiming.rootAcquisitionTotalMs,
             "childAcquisitionCount" to result.windowTiming.childAcquisitionCount,
             "childAcquisitionTotalMs" to result.windowTiming.childAcquisitionTotalMs,
+            "firstChildAcquisitionMs" to (result.windowTiming.firstChildAcquisitionMs ?: "UNOBSERVED"),
             "childAcquisitionMaxMs" to result.windowTiming.childAcquisitionMaxMs,
+            "firstNullRootId" to (result.windowTiming.firstNullRootId ?: "UNOBSERVED"),
+            "firstNullRootType" to (result.windowTiming.firstNullRootType ?: "UNOBSERVED"),
+            "firstNullRootDisplay" to (result.windowTiming.firstNullRootDisplay ?: "UNOBSERVED"),
+            "firstNullRootLayer" to (result.windowTiming.firstNullRootRelativeLayer ?: "UNOBSERVED"),
+            "firstNullRootSource" to (result.windowTiming.firstNullRootSource ?: "UNOBSERVED"),
             "localProcessingMs" to result.windowTiming.localProcessingMs,
             "slowWindowCalls" to result.windowTiming.slowCalls.joinToString(";"),
             "walkTruncationReasons" to result.windowTiming.walkTruncationReasons.joinToString(",").ifEmpty { "none" },
@@ -1658,12 +1702,16 @@ class FluviKeyguardCardService : AccessibilityService() {
         // Resolve the outstanding requirement at acquisition, not when an
         // event happened to replace a timer/pending request. A successful
         // boundary is consumed once, without clearing on every later event.
-        val freshness = inspectionFreshness.beforeRead(request)
+        val (freshness, initialRootOnly) = synchronized(queueLock) {
+            val ticket = inspectionFreshness.beforeRead(request)
+            ticket to firstAcquisition.take(request, ticket)
+        }
         val result = windowSnapshotReader.read(
             request = KeyguardWindowSnapshotReader.Request(
                 knownOwn = knownOwnOverlayIdentity,
                 attachGeneration = request.attachGeneration,
                 freshness = freshness?.reason ?: KeyguardWindowFreshness.FRAMEWORK_EVENT,
+                initialRootOnly = initialRootOnly,
             ),
             authorityIsCurrent = { freshness != null && authorityIsCurrent(request) },
             onFreshnessEstablished = { freshness?.let(inspectionFreshness::boundaryEstablished) },
@@ -2694,6 +2742,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         var removeReturnedAt: Long? = null
         var localHideBeginAt: Long? = null
         var attachedRootRemoved = false
+        var retiredSurface: RetiredSurfaceEvidence? = null
         if (::overlay.isInitialized) {
             localHideBeginAt = SystemClock.uptimeMillis()
             activeWindowDiagnosticOperation = hideOperation
@@ -2727,7 +2776,15 @@ class FluviKeyguardCardService : AccessibilityService() {
                                 "r09Use" to (event.useGeneration ?: "UNOBSERVED"),
                             ) })
                     } else null
-                overlay.hide(onLayerHideCommitted, onRetirementEvent)
+                val onSurfaceRevoked: ((Long, Long, com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceMetrics,
+                    com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceMetrics.HolderOperation) -> Unit)? =
+                    if (wasAttachedBefore && hideOperation.context?.captureId != null &&
+                        KeyguardCardDiagnostics.wantsEvent("R15_SURFACE_REVOKED")) {
+                        { attach, generation, metrics, atRevoke ->
+                            retiredSurface = RetiredSurfaceEvidence(attach, generation, metrics, atRevoke)
+                        }
+                    } else null
+                overlay.hide(onLayerHideCommitted, onRetirementEvent, onSurfaceRevoked)
             } finally {
                 activeWindowDiagnosticOperation = null
             }
@@ -2866,6 +2923,17 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "visibilityEpochBefore" to (invalidatedVisibilityEpoch - 1L),
             ),
         )
+        retiredSurface?.let { (attachment, generation, metrics, atRevoke) ->
+            // Bound to the actual captured child and hide operation. Worker
+            // completion after removal can update only this generation's
+            // primitive metrics, not the current service operation.
+            traceKeyguard("R15_SURFACE_REVOKED", "synchronousAccessClosure",
+                observedUptimeMs = removeReturnedAt, attachGeneration = attachment,
+                operation = hideOperation, surfaceMetrics = metrics, deferredFields = { mapOf(
+                    "r15TargetAttachment" to attachment, "r15Generation" to generation,
+                    "r15AtRevoke" to "${atRevoke.coherent}:${atRevoke.id}:${atRevoke.lockEnter ?: "UNOBSERVED"}/${atRevoke.lockReturn ?: "UNOBSERVED"}:${atRevoke.drawReturn ?: "UNOBSERVED"}:${atRevoke.postEnter ?: "UNOBSERVED"}/${atRevoke.postReturn ?: "UNOBSERVED"}:${atRevoke.recordAt ?: "UNOBSERVED"}",
+                ) })
+        }
         localHideBeginAt?.let { localHideAt ->
             traceKeyguard(
                 "LOCAL_HIDE_BEGIN",
