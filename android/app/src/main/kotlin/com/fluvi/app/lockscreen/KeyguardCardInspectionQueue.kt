@@ -69,6 +69,14 @@ internal data class KeyguardInspectionAuthority(
 internal interface KeyguardInspectionProbeForTest {
     fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> = actual
     fun started(request: KeyguardCardInspectionRequest) {}
+    /** The physical read has completed; this callback runs on the reader,
+     * before its Main handoff. A test may hold this worker without blocking
+     * the event-ingress thread. The classifier and authority are unchanged. */
+    fun readCompleted(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
+        reason: KeyguardSurfaceReason, rootUnavailable: Boolean, walkTruncated: Boolean,
+        abortedStale: Boolean, startedAt: Long, finishedAt: Long) {}
+    fun ingress(meta: KeyguardAccessibilityEventMeta, receivedAt: Long,
+        action: KeyguardEventAction, frameworkEvent: Boolean) {}
     fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
     fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
 }
