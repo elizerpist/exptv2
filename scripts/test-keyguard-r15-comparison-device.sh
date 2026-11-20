@@ -37,7 +37,11 @@ grep -Fq -- '--time-limit' "$evidence/screenrecord-help.txt"
 [[ $(adb shell getprop ro.build.version.sdk | tr -d '\r') == 35 ]]
 [[ $(adb shell getprop ro.product.cpu.abi | tr -d '\r') == x86_64 ]]
 grep -Fq 'com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner' "$evidence/device-before.txt"
-adb shell wm density 420
+saved_auto_rotation=$(adb shell settings get system accelerometer_rotation | tr -d '\r')
+saved_user_rotation=$(adb shell settings get system user_rotation | tr -d '\r')
+saved_density=$(adb shell wm density | tr -d '\r' | sed -n 's/^Override density: //p')
+[[ $saved_auto_rotation =~ ^(null|[01])$ && $saved_user_rotation =~ ^(null|[0-3])$ ]]
+[[ -z $saved_density || $saved_density =~ ^[0-9]+$ ]]
 active_pidfile=
 active_shell_pid=
 active_dir=
@@ -59,8 +63,22 @@ stop_recorder() {
  active_shell_pid=
  active_dir=
 }
-cleanup() { stop_recorder; adb shell wm density reset >/dev/null 2>&1 || true; }
+restore_rotation() {
+ local key=$1 value=$2
+ if [[ $value == null ]]; then adb shell settings delete system "$key" >/dev/null 2>&1 || true
+ else adb shell settings put system "$key" "$value" >/dev/null 2>&1 || true; fi
+}
+cleanup() {
+ stop_recorder
+ restore_rotation user_rotation "$saved_user_rotation"
+ restore_rotation accelerometer_rotation "$saved_auto_rotation"
+ if [[ -n $saved_density ]]; then adb shell wm density "$saved_density" >/dev/null 2>&1 || true
+ else adb shell wm density reset >/dev/null 2>&1 || true; fi
+}
 trap cleanup EXIT
+adb shell wm density 420
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 0
 adb shell wm size > "$evidence/size-after.txt"
 adb shell wm density > "$evidence/density-after.txt"
 [[ $(tr -d '\r' < "$evidence/size-after.txt" | tail -1) == *1080x2400 ]]

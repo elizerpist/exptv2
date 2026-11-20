@@ -6,6 +6,8 @@ from pathlib import Path
 
 workflow = Path('.github/workflows/fluvi-core.yml').read_text()
 collector = Path('scripts/test-keyguard-r14-candidate.sh').read_text()
+service_collector = Path('scripts/test-keyguard-r12-candidate.sh').read_text()
+service_test = Path('android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR15ServiceContractInstrumentationTest.kt').read_text()
 prefix = 'fluvi-r15-first-acquisition-'
 assert workflow.count("startsWith(github.ref_name, '" + prefix + "')") == 3
 matrix_line = next(line for line in workflow.splitlines() if 'case: ${{ fromJSON' in line)
@@ -14,7 +16,7 @@ assert len(arrays) == 7
 historical, comparison, motion, holder, export, r15, ordinary = arrays
 assert historical == ['exclusion', 'fresh-main', 'late-only', 'real-return']
 assert comparison == ['r15-ab-comparison']
-assert motion == ['r15-motion-red', 'r15-combined-recovery', 'r15-held-timeout']
+assert motion == ['r15-motion-red', 'r15-combined-recovery', 'r15-held-timeout', 'r15-motion-service']
 assert holder == ['r15-held-canvas']
 assert r15 == ordinary + ['r15-phone-light', 'r15-phone-full', 'r15-stale-owner', 'r15-first-live']
 assert export == ['r15-phone-light', 'r15-phone-full', 'r15-stale-owner', 'pressure-light', 'pressure-full',
@@ -29,6 +31,10 @@ assert all(case in mapping for case in motion)
 assert mapping['r15-motion-red'].endswith('#r15DetachedMotionOffRevokesPreparedLiveEligibility')
 assert mapping['r15-combined-recovery'].endswith('#r14PairedRecoveryEdgesRemainOwnedUnderPressureAndRotation')
 assert mapping['r15-held-timeout'].endswith('#r15HeldCanvasTimeoutIsIncompleteAndReleasesIndependently')
+assert mapping['r15-motion-service'].endswith('#r15MotionOffInvalidatesIssuedServiceOpportunity')
+assert 'fun firstCorrectServiceComposite()' in service_test
+assert 'KeyguardR15ServiceContractInstrumentationTest#firstCorrectServiceComposite' in service_collector
+assert 'first_composite_fixture' in service_collector and 'r12_real_service_first_composite' in service_collector
 assert workflow.index("startsWith(github.ref_name, 'fluvi-r15-first-acquisition-motion-controls-')") < workflow.rindex("startsWith(github.ref_name, 'fluvi-r15-first-acquisition-')")
 assert workflow.index("startsWith(github.ref_name, 'fluvi-r15-first-acquisition-validation-')") < workflow.rindex("startsWith(github.ref_name, 'fluvi-r15-first-acquisition-')")
 assert 'bash scripts/test-keyguard-r15-comparison-device.sh' in workflow

@@ -32,8 +32,46 @@ abi=$(adb shell getprop ro.product.cpu.abi | tr -d '\r')
   adb shell getprop ro.build.fingerprint
 } > "$evidence/manifest.txt"
 [[ "$api" == 35 && "$abi" == x86_64 ]] || { echo 'FAIL device identity' | tee "$evidence/status.txt"; exit 1; }
+saved_auto_rotation=$(adb shell settings get system accelerometer_rotation | tr -d '\r')
+saved_user_rotation=$(adb shell settings get system user_rotation | tr -d '\r')
+saved_density=$(adb shell wm density | tr -d '\r' | sed -n 's/^Override density: //p')
+[[ $saved_auto_rotation =~ ^(null|[01])$ && $saved_user_rotation =~ ^(null|[0-3])$ ]]
+[[ -z $saved_density || $saved_density =~ ^[0-9]+$ ]]
+recorder_pidfile=
+recorder_shell_pid=
+recorder_dir=
+stop_fixture_recorder() {
+  local signal_rc=0 wait_rc=0 forced=0
+  if [[ -n $recorder_pidfile ]]; then
+    adb shell "p=\$(cat '$recorder_pidfile' 2>/dev/null); case \"\$(cat /proc/\$p/cmdline 2>/dev/null | tr '\\0' ' ')\" in *fluvi-r15-*) kill -INT \$p ;; *) exit 1 ;; esac" \
+      > "${recorder_dir:-$evidence}/recorder-signal.txt" 2>&1 || signal_rc=$?
+  fi
+  if [[ -n $recorder_shell_pid ]]; then
+    for _ in {1..30}; do kill -0 "$recorder_shell_pid" 2>/dev/null || break; sleep 1; done
+    if kill -0 "$recorder_shell_pid" 2>/dev/null; then forced=1; kill "$recorder_shell_pid" 2>/dev/null || true; fi
+    wait "$recorder_shell_pid" 2>/dev/null || wait_rc=$?
+    printf 'signal_exit=%s\nwait_exit=%s\nforced=%s\n' "$signal_rc" "$wait_rc" "$forced" > "${recorder_dir:-$evidence}/recorder-exit.txt"
+  fi
+  recorder_pidfile=
+  recorder_shell_pid=
+  recorder_dir=
+}
+restore_rotation() {
+  local key=$1 value=$2
+  if [[ $value == null ]]; then adb shell settings delete system "$key" >/dev/null 2>&1 || true
+  else adb shell settings put system "$key" "$value" >/dev/null 2>&1 || true; fi
+}
+cleanup() {
+  stop_fixture_recorder
+  restore_rotation user_rotation "$saved_user_rotation"
+  restore_rotation accelerometer_rotation "$saved_auto_rotation"
+  if [[ -n $saved_density ]]; then adb shell wm density "$saved_density" >/dev/null 2>&1 || true
+  else adb shell wm density reset >/dev/null 2>&1 || true; fi
+}
+trap cleanup EXIT
 adb shell wm density 420
-trap 'adb shell wm density reset >/dev/null 2>&1 || true' EXIT
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 0
 adb shell wm size | tr -d '\r' > "$evidence/size-after.txt"
 adb shell wm density | tr -d '\r' > "$evidence/density-after.txt"
 grep -Eq '(^|: )1080x2400$' "$evidence/size-after.txt" || { echo 'FAIL geometry' | tee "$evidence/status.txt"; exit 1; }
@@ -61,10 +99,49 @@ run_test() {
   mkdir -p "$dir"
   printf 'source=%s\nrun_uuid=%s\nselector=%s\nmode=%s\n' "$source_sha" "$run_id" "$method" "$test_mode" > "$dir/identity.txt"
   adb shell am force-stop com.fluvi.app > "$dir/force-stop.txt" 2>&1 || rc=1
+  if [[ $label == first_composite_fixture ]]; then
+    [[ $run_id =~ ^[0-9a-f-]{36}$ ]] || return 1
+    adb shell screenrecord --help > "$dir/screenrecord-help.txt" 2>&1 || rc=1
+    adb shell dumpsys display > "$dir/display-before.txt" 2>&1 || true
+    adb shell dumpsys window > "$dir/window-before.txt" 2>&1 || true
+    local remote_video="/sdcard/fluvi-r15-$run_id.mp4"
+    recorder_pidfile="/data/local/tmp/fluvi-r15-$run_id.pid"
+    recorder_dir="$dir"
+    adb shell "sh -c 'echo \$\$ > $recorder_pidfile; exec screenrecord --verbose --time-limit 0 $remote_video'" > "$dir/recorder.txt" 2>&1 &
+    recorder_shell_pid=$!
+    local recorder_ready=0
+    for _ in {1..20}; do
+      if adb shell "test -s '$recorder_pidfile' && test -s '$remote_video'" >/dev/null 2>&1; then recorder_ready=1; break; fi
+      kill -0 "$recorder_shell_pid" 2>/dev/null || break
+      sleep 0.25
+    done
+    printf 'recorder_ready=%s\n' "$recorder_ready" > "$dir/recorder-status.txt"
+    [[ $recorder_ready == 1 ]] || rc=1
+  fi
+  local instrument_rc=0
   timeout -k 5s 260s adb shell am instrument -w -r -e sourceSha "$source_sha" -e harnessSha "$source_sha" -e runUuid "$run_id" \
     -e r12Mode "$test_mode" -e class "$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner \
-    > "$dir/instrumentation.txt" 2>&1 || rc=$?
-  printf '%s\n' "$rc" > "$dir/command-exit.txt"
+    > "$dir/instrumentation.txt" 2>&1 || instrument_rc=$?
+  printf '%s\n' "$instrument_rc" > "$dir/command-exit.txt"
+  [[ $instrument_rc == 0 ]] || rc=1
+  if [[ $label == first_composite_fixture ]]; then
+    stop_fixture_recorder
+    if ! grep -Fxq 'signal_exit=0' "$dir/recorder-exit.txt" || ! grep -Fxq 'forced=0' "$dir/recorder-exit.txt"; then rc=1; fi
+    adb shell dumpsys display > "$dir/display-after.txt" 2>&1 || true
+    adb shell dumpsys window > "$dir/window-after.txt" 2>&1 || true
+    if adb pull "$remote_video" "$dir/recording.mp4" > "$dir/pull-video.txt" 2>&1 && [[ -s $dir/recording.mp4 ]]; then
+      sha256sum "$dir/recording.mp4" > "$dir/recording.sha256"
+      if command -v ffprobe >/dev/null && command -v ffmpeg >/dev/null && python3 -c 'import PIL' >/dev/null 2>&1; then
+        python3 "$root/scripts/keyguard-r15-video.py" --video "$dir/recording.mp4" --out "$dir/decoded" > "$dir/decode.txt" 2>&1 || rc=1
+      else
+        printf 'decoded=NOT_ESTABLISHED missing_ffmpeg_ffprobe_or_pillow\n' > "$dir/decode.txt"
+        rc=1
+      fi
+    else
+      printf 'video=UNOBSERVED\n' >> "$dir/recorder-status.txt"
+      rc=1
+    fi
+  fi
   timeout -k 2s 20s adb logcat -b all -d -v monotonic > "$dir/logcat.txt" 2>&1 || rc=1
   timeout -k 2s 20s adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-service-probe \
     > "$dir/service-probe.tar" 2> "$dir/service-probe.stderr" || rc=1
@@ -140,6 +217,11 @@ else
   python3 "$root/scripts/keyguard-r12-candidate-oracle.py" --raw "$evidence/timing/instrumentation.txt" \
     --fixture "$fixture" --capture "$capture" --source "$source_sha" --mode "$mode" --run-id "$run_id" \
     > "$evidence/timing/verdict.txt" 2>&1 || result=1
+  # This real service/cover fixture supplies attachment and raw screenshot
+  # observations. It cannot pass the compositor row without the separately
+  # collected, calibrated independent recording and owner-bound case record.
+  run_test first_composite_fixture 'com.fluvi.app.lockscreen.KeyguardR15ServiceContractInstrumentationTest#firstCorrectServiceComposite' \
+    "$(cat /proc/sys/kernel/random/uuid)" "$mode" || result=1
   echo 'NOT ESTABLISHED: separate calibrated real-service visual process and composite/privacy controls' >> "$evidence/status.txt"
 fi
 # A partial timing/panel pass cannot be substituted for independent service
@@ -171,6 +253,7 @@ if [[ "$scope" == r12_contract ]]; then
   test_row diagnostic_full r12SurfaceEvidenceRetainsItsShowOwnerInFull
 else
   test_row timing fourRealWakeCyclesUseRequestedRoute
+  test_row first_composite_fixture firstCorrectServiceComposite
 fi
 for required in r12_real_service_first_composite r12_real_service_privacy_downgrade r12_holder_lifecycle_races r12_selector_persistence r13_service_demand_burst; do
   printf '%s=NOT_ESTABLISHED\n' "$required" >> "$rows"
