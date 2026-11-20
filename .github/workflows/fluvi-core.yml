@@ -1,7 +1,11 @@
-name: R16 Phone Candidate Builder (orchestration only)
+name: R18 Phone Candidate Builder (orchestration only)
 on:
   workflow_dispatch:
     inputs:
+      app_sha:
+        description: Exact immutable R18 application source SHA.
+        type: string
+        required: true
       native_diagnostic:
         description: Compatibility with the registered workflow dispatcher.
         type: boolean
@@ -21,15 +25,20 @@ on:
 permissions:
   contents: read
 jobs:
-  r16-phone-candidate:
+  r18-phone-candidate:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      FLUVI_R16_APP_SHA: 7c49a22386296ed0285552384c519da87d0bd468
+      FLUVI_R18_APP_SHA: ${{ inputs.app_sha }}
     steps:
+      - name: Require a full immutable source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$FLUVI_R18_APP_SHA" =~ ^[0-9a-f]{40}$ ]]
       - uses: actions/checkout@v5
         with:
-          ref: ${{ env.FLUVI_R16_APP_SHA }}
+          ref: ${{ env.FLUVI_R18_APP_SHA }}
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-java@v5
@@ -44,32 +53,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$FLUVI_R16_APP_SHA"
+          test "$(git rev-parse HEAD)" = "$FLUVI_R18_APP_SHA"
           test -z "$(git status --porcelain --untracked-files=no)"
-          mkdir -p "$RUNNER_TEMP/r16-phone"
-          printf 'application_sha=%s\norchestration_sha=%s\n' "$FLUVI_R16_APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r16-phone/source.txt"
-          java -version 2>&1 | head -3 > "$RUNNER_TEMP/r16-phone/java.txt"
-          flutter --version > "$RUNNER_TEMP/r16-phone/flutter.txt"
+          mkdir -p "$RUNNER_TEMP/r18-phone"
+          printf 'application_sha=%s\norchestration_sha=%s\n' "$FLUVI_R18_APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r18-phone/source.txt"
+          java -version 2>&1 | head -3 > "$RUNNER_TEMP/r18-phone/java.txt"
+          flutter --version > "$RUNNER_TEMP/r18-phone/flutter.txt"
       - name: Build Human profile using project script
         shell: bash
         run: |
           set -euo pipefail
-          export FLUVI_BUILD_COMMIT="$FLUVI_R16_APP_SHA"
-          bash scripts/build-human-diagnostic-apk.sh 2>&1 | tee "$RUNNER_TEMP/r16-phone/build.log"
+          export FLUVI_BUILD_COMMIT="$FLUVI_R18_APP_SHA"
+          bash scripts/build-human-diagnostic-apk.sh 2>&1 | tee "$RUNNER_TEMP/r18-phone/build.log"
           test -s build/app/outputs/flutter-apk/app-profile.apk
-          cp build/app/outputs/flutter-apk/app-profile.apk "$RUNNER_TEMP/r16-phone/app-profile-runner.apk"
-          unzip -tq "$RUNNER_TEMP/r16-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r16-phone/zip-check.txt"
-          sha256sum "$RUNNER_TEMP/r16-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r16-phone/runner-sha256.txt"
+          cp build/app/outputs/flutter-apk/app-profile.apk "$RUNNER_TEMP/r18-phone/app-profile-runner.apk"
+          unzip -tq "$RUNNER_TEMP/r18-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r18-phone/zip-check.txt"
+          sha256sum "$RUNNER_TEMP/r18-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r18-phone/runner-sha256.txt"
           aapt_path=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name aapt -type f | sort -V | tail -1)
           signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
-          "$aapt_path" dump badging "$RUNNER_TEMP/r16-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r16-phone/badging.txt"
-          "$signer" verify --verbose --print-certs "$RUNNER_TEMP/r16-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r16-phone/runner-signer.txt"
+          "$aapt_path" dump badging "$RUNNER_TEMP/r18-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r18-phone/badging.txt"
+          "$signer" verify --verbose --print-certs "$RUNNER_TEMP/r18-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r18-phone/runner-signer.txt"
       - name: Retain candidate binary and build evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r16-human-candidate-7c49a2238629-${{ github.run_id }}
-          path: ${{ runner.temp }}/r16-phone/
+          name: r18-human-candidate-${{ github.run_id }}
+          path: ${{ runner.temp }}/r18-phone/
           if-no-files-found: warn
           compression-level: 0
           retention-days: 14
