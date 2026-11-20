@@ -82,6 +82,9 @@ internal class KeyguardCardWindow(
     /** Captured with the observer for deterministic renderer-only tests. */
     private val isolatedOrbMaterialTimeSource: KeyguardOrbMaterialTimeSource =
         KeyguardOrbBufferRendererTestHooks.materialTimeSource,
+    /** Main notifies the service when an already-issued first-read hint can
+     * no longer describe the prepared animated route. */
+    private val onSurfaceMotionIneligible: () -> Unit = {},
 ) {
     enum class Result { ATTACHED, CONTENT_UPDATED, LAYOUT_UPDATED, REDACTED, NO_OP, FAILED }
 
@@ -93,10 +96,14 @@ internal class KeyguardCardWindow(
     private var attachGeneration = 0L
     private val mainHandler = Handler(Looper.getMainLooper())
     private var surfaceAnimationObserverRegistered = false
+    private var surfaceMotionAllowed = false
     private val surfaceAnimationObserver = object : android.database.ContentObserver(mainHandler) {
         override fun onChange(selfChange: Boolean) {
+            if (!surfaceAnimationObserverRegistered) return
             val allowed = android.provider.Settings.Global.getFloat(serviceContext.contentResolver,
                 android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+            surfaceMotionAllowed = allowed
+            if (!allowed) onSurfaceMotionIneligible()
             surfacePresenter?.setMotionAllowed(allowed)
             if (KeyguardR15AcquisitionTestHooks.ENABLED) KeyguardR15AcquisitionTestHooks.motionChanged(allowed)
         }
@@ -153,7 +160,7 @@ internal class KeyguardCardWindow(
             materialSettings == settings && materialProfile === profile && profile?.animated == true &&
             settings.presentationMode == KeyguardCardPresentationMode.ORB &&
             settings.animationMode == KeyguardCardAnimationMode.ORB_ONLY &&
-            effectiveRenderMode == KeyguardOrbRenderMode.SURFACE_LIVE && surfacePresenter != null
+            effectiveRenderMode == KeyguardOrbRenderMode.SURFACE_LIVE && surfacePresenter != null && surfaceMotionAllowed
     }
     fun attachmentRenderSummary() = materialController?.attachmentRenderSummary()
     fun displayRefreshRate(): Float? = root?.display?.refreshRate
@@ -173,10 +180,31 @@ internal class KeyguardCardWindow(
             profile?.animated == true && selection != KeyguardOrbRenderMode.LEGACY_R11
 
     private fun usesSurface(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?,
-                            selection: KeyguardOrbRenderMode): Boolean =
-        surfaceConfigurationEligible(settings, profile, selection) &&
-            android.provider.Settings.Global.getFloat(serviceContext.contentResolver,
-                android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+                            selection: KeyguardOrbRenderMode): Boolean {
+        if (!surfaceConfigurationEligible(settings, profile, selection)) {
+            val wasAllowed = surfaceMotionAllowed
+            surfaceMotionAllowed = false
+            if (wasAllowed) onSurfaceMotionIneligible()
+            return false
+        }
+        // Register first so a change between this existing settings read and
+        // detached preparation cannot be missed. Failure to observe changes
+        // disables only the experimental first-read hint, not the route.
+        if (!surfaceAnimationObserverRegistered) {
+            surfaceAnimationObserverRegistered = runCatching {
+                serviceContext.contentResolver.registerContentObserver(
+                    android.provider.Settings.Global.getUriFor(android.provider.Settings.Global.ANIMATOR_DURATION_SCALE),
+                    false, surfaceAnimationObserver,
+                )
+            }.isSuccess
+        }
+        val allowed = android.provider.Settings.Global.getFloat(serviceContext.contentResolver,
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+        val wasAllowed = surfaceMotionAllowed
+        surfaceMotionAllowed = allowed && surfaceAnimationObserverRegistered
+        if (wasAllowed && !surfaceMotionAllowed) onSurfaceMotionIneligible()
+        return allowed
+    }
 
     /** Reuse the actual route rule; the previous effective route is captured
      * separately while the old root still owns its presentation. */
@@ -225,14 +253,6 @@ internal class KeyguardCardWindow(
                 onFailure = onSurfaceFailure,
                 isCaptureActive = { KeyguardCardDiagnostics.wantsEvent("R12_SURFACE") },
             )
-            if (!surfaceAnimationObserverRegistered) {
-                surfaceAnimationObserverRegistered = runCatching {
-                    serviceContext.contentResolver.registerContentObserver(
-                        android.provider.Settings.Global.getUriFor(android.provider.Settings.Global.ANIMATOR_DURATION_SCALE),
-                        false, surfaceAnimationObserver,
-                    )
-                }.isSuccess
-            }
             orb.visibility = View.GONE
             effectiveRenderMode = selection
         } else {
@@ -542,6 +562,7 @@ internal class KeyguardCardWindow(
             runCatching { serviceContext.contentResolver.unregisterContentObserver(surfaceAnimationObserver) }
             surfaceAnimationObserverRegistered = false
         }
+        surfaceMotionAllowed = false
         root = null
         materialController = null
         surfacePresenter = null

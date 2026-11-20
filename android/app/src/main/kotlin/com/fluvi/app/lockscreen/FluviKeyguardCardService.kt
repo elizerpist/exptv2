@@ -509,6 +509,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             onOpen = ::openFocusedFluvi,
             onToggle = ::toggleView,
             onInteractionStarted = ::onOverlayInteractionStarted,
+            onSurfaceMotionIneligible = { synchronized(queueLock) { firstAcquisition.invalidate() } },
             onPositionCommitted = ::onOverlayPositionCommitted,
             onInteractionDiagnostic = { event, detail ->
                 val attached = overlay.isAttached

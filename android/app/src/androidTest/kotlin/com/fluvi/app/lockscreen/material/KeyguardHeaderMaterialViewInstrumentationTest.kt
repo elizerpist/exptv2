@@ -27,6 +27,11 @@ import com.fluvi.app.lockscreen.KeyguardCardContentOverflow
 import com.fluvi.app.lockscreen.KeyguardFrameCommitObservation
 import com.fluvi.app.lockscreen.KeyguardCardWindow
 import com.fluvi.app.lockscreen.KeyguardR15AcquisitionTestHooks
+import com.fluvi.app.lockscreen.KeyguardFirstAcquisition
+import com.fluvi.app.lockscreen.KeyguardInspectionAuthority
+import com.fluvi.app.lockscreen.KeyguardInspectionFreshness
+import com.fluvi.app.lockscreen.KeyguardCardInspectionRequest
+import com.fluvi.app.lockscreen.KeyguardWindowFreshness
 import com.fluvi.app.lockscreen.KeyguardDrawPublication
 import com.fluvi.app.lockscreen.KeyguardFirstDrawOwner
 import com.fluvi.app.lockscreen.KeyguardFirstDrawEvent
@@ -104,6 +109,17 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         check(evidence.parentFile?.mkdirs() == true || evidence.parentFile?.isDirectory == true)
         val latch = CountDownLatch(1)
         val observedAt = java.util.concurrent.atomic.AtomicLong(-1)
+        val invalidations = AtomicInteger()
+        val queueLock = Any()
+        val firstGate = KeyguardFirstAcquisition()
+        val restoredGate = KeyguardFirstAcquisition()
+        val authority = KeyguardInspectionAuthority(1, 2, 3, 4, 5)
+        fun request(owner: KeyguardInspectionAuthority, id: Long) = KeyguardCardInspectionRequest(
+            id = id, trigger = "wake", session = owner.serviceSession, visibilityEpoch = owner.visibilityEpoch,
+            interactionEpoch = owner.interactionEpoch, attachGeneration = owner.attachGeneration,
+            wakeGeneration = owner.wakeGeneration, queuedAtUptimeMs = 100)
+        fun ticket(owner: KeyguardInspectionAuthority) =
+            KeyguardInspectionFreshness.Ticket(owner, 1, KeyguardWindowFreshness.LIFECYCLE_BOUNDARY)
         var window: KeyguardCardWindow? = null
         var activity: KeyguardMaterialTestActivity? = null
         try {
@@ -119,11 +135,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             var eligibleBefore = false
             instrumentation.runOnMainSync {
                 val target = KeyguardCardWindow(targetActivity, onOpen = {}, onToggle = {}, onInteractionStarted = {},
-                    onPositionCommitted = { _, _, _, _ -> }, onInteractionDiagnostic = { _, _ -> })
+                    onPositionCommitted = { _, _, _, _ -> }, onInteractionDiagnostic = { _, _ -> },
+                    onSurfaceMotionIneligible = {
+                        synchronized(queueLock) { firstGate.invalidate(); restoredGate.invalidate() }
+                        invalidations.incrementAndGet()
+                    })
                 window = target
                 target.prepareRetainedView(settings, profile)
                 check(target.renderModeStatus().effective.name == "SURFACE_LIVE")
                 eligibleBefore = target.preparedInitialLiveOrb(settings, profile)
+                synchronized(queueLock) { firstGate.begin(authority, eligibleBefore); restoredGate.begin(authority, eligibleBefore) }
             }
             check(eligibleBefore) { "fixture did not reach detached prepared LIVE eligibility" }
             KeyguardR15AcquisitionTestHooks.motionObserver = { allowed ->
@@ -134,9 +155,37 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             check(latch.await(8, TimeUnit.SECONDS)) { "production motion observer was not reached" }
             var eligibleAfter = true
             instrumentation.runOnMainSync { eligibleAfter = checkNotNull(window).preparedInitialLiveOrb(settings, profile) }
+            val consumedWhileOff = synchronized(queueLock) { firstGate.take(request(authority, 1), ticket(authority)) }
+            val enabled = CountDownLatch(1)
+            KeyguardR15AcquisitionTestHooks.motionObserver = { allowed -> if (allowed) enabled.countDown() }
+            setScale("1")
+            check(enabled.await(8, TimeUnit.SECONDS)) { "production re-enable observer was not reached" }
+            var eligibleRestored = false
+            instrumentation.runOnMainSync { eligibleRestored = checkNotNull(window).preparedInitialLiveOrb(settings, profile) }
+            val revivedSameWake = synchronized(queueLock) { restoredGate.take(request(authority, 2), ticket(authority)) }
+            val newAuthority = authority.copy(wakeGeneration = authority.wakeGeneration + 1)
+            val allowedNextWake = synchronized(queueLock) {
+                restoredGate.begin(newAuthority, eligibleRestored)
+                restoredGate.take(request(newAuthority, 3), ticket(newAuthority))
+            }
+            val staleObserver = KeyguardCardWindow::class.java.getDeclaredField("surfaceAnimationObserver").apply {
+                isAccessible = true
+            }.get(checkNotNull(window)) as android.database.ContentObserver
+            instrumentation.runOnMainSync { checkNotNull(window).dispose(); window = null }
+            val invalidationsBeforeStale = invalidations.get()
+            setScale("0")
+            instrumentation.runOnMainSync { staleObserver.onChange(false) }
+            val staleIgnored = invalidations.get() == invalidationsBeforeStale
             evidence.writeText("source=${args.getString("sourceSha")} run=$runId prepared=true route=SURFACE_LIVE " +
-                "changed=$changedAt observer=${observedAt.get()} eligibleBefore=$eligibleBefore eligibleAfter=$eligibleAfter\n")
+                "changed=$changedAt observer=${observedAt.get()} eligibleBefore=$eligibleBefore eligibleAfter=$eligibleAfter " +
+                "invalidations=${invalidations.get()} consumedWhileOff=$consumedWhileOff eligibleRestored=$eligibleRestored " +
+                "revivedSameWake=$revivedSameWake allowedNextWake=$allowedNextWake staleAfterDisposeIgnored=$staleIgnored\n")
             assertFalse("motion-off must revoke detached LIVE eligibility after the real observer", eligibleAfter)
+            assertTrue("motion-off must invalidate the already-issued opportunity", invalidations.get() > 0)
+            assertFalse("issued opportunity must not be taken after motion-off", consumedWhileOff)
+            assertTrue("re-enable permits a new wake", eligibleRestored && allowedNextWake)
+            assertFalse("re-enable must not revive the old wake", revivedSameWake)
+            assertTrue("a disposed observer must not invalidate a later session", staleIgnored)
         } finally {
             KeyguardR15AcquisitionTestHooks.motionObserver = null
             instrumentation.runOnMainSync { window?.dispose(); activity?.finish() }
