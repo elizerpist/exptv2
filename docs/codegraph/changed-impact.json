@@ -1,13 +1,22 @@
 {
   "schema_version": 1,
-  "source_head": "6d03df62af5c0b02fe86efcf2085c5c7916d1149",
-  "base_head": "03677d622f0dd9873b6e1c2d323c3e1f2a7a1b5e",
+  "source_head": "536987c2345bf0c0cc2cb297b68c7227a0aed3c8",
+  "base_head": "be3bdbacf2f109094eda6d7fa8c1f34db50ba75a",
   "changed_files": [
     ".github/workflows/fluvi-core.yml",
-    "scripts/test-keyguard-apk-install.py",
-    "scripts/test-keyguard-r12-admission-baseline.sh",
+    "scripts/keyguard-r12-candidate-oracle.py",
+    "scripts/keyguard-r14-aggregate.py",
+    "scripts/keyguard-r15-case-manifest.py",
+    "scripts/keyguard-r15-comparison.py",
+    "scripts/keyguard-r15-slot-evidence.py",
     "scripts/test-keyguard-r12-candidate.sh",
-    "scripts/verify-keyguard-installed-apk.sh"
+    "scripts/test-keyguard-r14-aggregate.py",
+    "scripts/test-keyguard-r14-candidate.sh",
+    "scripts/test-keyguard-r15-case-manifest.py",
+    "scripts/test-keyguard-r15-comparison-device.sh",
+    "scripts/test-keyguard-r15-comparison.py",
+    "scripts/test-keyguard-r15-routing.py",
+    "scripts/test-keyguard-r15-slot-evidence.py"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
