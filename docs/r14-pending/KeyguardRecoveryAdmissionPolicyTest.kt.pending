@@ -1,0 +1,146 @@
+package com.fluvi.app.lockscreen
+
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/** Positive permission remains in the real service. These controls constrain
+ * only when an already complete, otherwise admissible MAIN may be held. */
+class KeyguardRecoveryAdmissionPolicyTest {
+    private val authority = KeyguardInspectionAuthority(1, 2, 3, 4, 5)
+    private fun origin(
+        id: Long = 22,
+        kind: KeyguardEventOriginClass = KeyguardEventOriginClass.EXTERNAL_SYSTEMUI,
+        display: Int = 0,
+        event: Long? = 100,
+        callback: Long = 101,
+    ) = KeyguardInspectionOrigin(id, kind, display, event, callback)
+    private fun request(id: Long = 10, event: KeyguardInspectionOrigin? = null,
+        auth: KeyguardInspectionAuthority = authority) = KeyguardCardInspectionRequest(
+        id = id, trigger = "window", session = auth.serviceSession,
+        visibilityEpoch = auth.visibilityEpoch, interactionEpoch = auth.interactionEpoch,
+        attachGeneration = auth.attachGeneration, wakeGeneration = auth.wakeGeneration,
+        queuedAtUptimeMs = 102, origin = event,
+    )
+    private fun eligible() = KeyguardRecoveryAdmissionEvidence(
+        currentAuthority = authority,
+        recoveryAuthority = authority,
+        detached = true,
+        withdrawnAwaitingSurface = true,
+        recoveryUnused = true,
+        sameEligibleLiveConfiguration = true,
+        completeMain = true,
+        currentPrivacyPermitsDecision = true,
+        request = request(event = origin(id = 21, event = 90, callback = 91)),
+        pending = request(id = 11, event = origin()),
+        readStartedAtUptimeMs = 100,
+        decisionSnapshotAtUptimeMs = 110,
+        ingressIdAtSnapshot = 22,
+    )
+    private fun assertRejected(value: KeyguardRecoveryAdmissionEvidence) =
+        assertFalse(KeyguardRecoveryAdmissionPolicy.shouldDefer(value))
+
+    @Test fun oneRealWithdrawalOnlyAndFirstShowNeverWaits() {
+        val base = eligible()
+        assertTrue(KeyguardRecoveryAdmissionPolicy.shouldDefer(base))
+        assertRejected(base.copy(recoveryAuthority = null))
+        assertRejected(base.copy(recoveryUnused = false))
+        assertRejected(base.copy(detached = false))
+        assertRejected(base.copy(withdrawnAwaitingSurface = false))
+        assertRejected(base.copy(sameEligibleLiveConfiguration = false))
+        assertRejected(base.copy(completeMain = false))
+        assertRejected(base.copy(currentPrivacyPermitsDecision = false))
+    }
+
+    @Test fun requiresUnstartedDifferentCurrentAuthorityExternalPrimaryEvent() {
+        val base = eligible()
+        assertRejected(base.copy(pending = null))
+        assertRejected(base.copy(pending = base.request))
+        assertRejected(base.copy(pending = request(event = origin())))
+        assertRejected(base.copy(pending = request(id = 11, event = origin(), auth = authority.copy(visibilityEpoch = 9))))
+        assertRejected(base.copy(recoveryAuthority = authority.copy(wakeGeneration = 9)))
+        for (kind in listOf(KeyguardEventOriginClass.OWN, KeyguardEventOriginClass.AMBIGUOUS, KeyguardEventOriginClass.SYNTHETIC)) {
+            assertRejected(base.copy(pending = request(id = 11, event = origin(kind = kind))))
+        }
+        assertRejected(base.copy(pending = request(id = 11, event = origin(display = 1))))
+        assertRejected(base.copy(pending = request(id = 11, event = null)))
+        assertRejected(base.copy(pending = request(id = 11, event = origin(id = 21))))
+    }
+
+    @Test fun requiresValidNewEventAndUnambiguousIngressOrdering() {
+        val base = eligible()
+        for (time in listOf(null, 0L, -1L, 99L, 102L)) {
+            assertRejected(base.copy(pending = request(id = 11, event = origin(event = time, callback = 101))))
+        }
+        assertRejected(base.copy(pending = request(id = 11, event = origin(callback = 100))))
+        assertRejected(base.copy(pending = request(id = 11, event = origin(callback = 111))))
+        assertRejected(base.copy(ingressIdAtSnapshot = 21))
+        // Equal event/read-start timestamps are allowed only with a strictly
+        // later callback and a positively ordered pending ingress.
+        assertTrue(KeyguardRecoveryAdmissionPolicy.shouldDefer(base))
+        assertTrue(KeyguardRecoveryAdmissionPolicy.shouldDefer(base.copy(decisionSnapshotAtUptimeMs = 101)))
+    }
+
+    @Test fun coalescingUsesOnlyTheCurrentPendingSlot() {
+        val base = eligible()
+        val queue = KeyguardCardInspectionQueue()
+        assertTrue(queue.offer(base.request))
+        assertFalse(queue.offer(checkNotNull(base.pending)))
+        val synthetic = request(id = 12, event = origin(id = 23, kind = KeyguardEventOriginClass.SYNTHETIC))
+        assertFalse(queue.offer(synthetic))
+        assertRejected(base.copy(pending = queue.pendingRequest()))
+        val fresh = request(id = 13, event = origin(id = 24, event = 103, callback = 104))
+        assertFalse(queue.offer(fresh))
+        assertTrue(KeyguardRecoveryAdmissionPolicy.shouldDefer(base.copy(pending = queue.pendingRequest(), ingressIdAtSnapshot = 24)))
+        val reserved = queue.reserveSuccessor(base.request) { true }
+        assertTrue(reserved == fresh)
+        assertRejected(base.copy(pending = queue.pendingRequest()))
+    }
+
+    @Test fun reacquiredOldIntentDoesNotBecomeANewExternalEvent() {
+        val base = eligible()
+        val prior = request(id = 30, event = origin(id = 30, event = 80, callback = 81))
+        val cloned = checkNotNull(prior.reacquireAfterWithdrawal(authority, 31, 105, KeyguardWindowFreshness.FRAMEWORK_EVENT))
+        assertTrue(cloned.origin == prior.origin)
+        assertRejected(base.copy(pending = cloned, ingressIdAtSnapshot = 30))
+    }
+
+    @Test fun noStaleSessionWakeInteractionOrAttachmentCanHoldCurrentWork() {
+        val base = eligible()
+        val changes = listOf(
+            authority.copy(serviceSession = 99), authority.copy(visibilityEpoch = 99),
+            authority.copy(wakeGeneration = 99), authority.copy(interactionEpoch = 99),
+            authority.copy(attachGeneration = 99),
+        )
+        for (changed in changes) {
+            assertRejected(base.copy(recoveryAuthority = changed))
+            assertRejected(base.copy(request = request(event = base.request.origin, auth = changed)))
+            assertRejected(base.copy(pending = request(id = 11, event = origin(), auth = changed)))
+        }
+    }
+
+    @Test fun retryOrReconciliationNeverInheritsExternalAuthorization() {
+        val base = eligible()
+        val retry = request(id = 55, event = origin(id = 55, kind = KeyguardEventOriginClass.SYNTHETIC))
+        assertRejected(base.copy(pending = retry, ingressIdAtSnapshot = 55))
+        // A fresh request id is not a fresh framework event when its origin
+        // is a reacquired copy of the A event itself.
+        val copied = base.request.copy(id = 56, queuedAtUptimeMs = 105)
+        assertRejected(base.copy(pending = copied, ingressIdAtSnapshot = 56))
+    }
+
+    @Test fun ingressOriginIsPositiveOnlyForIdentifiedSystemUiWindowEvents() {
+        fun meta(pkg: String?, type: Int = android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) =
+            KeyguardAccessibilityEventMeta(type, 17, 0, 0, pkg, 100)
+        assertTrue(KeyguardCardEventGate.originClass(meta("com.android.systemui"), ownWindow = false) ==
+            KeyguardEventOriginClass.EXTERNAL_SYSTEMUI)
+        assertTrue(KeyguardCardEventGate.originClass(meta("com.android.systemui"), ownWindow = true) ==
+            KeyguardEventOriginClass.OWN)
+        assertTrue(KeyguardCardEventGate.originClass(meta(null), ownWindow = false) ==
+            KeyguardEventOriginClass.AMBIGUOUS)
+        assertTrue(KeyguardCardEventGate.originClass(meta("com.example.other"), ownWindow = false) ==
+            KeyguardEventOriginClass.AMBIGUOUS)
+        assertTrue(KeyguardCardEventGate.originClass(meta("com.android.systemui", 0), ownWindow = false) ==
+            KeyguardEventOriginClass.AMBIGUOUS)
+    }
+}

@@ -1,0 +1,28 @@
+diff --git a/test/boundary/keyguard_first_render_architecture_boundary_test.dart b/test/boundary/keyguard_first_render_architecture_boundary_test.dart
+index 4027b2f9..b9348ac3 100644
+--- a/test/boundary/keyguard_first_render_architecture_boundary_test.dart
++++ b/test/boundary/keyguard_first_render_architecture_boundary_test.dart
+@@ -65,4 +65,23 @@ void main() {
+     expect(job, contains('needs: [test-core, test-flutter, test-keyguard-material-runtime]'));
+     expect(job, contains("needs.test-keyguard-material-runtime.result == 'success'"));
+   });
++
++  test('R14 recovery keeps the existing service and queue as sole owners', () {
++    final root = Directory('android/app/src/main/kotlin/com/fluvi/app/lockscreen');
++    final kotlin = root.listSync(recursive: true).whereType<File>()
++        .where((file) => file.path.endsWith('.kt')).toList();
++    final consumers = kotlin.where((file) => file.readAsStringSync()
++        .contains('KeyguardRecoveryAdmissionPolicy')).map((file) => file.path).toList();
++    expect(consumers, hasLength(2),
++        reason: 'the service and its existing inspection queue own this policy');
++    expect(consumers.any((path) => path.endsWith('/FluviKeyguardCardService.kt')), isTrue);
++    expect(consumers.any((path) => path.endsWith('/KeyguardCardInspectionQueue.kt')), isTrue);
++    final queue = File('${root.path}/KeyguardCardInspectionQueue.kt').readAsStringSync();
++    expect(queue, isNot(contains('import android.view.')),
++        reason: 'the bounded queue policy cannot own a View or window');
++    expect(queue, isNot(contains('android.os.Handler(')),
++        reason: 'the recovery policy may not create another worker or timer');
++    final service = File('${root.path}/FluviKeyguardCardService.kt').readAsStringSync();
++    expect(RegExp(r'KeyguardCardInspectionQueue\(\)').allMatches(service), hasLength(1));
++  });
+ }
