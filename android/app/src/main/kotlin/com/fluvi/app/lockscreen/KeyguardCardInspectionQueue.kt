@@ -77,6 +77,11 @@ internal interface KeyguardInspectionProbeForTest {
         abortedStale: Boolean, startedAt: Long, finishedAt: Long) {}
     fun ingress(meta: KeyguardAccessibilityEventMeta, receivedAt: Long,
         action: KeyguardEventAction, frameworkEvent: Boolean) {}
+    fun frameworkCopy(meta: KeyguardAccessibilityEventMeta, type: Int, window: Int, display: Int,
+        changes: Int, packageName: String?, eventTime: Long) {}
+    fun ingressOffered(meta: KeyguardAccessibilityEventMeta, request: KeyguardCardInspectionRequest,
+        previous: KeyguardCardInspectionRequest?, pending: KeyguardCardInspectionRequest?,
+        startsWorker: Boolean, frameworkEvent: Boolean) {}
     fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
     fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
 }

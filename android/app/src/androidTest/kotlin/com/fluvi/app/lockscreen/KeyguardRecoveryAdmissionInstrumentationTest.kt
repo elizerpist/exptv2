@@ -6,6 +6,7 @@ import android.app.KeyguardManager
 import android.app.UiAutomation
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.hardware.display.DisplayManager
 import android.os.Build
@@ -35,8 +36,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 /** Controlled ordering on the real service. The negative which first withdraws
  * the root is explicitly injected into the classifier, while the decisive
- * exclusion is an independently opened SystemUI shade. Event B is a labelled
- * metadata copy through the same ingress adapter as a framework callback. */
+ * exclusion is an independently visible test-APK window. Event B is a
+ * labelled metadata copy through the same adapter as a framework callback. */
 @RunWith(AndroidJUnit4::class)
 class KeyguardRecoveryAdmissionInstrumentationTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -86,9 +87,14 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
         val aAttached = java.util.concurrent.atomic.AtomicBoolean()
         val aGeneration = java.util.concurrent.atomic.AtomicLong()
         val originalGeneration = java.util.concurrent.atomic.AtomicLong()
+        val systemWindowBefore = java.util.concurrent.atomic.AtomicInteger(-1)
         val frameworkEvents = java.util.concurrent.atomic.AtomicInteger()
+        val frameworkCopies = java.util.concurrent.atomic.AtomicInteger()
+        val withdrawalDone = java.util.concurrent.atomic.AtomicBoolean()
+        val ingressByRequest = java.util.concurrent.ConcurrentHashMap<Long, KeyguardAccessibilityEventMeta>()
         var service: FluviKeyguardCardService? = null
         var captureStarted = false
+        var controlledOccluderStarted = false
         var captureId = "UNOBSERVED"
         fun schedule(owner: FluviKeyguardCardService, trigger: String) {
             val method = FluviKeyguardCardService::class.java.getDeclaredMethod(
@@ -99,6 +105,20 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
             method.invoke(owner, trigger, null, SystemClock.uptimeMillis(), KeyguardWindowFreshness.FRAMEWORK_EVENT, null)
         }
         val probe = object : KeyguardInspectionProbeForTest {
+            override fun frameworkCopy(meta: KeyguardAccessibilityEventMeta, type: Int, window: Int,
+                display: Int, changes: Int, packageName: String?, eventTime: Long) {
+                if (meta.eventType != type || meta.windowId != window || meta.displayId != display ||
+                    meta.windowChanges != changes || meta.packageName != packageName || meta.eventTimeUptimeMs != eventTime) {
+                    failure.compareAndSet(null, IllegalStateException("framework metadata copy mismatch"))
+                }
+                frameworkCopies.incrementAndGet()
+            }
+            override fun ingressOffered(meta: KeyguardAccessibilityEventMeta, request: KeyguardCardInspectionRequest,
+                previous: KeyguardCardInspectionRequest?, pending: KeyguardCardInspectionRequest?,
+                startsWorker: Boolean, frameworkEvent: Boolean) {
+                ingressByRequest[request.id] = meta
+                record("INGRESS_OFFER", "req=${request.id} before=${previous?.id ?: "none"} after=${pending?.id ?: "none"} started=$startsWorker framework=$frameworkEvent systemui=${meta.packageName == "com.android.systemui"} display=${meta.displayId} window=${meta.windowId}")
+            }
             override fun ingress(meta: KeyguardAccessibilityEventMeta, receivedAt: Long, action: KeyguardEventAction, frameworkEvent: Boolean) {
                 if (frameworkEvent) frameworkEvents.incrementAndGet()
                 record("INGRESS", "framework=$frameworkEvent type=${meta.eventType} window=${meta.windowId} display=${meta.displayId} systemui=${meta.packageName == "com.android.systemui"} event=${meta.eventTimeUptimeMs} callback=$receivedAt action=$action")
@@ -113,7 +133,10 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
                 abortedStale: Boolean, startedAt: Long, finishedAt: Long) {
                 record("READ", "req=${request.id} trigger=${request.trigger} decision=$decision reason=$reason rootUnavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale start=$startedAt end=$finishedAt")
                 reads.add(request.id)
-                if (request.trigger != "r14-positive-a" || !a.compareAndSet(null, request)) return
+                // An actual framework callback may coalesce the tagged intent
+                // before its read begins. Select the first real post-withdrawal
+                // read and validate its complete classification and authority.
+                if (!withdrawalDone.get() || !a.compareAndSet(null, request)) return
                 runCatching {
                     check(decision == KeyguardCardVisibility.SHOW_FULL && reason == KeyguardSurfaceReason.MAIN_CONFIRMED &&
                         !rootUnavailable && !walkTruncated && !abortedStale) { "A incomplete/non-MAIN: $decision/$reason" }
@@ -134,6 +157,7 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
                     runCatching {
                         check(decision == KeyguardCardVisibility.HIDDEN_OCCLUDED && !state.attached && roots == 0) { "controlled withdrawal did not remove the real root" }
                         check(state.wake != null && state.authority.attachGeneration == originalGeneration.get())
+                        withdrawalDone.set(true)
                         schedule(owner, "r14-positive-a")
                         check(owner.inspectionStateForTest().pending?.trigger == "r14-positive-a") { "A not pending after actual withdrawal" }
                     }.onFailure { failure.compareAndSet(null, it); workerHeld.countDown() }
@@ -149,7 +173,7 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
                     if (exclude && !lateOnly && state.attached) runCatching {
                         val previous = state.pending
                         check(previous?.trigger == "authorityReconcile:attach") { "stock add lacked observed attach reconciliation: ${previous?.trigger}" }
-                        sendControlled(owner, "C", aStarted.get(), previous.id, c)
+                        sendControlled(owner, "C", aStarted.get(), previous.id, c, systemWindowBefore.get())
                     }.onFailure { failure.compareAndSet(null, it) }
                     aApplied.countDown()
                 }
@@ -200,20 +224,35 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
                 check(!state.attached && state.authority.matches(aRequest)) { "A lacks current detached authority" }
                 check(WindowInspector.getGlobalWindowViews().none { (it.layoutParams as? WindowManager.LayoutParams)?.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY }) { "A has an actual attached accessibility root" }
                 record("A_HELD", "req=${aRequest.id} start=${aStarted.get()} pending=${state.pending?.id ?: "none"} authority=${state.authority}")
-                if (lateOnly) check(state.pending == null) { "late-only control already has pending work" }
+                if (lateOnly && state.pending != null) {
+                    // The old Fluvi window can emit a delayed framework
+                    // callback. Its exact queue-offer identity, not a nearest
+                    // timestamp, proves it is not a qualifying SystemUI B.
+                    val origin = checkNotNull(ingressByRequest[state.pending.id]) { "late-only pending origin unavailable" }
+                    check(origin.packageName != "com.android.systemui" || origin.displayId != Display.DEFAULT_DISPLAY) {
+                        "late-only control already has a qualifying external SystemUI event"
+                    }
+                    record("LATE_PENDING_CONTROL", "req=${state.pending.id} origin=nonSystemUI_or_nonPrimary")
+                }
             }
-            if (exclude && !lateOnly) establishShade("before-a")
+            systemWindowBefore.set(systemUiWindowId())
+            if (exclude && !lateOnly) {
+                controlledOccluderStarted = true
+                establishOccluder("before-a")
+            }
             if (!lateOnly) instrumentation.runOnMainSync {
-                sendControlled(checkNotNull(service), "B", aStarted.get(), null, b)
+                sendControlled(checkNotNull(service), "B", aStarted.get(), null, b, systemWindowBefore.get())
             }
             check(frameworkEvents.get() > 0) { "no framework ingress mapping observed" }
+            check(frameworkCopies.get() > 0) { "no framework metadata copy checked" }
             releaseWorker.countDown()
             assertTrue("A Main apply not reached", aApplied.await(15, TimeUnit.SECONDS))
             failure.get()?.let { throw AssertionError("INVALID fixture at A apply", it) }
             if (lateOnly) {
                 check(aAttached.get()) { "late-only A did not attach" }
-                establishShade("after-a")
-                instrumentation.runOnMainSync { sendControlled(checkNotNull(service), "C", aStarted.get(), null, c) }
+                controlledOccluderStarted = true
+                establishOccluder("after-a")
+                instrumentation.runOnMainSync { sendControlled(checkNotNull(service), "C", aStarted.get(), null, c, systemWindowBefore.get()) }
             }
             val actualSuccessor = if (lateOnly || (exclude && aAttached.get())) c.get()
                 else if (aAttached.get()) replacement.get() else b.get()
@@ -226,7 +265,7 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
             val roots = countOverlayRoots()
             check(reads.contains(successor.id)) { "actual successor ${successor.id} was not physically read" }
             val successorDecision = checkNotNull(applied[successor.id]) { "actual successor was not applied" }
-            if (exclude) check(successorDecision == KeyguardCardVisibility.HIDDEN_SHADE) { "independent shade was not the applied exclusion: $successorDecision" }
+            if (exclude) check(successorDecision == KeyguardCardVisibility.HIDDEN_OCCLUDED) { "independent foreign window was not the applied exclusion: $successorDecision" }
             else check(successorDecision == KeyguardCardVisibility.SHOW_FULL) { "MAIN successor not applied: $successorDecision" }
             record("RESULT", "a=${aRequest.id} b=${b.get()?.id ?: "none"} r=${replacement.get()?.id ?: "none"} c=${c.get()?.id ?: "none"} read=${successor.id} readDecision=$successorDecision initialGeneration=${originalGeneration.get()} aAttached=${aAttached.get()} aGeneration=${aGeneration.get()} finalGeneration=${final.first.authority.attachGeneration} finalAttached=${final.first.attached} roots=$roots exclusionWitness=$exclude physicalPresentation=UNOBSERVED")
             if (exclude && !lateOnly) {
@@ -247,7 +286,10 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
             if (captureStarted) runCatching { File(output, "capture.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"].toString()) }
                 .onFailure { cleanupFailure = it; record("FREEZE_FAILURE", it.javaClass.simpleName) }
             runCatching {
-                shell("cmd statusbar collapse")
+                if (controlledOccluderStarted) {
+                    synchronizedKey(KeyEvent.KEYCODE_BACK)
+                    await("controlled occluder removed", 5_000) { testOccluderWindowId() == null }
+                }
                 setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, otherServices())
                 await("service disconnect", 8_000) { !FluviKeyguardCardServiceRegistry.connected }
                 restore(savedSettings); restore(savedMaterial); restore(savedMode)
@@ -264,11 +306,12 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
     /** Capture the actual pending slot under Main. The SystemUI identity is
      * controlled metadata, explicitly distinct from observed framework rows. */
     private fun sendControlled(owner: FluviKeyguardCardService, role: String, aStart: Long,
-        expectedPrevious: Long?, target: AtomicReference<KeyguardCardInspectionRequest?>) {
+        expectedPrevious: Long?, target: AtomicReference<KeyguardCardInspectionRequest?>, systemWindowId: Int) {
         while (SystemClock.uptimeMillis() <= aStart) SystemClock.sleep(1)
         val before = owner.inspectionStateForTest()
         if (expectedPrevious != null) check(before.pending?.id == expectedPrevious)
-        val window = systemUiWindowId()
+        val window = systemWindowId
+        check(window >= 0) { "the prior real SystemUI window identity was not captured" }
         val eventAt = SystemClock.uptimeMillis()
         owner.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, window, Display.DEFAULT_DISPLAY, 0,
@@ -281,28 +324,46 @@ class KeyguardRecoveryAdmissionInstrumentationTest {
         record("OFFER", "role=$role origin=controlled_framework_metadata window=$window event=$eventAt callback=${next.triggerReceivedUptimeMs} before=${before.pending?.id ?: "none"} after=${next.id} authority=${after.authority}")
     }
 
-    private fun establishShade(label: String) {
-        shell("cmd statusbar expand-settings")
-        var witnessed = false
-        await("independent SystemUI shade marker", 8_000) {
-            witnessed = shadeMarkerSeen()
-            witnessed
+    private fun establishOccluder(label: String) {
+        val before = checkNotNull(automation.takeScreenshot())
+        try {
+            check(greenPixels(before) < 16) { "baseline region already matches controlled green" }
+            File(output, "$label-before.png").outputStream().use { before.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        } finally { before.recycle() }
+        val started = SystemClock.uptimeMillis()
+        instrumentation.context.startActivity(Intent().setClassName("com.fluvi.app.test",
+            "com.fluvi.app.lockscreen.KeyguardR14ControlledOccluderActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        await("actual foreign test window", 8_000) { testOccluderWindowId() != null }
+        var visible = false
+        await("actual controlled surface pixels", 8_000) {
+            val shot = automation.takeScreenshot() ?: return@await false
+            try { visible = greenPixels(shot) >= 900; visible } finally { shot.recycle() }
         }
-        check(witnessed)
         val bitmap = checkNotNull(automation.takeScreenshot())
-        File(output, "$label-shade.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-        bitmap.recycle()
-        record("INDEPENDENT_EXCLUSION", "kind=actual_systemui_shade marker=true screenshot=$label-shade.png window=${systemUiWindowId()} locked=${keyguard.isKeyguardLocked}")
-        check(keyguard.isKeyguardLocked)
+        try {
+            check(greenPixels(bitmap) >= 900)
+            File(output, "$label-occluder.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        } finally { bitmap.recycle() }
+        check(visible && keyguard.isKeyguardLocked)
+        record("INDEPENDENT_EXCLUSION", "kind=actual_foreign_test_window visual=true started=$started screenshot=$label-occluder.png before=$label-before.png window=${testOccluderWindowId()} locked=${keyguard.isKeyguardLocked}")
     }
-    private fun shadeMarkerSeen(): Boolean {
-        val ids = listOf("com.android.systemui:id/quick_settings_panel", "com.android.systemui:id/quick_qs_panel", "com.android.systemui:id/qs_frame", "com.android.systemui:id/settings_button", "com.android.systemui:id/notification_shade_shortcut", "com.android.systemui:id/split_shade_status_bar")
-        return automation.windows.any { window ->
-            val root: AccessibilityNodeInfo = window.root ?: return@any false
-            try { root.packageName?.toString() == "com.android.systemui" && ids.any { id -> root.findAccessibilityNodeInfosByViewId(id).any { it.isVisibleToUser } } }
-            finally { root.recycle() }
+    private fun greenPixels(bitmap: android.graphics.Bitmap): Int {
+        val cx = bitmap.width / 2
+        val cy = bitmap.height / 2
+        var count = 0
+        for (y in cy - 16 until cy + 16) for (x in cx - 16 until cx + 16) {
+            val pixel = bitmap.getPixel(x, y)
+            val r = android.graphics.Color.red(pixel)
+            val g = android.graphics.Color.green(pixel)
+            val b = android.graphics.Color.blue(pixel)
+            if (g > 120 && g > 2 * r && 2 * g > 3 * b) count++
         }
+        return count
     }
+    private fun testOccluderWindowId(): Int? = automation.windows.firstOrNull { window ->
+        val root: AccessibilityNodeInfo = window.root ?: return@firstOrNull false
+        try { root.packageName?.toString() == "com.fluvi.app.test" } finally { root.recycle() }
+    }?.id
     private fun systemUiWindowId(): Int = automation.windows.firstOrNull { window ->
         val root = window.root ?: return@firstOrNull false
         try { root.packageName?.toString() == "com.android.systemui" } finally { root.recycle() }

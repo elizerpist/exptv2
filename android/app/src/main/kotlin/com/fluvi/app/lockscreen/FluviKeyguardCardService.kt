@@ -587,6 +587,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             packageName = event.packageName?.toString(),
             eventTimeUptimeMs = event.eventTime,
         )
+        inspectionProbeForTest?.frameworkCopy(meta, event.eventType, event.windowId,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) event.displayId else Display.DEFAULT_DISPLAY,
+            if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) event.windowChanges else 0,
+            event.packageName?.toString(), event.eventTime)
         acceptAccessibilityMetadata(meta, callbackReceivedAt, frameworkEvent = true)
     }
 
@@ -635,7 +639,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 val cycle = beginOrJoinWakeCycle("accessibility", callbackReceivedAt, schedule = false,
                     eventTime = meta.eventTimeUptimeMs)
                 if (cycle == null) return
-                scheduleEvaluation(
+                scheduleEvaluationFromIngress(
                     "window",
                     meta.eventTimeUptimeMs,
                     triggerReceivedUptimeMs = callbackReceivedAt,
@@ -644,6 +648,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                     } else {
                         KeyguardWindowFreshness.FRAMEWORK_EVENT
                     },
+                    meta = meta,
+                    frameworkEvent = frameworkEvent,
                 )
             }
         }
@@ -1058,6 +1064,21 @@ class FluviKeyguardCardService : AccessibilityService() {
         freshness: KeyguardWindowFreshness = KeyguardWindowFreshness.FRAMEWORK_EVENT,
         reconciliationIntent: KeyguardCardInspectionRequest? = null,
     ) {
+        scheduleEvaluationCommon(trigger, eventTimeUptimeMs, triggerReceivedUptimeMs, freshness,
+            reconciliationIntent, null, false)
+    }
+
+    private fun scheduleEvaluationFromIngress(trigger: String, eventTimeUptimeMs: Long?,
+        triggerReceivedUptimeMs: Long?, freshness: KeyguardWindowFreshness,
+        meta: KeyguardAccessibilityEventMeta, frameworkEvent: Boolean) {
+        scheduleEvaluationCommon(trigger, eventTimeUptimeMs, triggerReceivedUptimeMs, freshness,
+            null, meta, frameworkEvent)
+    }
+
+    private fun scheduleEvaluationCommon(trigger: String, eventTimeUptimeMs: Long?,
+        triggerReceivedUptimeMs: Long?, freshness: KeyguardWindowFreshness,
+        reconciliationIntent: KeyguardCardInspectionRequest?, meta: KeyguardAccessibilityEventMeta?,
+        frameworkEvent: Boolean) {
         if (!FluviKeyguardCardServiceRegistry.connected) return
         val now = SystemClock.uptimeMillis()
         val authority = inspectionAuthority
@@ -1088,13 +1109,15 @@ class FluviKeyguardCardService : AccessibilityService() {
         val queueOffer = synchronized(queueLock) {
             inspectionFreshness.require(authority, request.windowFreshness)
             publishReadAheadSnapshotLocked()
-            val replacedPending = inspectionQueue.pendingRequest()?.id
+            val replacedPending = inspectionQueue.pendingRequest()
             val startsWorker = inspectionQueue.offer(request)
             if (inspectionQueue.pendingRequest() != null) {
                 recordMaximum(maximumPendingInspections, 1)
             }
-            startsWorker to replacedPending
+            Triple(startsWorker, replacedPending, inspectionQueue.pendingRequest())
         }
+        if (meta != null) inspectionProbeForTest?.ingressOffered(meta, request, queueOffer.second,
+            queueOffer.third, queueOffer.first, frameworkEvent)
         traceKeyguard(
             if (queueOffer.first) "INSPECTION_QUEUED" else "INSPECTION_COALESCED",
             trigger,
@@ -1103,7 +1126,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "queuedAtUptimeMs" to now,
                 "triggerReceivedUptimeMs" to (request.triggerReceivedUptimeMs ?: "NA"),
                 "eventTimeUptimeMs" to (request.eventTimeUptimeMs ?: "NA"),
-                "replacedPendingRequestId" to (queueOffer.second ?: "NA"),
+                "replacedPendingRequestId" to (queueOffer.second?.id ?: "NA"),
                 "requestVisibilityEpoch" to request.visibilityEpoch,
                 "requestInteractionEpoch" to request.interactionEpoch,
                 "requestWakeGeneration" to request.wakeGeneration,

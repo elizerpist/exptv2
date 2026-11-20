@@ -72,11 +72,15 @@ run_case exclusion 'com.fluvi.app.lockscreen.KeyguardRecoveryAdmissionInstrument
 run_case fresh-main 'com.fluvi.app.lockscreen.KeyguardRecoveryAdmissionInstrumentationTest#freshMainSuccessorRestoresExactlyOnce'
 run_case late-only 'com.fluvi.app.lockscreen.KeyguardRecoveryAdmissionInstrumentationTest#postAttachOnlyExclusionNeverDefersPriorAdmission'
 run_case pressure 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#lightAndFullPressureRetainEverySelectedEpisodeCauseAndFitTheWholeUtf8Budget'
-run_case ordered 'com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest#r12DetachedNegativeCanReadOneSuccessorBeforeOrderedApply'
-run_case service-occlusion 'com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest#connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles'
-run_case natural 'com.fluvi.app.lockscreen.KeyguardR12ServiceTimingInstrumentationTest#fourRealWakeCyclesUseRequestedRoute'
+if [[ ${FLUVI_R14_CONTROLS_ONLY:-0} != 1 ]]; then
+  run_case ordered 'com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest#r12DetachedNegativeCanReadOneSuccessorBeforeOrderedApply'
+  run_case service-occlusion 'com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest#connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles'
+  run_case natural 'com.fluvi.app.lockscreen.KeyguardR12ServiceTimingInstrumentationTest#fourRealWakeCyclesUseRequestedRoute'
+fi
 result=0
-for label in exclusion fresh-main late-only pressure ordered service-occlusion natural; do
+labels=(exclusion fresh-main late-only pressure ordered service-occlusion natural)
+if [[ ${FLUVI_R14_CONTROLS_ONLY:-0} == 1 ]]; then labels=(exclusion fresh-main late-only pressure); fi
+for label in "${labels[@]}"; do
   transcript="$evidence/$label/instrumentation.txt"
   id=$(sed -n 's/^run_uuid=//p' "$evidence/$label/identity.txt")
   case "$label" in
@@ -93,9 +97,10 @@ for label in exclusion fresh-main late-only pressure ordered service-occlusion n
   fi
   if [[ $label == exclusion && $scope == r14_recovery_stock ]]; then
     fixture="$evidence/$label/probe/files/keyguard-service-probe/r14/$id/exclusion/fixture.txt"
-    image="$evidence/$label/probe/files/keyguard-service-probe/r14/$id/exclusion/before-a-shade.png"
-    if [[ -s $fixture && -s $image ]] && grep -q 'stage=INDEPENDENT_EXCLUSION.*marker=true' "$fixture" && \
-       grep -q 'stage=RESULT.*aAttached=true' "$fixture" && grep -q 'pendingTrigger=authorityReconcile:attach' "$fixture" && \
+    image="$evidence/$label/probe/files/keyguard-service-probe/r14/$id/exclusion/before-a-occluder.png"
+    before="$evidence/$label/probe/files/keyguard-service-probe/r14/$id/exclusion/before-a-before.png"
+    if [[ -s $fixture && -s $image && -s $before ]] && grep -q 'stage=INDEPENDENT_EXCLUSION.*visual=true' "$fixture" && \
+       grep -q 'stage=RESULT.*readDecision=HIDDEN_OCCLUDED.*aAttached=true' "$fixture" && grep -q 'pendingTrigger=authorityReconcile:attach' "$fixture" && \
        grep -q 'R14 candidate assertion: pending B must suppress the excess A add' "$transcript"; then
       echo "$label=VALID_STOCK_RED (candidate assertion fails on actual extra add)" >> "$evidence/status.txt"
     else

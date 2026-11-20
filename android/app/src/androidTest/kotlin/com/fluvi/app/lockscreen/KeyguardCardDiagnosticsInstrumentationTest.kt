@@ -772,6 +772,13 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         val frozen = KeyguardCardDiagnostics.freezeCapture(context)
         val report = frozen["report"] as String
         val bytes = report.toByteArray(Charsets.UTF_8).size
+        // Observation only: retain the exact specimen before any original
+        // assertion can fail. The normal test invocation needs no arguments.
+        androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("runUuid")?.let { runId ->
+            val directory = java.io.File(context.filesDir, "keyguard-service-probe/r14/$runId/existing-pressure")
+            check(directory.mkdirs() || directory.isDirectory)
+            java.io.File(directory, "$mode-report.txt").writeText(report)
+        }
         android.util.Log.i("FluviExportBudget", "$mode retainedEpisodes=5 events=${frozen["eventsRecorded"]} UTF8Bytes=$bytes")
         assertTrue((frozen["eventsRecorded"] as Long) >= 1_507L)
         assertTrue("complete export was $bytes bytes", bytes <= 32 * 1024)
