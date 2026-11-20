@@ -80,6 +80,45 @@ run_id=$(cat /proc/sys/kernel/random/uuid)
 printf 'run_uuid=%s\n' "$run_id" >> "$evidence/manifest.txt"
 result=0
 if [[ "$scope" == r12_contract ]]; then
+  # Run the actual Android Bitmap controls independently. Preserve the raw
+  # runner transcript even on the reference's expected behavioral failure.
+  financial_dir="$evidence/financial-orb-demand"
+  mkdir -p "$financial_dir"
+  adb shell pm list instrumentation > "$financial_dir/registered-runner.txt" 2>&1
+  adb shell am force-stop com.fluvi.app > "$financial_dir/force-stop.txt" 2>&1
+  financial_rc=0
+  timeout -k 5s 260s adb shell am instrument -w -r \
+    -e class com.fluvi.app.lockscreen.KeyguardFinancialOrbDemandInstrumentationTest \
+    com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner \
+    > "$financial_dir/instrumentation.txt" 2>&1 || financial_rc=$?
+  printf '%s\n' "$financial_rc" > "$financial_dir/command-exit.txt"
+  timeout -k 2s 20s adb logcat -b all -d -v monotonic > "$financial_dir/logcat.txt" 2>&1 || true
+  if ! timeout -k 2s 20s adb exec-out run-as com.fluvi.app tar -cf - files/r13-financial-pixels \
+      > "$financial_dir/pixels.tar" 2> "$financial_dir/pixels.stderr"; then
+    echo 'independent bitmap pixel archive unavailable' > "$financial_dir/pixels-status.txt"
+  else
+    mkdir -p "$financial_dir/pixels"
+    if tar -xf "$financial_dir/pixels.tar" -C "$financial_dir/pixels"; then
+      sha256sum "$financial_dir/pixels.tar" > "$financial_dir/pixels.sha256"
+    else
+      echo 'independent bitmap pixel archive invalid' > "$financial_dir/pixels-status.txt"
+    fi
+  fi
+  financial_named=0
+  for method_name in constructionAndFirstDemandCountActualPaints concurrentFirstReadersShareOneRealBitmap demandPreservesIndependentReferencePixelsAndSemanticFields; do
+    grep -Fxq "INSTRUMENTATION_STATUS: test=$method_name" "$financial_dir/instrumentation.txt" || financial_named=1
+  done
+  if [[ "$financial_rc" -eq 0 && "$financial_named" -eq 0 ]] && grep -Eq '^OK \(3 tests\)' "$financial_dir/instrumentation.txt"; then
+    echo 'R13_T1=PASS (3 Android tests)' > "$financial_dir/status.txt"
+  else
+    echo 'R13_T1=FAIL_OR_INCOMPLETE; inspect raw assertion and actual paint count' > "$financial_dir/status.txt"
+    result=1
+  fi
+  run_test financial_panel 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r13FinancialDemandAndPrivacyAcrossRetainedRouteChanges' "$run_id" SURFACE_STATIC || result=1
+  run_test financial_widget 'com.fluvi.app.lockscreen.KeyguardFinancialSnapshotRemoteViewsInstrumentationTest#remoteViewsAndNotificationDelegateKeepRealPixelsAndText' "$run_id" SURFACE_LIVE || result=1
+  run_test financial_light 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r13FinancialWorkRetainsOwnedCountsInLight' "$run_id" SURFACE_LIVE || result=1
+  run_test financial_full 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r13FinancialWorkRetainsOwnedCountsInFull' "$run_id" SURFACE_LIVE || result=1
+  run_test financial_pressure 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r13FinancialWorkSurvivesPressureAndRemainsCaptureBounded' "$run_id" SURFACE_LIVE || result=1
   run_test poster 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12PreparedPictureMatchesCanonicalHardwareCanvasAcrossPhases' "$run_id" SURFACE_LIVE || result=1
   run_test static_panel 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12StaticSurfaceMatchesFullAndNeutralReferenceOnRealPanel' "$run_id" SURFACE_STATIC || result=1
   run_test diagnostic_light 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r12SurfaceEvidenceRetainsItsShowOwnerInLight' "$run_id" SURFACE_LIVE || result=1
@@ -95,7 +134,42 @@ else
     > "$evidence/timing/verdict.txt" 2>&1 || result=1
   echo 'NOT ESTABLISHED: separate calibrated real-service visual process and composite/privacy controls' >> "$evidence/status.txt"
 fi
-# A partial timing/panel pass cannot be substituted for the required product
-# scope. Keep it red and preserve all collected evidence for the reviewer.
-printf 'partial_observation_exit=%s\nfull_scope=FAIL_INCOMPLETE\n' "$result" >> "$evidence/status.txt"
-exit 1
+# A partial timing/panel pass cannot be substituted for independent service
+# pixels, privacy and lifecycle evidence. Record individual rows and fail the
+# scope while any required row is missing; the collector never manufactures a
+# PASS from a producer callback or a single panel screenshot.
+rows="$evidence/required-rows.txt"
+printf 'source=%s scope=%s route=%s\n' "$source_sha" "$scope" "$mode" > "$rows"
+test_row() {
+  local label=$1 expected_method=$2 file="$evidence/$1/instrumentation.txt" rc_file="$evidence/$1/command-exit.txt"
+  if [[ ! -f "$file" || ! -f "$rc_file" ]]; then
+    printf '%s=NOT_ESTABLISHED\n' "$label" >> "$rows"
+  elif [[ $(cat "$rc_file") == 0 ]] && grep -Fxq "INSTRUMENTATION_STATUS: test=$expected_method" "$file" && grep -Eq '^OK \(1 test\)' "$file"; then
+    printf '%s=PASS\n' "$label" >> "$rows"
+  else
+    printf '%s=FAIL\n' "$label" >> "$rows"
+  fi
+}
+if [[ "$scope" == r12_contract ]]; then
+  cat "$financial_dir/status.txt" >> "$rows"
+  test_row financial_panel r13FinancialDemandAndPrivacyAcrossRetainedRouteChanges
+  test_row financial_widget remoteViewsAndNotificationDelegateKeepRealPixelsAndText
+  test_row financial_light r13FinancialWorkRetainsOwnedCountsInLight
+  test_row financial_full r13FinancialWorkRetainsOwnedCountsInFull
+  test_row financial_pressure r13FinancialWorkSurvivesPressureAndRemainsCaptureBounded
+  test_row poster r12PreparedPictureMatchesCanonicalHardwareCanvasAcrossPhases
+  test_row static_panel r12StaticSurfaceMatchesFullAndNeutralReferenceOnRealPanel
+  test_row diagnostic_light r12SurfaceEvidenceRetainsItsShowOwnerInLight
+  test_row diagnostic_full r12SurfaceEvidenceRetainsItsShowOwnerInFull
+else
+  test_row timing fourRealWakeCyclesUseRequestedRoute
+fi
+for required in r12_real_service_first_composite r12_real_service_privacy_downgrade r12_holder_lifecycle_races r12_selector_persistence r13_service_demand_burst; do
+  printf '%s=NOT_ESTABLISHED\n' "$required" >> "$rows"
+done
+printf 'partial_observation_exit=%s\n' "$result" >> "$evidence/status.txt"
+if [[ "$result" -ne 0 ]] || grep -Eq '=(FAIL|NOT_ESTABLISHED)' "$rows"; then
+  printf 'full_scope=FAIL_INCOMPLETE\n' >> "$evidence/status.txt"
+  exit 1
+fi
+printf 'full_scope=PASS\n' >> "$evidence/status.txt"

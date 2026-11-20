@@ -16,14 +16,26 @@ internal data class FluviFinancialCardPresentation(
     val event: String?,
     val eventLabel: String?,
     val contentDescription: String,
-    val orb: Bitmap,
+    val orbAccentColor: Int,
     val showToggle: Boolean,
     val toggleLabel: String,
     val full: Boolean,
     /** Stable rendered-input identity. Bitmap allocation identity is not a
      * visual change and must never trigger an accessibility-window update. */
     val visualKey: String,
-)
+) {
+    init { FluviFinancialOrbWork.construction() }
+    /** Construct pixels only for an actual consumer. Each presentation owns
+     * its one bitmap; synchronized lazy also covers concurrent consumers. */
+    private val orbValue: Bitmap by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        renderFinancialOrbBitmap(orbAccentColor)
+    }
+    val orb: Bitmap
+        get() {
+            FluviFinancialOrbWork.demand()
+            return orbValue
+        }
+}
 
 internal object FluviFinancialCardPresenter {
     private val neutral = FluviLockScreenCardContent(
@@ -43,7 +55,7 @@ internal object FluviFinancialCardPresenter {
         event = null,
         eventLabel = null,
         contentDescription = "Fluvi · Pénzügyi pillanatkép",
-        orb = neutral.orbBitmap(),
+        orbAccentColor = neutral.accentColor,
         showToggle = false,
         toggleLabel = "",
         full = false,
@@ -57,7 +69,7 @@ internal object FluviFinancialCardPresenter {
         event = null,
         eventLabel = null,
         contentDescription = "Fluvi pénzügyi pillanatkép",
-        orb = neutral.orbBitmap(),
+        orbAccentColor = neutral.accentColor,
         showToggle = false,
         toggleLabel = "",
         full = true,
@@ -82,7 +94,7 @@ internal object FluviFinancialCardPresenter {
         event = null,
         eventLabel = null,
         contentDescription = "Fluvi pénzügyi pillanatkép: a kártya fókusza hiányos",
-        orb = neutral.orbBitmap(),
+        orbAccentColor = neutral.accentColor,
         showToggle = false,
         toggleLabel = "",
         full = true,
@@ -98,7 +110,7 @@ internal object FluviFinancialCardPresenter {
             event = if (eventIsPrimary) null else content.event,
             eventLabel = if (eventIsPrimary) null else content.eventLabel,
             contentDescription = content.focus,
-            orb = content.orbBitmap(),
+            orbAccentColor = content.accentColor,
             showToggle = content.event != null,
             toggleLabel = if (eventIsPrimary) "Fő érték" else "Utolsó tétel",
             full = true,

@@ -80,6 +80,72 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         check(edit.commit())
     }
 
+    /** Real retained panel/route ownership; this is not a service compositor gate. */
+    @Test fun r13FinancialDemandAndPrivacyAcrossRetainedRouteChanges() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        check(context.getSharedPreferences("fluvi_keyguard_orb_diagnostic_route", Context.MODE_PRIVATE)
+            .edit().putString("mode", "SURFACE_STATIC").commit())
+        val activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
+        val settings = KeyguardCardSettings(requested = true, showFinancialDetails = true,
+            presentationMode = KeyguardCardPresentationMode.ORB, animationMode = KeyguardCardAnimationMode.ORB_ONLY)
+        val legacy = settings.copy(animationMode = KeyguardCardAnimationMode.OFF)
+        val content = com.fluvi.app.runtime.FluviLockScreenCardContent("focus", "amount", "detail",
+            "event", "label", android.graphics.Color.rgb(210, 72, 43), true)
+        var window: KeyguardCardWindow? = null
+        try {
+            instrumentation.runOnMainSync {
+                activity.setContentView(FrameLayout(activity))
+                val manager = TestPanelWindowManager(activity)
+                val target = KeyguardCardWindow(activity, onOpen = {}, onToggle = {}, onInteractionStarted = {},
+                    onPositionCommitted = { _, _, _, _ -> }, onInteractionDiagnostic = { _, _ -> }, manager = manager)
+                window = target
+                target.prepareRetainedView(settings, calibratedOrbProfile())
+                val work = com.fluvi.app.runtime.FluviFinancialOrbWork.begin()
+                try {
+                    assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                        target.showOrUpdate(FluviFinancialCardPresenter.full(content, false), settings))
+                    assertTrue("test requires the real Surface owner", target.surfaceForTest() != null)
+                    assertTrue("test requires an attached retained root", requireNotNull(manager.currentRoot).isAttachedToWindow)
+                    repeat(32) {
+                        assertEquals(KeyguardCardWindow.Result.NO_OP,
+                            target.showOrUpdate(FluviFinancialCardPresenter.full(content, false), settings))
+                    }
+                    assertEquals(33L, work.constructions)
+                    assertEquals(0L, work.paints)
+                    assertEquals(0L, work.legacyBinds)
+                } finally { com.fluvi.app.runtime.FluviFinancialOrbWork.end(work) }
+                val view = requireNotNull(manager.currentRoot)
+                    .findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
+                assertEquals(null, view.staticBitmapForTest())
+
+                val authorized = FluviFinancialCardPresenter.full(content, false)
+                assertEquals(KeyguardCardWindow.Result.LAYOUT_UPDATED, target.showOrUpdate(authorized, legacy))
+                val fullBitmap = requireNotNull(view.staticBitmapForTest())
+                org.junit.Assert.assertSame(authorized.orb, fullBitmap)
+                val discreet = FluviFinancialCardPresenter.discreet()
+                target.showOrUpdate(discreet, legacy.copy(showFinancialDetails = false))
+                val neutralBitmap = requireNotNull(view.staticBitmapForTest())
+                org.junit.Assert.assertSame(discreet.orb, neutralBitmap)
+                assertTrue("neutral and full fallback must differ", fullBitmap.getPixel(48, 48) != neutralBitmap.getPixel(48, 48))
+
+                target.showOrUpdate(discreet, settings.copy(showFinancialDetails = false))
+                assertTrue("transition must select Surface", target.surfaceForTest() != null)
+                assertEquals(View.GONE, view.visibility)
+                assertEquals("retired legacy View must release fallback", null, view.staticBitmapForTest())
+                val authorizedNeutral = FluviFinancialCardPresenter.discreet()
+                target.showOrUpdate(authorizedNeutral, legacy.copy(showFinancialDetails = false))
+                org.junit.Assert.assertSame("legacy must synchronously receive current neutral fallback",
+                    authorizedNeutral.orb, view.staticBitmapForTest())
+                assertTrue(target.hide())
+            }
+        } finally {
+            instrumentation.runOnMainSync { window?.dispose(); activity.finish() }
+        }
+    }
+
     /** Producer-only positive/negative control. A real View screenshot is the
      * independent reference; this does not claim SurfaceView composition or
      * replace the separately required service/privacy screen samples. */

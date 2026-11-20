@@ -760,12 +760,37 @@ internal object KeyguardCardDiagnostics {
         var pendingR11Omitted: Int = 0,
         val pendingR12: ArrayDeque<TimingEvent> = ArrayDeque(),
         var pendingR12Omitted: Int = 0,
+        var r13Work: FinancialWorkSummary? = null,
         val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
         /** This compact causal spine is independent of the raw event ring.
          * A later hidden-state storm cannot evict an earlier wake/attach/hide
          * operation that explains a physical attempt. */
         val causalSpine: ArrayDeque<CausalSpineEvent> = ArrayDeque(),
         var finalState: String = "INCOMPLETE",
+    )
+
+    /** Bounded per-attempt reduction, independent of the raw event ring. */
+    private data class FinancialWorkSummary(
+        var scopes: Long = 0,
+        var invalid: Long = 0,
+        var returned: Long = 0,
+        var noops: Long = 0,
+        var constructions: Long = 0,
+        var demands: Long = 0,
+        var paints: Long = 0,
+        var paintCompletions: Long = 0,
+        var binds: Long = 0,
+        var wallNs: Long = 0,
+        var cpuNs: Long = 0,
+        var paintWallNs: Long = 0,
+        var paintCpuNs: Long = 0,
+        var paintMaxWallNs: Long = 0,
+        var paintMaxCpuNs: Long = 0,
+        var first: TimingEvent? = null,
+        var last: TimingEvent? = null,
+        var worst: TimingEvent? = null,
+        val recent: ArrayDeque<TimingEvent> = ArrayDeque(),
+        var recentEvicted: Long = 0,
     )
 
     private data class PendingHideCommit(val operationId: Long, val attachment: Long?, val receivedAtUptimeMs: Long)
@@ -1406,6 +1431,39 @@ internal object KeyguardCardDiagnostics {
                 show.r12Evidence = values
             }
             when (stage) {
+                "R13_FINANCIAL" -> {
+                    val totals = attempt.r13Work ?: FinancialWorkSummary().also { attempt.r13Work = it }
+                    val required = listOf("r13Start", "r13End", "r13WallNs", "r13CpuNs", "r13Construct",
+                        "r13Demand", "r13Paint", "r13PaintDone", "r13Bind", "r13PaintWallNs",
+                        "r13PaintCpuNs", "r13PaintMaxWallNs", "r13PaintMaxCpuNs")
+                    if (required.any { fields[it]?.toLongOrNull() == null } ||
+                        fields["r13Returned"] !in setOf("true", "false") ||
+                        fields["r13Noop"] !in setOf("true", "false")) {
+                        totals.invalid++
+                    } else {
+                        fun number(key: String) = requireNotNull(fields[key]?.toLongOrNull())
+                        totals.scopes++
+                        if (fields["r13Returned"] == "true") totals.returned++
+                        if (fields["r13Noop"] == "true") totals.noops++
+                        totals.constructions += number("r13Construct")
+                        totals.demands += number("r13Demand")
+                        totals.paints += number("r13Paint")
+                        totals.paintCompletions += number("r13PaintDone")
+                        totals.binds += number("r13Bind")
+                        totals.wallNs += number("r13WallNs")
+                        totals.cpuNs += number("r13CpuNs")
+                        totals.paintWallNs += number("r13PaintWallNs")
+                        totals.paintCpuNs += number("r13PaintCpuNs")
+                        totals.paintMaxWallNs = maxOf(totals.paintMaxWallNs, number("r13PaintMaxWallNs"))
+                        totals.paintMaxCpuNs = maxOf(totals.paintMaxCpuNs, number("r13PaintMaxCpuNs"))
+                        if (totals.first == null) totals.first = event
+                        if (totals.recent.size >= 32) { totals.recent.removeFirst(); totals.recentEvicted++ }
+                        totals.recent.addLast(event)
+                        totals.last = event
+                        if (totals.worst == null || number("r13WallNs") >
+                            (totals.worst?.fields?.get("r13WallNs")?.toLongOrNull() ?: -1)) totals.worst = event
+                    }
+                }
                 "R12_ADMISSION" -> inspectionTimeline()?.let {
                     it.readAheadReason = reason
                     it.readAheadPending = fields["r12Pending"]
@@ -1814,6 +1872,12 @@ internal object KeyguardCardDiagnostics {
     )
 
     private fun copyAttempt(attempt: TimingAttempt): TimingAttempt = attempt.copy(
+        r13Work = attempt.r13Work?.let { work -> work.copy(
+            first = work.first?.let { it.copy(fields = it.fields.toMap()) },
+            last = work.last?.let { it.copy(fields = it.fields.toMap()) },
+            worst = work.worst?.let { it.copy(fields = it.fields.toMap()) },
+            recent = ArrayDeque(work.recent.map { it.copy(fields = it.fields.toMap()) }),
+        ) },
         shows = ArrayDeque(attempt.shows.map { it.copy(cause = it.cause?.copy(), renderSummary = it.renderSummary.toMap(), r11Evidence = it.r11Evidence.toMap(), r12Evidence = it.r12Evidence.toMap(), r12MetricSnapshot = it.r12Metrics?.snapshot() ?: it.r12MetricSnapshot, r12Metrics = null, r12LatestMetricSnapshot = it.r12LatestMetrics?.snapshot() ?: it.r12LatestMetricSnapshot, r12LatestMetrics = null) }),
         hides = ArrayDeque(attempt.hides.map { it.copy(cause = it.cause?.copy()) }),
         pendingHideCommits = ArrayDeque(attempt.pendingHideCommits),
@@ -1992,6 +2056,26 @@ internal object KeyguardCardDiagnostics {
         // inspection histories. Their actual UTF-8 size counts against the
         // same export limit as every other record.
         attemptsForCausalEvidence.forEach { attempt ->
+            val financial = attempt.r13Work
+            select("a${attempt.id}:r13Financial", buildString {
+                if (financial == null) {
+                    appendLine(" R13_FINANCIAL attempt=${attempt.id} coverage=UNOBSERVED")
+                } else {
+                    append(" R13_FINANCIAL attempt=${attempt.id} coverage=keyguardScopesOnly")
+                    append(" scopes=${financial.scopes} invalid=${financial.invalid} returned=${financial.returned} noops=${financial.noops}")
+                    append(" constructions=${financial.constructions} demands=${financial.demands} paints=${financial.paints} paintCompleted=${financial.paintCompletions} legacyBinds=${financial.binds}")
+                    append(" pixelPayloadEstimateBytes=${financial.paintCompletions * 36_864L} wallNs=${financial.wallNs} cpuNs=${financial.cpuNs}")
+                    append(" paintWallNs=${financial.paintWallNs} paintCpuNs=${financial.paintCpuNs} paintMaxWallNs=${financial.paintMaxWallNs} paintMaxCpuNs=${financial.paintMaxCpuNs}")
+                    appendLine(" intervalClock=uptimeMs durationClock=System.nanoTime cpuClock=threadCPU overlap=UNOBSERVED physical=UNOBSERVED")
+                    listOf("first" to financial.first, "worst" to financial.worst, "last" to financial.last)
+                        .filter { it.second != null }.distinctBy { it.second?.seq }.forEach { (label, sample) ->
+                            requireNotNull(sample)
+                            val f = sample.fields
+                            val route = f["r13Route"]?.toIntOrNull()?.let { KeyguardOrbRenderMode.entries.getOrNull(it)?.name } ?: "UNOBSERVED"
+                            appendLine(" R13_FINANCIAL_SCOPE kind=$label req=${sample.requestId ?: "UNOBSERVED"} showOp=${sample.showOperationId ?: "UNOBSERVED"} attach=${sample.attachGeneration ?: "UNOBSERVED"} route=$route start=${f["r13Start"] ?: "UNOBSERVED"} end=${f["r13End"] ?: "UNOBSERVED"} wallNs=${f["r13WallNs"] ?: "UNOBSERVED"} cpuNs=${f["r13CpuNs"] ?: "UNOBSERVED"} construct=${f["r13Construct"] ?: "UNOBSERVED"} demand=${f["r13Demand"] ?: "UNOBSERVED"} paint=${f["r13Paint"] ?: "UNOBSERVED"} bind=${f["r13Bind"] ?: "UNOBSERVED"} noop=${f["r13Noop"] ?: "UNOBSERVED"} returned=${f["r13Returned"] ?: "UNOBSERVED"}")
+                        }
+                }
+            }, attempt.id)
             val first = attempt.shows.firstOrNull()
             val cold = first?.renderSummary
             val offer = first?.r11Evidence ?: emptyMap()
@@ -2046,6 +2130,7 @@ internal object KeyguardCardDiagnostics {
             attempt.hides.forEach { hide ->
                 val route = attempt.shows.firstOrNull { it.attachGeneration == hide.attachGeneration }
                     ?.renderSummary?.get("r08Route") ?: "UNOBSERVED"
+                select("a${attempt.id}:financialHide${hide.operationId}", financialHideRecord(attempt, hide), attempt.id)
                 select("a${attempt.id}:compactHide${hide.operationId}",
                     " R10_COMPACT_HIDE attempt=${attempt.id} hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "UNOBSERVED"} attachedBefore=${hide.attachedBefore ?: "UNOBSERVED"} event=${hide.cause?.eventTimeUptimeMs ?: "UNOBSERVED"} callback=${hide.triggerReceivedAtUptimeMs ?: "UNOBSERVED"} decision=${hide.decisionAtUptimeMs} local=${hide.localHideAppliedAtUptimeMs ?: "UNOBSERVED"} layer=${hide.isolatedLayerHideSubmittedAtUptimeMs ?: "UNOBSERVED"} remove=${hide.removeReturnAtUptimeMs ?: "UNOBSERVED"} route=$route\n", attempt.id)
             }
@@ -2241,6 +2326,43 @@ internal object KeyguardCardDiagnostics {
         episode.r12LatestMetricSnapshot?.let { metrics ->
             appendLine(" R12_CADENCE_LATEST attempt=${attempt.id} showOp=${episode.operationId} generation=${value("latestGeneration")} coherent=${metrics.coherent} submissions=${metrics.submissions} firstPost=${metrics.firstPostUptimeMs ?: "UNOBSERVED"} distinct=${metrics.firstDistinctUptimeMs ?: "UNOBSERVED"} lastPost=${metrics.lastPostUptimeMs ?: "UNOBSERVED"} worstGapNs=${metrics.worstGapNs ?: "UNOBSERVED"} presentation=UNOBSERVED")
         }
+    }
+
+    /** Intersections concern only retained app-owned Main scopes. They are
+     * lower bounds, never an inference about physical removal or OS work. */
+    private fun financialHideRecord(attempt: TimingAttempt, hide: HideEpisode): String {
+        val work = attempt.r13Work
+        val callback = hide.triggerReceivedAtUptimeMs
+        val event = hide.cause?.eventTimeUptimeMs
+        val local = hide.localHideAppliedAtUptimeMs
+        if (work == null || local == null) return " R13_HIDE_WORK attempt=${attempt.id} hideOp=${hide.operationId} coverage=UNOBSERVED\n"
+        val samples = work.recent.filter { hide.attachGeneration != null && it.attachGeneration == hide.attachGeneration }
+        fun intersection(from: Long?, paintOnly: Boolean): String {
+            if (from == null || from > local) return "UNOBSERVED"
+            val intervals = samples.mapNotNull { sample ->
+                val f = sample.fields
+                if (paintOnly && f["r13Paint"] != "1") return@mapNotNull null
+                val a = f[if (paintOnly) "r13PaintStart" else "r13Start"]?.toLongOrNull() ?: return@mapNotNull null
+                val b = f[if (paintOnly) "r13PaintEnd" else "r13End"]?.toLongOrNull() ?: return@mapNotNull null
+                if (b < a) return@mapNotNull null
+                maxOf(a, from) to minOf(b, local)
+            }.filter { it.second > it.first }.sortedBy { it.first }
+            var total = 0L
+            var begin = -1L
+            var end = -1L
+            for ((a, b) in intervals) {
+                if (begin < 0) { begin = a; end = b }
+                else if (a <= end) end = maxOf(end, b)
+                else { total += end - begin; begin = a; end = b }
+            }
+            if (begin >= 0) total += end - begin
+            return total.toString()
+        }
+        val missingPaintBounds = samples.count {
+            val count = it.fields["r13Paint"]?.toLongOrNull() ?: -1
+            count > 1 || (count == 1L && (it.fields["r13PaintStart"] == null || it.fields["r13PaintEnd"] == null))
+        }
+        return " R13_HIDE_WORK attempt=${attempt.id} hideOp=${hide.operationId} attach=${hide.attachGeneration ?: "UNOBSERVED"} req=${hide.requestId ?: "UNOBSERVED"} event=${event ?: "UNOBSERVED"} callback=${callback ?: "UNOBSERVED"} local=$local retainedScopes=${samples.size} retainedEvicted=${work.recentEvicted} invalid=${work.invalid} eventToLocalScopeLowerMs=${intersection(event, false)} eventToLocalSinglePaintLowerMs=${intersection(event, true)} callbackToLocalScopeLowerMs=${intersection(callback, false)} callbackToLocalSinglePaintLowerMs=${intersection(callback, true)} missingPaintBounds=$missingPaintBounds coverage=retainedOwnedScopesOnly resolution=uptimeMs physical=UNOBSERVED\n"
     }
 
     private fun hideRecord(hide: HideEpisode): String =

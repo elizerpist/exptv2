@@ -63,8 +63,12 @@ def verify(raw: str, fixture: str, capture: str, source: str, mode: str, run_id:
     for name, trigger, detached in withdrawals:
         if int(detached) < int(trigger):
             errors.append("withdraw_clock_order:" + name)
-    if mode != "LEGACY_R11" and not re.search(r"(?m)^LOCKED_INTERVAL .* name=warm1 .*postsStart=\d+ postsEnd=\d+\s*$", fixture):
-        errors.append("locked_interval_missing")
+    if mode == "LEGACY_R11":
+        interval = re.findall(r"(?m)^LOCKED_INTERVAL up=\d+ name=warm1 start=(\d+) end=(\d+) postsStart=UNOBSERVED postsEnd=UNOBSERVED route=LEGACY_R11\s*$", fixture)
+    else:
+        interval = re.findall(r"(?m)^LOCKED_INTERVAL up=\d+ name=warm1 start=(\d+) end=(\d+) postsStart=\d+ postsEnd=\d+\s*$", fixture)
+    if len(interval) != 1 or int(interval[0][1]) - int(interval[0][0]) < 5000:
+        errors.append("locked_interval_missing_or_short")
     if fixture.count("RESULT ") != 1 or "PASS timing_control_only" not in fixture or re.search(r"(?m)^FAILURE ", fixture):
         errors.append("fixture_failure_or_missing_cleanup")
     return errors

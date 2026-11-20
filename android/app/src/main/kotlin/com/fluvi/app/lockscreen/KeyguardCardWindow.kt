@@ -166,6 +166,9 @@ internal class KeyguardCardWindow(
         val hadOwner = surfacePresenter != null || materialController != null
         val orb = current.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb)
         if (usesSurface(settings, materialProfile, selection)) {
+            // Hide the old View before retiring its controller or releasing
+            // its fallback reference; Surface owns presentation from here.
+            orb.visibility = View.GONE
             materialController?.let {
                 it.dispose()
                 materialController = null
@@ -179,6 +182,7 @@ internal class KeyguardCardWindow(
                     view.onFirstBootstrapDraw = null
                     view.setScene(null, enabled = false)
                 }
+                orb.setStaticBitmap(null)
             }
             if (surfacePresenter == null) surfacePresenter = KeyguardOrbSurfacePresenter(
                 context = serviceContext,
@@ -219,6 +223,7 @@ internal class KeyguardCardWindow(
     private fun surfaceSize(): Int = serviceContext.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
 
     internal fun presentationConfigurationApplicationsForTest(): Int = presentationConfigurationApplyCount
+    internal fun effectiveRouteForFinancialDiagnostics(): Int = effectiveRenderMode.ordinal
     internal fun surfaceForTest() = surfacePresenter?.surfaceForTest()
     internal fun surfaceMetricsForTest() = surfacePresenter?.metricsForTest()
 
@@ -707,7 +712,7 @@ internal class KeyguardCardWindow(
                 "Fluvi · animált orb"
             }
         }
-        if (force || previous?.visualKey != presentation.visualKey) {
+        if (surfacePresenter == null && (force || previous?.visualKey != presentation.visualKey)) {
             root.findViewById<KeyguardHeaderMaterialView>(R.id.fluvi_financial_snapshot_orb).setStaticBitmap(presentation.orb)
         }
         val eventText = presentation.event?.let { "${presentation.eventLabel ?: "Utolsó tétel"}: $it" } ?: ""

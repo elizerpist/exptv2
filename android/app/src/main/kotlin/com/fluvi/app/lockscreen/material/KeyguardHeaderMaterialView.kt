@@ -301,10 +301,13 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     }
 
     fun setStaticBitmap(value: Bitmap?) {
+        if (value != null) com.fluvi.app.runtime.FluviFinancialOrbWork.legacyBind()
         if (fallbackBitmap === value) return
         fallbackBitmap = value
         if (!materialEnabled) invalidate()
     }
+
+    internal fun staticBitmapForTest(): Bitmap? = fallbackBitmap
 
     /** Main-thread gate for cold presentation. This does not alter the scene
      * or its monotonic clock anchor; it only chooses the first draw route. */

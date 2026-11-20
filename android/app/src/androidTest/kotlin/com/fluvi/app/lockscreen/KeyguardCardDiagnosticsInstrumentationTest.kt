@@ -28,6 +28,85 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r12SurfaceEvidenceRetainsItsShowOwnerInLight() = r12SurfaceEvidence("LIGHT")
     @Test fun r12SurfaceEvidenceRetainsItsShowOwnerInFull() = r12SurfaceEvidence("FULL")
 
+    @Test fun r13FinancialWorkRetainsOwnedCountsInLight() = r13FinancialWork("LIGHT")
+    @Test fun r13FinancialWorkRetainsOwnedCountsInFull() = r13FinancialWork("FULL")
+
+    @Test fun r13FinancialWorkSurvivesPressureAndRemainsCaptureBounded() {
+        for (mode in listOf("LIGHT", "FULL")) {
+            KeyguardCardDiagnostics.startCapture(context, "r13-pressure", "profile", mode)
+            repeat(4) { wake ->
+                val base = (wake + 1) * 10_000L
+                val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 44, wake + 1L, "wake", base))
+                val attach = wake + 1L
+                val show = KeyguardCardDiagnostics.newShowOperation(owner, attach, base + 1)
+                KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", observedUptimeMs = base + 1, operation = show)
+                repeat(40) { index ->
+                    val at = base + 100 + index
+                    val fields = mapOf<String, Any>("r13Start" to at, "r13End" to at + 1,
+                        "r13WallNs" to 123456789012L, "r13CpuNs" to 12345678901L,
+                        "r13Construct" to 1, "r13Demand" to 0, "r13Paint" to 0, "r13PaintDone" to 0,
+                        "r13Bind" to 0, "r13PaintWallNs" to 0, "r13PaintCpuNs" to 0,
+                        "r13PaintMaxWallNs" to 0, "r13PaintMaxCpuNs" to 0, "r13Returned" to true,
+                        "r13Noop" to true, "r13Success" to true, "r13Route" to 0)
+                    KeyguardCardDiagnostics.captureEvent(context, "R13_FINANCIAL", "scoped", requestId = base + index + 2,
+                        attachGeneration = attach, diagnosticContext = owner, observedUptimeMs = at + 1, fields = fields)
+                    if (index % 10 == 0) KeyguardCardDiagnostics.captureSnapshot(context) // fixture drain
+                }
+                val hide = KeyguardCardDiagnostics.newHideOperation(owner, attach, base + 80, base + 130)
+                KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "window", observedUptimeMs = base + 150, operation = hide)
+                KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "window", observedUptimeMs = base + 150,
+                    operation = hide, fields = mapOf("attachedBefore" to true))
+                KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_APPLIED", "invisible", observedUptimeMs = base + 151, operation = hide)
+            }
+            val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+            for (attempt in 1..4) {
+                assertTrue("missing owned pressure aggregate for $mode attempt $attempt",
+                    report.contains("R13_FINANCIAL attempt=$attempt coverage=keyguardScopesOnly scopes=40 invalid=0 returned=40 noops=40"))
+            }
+            assertTrue(report.contains("retainedEvicted=8"))
+            assertTrue(report.contains("physical=UNOBSERVED"))
+        }
+    }
+
+    private fun r13FinancialWork(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r13-$mode", "profile", mode)
+        val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 4, 1, "wake", 100))
+        val first = KeyguardCardDiagnostics.newShowOperation(attempt, 1, 21)
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", observedUptimeMs = 101, operation = first)
+        val fields = mapOf<String, Any>("r13Start" to 102, "r13End" to 103, "r13WallNs" to 10,
+            "r13CpuNs" to 7, "r13Construct" to 1, "r13Demand" to 0, "r13Paint" to 0,
+            "r13PaintDone" to 0, "r13Bind" to 0, "r13PaintWallNs" to 0, "r13PaintCpuNs" to 0,
+            "r13PaintMaxWallNs" to 0, "r13PaintMaxCpuNs" to 0, "r13Returned" to true,
+            "r13Noop" to false, "r13Success" to true, "r13Route" to 0)
+        KeyguardCardDiagnostics.captureEvent(context, "R13_FINANCIAL", "scoped", operation = first,
+            observedUptimeMs = 103, fields = fields)
+        KeyguardCardDiagnostics.captureEvent(context, "R13_FINANCIAL", "scoped", diagnosticContext = attempt,
+            requestId = 22, attachGeneration = 1, observedUptimeMs = 110,
+            fields = fields + mapOf("r13Noop" to true, "r13Start" to 109, "r13End" to 110))
+        val hide = KeyguardCardDiagnostics.newHideOperation(attempt, 1, 23, 109)
+        KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "window", observedUptimeMs = 110, operation = hide)
+        KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "window", observedUptimeMs = 110,
+            operation = hide, fields = mapOf("attachedBefore" to true))
+        KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_APPLIED", "invisible", observedUptimeMs = 112, operation = hide)
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.contains("R13_FINANCIAL attempt=${attempt.attemptId} coverage=keyguardScopesOnly scopes=2"))
+        assertTrue(report.contains("constructions=2 demands=0 paints=0 paintCompleted=0 legacyBinds=0"))
+        assertTrue(report.contains("noops=1"))
+        assertTrue(report.contains("req=21 showOp=${first.showOperationId} attach=1 route=SURFACE_LIVE"))
+        assertTrue(report.contains("overlap=UNOBSERVED physical=UNOBSERVED"))
+        assertTrue(report.contains("hideOp=${hide.hideOperationId} attach=1 req=23 event=UNOBSERVED callback=109 local=112"))
+        assertTrue(report.contains("callbackToLocalScopeLowerMs=1"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        KeyguardCardDiagnostics.captureEvent(context, "R13_FINANCIAL", "late", operation = first, fields = fields)
+        assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+        KeyguardCardDiagnostics.startCapture(context, "r13-new", "profile", mode)
+        KeyguardCardDiagnostics.beginLockAttempt(context, 5, 1, "wake", 200)
+        KeyguardCardDiagnostics.captureEvent(context, "R13_FINANCIAL", "old-owner", operation = first, fields = fields)
+        val next = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(next.contains("R13_FINANCIAL attempt=1 coverage=UNOBSERVED"))
+    }
+
     private fun r12SurfaceEvidence(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r12-$mode", "profile", mode)
         val attempt = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9, 3, "wake", 100))
