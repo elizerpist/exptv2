@@ -52,10 +52,18 @@ if ! timeout -k 2s 60s bash "$root/scripts/prepare-keyguard-lower-environment.sh
   exit 1
 fi
 printf 'preflight=PASS\n' >> "$evidence/manifest.txt"
-adb install -r "$app" > "$evidence/install-app.txt"
-adb install -r "$test_apk" > "$evidence/install-test.txt"
+install_rc=0
+adb install -r "$app" > "$evidence/install-app.txt" 2>&1 || install_rc=$?
+printf '%s\n' "$install_rc" > "$evidence/install-app.exit"
+[[ "$install_rc" == 0 ]] || { echo 'FAIL=app_install' > "$evidence/status.txt"; exit 1; }
+install_rc=0
+adb install -r "$test_apk" > "$evidence/install-test.txt" 2>&1 || install_rc=$?
+printf '%s\n' "$install_rc" > "$evidence/install-test.exit"
+[[ "$install_rc" == 0 ]] || { echo 'FAIL=test_install' > "$evidence/status.txt"; exit 1; }
 grep -qx 'Success' "$evidence/install-app.txt"
 grep -qx 'Success' "$evidence/install-test.txt"
+bash "$root/scripts/verify-keyguard-installed-apk.sh" com.fluvi.app "$app" "$evidence" app-before > "$evidence/installed-app-before-verdict.txt"
+bash "$root/scripts/verify-keyguard-installed-apk.sh" com.fluvi.app.test "$test_apk" "$evidence" test-before > "$evidence/installed-test-before-verdict.txt"
 installed_hash() {
   local name=$1 package_path
   package_path=$(adb shell pm path "$name" | tr -d '\r' | sed -n 's/^package://p')
@@ -96,6 +104,13 @@ timeout -k 2s 10s adb shell dumpsys window > "$evidence/window-after.txt" 2>&1
 window_rc=$?
 sha256sum --check "$evidence/apks-before.sha256" > "$evidence/apks-after-check.txt" 2>&1
 identity_rc=$?
+bash "$root/scripts/verify-keyguard-installed-apk.sh" com.fluvi.app "$app" "$evidence" app-after > "$evidence/installed-app-after-verdict.txt" 2>&1
+app_after_rc=$?
+bash "$root/scripts/verify-keyguard-installed-apk.sh" com.fluvi.app.test "$test_apk" "$evidence" test-after > "$evidence/installed-test-after-verdict.txt" 2>&1
+test_after_rc=$?
+printf '%s\n' "$app_after_rc" > "$evidence/installed-app-after.exit"
+printf '%s\n' "$test_after_rc" > "$evidence/installed-test-after.exit"
+if [[ "$app_after_rc" != 0 || "$test_after_rc" != 0 ]]; then identity_rc=1; fi
 tar -tf "$evidence/probe.tar" > "$evidence/tar-list.txt" 2> "$evidence/untar.stderr"
 extract_rc=$?
 set -e

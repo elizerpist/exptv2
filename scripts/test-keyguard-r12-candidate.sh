@@ -38,18 +38,16 @@ adb shell wm size | tr -d '\r' > "$evidence/size-after.txt"
 adb shell wm density | tr -d '\r' > "$evidence/density-after.txt"
 grep -Eq '(^|: )1080x2400$' "$evidence/size-after.txt" || { echo 'FAIL geometry' | tee "$evidence/status.txt"; exit 1; }
 grep -Eq '(^|: )420$' "$evidence/density-after.txt" || { echo 'FAIL density' | tee "$evidence/status.txt"; exit 1; }
-adb install -r "$app" > "$evidence/install-app.txt"
-adb install -r "$test_apk" > "$evidence/install-test.txt"
+install_rc=0
+adb install -r "$app" > "$evidence/install-app.txt" 2>&1 || install_rc=$?
+printf '%s\n' "$install_rc" > "$evidence/install-app.exit"
+[[ "$install_rc" == 0 ]] && grep -qx 'Success' "$evidence/install-app.txt" || { echo 'FAIL app install' | tee "$evidence/status.txt"; exit 1; }
+install_rc=0
+adb install -r "$test_apk" > "$evidence/install-test.txt" 2>&1 || install_rc=$?
+printf '%s\n' "$install_rc" > "$evidence/install-test.exit"
+[[ "$install_rc" == 0 ]] && grep -qx 'Success' "$evidence/install-test.txt" || { echo 'FAIL test install' | tee "$evidence/status.txt"; exit 1; }
 verify_installed() {
-  local package=$1 expected_file=$2 name=$3 installed_path expected actual
-  adb shell pm path "$package" | tr -d '\r' > "$evidence/installed-$name-path.txt"
-  [[ $(wc -l < "$evidence/installed-$name-path.txt") -eq 1 ]] || return 1
-  installed_path=$(sed -n 's/^package://p' "$evidence/installed-$name-path.txt")
-  [[ "$installed_path" == /*/base.apk ]] || return 1
-  expected=$(sha256sum "$expected_file" | cut -d ' ' -f 1)
-  actual=$(timeout -k 2s 30s adb exec-out cat "$installed_path" | sha256sum | cut -d ' ' -f 1)
-  printf 'expected=%s installed=%s\n' "$expected" "$actual" > "$evidence/installed-$name-sha256.txt"
-  [[ "$expected" == "$actual" ]]
+  bash "$root/scripts/verify-keyguard-installed-apk.sh" "$1" "$2" "$evidence" "$3"
 }
 verify_installed com.fluvi.app "$app" app || { echo 'FAIL installed app identity' | tee "$evidence/status.txt"; exit 1; }
 verify_installed com.fluvi.app.test "$test_apk" test || { echo 'FAIL installed test identity' | tee "$evidence/status.txt"; exit 1; }
@@ -75,6 +73,11 @@ run_test() {
   timeout -k 2s 20s adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-material-smoke \
     > "$dir/panel-probe.tar" 2> "$dir/panel-probe.stderr" || true
   sha256sum --check "$evidence/apks.sha256" > "$dir/apks-after-check.txt" 2>&1 || rc=1
+  identity_rc=0
+  bash "$root/scripts/verify-keyguard-installed-apk.sh" com.fluvi.app "$app" "$dir" app-after > "$dir/installed-app-after-verdict.txt" 2>&1 || identity_rc=1
+  bash "$root/scripts/verify-keyguard-installed-apk.sh" com.fluvi.app.test "$test_apk" "$dir" test-after > "$dir/installed-test-after-verdict.txt" 2>&1 || identity_rc=1
+  printf '%s\n' "$identity_rc" > "$dir/identity-after.exit"
+  [[ "$identity_rc" == 0 ]] || rc=1
   return "$rc"
 }
 run_id=$(cat /proc/sys/kernel/random/uuid)
@@ -105,11 +108,15 @@ if [[ "$scope" == r12_contract ]]; then
       echo 'independent bitmap pixel archive invalid' > "$financial_dir/pixels-status.txt"
     fi
   fi
+  financial_identity_rc=0
+  bash "$root/scripts/verify-keyguard-installed-apk.sh" com.fluvi.app "$app" "$financial_dir" app-after > "$financial_dir/installed-app-after-verdict.txt" 2>&1 || financial_identity_rc=1
+  bash "$root/scripts/verify-keyguard-installed-apk.sh" com.fluvi.app.test "$test_apk" "$financial_dir" test-after > "$financial_dir/installed-test-after-verdict.txt" 2>&1 || financial_identity_rc=1
+  printf '%s\n' "$financial_identity_rc" > "$financial_dir/identity-after.exit"
   financial_named=0
   for method_name in constructionAndFirstDemandCountActualPaints concurrentFirstReadersShareOneRealBitmap demandPreservesIndependentReferencePixelsAndSemanticFields; do
     grep -Fxq "INSTRUMENTATION_STATUS: test=$method_name" "$financial_dir/instrumentation.txt" || financial_named=1
   done
-  if [[ "$financial_rc" -eq 0 && "$financial_named" -eq 0 ]] && grep -Eq '^OK \(3 tests\)' "$financial_dir/instrumentation.txt"; then
+  if [[ "$financial_rc" -eq 0 && "$financial_named" -eq 0 && "$financial_identity_rc" -eq 0 ]] && grep -Eq '^OK \(3 tests\)' "$financial_dir/instrumentation.txt"; then
     echo 'R13_T1=PASS (3 Android tests)' > "$financial_dir/status.txt"
   else
     echo 'R13_T1=FAIL_OR_INCOMPLETE; inspect raw assertion and actual paint count' > "$financial_dir/status.txt"
@@ -145,7 +152,7 @@ test_row() {
   local label=$1 expected_method=$2 file="$evidence/$1/instrumentation.txt" rc_file="$evidence/$1/command-exit.txt"
   if [[ ! -f "$file" || ! -f "$rc_file" ]]; then
     printf '%s=NOT_ESTABLISHED\n' "$label" >> "$rows"
-  elif [[ $(cat "$rc_file") == 0 ]] && grep -Fxq "INSTRUMENTATION_STATUS: test=$expected_method" "$file" && grep -Eq '^OK \(1 test\)' "$file"; then
+  elif [[ $(cat "$rc_file") == 0 && -f "$evidence/$1/identity-after.exit" && $(cat "$evidence/$1/identity-after.exit") == 0 ]] && grep -Fxq "INSTRUMENTATION_STATUS: test=$expected_method" "$file" && grep -Eq '^OK \(1 test\)' "$file"; then
     printf '%s=PASS\n' "$label" >> "$rows"
   else
     printf '%s=FAIL\n' "$label" >> "$rows"
