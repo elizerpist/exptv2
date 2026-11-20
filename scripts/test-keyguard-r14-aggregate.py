@@ -155,6 +155,19 @@ class AggregateControls(unittest.TestCase):
             sample = dict(path="image.png", sha256=hashlib.sha256(content).hexdigest())
             self.assertEqual(wanted, r14.visual_file(self.root, sample))
 
+    def test_late_systemui_nonqualifying_type_is_explicit_and_time_bounded(self):
+        result = dict(status="PASS", a=81, a_read_start=100, a_decision_at=110,
+                      previous_hide=3, initial_attach=1, final_attach=2, a_complete=True,
+                      a_reason="MAIN_CONFIRMED", pre_a_roots=0, pending_before_a=82,
+                      pending_origin="SYSTEMUI_OTHER_EVENT", pending_type=2048,
+                      pending_event=99, pending_callback=100, pending_qualifies=False,
+                      a_adds=1, post_c_received=True, final_roots=0)
+        errors = r14.check_specific("r14_late_only", "SURFACE_LIVE", result, self.root)
+        self.assertNotIn("r14_late_only", errors)
+        for changed in (result | {"pending_type": 32}, result | {"pending_callback": 111},
+                        result | {"pending_type": None}):
+            self.assertIn("r14_late_only", r14.check_specific("r14_late_only", "SURFACE_LIVE", changed, self.root))
+
     def test_reused_specimen_and_duplicate_contradictions_fail(self):
         for name in ("one", "two"):
             target = self.root / name

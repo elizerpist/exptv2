@@ -31,6 +31,7 @@ def module(name: str, filename: str):
 
 aggregate = module("r14aggregate", "keyguard-r14-aggregate.py")
 timing = module("r12timing", "keyguard-r12-candidate-oracle.py")
+r14_replay = module("r16_r14_replay", "r16_r14_replay.py")
 
 
 def key_values(text: str) -> dict[str, str]:
@@ -108,6 +109,11 @@ def make(args: argparse.Namespace) -> tuple[dict, list[str]]:
                 test_after_receipt=copy("test-after", args.test_after), run_metadata=copy("run-metadata", args.run_metadata),
                 fixture=copy("fixture", args.fixture), identity_file=copy("identity", args.identity),
                 process_file=copy("process", args.process), records="records.jsonl")
+    replay_harness = getattr(args, "replay_harness", None)
+    if replay_harness:
+        if not re.fullmatch(r"[0-9a-f]{40}", replay_harness):
+            raise ValueError("replay_harness_invalid")
+        case["replay_harness"] = replay_harness
     actual_process = dict(kind="PROCESS", source=args.source, run_uuid=run_uuid, pid=pid,
                           process_start=start, route=args.route, row=args.row)
     result: dict = dict(kind="RESULT", row=args.row, status="NOT_ESTABLISHED",
@@ -149,6 +155,46 @@ def make(args: argparse.Namespace) -> tuple[dict, list[str]]:
                           actual_legacy_binds=int(numbers.get("actualBinds", "-1")))
             if aggregate.check_specific(args.row, args.route, result, args.out):
                 result.update(status="FAIL", reason="financial_scope_failed")
+    elif args.row in r14_replay.CASES and args.route == "SURFACE_LIVE" and args.capture and getattr(args, "visual_dir", None):
+        queue_path = getattr(args, "queue", None)
+        if args.row in {"r14_exclusion", "r14_fresh_main", "r14_late_only"} and not queue_path:
+            result.update(reason="request_queue_missing")
+        else:
+            queue = queue_path.read_text().replace("\r\n", "\n") if queue_path else ""
+            if queue_path:
+                copy("request-queue", queue_path)
+            capture_text = args.capture.read_text().replace("\r\n", "\n")
+            copy("capture", args.capture)
+            result, replay_errors, image_names = r14_replay.extract(
+                args.row, fixture, queue, capture_text, args.visual_dir, args.source, run_uuid, pid, raw)
+            if result.get("capture_id"):
+                case["capture_id"] = result["capture_id"]
+            # Keep the exact source files required by the replay, including
+            # green controls. A new PNG name is not a new observation.
+            extra_names: set[str] = set(image_names)
+            for line in fixture.splitlines():
+                item = r14_replay.stock.fields(line)
+                selected_witness = ((args.row == "r14_exclusion" and item.get("screenshot") == "before-a-occluder.png") or
+                    (args.row == "r14_late_only" and item.get("screenshot") == "after-a-occluder.png") or
+                    args.row == "r14_real_occlusion")
+                if item.get("stage") == "INDEPENDENT_EXCLUSION" and selected_witness:
+                    extra_names.update(item.get(key, "") for key in ("before", "reference", "screenshot"))
+                if item.get("stage") in {"POST_A_WITNESS", "POST_SUCCESSOR_WITNESS", "REAL_RETURN"}:
+                    extra_names.add(item.get("screenshot", ""))
+            copied: dict[str, str] = {}
+            for name in sorted(extra_names - {""}):
+                source_image = r14_replay.local(args.visual_dir, name)
+                copied[name] = copy("r14-" + source_image.stem, source_image)
+            case["r14_support_files"] = copied
+            marks = args.visual_dir / "g1-withdrawal-marks.txt"
+            if marks.is_file():
+                copy("r14-g1-withdrawal-marks", marks)
+            if image_names:
+                result["visual_samples"] = [dict(path=copied[name], sha256=files[copied[name]]) for name in image_names]
+            if not replay_errors and result.get("status") == "PASS":
+                mismatch = aggregate.check_specific(args.row, args.route, result, args.out)
+                if mismatch:
+                    result.update(status="NOT_ESTABLISHED", reason="typed_contract_failed", errors=mismatch)
     elif args.row == "r12_selector_persistence" and all((args.phase_one_fixture, args.phase_one_receipt,
             args.phase_one_identity, args.phase_one_process, args.phase_one_transcript,
             args.phase_one_app_before, args.phase_one_app_after, args.phase_one_test_before, args.phase_one_test_after)):
@@ -225,6 +271,9 @@ def main() -> int:
                  "app-after", "test-after", "run-metadata", "out"):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--capture", type=Path)
+    parser.add_argument("--queue", type=Path)
+    parser.add_argument("--visual-dir", type=Path)
+    parser.add_argument("--replay-harness")
     parser.add_argument("--report", type=Path, action="append", default=[])
     for name in ("phase-one-fixture", "phase-one-receipt", "phase-one-identity", "phase-one-process",
                  "phase-one-transcript", "phase-one-app-before", "phase-one-app-after", "phase-one-test-before", "phase-one-test-after"):

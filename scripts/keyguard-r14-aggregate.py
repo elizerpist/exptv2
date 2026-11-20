@@ -279,7 +279,13 @@ def check_specific(row: str, route: str, result: dict, root: Path) -> list[str]:
                     and result.get("total_new_adds") == 1 and result.get("final_roots") == 1):
                 errors.append("r14_fresh_recovery")
         else:
-            no_qualifying_pending = (result.get("pending_before_a") is None or
+            other_systemui_event = (result.get("pending_origin") == "SYSTEMUI_OTHER_EVENT"
+                and isinstance(result.get("pending_type"), int)
+                and result["pending_type"] not in (32, 4194304)
+                and isinstance(result.get("pending_event"), int)
+                and isinstance(result.get("pending_callback"), int)
+                and 0 < result["pending_event"] <= result["pending_callback"] <= result.get("a_decision_at", -1))
+            no_qualifying_pending = (result.get("pending_before_a") is None or other_systemui_event or
                 result.get("pending_origin") in {"OWN", "AMBIGUOUS", "SYNTHETIC", "NON_PRIMARY"})
             if not (no_qualifying_pending and result.get("pending_qualifies") is False and result.get("a_adds") == 1
                     and result.get("post_c_received") is True and result.get("final_roots") == 0):
