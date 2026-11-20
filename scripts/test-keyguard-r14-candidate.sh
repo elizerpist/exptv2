@@ -38,6 +38,8 @@ r15-phone-full com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTe
 r15-stale-owner com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r15WrongRetiredAttachmentNeverInheritsHolderEvidence
 r15-first-live com.fluvi.app.lockscreen.KeyguardR12ServiceTimingInstrumentationTest#r15FirstReadIsRootOnlyAndLaterReadRemainsStock
 r15-held-canvas com.fluvi.app.lockscreen.KeyguardR15HeldCanvasInstrumentationTest#r15EnteredCanvasSurvivesActualServiceWithdrawal
+r15-motion-red com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r15DetachedMotionOffRevokesPreparedLiveEligibility
+r15-combined-recovery com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r14PairedRecoveryEdgesRemainOwnedUnderPressureAndRotation
 CASES
 cat "$evidence/case-list.txt"
 selector=$(awk -v label="$requested" '$1==label {print $2}' "$evidence/case-list.txt")

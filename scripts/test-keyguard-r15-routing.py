@@ -10,9 +10,11 @@ prefix = 'fluvi-r15-first-acquisition-'
 assert workflow.count("startsWith(github.ref_name, '" + prefix + "')") == 3
 matrix_line = next(line for line in workflow.splitlines() if 'case: ${{ fromJSON' in line)
 arrays = [json.loads(value) for value in re.findall(r"'(\[[^']+\])'", matrix_line)]
-assert len(arrays) == 5
-historical, holder, export, r15, ordinary = arrays
+assert len(arrays) == 7
+historical, comparison, motion, holder, export, r15, ordinary = arrays
 assert historical == ['exclusion', 'fresh-main', 'late-only', 'real-return']
+assert comparison == ['r15-ab-comparison']
+assert motion == ['r15-motion-red', 'r15-combined-recovery']
 assert holder == ['r15-held-canvas']
 assert r15 == ordinary + ['r15-phone-light', 'r15-phone-full', 'r15-stale-owner', 'r15-first-live']
 assert export == ['r15-phone-light', 'r15-phone-full', 'r15-stale-owner', 'pressure-light', 'pressure-full',
@@ -23,6 +25,12 @@ mapping = dict(lines)
 assert len(mapping) == len(lines)
 assert all(case in mapping for case in r15)
 assert all(case in mapping for case in export)
+assert all(case in mapping for case in motion)
+assert mapping['r15-motion-red'].endswith('#r15DetachedMotionOffRevokesPreparedLiveEligibility')
+assert mapping['r15-combined-recovery'].endswith('#r14PairedRecoveryEdgesRemainOwnedUnderPressureAndRotation')
+assert workflow.index("startsWith(github.ref_name, 'fluvi-r15-first-acquisition-motion-controls-')") < workflow.rindex("startsWith(github.ref_name, 'fluvi-r15-first-acquisition-')")
+assert workflow.index("startsWith(github.ref_name, 'fluvi-r15-first-acquisition-validation-')") < workflow.rindex("startsWith(github.ref_name, 'fluvi-r15-first-acquisition-')")
+assert 'bash scripts/test-keyguard-r15-comparison-device.sh' in workflow
 assert mapping['r15-held-canvas'].endswith('#r15EnteredCanvasSurvivesActualServiceWithdrawal')
 assert mapping['r15-phone-light'].endswith('#r15PhoneShapeKeepsFinancialAndActualWithdrawalLight')
 assert mapping['r15-phone-full'].endswith('#r15PhoneShapeKeepsFinancialAndActualWithdrawalFull')
