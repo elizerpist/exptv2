@@ -22,6 +22,7 @@ ffprobe -version > "$evidence/ffprobe-version.txt"
 python3 -c 'import PIL; print(PIL.__version__)' > "$evidence/pillow-version.txt"
 python3 "$root/scripts/test-keyguard-r15-visual.py" > "$evidence/visual-host.txt" 2>&1
 python3 "$root/scripts/test-keyguard-r15-comparison.py" > "$evidence/comparison-host.txt" 2>&1
+python3 "$root/scripts/test-keyguard-r15-slot-evidence.py" > "$evidence/slot-host.txt" 2>&1
 adb shell screenrecord --help > "$evidence/screenrecord-help.txt" 2>&1
 grep -Fq -- '--time-limit' "$evidence/screenrecord-help.txt"
 {
@@ -34,9 +35,9 @@ grep -Fq -- '--time-limit' "$evidence/screenrecord-help.txt"
  adb shell wm density
  adb shell pm list instrumentation
 } > "$evidence/device-before.txt"
+adb shell cat /proc/sys/kernel/random/boot_id | tr -d '\r' > "$evidence/boot-before.txt"
 [[ $(adb shell getprop ro.build.version.sdk | tr -d '\r') == 35 ]]
 [[ $(adb shell getprop ro.product.cpu.abi | tr -d '\r') == x86_64 ]]
-grep -Fq 'com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner' "$evidence/device-before.txt"
 saved_auto_rotation=$(adb shell settings get system accelerometer_rotation | tr -d '\r')
 saved_user_rotation=$(adb shell settings get system user_rotation | tr -d '\r')
 saved_density=$(adb shell wm density | tr -d '\r' | sed -n 's/^Override density: //p')
@@ -87,6 +88,8 @@ adb install -r "$app" > "$evidence/install-app.txt" 2>&1
 adb install -r "$test_apk" > "$evidence/install-test.txt" 2>&1
 grep -qx 'Success' "$evidence/install-app.txt"
 grep -qx 'Success' "$evidence/install-test.txt"
+adb shell pm list instrumentation > "$evidence/registered-runner.txt"
+grep -Fq 'com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner' "$evidence/registered-runner.txt"
 if ! timeout -k 2s 60s bash "$root/scripts/prepare-keyguard-lower-environment.sh" "$evidence/preflight"; then
  printf 'device_preflight=FAIL\n' > "$evidence/status.txt"
  exit 1
@@ -140,11 +143,15 @@ for spec in 1:stock 1:candidate 2:candidate 2:stock; do
   result=1
  fi
  adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-service-probe > "$dir/service-probe.tar" 2> "$dir/service-probe.stderr" || result=1
+ mkdir -p "$dir/probe"
+ tar -xf "$dir/service-probe.tar" -C "$dir/probe" > "$dir/untar.txt" 2>&1 || result=1
  for item in "com.fluvi.app:$app:app-after" "com.fluvi.app.test:$test_apk:test-after"; do
   IFS=: read -r package binary label <<< "$item"
   bash "$root/scripts/verify-keyguard-installed-apk.sh" "$package" "$binary" "$dir" "$label" > "$dir/$label-verdict.txt" 2>&1 || result=1
  done
 done
+adb shell cat /proc/sys/kernel/random/boot_id | tr -d '\r' > "$evidence/boot-after.txt" || result=1
+cmp -s "$evidence/boot-before.txt" "$evidence/boot-after.txt" || result=1
 
 # Decode only after all timed slots to avoid host decoding load contaminating
 # a later arm. Missing metadata/space remains an explicit failed boundary.
@@ -155,6 +162,8 @@ for dir in "$evidence"/block-*; do
  fi
 done
 sha256sum --check "$evidence/apks.sha256" > "$evidence/apks-after-check.txt" 2>&1 || result=1
+python3 "$root/scripts/keyguard-r15-slot-evidence.py" --evidence "$evidence" --source "$source_sha" --out "$evidence/slot-evidence.json" \
+ > "$evidence/slot-evidence.txt" 2>&1 || result=1
 printf 'raw_collection_exit=%s\nvisual_calibration=NOT_ESTABLISHED\ncomparison_qualification=NOT_ESTABLISHED\n' "$result" > "$evidence/status.txt"
 # Until independent references, all slot manifests and their collector are
 # available, a video/producer timing observation is not an admission pass.

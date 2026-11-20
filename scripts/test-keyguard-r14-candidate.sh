@@ -88,7 +88,21 @@ adb shell am force-stop com.fluvi.app > "$evidence/force-stop.txt" 2>&1 || true
 rc=0
 timeout -k 5s 260s adb shell am instrument -w -r -e sourceSha "$source_sha" -e harnessSha "$harness_sha" \
  -e runUuid "$id" -e r12Mode SURFACE_LIVE -e r14Expected candidate -e class "$selector" \
- com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$evidence/instrumentation.txt" 2>&1 || rc=$?
+ com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$evidence/instrumentation.txt" 2>&1 &
+instrumentation_owner=$!
+process_seen=0
+for _ in {1..100}; do
+ kill -0 "$instrumentation_owner" 2>/dev/null || break
+ if adb shell 'p=$(pidof com.fluvi.app); case "$p" in ""|*" "*) exit 1;; esac; test -r /proc/$p/stat || exit 1; printf "pid=%s startTicks=" "$p"; awk "{print \$22}" /proc/$p/stat' \
+     | tr -d '\r' > "$evidence/process-identity.tmp" 2>/dev/null && grep -Eq '^pid=[0-9]+ startTicks=[0-9]+$' "$evidence/process-identity.tmp"; then
+  mv "$evidence/process-identity.tmp" "$evidence/process-identity.txt"
+  process_seen=1
+  break
+ fi
+ sleep 0.1
+done
+[[ $process_seen == 1 ]] || printf 'pid=UNOBSERVED startTicks=UNOBSERVED\n' > "$evidence/process-identity.txt"
+wait "$instrumentation_owner" || rc=$?
 printf '%s\n' "$rc" > "$evidence/command-exit.txt"
 timeout -k 2s 20s adb logcat -b all -d -v monotonic > "$evidence/logcat.txt" 2>&1 || true
 timeout -k 2s 20s adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-service-probe > "$evidence/service-probe.tar" 2> "$evidence/service-probe.stderr" || true

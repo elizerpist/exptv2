@@ -276,6 +276,8 @@ jobs:
           python3 scripts/test-keyguard-r12-harness.py
           python3 scripts/test-keyguard-r15-visual.py
           python3 scripts/test-keyguard-r15-comparison.py
+          python3 scripts/test-keyguard-r15-case-manifest.py
+          python3 scripts/test-keyguard-r15-slot-evidence.py
 
       - name: Enable KVM for material runtime
         run: &fluvi_enable_kvm |
@@ -372,7 +374,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        case: ${{ fromJSON(startsWith(github.ref_name, 'fluvi-r14-wiring-') && '["exclusion","fresh-main","late-only","real-return"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-validation-') && '["r15-ab-comparison"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-motion-controls-') && '["r15-motion-red","r15-combined-recovery","r15-held-timeout","r15-motion-service"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-holder-') && '["r15-held-canvas"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-export-') && '["r15-phone-light","r15-phone-full","r15-stale-owner","pressure-light","pressure-full","pressure-combined","paired-light","paired-full","deferred-light","deferred-full"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-') && '["exclusion","fresh-main","late-only","real-return","terminal-stale","pressure-light","pressure-full","pressure-combined","paired-light","paired-full","deferred-light","deferred-full","r15-phone-light","r15-phone-full","r15-stale-owner","r15-first-live"]' || '["exclusion","fresh-main","late-only","real-return","terminal-stale","pressure-light","pressure-full","pressure-combined","paired-light","paired-full","deferred-light","deferred-full"]') }}
+        case: ${{ fromJSON(startsWith(github.ref_name, 'fluvi-r14-wiring-') && '["exclusion","fresh-main","late-only","real-return"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-validation-') && '["r15-ab-comparison"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-motion-controls-') && '["r15-motion-red","r15-combined-recovery","r15-held-timeout","r15-motion-service"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-holder-') && '["r15-held-canvas"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-export-') && '["r15-phone-light","r15-phone-full","r15-stale-owner","pressure-light","pressure-full","pressure-combined","paired-light","paired-full","deferred-light","deferred-full"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-') && '["exclusion","fresh-main","late-only","real-return","terminal-stale","pressure-light","pressure-full","pressure-combined","paired-light","paired-full","deferred-light","deferred-full","r15-phone-light","r15-phone-full","r15-stale-owner","r15-first-live","r15-combined-recovery"]' || '["exclusion","fresh-main","late-only","real-return","terminal-stale","pressure-light","pressure-full","pressure-combined","paired-light","paired-full","deferred-light","deferred-full"]') }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -397,6 +399,8 @@ jobs:
           python3 scripts/test-keyguard-r15-routing.py
           python3 scripts/test-keyguard-r15-visual.py
           python3 scripts/test-keyguard-r15-comparison.py
+          python3 scripts/test-keyguard-r15-case-manifest.py
+          python3 scripts/test-keyguard-r15-slot-evidence.py
           bash scripts/test-keyguard-lower-environment.sh
       - name: Prepare VM acceleration
         run: *fluvi_enable_kvm

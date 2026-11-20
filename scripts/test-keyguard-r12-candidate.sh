@@ -95,11 +95,12 @@ if ! timeout -k 2s 60s bash "$root/scripts/prepare-keyguard-lower-environment.sh
 fi
 run_test() {
   local label=$1 method=$2 run_id=$3 test_mode=$4
+  local selector_phase=${5:-}
   local dir="$evidence/$label" rc=0
   mkdir -p "$dir"
   printf 'source=%s\nrun_uuid=%s\nselector=%s\nmode=%s\n' "$source_sha" "$run_id" "$method" "$test_mode" > "$dir/identity.txt"
   adb shell am force-stop com.fluvi.app > "$dir/force-stop.txt" 2>&1 || rc=1
-  if [[ $label == first_composite_fixture ]]; then
+  if [[ $label == first_composite_fixture || $label == privacy_fixture || $label == holder_fixture ]]; then
     [[ $run_id =~ ^[0-9a-f-]{36}$ ]] || return 1
     adb shell screenrecord --help > "$dir/screenrecord-help.txt" 2>&1 || rc=1
     adb shell dumpsys display > "$dir/display-before.txt" 2>&1 || true
@@ -119,12 +120,27 @@ run_test() {
     [[ $recorder_ready == 1 ]] || rc=1
   fi
   local instrument_rc=0
-  timeout -k 5s 260s adb shell am instrument -w -r -e sourceSha "$source_sha" -e harnessSha "$source_sha" -e runUuid "$run_id" \
-    -e r12Mode "$test_mode" -e class "$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner \
-    > "$dir/instrumentation.txt" 2>&1 || instrument_rc=$?
+  local -a instrument_args=(-e sourceSha "$source_sha" -e harnessSha "$source_sha" -e runUuid "$run_id" -e r12Mode "$test_mode")
+  if [[ -n $selector_phase ]]; then instrument_args+=(-e selectorPhase "$selector_phase"); fi
+  timeout -k 5s 260s adb shell am instrument -w -r "${instrument_args[@]}" \
+    -e class "$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner \
+    > "$dir/instrumentation.txt" 2>&1 &
+  local instrumentation_owner=$! process_seen=0
+  for _ in {1..100}; do
+    kill -0 "$instrumentation_owner" 2>/dev/null || break
+    if adb shell 'p=$(pidof com.fluvi.app); case "$p" in ""|*" "*) exit 1;; esac; test -r /proc/$p/stat || exit 1; printf "pid=%s startTicks=" "$p"; awk "{print \$22}" /proc/$p/stat' \
+        | tr -d '\r' > "$dir/process-identity.tmp" 2>/dev/null && grep -Eq '^pid=[0-9]+ startTicks=[0-9]+$' "$dir/process-identity.tmp"; then
+      mv "$dir/process-identity.tmp" "$dir/process-identity.txt"
+      process_seen=1
+      break
+    fi
+    sleep 0.1
+  done
+  [[ $process_seen == 1 ]] || printf 'pid=UNOBSERVED startTicks=UNOBSERVED\n' > "$dir/process-identity.txt"
+  wait "$instrumentation_owner" || instrument_rc=$?
   printf '%s\n' "$instrument_rc" > "$dir/command-exit.txt"
   [[ $instrument_rc == 0 ]] || rc=1
-  if [[ $label == first_composite_fixture ]]; then
+  if [[ $label == first_composite_fixture || $label == privacy_fixture || $label == holder_fixture ]]; then
     stop_fixture_recorder
     if ! grep -Fxq 'signal_exit=0' "$dir/recorder-exit.txt" || ! grep -Fxq 'forced=0' "$dir/recorder-exit.txt"; then rc=1; fi
     adb shell dumpsys display > "$dir/display-after.txt" 2>&1 || true
@@ -161,6 +177,12 @@ run_id=$(cat /proc/sys/kernel/random/uuid)
 printf 'run_uuid=%s\n' "$run_id" >> "$evidence/manifest.txt"
 result=0
 if [[ "$scope" == r12_contract ]]; then
+  # Each historic @Before forces LEGACY_R11. Keep the two selectors separate
+  # so their transcripts cannot be mistaken for a multi-method route pass.
+  run_test r12_ordered 'com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest#r12DetachedNegativeCanReadOneSuccessorBeforeOrderedApply' \
+    "$(cat /proc/sys/kernel/random/uuid)" LEGACY_R11 || result=1
+  run_test r12_occlusion 'com.fluvi.app.lockscreen.KeyguardServiceOverlayInstrumentationTest#connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles' \
+    "$(cat /proc/sys/kernel/random/uuid)" LEGACY_R11 || result=1
   # Run the actual Android Bitmap controls independently. Preserve the raw
   # runner transcript even on the reference's expected behavioral failure.
   financial_dir="$evidence/financial-orb-demand"
@@ -208,6 +230,16 @@ if [[ "$scope" == r12_contract ]]; then
   run_test static_panel 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12StaticSurfaceMatchesFullAndNeutralReferenceOnRealPanel' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_STATIC || result=1
   run_test diagnostic_light 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r12SurfaceEvidenceRetainsItsShowOwnerInLight' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_LIVE || result=1
   run_test diagnostic_full 'com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest#r12SurfaceEvidenceRetainsItsShowOwnerInFull' "$(cat /proc/sys/kernel/random/uuid)" SURFACE_LIVE || result=1
+  for financial_route in SURFACE_LIVE SURFACE_STATIC LEGACY_R11; do
+    run_test "financial_service_$financial_route" 'com.fluvi.app.lockscreen.KeyguardR15ServiceContractInstrumentationTest#stableServiceMainConfirmationsDoNotDemandBitmaps' \
+      "$(cat /proc/sys/kernel/random/uuid)" "$financial_route" || result=1
+  done
+  for selector_route in SURFACE_LIVE SURFACE_STATIC LEGACY_R11; do
+    selector_id=$(cat /proc/sys/kernel/random/uuid)
+    selector_method='com.fluvi.app.lockscreen.KeyguardR15ServiceContractInstrumentationTest#routeSelectionSurvivesReattachAndRestart'
+    run_test "selector_${selector_route}_one" "$selector_method" "$selector_id" "$selector_route" one || result=1
+    run_test "selector_${selector_route}_two" "$selector_method" "$selector_id" "$selector_route" two || result=1
+  done
   echo 'NOT ESTABLISHED: complete T1-T7 admission, lifecycle, privacy and independent real-service compositor oracle' >> "$evidence/status.txt"
 else
   method='com.fluvi.app.lockscreen.KeyguardR12ServiceTimingInstrumentationTest#fourRealWakeCyclesUseRequestedRoute'
@@ -221,6 +253,10 @@ else
   # observations. It cannot pass the compositor row without the separately
   # collected, calibrated independent recording and owner-bound case record.
   run_test first_composite_fixture 'com.fluvi.app.lockscreen.KeyguardR15ServiceContractInstrumentationTest#firstCorrectServiceComposite' \
+    "$(cat /proc/sys/kernel/random/uuid)" "$mode" || result=1
+  run_test privacy_fixture 'com.fluvi.app.lockscreen.KeyguardR15ServiceContractInstrumentationTest#serviceDowngradeRevokesOldFull' \
+    "$(cat /proc/sys/kernel/random/uuid)" "$mode" || result=1
+  run_test holder_fixture 'com.fluvi.app.lockscreen.KeyguardR15ServiceContractInstrumentationTest#realHolderRevocationAcrossGeneration' \
     "$(cat /proc/sys/kernel/random/uuid)" "$mode" || result=1
   echo 'NOT ESTABLISHED: separate calibrated real-service visual process and composite/privacy controls' >> "$evidence/status.txt"
 fi
@@ -241,6 +277,8 @@ test_row() {
   fi
 }
 if [[ "$scope" == r12_contract ]]; then
+  test_row r12_ordered r12DetachedNegativeCanReadOneSuccessorBeforeOrderedApply
+  test_row r12_occlusion connectedProductionServiceRendersPortalOrbAcrossRealKeyguardCycles
   cat "$financial_dir/status.txt" >> "$rows"
   test_row financial_panel r13FinancialDemandAndPrivacyAcrossRetainedRouteChanges
   test_row financial_widget remoteViewsAndNotificationDelegateKeepRealPixelsAndText
@@ -251,9 +289,18 @@ if [[ "$scope" == r12_contract ]]; then
   test_row static_panel r12StaticSurfaceMatchesFullAndNeutralReferenceOnRealPanel
   test_row diagnostic_light r12SurfaceEvidenceRetainsItsShowOwnerInLight
   test_row diagnostic_full r12SurfaceEvidenceRetainsItsShowOwnerInFull
+  for financial_route in SURFACE_LIVE SURFACE_STATIC LEGACY_R11; do
+    test_row "financial_service_$financial_route" stableServiceMainConfirmationsDoNotDemandBitmaps
+  done
+  for selector_route in SURFACE_LIVE SURFACE_STATIC LEGACY_R11; do
+    test_row "selector_${selector_route}_one" routeSelectionSurvivesReattachAndRestart
+    test_row "selector_${selector_route}_two" routeSelectionSurvivesReattachAndRestart
+  done
 else
   test_row timing fourRealWakeCyclesUseRequestedRoute
   test_row first_composite_fixture firstCorrectServiceComposite
+  test_row privacy_fixture serviceDowngradeRevokesOldFull
+  test_row holder_fixture realHolderRevocationAcrossGeneration
 fi
 for required in r12_real_service_first_composite r12_real_service_privacy_downgrade r12_holder_lifecycle_races r12_selector_persistence r13_service_demand_burst; do
   printf '%s=NOT_ESTABLISHED\n' "$required" >> "$rows"

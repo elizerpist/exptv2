@@ -48,8 +48,11 @@ def _slot_errors(slot: dict, process: dict, index: int) -> list[str]:
     if status not in ("called", "no_call") or (status == "no_call" and flags is not None):
         errors.append("root_call")
     if status == "called":
-        expected = 0 if process.get("arm") == "candidate" else 36
-        if slot.get("eligible") is not True or flags != expected:
+        # A real ineligible first read still uses the production argument in
+        # both arms; retain it as an excluded row instead of inventing an
+        # eligible opportunity or rejecting the whole observation.
+        expected = 0 if process.get("arm") == "candidate" and slot.get("eligible") is True else 36
+        if flags != expected:
             errors.append("first_argument_or_opportunity")
     accepted = slot.get("root_accepted")
     if not isinstance(accepted, bool) or (accepted and status != "called"):

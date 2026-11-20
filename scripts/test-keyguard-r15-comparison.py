@@ -58,6 +58,16 @@ class ComparisonControls(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "actual_first_child"):
             comparison.compare(data)
 
+    def test_ineligible_real_root_is_retained_with_stock_flags_and_excluded(self):
+        data = specimen()
+        row = data["processes"][1]["slots"][1]
+        row.update(eligible=False, root_call="called", root_flags=36)
+        result = comparison.compare(data)
+        self.assertIn("first_opportunity_missing", result["blocks"][0]["excluded"][0]["reasons"])
+        row["root_flags"] = 0
+        with self.assertRaisesRegex(ValueError, "first_argument_or_opportunity"):
+            comparison.compare(data)
+
     def test_real_fallback_is_retained_but_not_paired_as_an_active_root(self):
         data = specimen()
         for row in data["processes"][1]["slots"][1:]:

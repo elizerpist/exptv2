@@ -341,14 +341,27 @@ def check_specific(row: str, route: str, result: dict, root: Path) -> list[str]:
             errors.append("surface_eager_demand")
     if row in {"r14_pressure", "r12_pressure"}:
         try:
-            report = read_local(root, result.get("report")).decode("utf-8")
-            byte_count = len(report.encode("utf-8"))
-            if (byte_count > 32_768 or f"exportBytes={byte_count}\n" not in report
-                    or not report.endswith("END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n")
-                    or "omittedCriticalRecordIds=none" not in report):
-                errors.append("pressure_budget_or_critical_omission")
-            if row == "r14_pressure" and not recovery_pressure_owned(report):
+            paths = [result.get("report")] if row == "r14_pressure" else result.get("reports")
+            if not isinstance(paths, list) or len(paths) != (1 if row == "r14_pressure" else 2):
+                raise ValueError("pressure_report_count")
+            reports = [read_local(root, path).decode("utf-8") for path in paths]
+            ids = []
+            for report in reports:
+                byte_count = len(report.encode("utf-8"))
+                if (byte_count > 32_768 or f"exportBytes={byte_count}\n" not in report
+                        or not report.endswith("END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n")
+                        or "omittedCriticalRecordIds=none" not in report):
+                    errors.append("pressure_budget_or_critical_omission")
+                captures = re.findall(r"(?m)^captureId=([^\n]+)$", report)
+                if len(captures) != 1:
+                    errors.append("pressure_capture_missing")
+                else:
+                    ids.append(captures[0])
+            if row == "r14_pressure" and not recovery_pressure_owned(reports[0]):
                 errors.append("recovery_edges_missing")
+            if row == "r12_pressure" and (len(set(ids)) != 2 or
+                    {mode for report in reports for mode in re.findall(r"(?m)^captureMode=(LIGHT|FULL)$", report)} != {"LIGHT", "FULL"}):
+                errors.append("pressure_capture_rotation_missing")
         except (ValueError, OSError, UnicodeError):
             errors.append("pressure_report_missing")
     return errors
@@ -384,14 +397,35 @@ def verify_case(root: Path, case: dict, source: str) -> list[str]:
     if case.get("installed_app_sha256") != case.get("app_sha256") or case.get("installed_test_sha256") != case.get("test_sha256"):
         errors.append("installed_apk_mismatch")
     try:
+        evidence_hashes = case.get("evidence_sha256")
+        mandatory_paths = [case.get(key) for key in ("transcript", "records", "app_receipt", "test_receipt",
+            "app_after_receipt", "test_after_receipt", "run_metadata", "fixture", "identity_file", "process_file")]
+        if not isinstance(evidence_hashes, dict) or any(not isinstance(path, str) or path not in evidence_hashes for path in mandatory_paths):
+            errors.append("evidence_hashes_missing")
+        else:
+            for path, expected_hash in evidence_hashes.items():
+                if not re.fullmatch(r"[0-9a-f]{64}", str(expected_hash)) or hashlib.sha256(read_local(root, path)).hexdigest() != expected_hash:
+                    errors.append("evidence_hash_mismatch:" + str(path))
         raw = read_local(root, case.get("transcript")).decode("utf-8").replace("\r\n", "\n")
         records = [json.loads(line) for line in read_local(root, case.get("records")).decode("utf-8").splitlines() if line.strip()]
         app_receipt = read_local(root, case.get("app_receipt")).decode("utf-8")
         test_receipt = read_local(root, case.get("test_receipt")).decode("utf-8")
+        app_after = read_local(root, case.get("app_after_receipt")).decode("utf-8")
+        test_after = read_local(root, case.get("test_after_receipt")).decode("utf-8")
         run_metadata = json.loads(read_local(root, case.get("run_metadata")).decode("utf-8"))
+        identity_text = read_local(root, case.get("identity_file")).decode("utf-8")
+        process_text = read_local(root, case.get("process_file")).decode("utf-8").replace("\r\n", "\n")
+        if (f"run_uuid={case.get('run_uuid')}\n" not in identity_text
+                or f"selector={expected_class(str(row))}#{method}\n" not in identity_text
+                or not (f"source={source}\n" in identity_text or f"source_sha={source}\n" in identity_text)
+                or process_text.strip() != f"pid={case.get('pid')} startTicks={case.get('process_start')}"):
+            errors.append("raw_identity_mismatch")
         if not method or not instrumented(raw, method, expected_class(str(row))):
             errors.append("unexecuted_or_failed_test")
-        for content, digest, label in ((app_receipt, case.get("app_sha256"), "app"), (test_receipt, case.get("test_sha256"), "test")):
+        for content, digest, label in ((app_receipt, case.get("app_sha256"), "app"),
+                                       (test_receipt, case.get("test_sha256"), "test"),
+                                       (app_after, case.get("app_sha256"), "app_after"),
+                                       (test_after, case.get("test_sha256"), "test_after")):
             if f"expected={digest} installed={digest}" not in content:
                 errors.append(label + "_receipt_mismatch")
         process = [r for r in records if r.get("kind") == "PROCESS"]
@@ -400,8 +434,22 @@ def verify_case(root: Path, case: dict, source: str) -> list[str]:
         if row == "r12_selector_persistence":
             phase_one = [json.loads(line) for line in read_local(root, case.get("phase_one_records")).decode("utf-8").splitlines() if line.strip()]
             phase_one_raw = read_local(root, case.get("phase_one_transcript")).decode("utf-8").replace("\r\n", "\n")
+            first_paths = [case.get(key) for key in ("phase_one_records", "phase_one_transcript", "phase_one_fixture",
+                "phase_one_identity", "phase_one_process", "phase_one_store_receipt", "phase_one_app_receipt",
+                "phase_one_test_receipt", "phase_one_app_after_receipt", "phase_one_test_after_receipt")]
+            if not isinstance(evidence_hashes, dict) or any(not isinstance(path, str) or path not in evidence_hashes for path in first_paths):
+                errors.append("selector_phase_one_hashes_missing")
             if not restart_lineage_valid(phase_one, records, case) or not instrumented(phase_one_raw, method, expected_class(str(row))):
                 errors.append("selector_restart_lineage_mismatch")
+            first_process = read_local(root, case.get("phase_one_process")).decode("utf-8").strip()
+            first_identity = read_local(root, case.get("phase_one_identity")).decode("utf-8")
+            first_store = read_local(root, case.get("phase_one_store_receipt")).decode("utf-8")
+            if (not phase_one or first_process != f"pid={phase_one[0].get('pid')} startTicks={phase_one[0].get('process_start')}"
+                    or f"run_uuid={case.get('run_uuid')}\n" not in first_identity
+                    or f"selector={expected_class(str(row))}#{method}\n" not in first_identity
+                    or f"case={case.get('run_uuid')}\n" not in first_store
+                    or f"target={route}\n" not in first_store or "result=PASS\n" not in first_store):
+                errors.append("selector_phase_one_raw_identity_mismatch")
             for key, digest in (("phase_one_app_receipt", case.get("app_sha256")), ("phase_one_test_receipt", case.get("test_sha256")),
                                 ("phase_one_app_after_receipt", case.get("app_sha256")), ("phase_one_test_after_receipt", case.get("test_sha256"))):
                 if f"expected={digest} installed={digest}" not in read_local(root, case.get(key)).decode("utf-8"):
@@ -415,6 +463,15 @@ def verify_case(root: Path, case: dict, source: str) -> list[str]:
         if len(result) != 1 or result[0].get("row") != row:
             errors.append("result_missing_or_duplicate")
         else:
+            result_paths = []
+            if isinstance(result[0].get("report"), str):
+                result_paths.append(result[0]["report"])
+            if isinstance(result[0].get("reports"), list):
+                result_paths.extend(result[0]["reports"])
+            if isinstance(result[0].get("visual_samples"), list):
+                result_paths.extend(sample.get("path") for sample in result[0]["visual_samples"] if isinstance(sample, dict))
+            if not isinstance(evidence_hashes, dict) or any(not isinstance(path, str) or path not in evidence_hashes for path in result_paths):
+                errors.append("result_evidence_hashes_missing")
             errors.extend(check_specific(str(row), str(route), result[0], root))
             if row == "r14_pressure":
                 report = read_local(root, result[0].get("report")).decode("utf-8")

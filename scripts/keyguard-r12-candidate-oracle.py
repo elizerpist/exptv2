@@ -32,7 +32,7 @@ def verify(raw: str, fixture: str, capture: str, source: str, mode: str, run_id:
         errors.append("instrumentation_not_exact_success")
     if re.search(r"FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_STATUS_CODE: -[1234]|Exception|timed out", raw, re.I):
         errors.append("instrumentation_failure_or_skip")
-    process = re.findall(r"(?m)^PROCESS up=\d+ source=(\S+) run=(\S+) capture=(\S+) mode=(\S+) pid=(\d+)\s*$", fixture)
+    process = re.findall(r"(?m)^PROCESS up=\d+ source=(\S+) run=(\S+) capture=(\S+) mode=(\S+) pid=(\d+)(?: startTicks=\d+)?\s*$", fixture)
     if len(process) != 1:
         errors.append("process_row_missing_or_duplicate")
     else:

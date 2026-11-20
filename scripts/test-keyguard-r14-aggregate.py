@@ -47,6 +47,7 @@ class AggregateControls(unittest.TestCase):
         def report(replacement="22", displaced="21", seq="7", hide="7", attempt="1"):
             text = (
                 "FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n"
+                "captureId=11111111-1111-4111-8111-111111111111\n"
                 "omittedCriticalRecordIds=none\n"
                 " EPISODE attempt=1 showOp=1 attach=4 req=19 withdrawal=7\n"
                 " EPISODE attempt=1 showOp=2 attach=5 req=24 withdrawal=8\n"
@@ -88,7 +89,8 @@ class AggregateControls(unittest.TestCase):
             app_sha256="b" * 64, test_sha256="c" * 64,
             installed_app_sha256="b" * 64, installed_test_sha256="c" * 64,
             transcript="raw.txt", records="records.jsonl", app_receipt="app.txt",
-            test_receipt="test.txt", run_metadata="run.json")
+            test_receipt="test.txt", app_after_receipt="app-after.txt", test_after_receipt="test-after.txt", run_metadata="run.json",
+            fixture="fixture.txt", identity_file="identity.txt", process_file="process.txt")
         self.result = dict(kind="RESULT", row="r14_fresh_main", status="PASS", a=10, a_read_start=100, a_decision_at=110,
             previous_hide=7, initial_attach=4, final_attach=5, a_complete=True,
             a_reason="MAIN_CONFIRMED", pre_a_roots=0, b=11, pending_b=11,
@@ -101,9 +103,16 @@ class AggregateControls(unittest.TestCase):
         (self.root / "raw.txt").write_text(self.raw)
         (self.root / "app.txt").write_text(f"expected={'b' * 64} installed={'b' * 64}\n")
         (self.root / "test.txt").write_text(f"expected={'c' * 64} installed={'c' * 64}\n")
+        (self.root / "app-after.txt").write_text(f"expected={'b' * 64} installed={'b' * 64}\n")
+        (self.root / "test-after.txt").write_text(f"expected={'c' * 64} installed={'c' * 64}\n")
         (self.root / "run.json").write_text(json.dumps(dict(databaseId=1, headSha=SOURCE,
             event="workflow_dispatch", jobs=[dict(databaseId=2)])))
+        (self.root / "identity.txt").write_text(f"source={SOURCE}\nrun_uuid={self.run_uuid}\nselector=com.fluvi.app.lockscreen.KeyguardRecoveryAdmissionInstrumentationTest#{self.method}\n")
+        (self.root / "process.txt").write_text("pid=3 startTicks=10\n")
+        (self.root / "fixture.txt").write_text("real fixture evidence\n")
         self.write_records()
+        self.case["evidence_sha256"] = {path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in self.root.iterdir() if path.is_file()}
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -133,6 +142,8 @@ class AggregateControls(unittest.TestCase):
         self.write_records(process=process)
         self.assertIn("process_mismatch", r14.verify_case(self.root, self.case, SOURCE))
         self.assertIn("installed_apk_mismatch", r14.verify_case(self.root, self.case | {"installed_app_sha256": "d" * 64}, SOURCE))
+        (self.root / "app-after.txt").write_text(f"expected={'b' * 64} installed={'d' * 64}\n")
+        self.assertIn("app_after_receipt_mismatch", r14.verify_case(self.root, self.case, SOURCE))
 
     def test_visual_file_missing_invalid_or_white(self):
         case = self.case | {"row": "r14_exclusion", "method": "supersededExternalEventSuppressesOnlyTheRecoveryAdd"}
