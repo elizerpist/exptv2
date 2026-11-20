@@ -53,8 +53,23 @@ def read_local(root: Path, name: object) -> bytes:
     return path.read_bytes()
 
 
-def instrumented(raw: str, method: str) -> bool:
+def expected_class(row: str) -> str:
+    if row in {"r14_pressure", "r12_pressure"}:
+        name = "KeyguardCardDiagnosticsInstrumentationTest"
+    elif row in {"r12_ordered", "r12_occlusion"}:
+        name = "KeyguardServiceOverlayInstrumentationTest"
+    elif row == "r12_natural_timing":
+        name = "KeyguardR12ServiceTimingInstrumentationTest"
+    elif row.startswith("r14_"):
+        name = "KeyguardRecoveryAdmissionInstrumentationTest"
+    else:
+        name = "KeyguardR15ServiceContractInstrumentationTest"
+    return "com.fluvi.app.lockscreen." + name
+
+
+def instrumented(raw: str, method: str, class_name: str) -> bool:
     return (raw.count("INSTRUMENTATION_STATUS: test=" + method + "\n") == 2
+            and raw.count("INSTRUMENTATION_STATUS: class=" + class_name + "\n") == 2
             and "INSTRUMENTATION_STATUS: numtests=1" in raw
             and "INSTRUMENTATION_STATUS_CODE: 1" in raw
             and "INSTRUMENTATION_STATUS_CODE: 0" in raw
@@ -135,6 +150,107 @@ def visual_file(root: Path, sample: dict) -> bool:
         return False
 
 
+def recovery_pressure_owned(report: str) -> bool:
+    """Validate a paired recovery from one report, never from merged captures."""
+    def fields(line: str) -> dict[str, str] | None:
+        values: dict[str, str] = {}
+        for item in line.split()[1:]:
+            if "=" not in item:
+                continue
+            key, value = item.split("=", 1)
+            if key in values:
+                return None
+            values[key] = value
+        return values
+
+    rows = report.splitlines()
+    episodes = [fields(line) for line in rows if line.startswith(" EPISODE ")]
+    withdrawals = [fields(line) for line in rows if line.startswith(" WITHDRAWAL ")]
+    recoveries = [fields(line) for line in rows if line.startswith(" R14_RECOVERY ")]
+    financial = [fields(line) for line in rows if line.startswith(" R13_FINANCIAL ")]
+    if any(row is None for row in episodes + withdrawals + recoveries + financial):
+        return False
+    for initial in recoveries:
+        if initial.get("phase") != "DEFERRED":
+            continue
+        keys = ("attempt", "r14Recovery", "r14PreviousHide", "r14PreviousAttach",
+                "r14DeferredA", "r14OriginalB", "r14Pending", "seq", "up")
+        if not all(str(initial.get(key, "")).isdigit() and int(initial[key]) > 0 for key in keys):
+            continue
+        if initial["r14Pending"] != initial["r14OriginalB"]:
+            continue
+        same_attempt = [e for e in episodes if e.get("attempt") == initial["attempt"]]
+        owner_episode = [e for e in same_attempt if e.get("attach") == initial["r14PreviousAttach"]
+                         and e.get("withdrawal") == initial["r14PreviousHide"]]
+        owner_hide = [h for h in withdrawals if h.get("hideOp") == initial["r14PreviousHide"]
+                      and h.get("attach") == initial["r14PreviousAttach"] and h.get("attachedBefore") == "true"]
+        if (len(owner_episode) != 1 or len(owner_hide) != 1 or len(same_attempt) < 2
+                or len({e.get("attach") for e in same_attempt}) < 2
+                or len({e.get("showOp") for e in same_attempt}) < 2
+                or not any(f.get("attempt") == initial["attempt"] and f.get("coverage") == "keyguardScopesOnly"
+                           and f.get("scopes", "0").isdigit() and int(f["scopes"]) > 0
+                           and f.get("invalid") == "0" for f in financial)):
+            continue
+        immutable = ("attempt", "r14Recovery", "r14PreviousHide", "r14PreviousAttach", "r14DeferredA", "r14OriginalB")
+        for replacement in recoveries:
+            if replacement.get("phase") != "REPLACED" or any(replacement.get(k) != initial[k] for k in immutable):
+                continue
+            if (replacement.get("r14Displaced") == initial["r14Pending"]
+                    and replacement.get("r14Pending", "").isdigit()
+                    and int(replacement["r14Pending"]) > 0
+                    and replacement["r14Pending"] != initial["r14Pending"]
+                    and replacement.get("seq", "").isdigit() and int(replacement["seq"]) > int(initial["seq"])
+                    and replacement.get("up", "").isdigit() and int(replacement["up"]) >= int(initial["up"])):
+                return True
+    return False
+
+
+def restart_lineage_valid(first: object, second: object, owner: dict) -> bool:
+    """The selected-route read must precede any phase-two fixture write."""
+    if not isinstance(first, list) or not isinstance(second, list) or len(first) < 3 or len(second) < 3:
+        return False
+    if not all(isinstance(row, dict) for row in first + second):
+        return False
+    p1, p2 = first[0], second[0]
+    if not (p1.get("kind") == p2.get("kind") == "PROCESS" and p1.get("phase") == 1 and p2.get("phase") == 2
+            and all(p1.get(k) == p2.get(k) == owner.get(k) for k in ("source", "run_uuid", "row", "route"))
+            and all(isinstance(p.get(k), int) and p[k] > 0 for p in (p1, p2) for k in ("pid", "process_start"))
+            and p1["pid"] != p2["pid"] and p2["process_start"] > p1["process_start"]):
+        return False
+    return (first[1].get("kind") == "SELECTOR_WRITE" and first[1].get("route") == owner.get("route")
+            and first[-1].get("kind") == "PHASE_COMPLETE"
+            and second[1].get("kind") == "RESTORED_BEFORE_FIXTURE" and second[1].get("route") == owner.get("route")
+            and sum(row.get("kind") == "RESTORED_BEFORE_FIXTURE" for row in second) == 1)
+
+
+def holder_timeline_valid(timeline: object, barrier_timed_out: object) -> bool:
+    """A held G1 and positive G2 must belong to distinct real identities."""
+    stages = ("G1_LOCKED", "G1_REVOKED", "G1_BARRIER_RELEASED", "G1_OPERATION_FINISHED",
+              "G1_DESTROY_RETURN", "G2_CREATED", "G2_POSTED", "G2_REDRAW_COMPLETED")
+    if barrier_timed_out is not False or not isinstance(timeline, list) or not all(isinstance(e, dict) for e in timeline):
+        return False
+    selected = []
+    for stage in stages:
+        matching = [e for e in timeline if e.get("stage") == stage]
+        if len(matching) != 1:
+            return False
+        selected.append(matching[0])
+    if not all(isinstance(e.get("uptime"), int) and e["uptime"] > 0 for e in selected):
+        return False
+    if any(a["uptime"] > b["uptime"] for a, b in zip(selected, selected[1:])):
+        return False
+    def identity(event):
+        value = tuple(event.get(k) for k in ("generation", "holder", "operation"))
+        return value if all(isinstance(v, int) and v > 0 for v in value) else None
+    g1, g2 = identity(selected[0]), identity(selected[5])
+    if not g1 or not g2 or g1[0] == g2[0] or g1[1] == g2[1]:
+        return False
+    if any(identity(e) != g1 for e in selected[:5]) or any(identity(e) != g2 for e in selected[5:]):
+        return False
+    return not any(identity(e) == g1 and isinstance(e.get("uptime"), int)
+                   and e["uptime"] > selected[4]["uptime"] for e in timeline)
+
+
 def check_specific(row: str, route: str, result: dict, root: Path) -> list[str]:
     errors: list[str] = []
     if result.get("status") != "PASS":
@@ -199,12 +315,13 @@ def check_specific(row: str, route: str, result: dict, root: Path) -> list[str]:
             errors.append("privacy_transition_not_established")
     if row == "r12_holder_lifecycle_races":
         if route == "LEGACY_R11":
-            if result.get("actual_surface_holders") != 0:
+            if result.get("actual_surface_holders") != 0 or result.get("actual_legacy_material") is not True:
                 errors.append("legacy_holder_count")
         elif not (result.get("actual_holder") is True and result.get("created_changed_destroyed") is True
                   and result.get("resize_recreate") is True and result.get("inflight_at_revocation") is True
                   and result.get("stale_post_after_destroy") is False and result.get("redraw_completion_exactly_once") is True
-                  and result.get("repeat_hide_disconnect") is True):
+                  and result.get("repeat_hide_disconnect") is True
+                  and holder_timeline_valid(result.get("holder_timeline"), result.get("barrier_timed_out"))):
             errors.append("holder_race_not_established")
     if row == "r12_selector_persistence":
         pids = result.get("process_ids")
@@ -225,10 +342,12 @@ def check_specific(row: str, route: str, result: dict, root: Path) -> list[str]:
     if row in {"r14_pressure", "r12_pressure"}:
         try:
             report = read_local(root, result.get("report")).decode("utf-8")
-            if (len(report.encode()) > 32_768 or not report.endswith("END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n")
+            byte_count = len(report.encode("utf-8"))
+            if (byte_count > 32_768 or f"exportBytes={byte_count}\n" not in report
+                    or not report.endswith("END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n")
                     or "omittedCriticalRecordIds=none" not in report):
                 errors.append("pressure_budget_or_critical_omission")
-            if row == "r14_pressure" and not all(token in report for token in ("R14_RECOVERY", "R14_DECISION", "R14_REPLACEMENT", "decision=DEFERRED")):
+            if row == "r14_pressure" and not recovery_pressure_owned(report):
                 errors.append("recovery_edges_missing")
         except (ValueError, OSError, UnicodeError):
             errors.append("pressure_report_missing")
@@ -241,9 +360,9 @@ def verify_case(root: Path, case: dict, source: str) -> list[str]:
     method = REQUIRED.get((row, route))
     if method is None or case.get("method") != method:
         errors.append("unexpected_row_or_method")
-    if str(row).startswith("r14_") or row in {"r12_pressure", "r12_ordered", "r12_occlusion"}:
+    if str(row).startswith("r14_") or row == "r12_pressure":
         expected_scope = "r14_recovery_candidate"
-    elif row in {"r12_selector_persistence", "r13_service_demand_burst"}:
+    elif row in {"r12_ordered", "r12_occlusion", "r12_selector_persistence", "r13_service_demand_burst"}:
         expected_scope = "r12_contract"
     else:
         expected_scope = {"SURFACE_LIVE": "r12_live", "SURFACE_STATIC": "r12_static", "LEGACY_R11": "r12_legacy"}.get(route)
@@ -270,7 +389,7 @@ def verify_case(root: Path, case: dict, source: str) -> list[str]:
         app_receipt = read_local(root, case.get("app_receipt")).decode("utf-8")
         test_receipt = read_local(root, case.get("test_receipt")).decode("utf-8")
         run_metadata = json.loads(read_local(root, case.get("run_metadata")).decode("utf-8"))
-        if not method or not instrumented(raw, method):
+        if not method or not instrumented(raw, method, expected_class(str(row))):
             errors.append("unexecuted_or_failed_test")
         for content, digest, label in ((app_receipt, case.get("app_sha256"), "app"), (test_receipt, case.get("test_sha256"), "test")):
             if f"expected={digest} installed={digest}" not in content:
@@ -278,6 +397,15 @@ def verify_case(root: Path, case: dict, source: str) -> list[str]:
         process = [r for r in records if r.get("kind") == "PROCESS"]
         if len(process) != 1 or any(process[0].get(k) != case.get(k) for k in ("source", "run_uuid", "pid", "process_start", "route", "row")):
             errors.append("process_mismatch")
+        if row == "r12_selector_persistence":
+            phase_one = [json.loads(line) for line in read_local(root, case.get("phase_one_records")).decode("utf-8").splitlines() if line.strip()]
+            phase_one_raw = read_local(root, case.get("phase_one_transcript")).decode("utf-8").replace("\r\n", "\n")
+            if not restart_lineage_valid(phase_one, records, case) or not instrumented(phase_one_raw, method, expected_class(str(row))):
+                errors.append("selector_restart_lineage_mismatch")
+            for key, digest in (("phase_one_app_receipt", case.get("app_sha256")), ("phase_one_test_receipt", case.get("test_sha256")),
+                                ("phase_one_app_after_receipt", case.get("app_sha256")), ("phase_one_test_after_receipt", case.get("test_sha256"))):
+                if f"expected={digest} installed={digest}" not in read_local(root, case.get(key)).decode("utf-8"):
+                    errors.append("selector_phase_one_receipt_mismatch")
         jobs = run_metadata.get("jobs") or []
         if not (run_metadata.get("databaseId") == case.get("run_id") and run_metadata.get("headSha") == source
                 and run_metadata.get("event") == "workflow_dispatch"

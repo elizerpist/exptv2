@@ -33,6 +33,51 @@ class AggregateControls(unittest.TestCase):
         self.assertNotIn(("r12_ordered", "SURFACE_LIVE"), r14.REQUIRED)
         self.assertNotIn(("r12_occlusion", "SURFACE_LIVE"), r14.REQUIRED)
 
+    def test_legacy_service_controls_use_their_actual_contract_scope(self):
+        for row in ("r12_ordered", "r12_occlusion"):
+            case = self.case | {"row": row, "route": "LEGACY_R11",
+                "method": r14.REQUIRED[(row, "LEGACY_R11")], "scope": "r12_contract"}
+            # The synthetic record is intentionally not a passing device case;
+            # this assertion tests the collector's scope mapping only.
+            self.assertNotIn("scope_mismatch", r14.verify_case(self.root, case, SOURCE))
+            self.assertIn("scope_mismatch", r14.verify_case(
+                self.root, case | {"scope": "r14_recovery_candidate"}, SOURCE))
+
+    def test_pressure_requires_owned_typed_deferred_and_replacement_edges(self):
+        def report(replacement="22", displaced="21", seq="7", hide="7", attempt="1"):
+            text = (
+                "FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n"
+                "omittedCriticalRecordIds=none\n"
+                " EPISODE attempt=1 showOp=1 attach=4 req=19 withdrawal=7\n"
+                " EPISODE attempt=1 showOp=2 attach=5 req=24 withdrawal=8\n"
+                " WITHDRAWAL hideOp=7 attach=4 req=18 attachedBefore=true\n"
+                " WITHDRAWAL hideOp=8 attach=5 req=25 attachedBefore=true\n"
+                " R13_FINANCIAL attempt=1 coverage=keyguardScopesOnly scopes=40 invalid=0\n"
+                " R14_RECOVERY attempt=1 seq=6 up=135 phase=DEFERRED r14Recovery=9 "
+                "r14PreviousHide=7 r14PreviousAttach=4 r14DeferredA=20 r14OriginalB=21 r14Pending=21\n"
+                f" R14_RECOVERY attempt={attempt} seq={seq} up=136 phase=REPLACED r14Recovery=9 "
+                f"r14PreviousHide={hide} r14PreviousAttach=4 r14DeferredA=20 r14OriginalB=21 "
+                f"r14Pending={replacement} r14Displaced={displaced}\n"
+                "END_FLUVI_KEYGUARD_TIMING_CAPTURE_V1\n"
+            )
+            # The real exporter includes the length of the complete UTF-8 report.
+            while True:
+                candidate = text.replace("omittedCriticalRecordIds=none\n",
+                    f"exportBytes={len(text.encode())}\nomittedCriticalRecordIds=none\n")
+                size = len(candidate.encode())
+                final = text.replace("omittedCriticalRecordIds=none\n",
+                    f"exportBytes={size}\nomittedCriticalRecordIds=none\n")
+                if len(final.encode()) == size:
+                    return final
+                text = final.replace(f"exportBytes={size}\n", "")
+        result = {"status": "PASS", "report": "pressure.txt"}
+        (self.root / "pressure.txt").write_text(report())
+        self.assertEqual([], r14.check_specific("r14_pressure", "LIGHT", result, self.root))
+        for broken in (report(displaced="99"), report(replacement="21"), report(seq="5"),
+                       report(hide="8"), report(attempt="2")):
+            (self.root / "pressure.txt").write_text(broken)
+            self.assertIn("recovery_edges_missing", r14.check_specific("r14_pressure", "LIGHT", result, self.root))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -49,8 +94,9 @@ class AggregateControls(unittest.TestCase):
             a_reason="MAIN_CONFIRMED", pre_a_roots=0, b=11, pending_b=11,
             b_origin="CONTROLLED_SYSTEMUI_PRIMARY", b_event=100, b_callback=101,
             a_adds=0, b_read=11, b_classification="SHOW_FULL", total_new_adds=1, final_roots=1)
-        self.raw = (f"INSTRUMENTATION_STATUS: numtests=1\nINSTRUMENTATION_STATUS: test={self.method}\n"
-                    f"INSTRUMENTATION_STATUS_CODE: 1\nINSTRUMENTATION_STATUS: test={self.method}\n"
+        class_line = "INSTRUMENTATION_STATUS: class=com.fluvi.app.lockscreen.KeyguardRecoveryAdmissionInstrumentationTest\n"
+        self.raw = (f"{class_line}INSTRUMENTATION_STATUS: numtests=1\nINSTRUMENTATION_STATUS: test={self.method}\n"
+                    f"INSTRUMENTATION_STATUS_CODE: 1\n{class_line}INSTRUMENTATION_STATUS: test={self.method}\n"
                     "INSTRUMENTATION_STATUS_CODE: 0\nOK (1 test)\nINSTRUMENTATION_CODE: -1\n")
         (self.root / "raw.txt").write_text(self.raw)
         (self.root / "app.txt").write_text(f"expected={'b' * 64} installed={'b' * 64}\n")
@@ -77,7 +123,8 @@ class AggregateControls(unittest.TestCase):
         self.assertIn("scope_mismatch", r14.verify_case(self.root, self.case | {"scope": "r12_live"}, SOURCE))
 
     def test_unexecuted_or_failed_instrumentation(self):
-        for raw in (self.raw.replace(self.method, "differentTest"), self.raw.replace("OK (1 test)", "FAILURES!!!")):
+        for raw in (self.raw.replace(self.method, "differentTest"), self.raw.replace("OK (1 test)", "FAILURES!!!"),
+                    self.raw.replace("KeyguardRecoveryAdmissionInstrumentationTest", "OtherClass")):
             (self.root / "raw.txt").write_text(raw)
             self.assertIn("unexecuted_or_failed_test", r14.verify_case(self.root, self.case, SOURCE))
 
@@ -140,6 +187,32 @@ class AggregateControls(unittest.TestCase):
         (self.root / "run.json").write_text(json.dumps(dict(databaseId=1, headSha="d" * 40,
             event="workflow_dispatch", jobs=[dict(databaseId=2)])))
         self.assertIn("run_or_job_provenance_mismatch", r14.verify_case(self.root, self.case, SOURCE))
+
+    def test_selector_phase_one_replay_cannot_prove_a_restart(self):
+        owner = dict(source=SOURCE, run_uuid=self.run_uuid, row="r12_selector_persistence", route="SURFACE_LIVE")
+        first = [owner | dict(kind="PROCESS", phase=1, pid=3, process_start=10),
+                 dict(kind="SELECTOR_WRITE", route="SURFACE_LIVE"), dict(kind="PHASE_COMPLETE")]
+        second = [owner | dict(kind="PROCESS", phase=2, pid=4, process_start=20),
+                  dict(kind="RESTORED_BEFORE_FIXTURE", route="SURFACE_LIVE"), dict(kind="RESULT")]
+        self.assertTrue(r14.restart_lineage_valid(first, second, owner))
+        self.assertFalse(r14.restart_lineage_valid(first, first, owner))
+        self.assertFalse(r14.restart_lineage_valid(first, [second[0],
+            dict(kind="SELECTOR_WRITE", route="SURFACE_LIVE"), second[1], second[2]], owner))
+        self.assertFalse(r14.restart_lineage_valid(first, [second[0] | {"route": "LEGACY_R11"}] + second[1:], owner))
+
+    def test_holder_generation_and_timeout_cannot_be_relabelled(self):
+        def event(stage, at, generation, holder, operation=7):
+            return dict(stage=stage, uptime=at, generation=generation, holder=holder, operation=operation)
+        timeline = [event("G1_LOCKED", 10, 1, 100), event("G1_REVOKED", 11, 1, 100),
+            event("G1_BARRIER_RELEASED", 12, 1, 100), event("G1_OPERATION_FINISHED", 13, 1, 100),
+            event("G1_DESTROY_RETURN", 14, 1, 100), event("G2_CREATED", 15, 2, 200, 8),
+            event("G2_POSTED", 16, 2, 200, 8), event("G2_REDRAW_COMPLETED", 17, 2, 200, 8)]
+        self.assertTrue(r14.holder_timeline_valid(timeline, barrier_timed_out=False))
+        stale = [entry.copy() for entry in timeline]
+        stale[6] = stale[6] | {"generation": 1, "holder": 100, "operation": 7}
+        self.assertFalse(r14.holder_timeline_valid(stale, barrier_timed_out=False))
+        self.assertFalse(r14.holder_timeline_valid(timeline, barrier_timed_out=True))
+        self.assertFalse(r14.holder_timeline_valid(timeline + [event("G1_OPERATION_FINISHED", 18, 1, 100)], False))
 
 
 if __name__ == "__main__":
