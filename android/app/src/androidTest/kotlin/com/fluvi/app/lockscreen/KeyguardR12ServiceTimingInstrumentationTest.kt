@@ -153,6 +153,15 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                         }
                         record("WAKE", "name=$name wake=$wake attached=$attached firstPost=${first.firstPostUptimeMs} distinct=${sample().second?.firstDistinctUptimeMs ?: "UNOBSERVED"} meaning=producer_not_presentation")
                     } else {
+                        if (index == 1) {
+                            val intervalStart = SystemClock.uptimeMillis()
+                            SystemClock.sleep(5_000)
+                            val state = sample().first
+                            check(power.isInteractive && keyguard.isKeyguardLocked && state?.visible == true && state.effective == mode) {
+                                "legacy locked interval lost its actual service owner"
+                            }
+                            record("LOCKED_INTERVAL", "name=$name start=$intervalStart end=${SystemClock.uptimeMillis()} postsStart=UNOBSERVED postsEnd=UNOBSERVED route=LEGACY_R11")
+                        }
                         record("WAKE", "name=$name wake=$wake attached=$attached firstPost=UNOBSERVED distinct=UNOBSERVED route=LEGACY_R11")
                     }
                 } catch (error: Throwable) {
