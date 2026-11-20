@@ -12764,3 +12764,26 @@ promoted, no Human profile APK is delivered, and no installation is requested.
 Physical acceptance is pending and belongs to the user. See
 `docs/R15_FIRST_ACQUISITION_EXPERIMENT_2026-11-20.md` for the raw links,
 separate retained failures, further run results and exact outstanding gates.
+
+An independent test-source successor
+`03677d622f0dd9873b6e1c2d323c3e1f2a7a1b5e` added a debug-only held-Canvas
+barrier. Its profile Kotlin worker has no hook reference in `javap`; this is
+not an APK build. [API 35 run 44736433739](https://github.com/elizerpist/exptv2/actions/runs/44736433739)
+passed its actual service holder-boundary test. Capture
+`e7e4035b-a48c-4934-87d5-00f18e3f743d`, PID 2441, recorded attachment/
+generation 1/1, operation 14: lock 63020, revoke/local hide 64156,
+test release/draw 66077, post return 66079, remove return 67543 (uptime ms).
+The extra wait was deliberately imposed by the test. Raw screen samples and
+crops were retained but lack independent calibration; they are UNCLASSIFIED,
+and no physical or last-visible-pixel conclusion follows. The separate
+collector successor `6d03df62af5c0b02fe86efcf2085c5c7916d1149` adds
+before/after installed APK identity receipts; its route controls are recorded
+separately from the `96cf20d4` application candidate.
+On that test source, LEGACY, STATIC and LIVE runs 44737514537, 44737515067
+and 44737515219 each passed the four-wake timing-only test and matching
+before/after installed app and test APK hashes. Every full route gate returned
+`FAIL_INCOMPLETE` for five missing service compositor, privacy, lifecycle,
+selector and financial-demand controls. STATIC preflight handled and retained
+an observed Launcher3 ANR before testing. The screenshot calls in the held
+fixture took 430–1,069 ms and its samples were not independently calibrated;
+they cannot resolve or qualify the reported first appearance.

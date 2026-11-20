@@ -100,8 +100,9 @@ connected-test or visual claim follows from compilation.
 - T2: the initial source's first-LIVE flag control passed; all four R14
   service controls passed on corrected source `96cf20d4`. These do not
   substitute for both balanced stock/candidate blocks or a correct pixel.
-- T3: no held in-flight Canvas fixture and no independently sampled last
-  visible ORB boundary have been qualified.
+- T3: an instrumented successor passed one held in-flight Canvas boundary;
+  its screen samples are unclassified and no last visible ORB boundary has
+  been qualified. See the separate test-source identity below.
 - T4: the first hosted source failed the phone-shaped LIGHT/FULL cases. The
   corrected source passed both synthetic four-attempt exports and the
   stale-owner control; independent real-service/freeze coverage is incomplete.
@@ -257,3 +258,88 @@ and actual test execution; they are not the cause of the final gate failure.
 [Retained archive](https://media.githubusercontent.com/media/elizerpist/exptv2/2e3139f7ca6a0351ddfe3c1848d620ab77db315d/r15-evidence/r15-run-44732734516-evidence.tar.gz):
 9,083,220 bytes, independently downloaded SHA-256
 `b27c8580e13e4f5def3104079522ed3a1ffac80ac0d294eb9676e05798b45258`.
+
+## Held real-service Canvas observation
+
+The separate test-source commit
+[`03677d622f0dd9873b6e1c2d323c3e1f2a7a1b5e`](https://github.com/elizerpist/exptv2/commit/03677d622f0dd9873b6e1c2d323c3e1f2a7a1b5e)
+descends from `96cf20d4` and adds a debug-only barrier, test and focused
+workflow wiring. It is not the same application source identity as the
+`96cf20d4` experiment. Profile Kotlin compiled with the Flutter profile build
+task excluded, and `javap` confirmed no test-hook reference in the compiled
+profile worker; the debug worker does contain it. This check is not a Human
+APK build or delivery.
+The later identity-collector source
+`6d03df62af5c0b02fe86efcf2085c5c7916d1149` has its own
+[Dart graph and Kotlin inventory](https://github.com/elizerpist/exptv2/blob/2554994c876e7db7a7872820838fe1cfdf70ff36/docs/codegraph-r15-holder-harness-2026-11-20.md),
+tooling commit `2554994c876e7db7a7872820838fe1cfdf70ff36`, index SHA-256
+`4de71f94d5a6e0463cd27d2ea4622a4434dce4991a93d066754a1a607b79bf59`
+and manifest SHA-256
+`531045e5450f3c67743e8dcf86679b538b1806652eb2ba5730002f98524ca111`.
+All 102 graph shard hashes were checked; this graph identifies the test
+successor and does not relabel the `96cf20d4` app graph.
+
+The named real-service case passed in
+[run 44736433739, job 136288883109](https://github.com/elizerpist/exptv2/actions/runs/44736433739/job/136288883109)
+([artifact 14629206992](https://github.com/elizerpist/exptv2/actions/runs/44736433739/artifacts/14629206992)).
+The app and test APKs matched their installed bytes before and after that run.
+Capture `e7e4035b-a48c-4934-87d5-00f18e3f743d`, PID 2441, used FULL,
+SURFACE_LIVE and one actual locked service attachment. On the device's uptime
+clock, request 12's event/callback were 63624/63629, read start/end
+63630/64130, Main entry 64155, and decision/revoke/local hide 64156. The
+root-read component was 486 ms. The test held the real attachment/generation
+`1/1`, holder identity 86888383, operation 14 after lock 63020/63020.
+Remove began 64157; the deliberately held worker was released at 66077,
+draw/post occurred 66077/66077–66079 and remove returned 67543
+(capture receipt 67544). The delay after local hide was intentionally induced
+by the fixture, so it is not a performance measurement.
+
+Raw screen samples were taken before service, while the service reported its
+window visible, after local hide with the worker held, and after removal. Their screenshot brackets were
+54439–55051, 60453–61522, 64190–64620 and 67598–68091 respectively;
+the 168×168 crop was at `(456,1905)–(624,2073)` on display 0. They are
+**UNCLASSIFIED**: no independent calibrated full/discreet/background oracle
+was applied, no first/last visible ORB is established and physical display
+presentation is unknown. The pre-service crop was flat and cannot serve as a
+qualified calibration. The before-hold crop and after-removal crop had no
+pixel with a channel difference of 7 or more; this is an uncalibrated raw
+comparison ([raw crop statistics](https://github.com/elizerpist/exptv2/blob/417377db548b6ef2dbd06cab6cc93ed4cb83eb4b/r15-evidence/r15-run-44736433739-crop-raw-statistics.txt)),
+not proof that an orb was absent or present in either sample.
+The screenshot calls themselves took 430–1,069 ms,
+too coarse to resolve an onset on the scale of the phone's reported hundreds
+of milliseconds. This control does not implement the complete holder
+lifecycle/privacy fixture across generations and routes.
+
+[Retained holder archive](https://media.githubusercontent.com/media/elizerpist/exptv2/89bc0b00e3b9de01b64562ff6a19665e2c600247/r15-evidence/r15-run-44736433739-evidence.tar.gz):
+7,999,792 bytes, independently downloaded SHA-256
+`ec7afd4681b14def01e3dd581cabd9fe176c986782a0306d361d1a3bca2fecb5`.
+
+## Separate route and package-identity controls
+
+Test-source `6d03df62af5c0b02fe86efcf2085c5c7916d1149` adds a fail-closed
+installed-package verifier to the R12 collector. It records install exit,
+the actual `pm path` split list and package listing, and compares installed
+app/test APK bytes with their source files both before and after each case.
+Its host controls passed matching before/after receipts and five negative
+split, identity, command and byte-mismatch cases. This does not qualify the
+application's visual output.
+
+| Route | Run and artifact | Timing case | Full route gate | App APK SHA-256, before = after |
+| --- | --- | --- | --- | --- |
+| LEGACY_R11 | [44737514537](https://github.com/elizerpist/exptv2/actions/runs/44737514537), [14629852185](https://github.com/elizerpist/exptv2/actions/runs/44737514537/artifacts/14629852185) | PASS, 4 wakes, PID 2456 | FAIL_INCOMPLETE | `f7b4b961b5a6cbfa20225be2c267331ad93afe53f296771d701424e23fbf37a5` |
+| SURFACE_STATIC | [44737515067](https://github.com/elizerpist/exptv2/actions/runs/44737515067), [14629019191](https://github.com/elizerpist/exptv2/actions/runs/44737515067/artifacts/14629019191) | PASS, 4 wakes, PID 2502 | FAIL_INCOMPLETE | `76d642fc9c4985832457da5cbb722a403c4dabf8ba91d56cba97500bd992bde1` |
+| SURFACE_LIVE | [44737515219](https://github.com/elizerpist/exptv2/actions/runs/44737515219), [14630415609](https://github.com/elizerpist/exptv2/actions/runs/44737515219/artifacts/14630415609) | PASS, 4 wakes, PID 2459 | FAIL_INCOMPLETE | `89d9dc2751e5edcbcbd5f6292d6d623447c98e43cc5eaab6cfc90a4885a96e01` |
+
+The installed test APK hashes also matched before and after in all three
+cases; both install commands and the post-test identity checks returned zero.
+The different debug APK hashes belong to separately built emulator jobs and
+are not a matched stock/candidate performance comparison. STATIC preflight
+found a known Launcher3 ANR, retained its evidence, closed the system dialog
+and proceeded after the fixture reported `PREPARED_KNOWN_LAUNCHER_ANR`; that
+is distinct from the later product-test and full-contract outcomes. All three
+wrappers correctly returned failure for the five absent service compositor,
+privacy, holder-lifecycle, selector-persistence and financial-demand cases.
+
+[All three route specimens and receipts](https://media.githubusercontent.com/media/elizerpist/exptv2/ef1d8ba9886a139a93ff7c366ede30a699975980/r15-evidence/r15-route-controls-6d03df62-evidence.tar.gz)
+were independently downloaded: 3,218,453 bytes, SHA-256
+`2a39885c9dab86ad19b7f11901d2d0685b5341479c708a674e4d60b4ef472cbe`.
