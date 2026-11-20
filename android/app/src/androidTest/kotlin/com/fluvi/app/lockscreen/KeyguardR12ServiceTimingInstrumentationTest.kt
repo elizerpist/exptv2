@@ -45,6 +45,82 @@ class KeyguardR12ServiceTimingInstrumentationTest {
     private lateinit var automation: UiAutomation
     private lateinit var output: File
     private val evidence = StringBuilder()
+    private var naturalComparison = false
+
+    /** One process/arm only. The host must run both reverse-order blocks on
+     * one device and collect independent video; this method is not a visual
+     * or performance pass by itself. */
+    @Test fun r15BalancedFirstAcquisition() {
+        val args = InstrumentationRegistry.getArguments()
+        val arm = requireNotNull(args.getString("r15Arm"))
+        require(arm == "stock" || arm == "candidate")
+        val block = requireNotNull(args.getString("r15Block")).toInt()
+        require(block in 1..2)
+        val runId = UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
+        val source = requireNotNull(args.getString("sourceSha"))
+        require(source.matches(Regex("[0-9a-f]{40}")))
+        val observations = java.util.Collections.synchronizedList(mutableListOf<KeyguardR15AcquisitionTestHooks.Observation>())
+        val overflow = java.util.concurrent.atomic.AtomicInteger()
+        check(!FluviKeyguardCardServiceRegistry.connected)
+        KeyguardR15AcquisitionTestHooks.stockArm = arm == "stock"
+        KeyguardR15AcquisitionTestHooks.observer = { item ->
+            synchronized(observations) {
+                if (observations.size < 64) observations.add(item) else overflow.incrementAndGet()
+            }
+        }
+        naturalComparison = true
+        try {
+            fourRealWakeCyclesUseRequestedRoute()
+        } finally {
+            KeyguardR15AcquisitionTestHooks.observer = null
+            KeyguardR15AcquisitionTestHooks.stockArm = false
+            naturalComparison = false
+            val directory = File(context.filesDir, "keyguard-service-probe/r15/$runId/acquisition")
+            check(directory.mkdirs() || directory.isDirectory)
+            val lines = synchronized(observations) { observations.toList() }.map { item ->
+                val request = item.request
+                val timing = item.result.timing
+                org.json.JSONObject().apply {
+                    put("source", source); put("runUuid", runId); put("arm", arm); put("block", block)
+                    put("pid", android.os.Process.myPid()); put("session", request.session); put("wake", request.wakeGeneration)
+                    put("request", request.id); put("capture", request.diagnosticContext?.captureId ?: org.json.JSONObject.NULL)
+                    put("visibilityEpoch", request.visibilityEpoch); put("interactionEpoch", request.interactionEpoch)
+                    put("attachment", request.attachGeneration); put("freshness", item.ticket.reason.name)
+                    put("freshnessRevision", item.ticket.revision); put("authorityMatches", item.ticket.authority.matches(request))
+                    put("authorityAtCompletion", item.authorityAtCompletion)
+                    put("queued", request.queuedAtUptimeMs); put("inspectionStart", item.inspectionStarted)
+                    put("readStart", item.started); put("readEnd", item.finished); put("inspectionEnd", item.inspectionFinished)
+                    put("rootCalled", timing.activeRootCallCount > 0)
+                    put("rootFlags", timing.activeRootPrefetchFlags ?: org.json.JSONObject.NULL)
+                    put("windowId", item.candidate?.id ?: org.json.JSONObject.NULL)
+                    put("windowType", item.candidate?.type ?: org.json.JSONObject.NULL)
+                    put("displayId", item.candidate?.displayId ?: org.json.JSONObject.NULL)
+                    put("childCalled", item.firstChildCalled); put("childCalls", timing.childAcquisitionCount)
+                    put("firstChildWindow", item.firstChildWindow ?: org.json.JSONObject.NULL)
+                    put("firstChildIndex", item.firstChildIndex ?: org.json.JSONObject.NULL)
+                    put("firstChildFlags", item.firstChildFlags ?: org.json.JSONObject.NULL)
+                    put("visited", item.result.visitedNodeCount); put("reader", timing.readerStrategy)
+                    put("cacheClear", timing.cacheClearResult); put("fallback", timing.fallbackReason ?: org.json.JSONObject.NULL)
+                    put("rootUnavailable", item.result.rootUnavailable); put("walkTruncated", item.result.walkTruncated)
+                    put("abortedStale", item.result.abortedStale); put("decision", item.decision.name); put("reason", item.reason.name)
+                    put("windows", org.json.JSONArray().apply {
+                        item.result.snapshots.forEach { snapshot ->
+                            put(org.json.JSONObject().put("id", snapshot.windowId).put("type", snapshot.type)
+                                .put("display", snapshot.displayId).put("own", snapshot.ownOverlay))
+                        }
+                    })
+                }.toString()
+            }
+            File(directory, "$arm-block$block.jsonl").writeText(lines.joinToString("\n", postfix = if (lines.isEmpty()) "" else "\n"))
+            File(directory, "$arm-block$block-overflow.txt").writeText("${overflow.get()}\n")
+        }
+        val rows = synchronized(observations) { observations.toList() }
+        assertEquals("bounded first-read observer overflow", 0, overflow.get())
+        assertTrue("no eligible first active-root call; later stock calls are not a substitute",
+            rows.any { it.result.timing.activeRootCallCount > 0 && it.result.timing.activeRootPrefetchFlags == if (arm == "stock") 36 else 0 })
+        assertTrue(rows.all { it.stock == (arm == "stock") && it.ticket.authority.matches(it.request) &&
+            (it.firstChildCalled || it.result.timing.childAcquisitionCount == 0) })
+    }
 
     /** A real-service acquisition control only. This does not qualify first
      * composited pixels, device-visible motion or a performance improvement. */
@@ -135,9 +211,11 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                         !power.isInteractive && display?.state == Display.STATE_OFF && keyguard.isKeyguardLocked
                     }
                     await("$name previous service window withdrawn", 5_000) { sample().first?.visible != true }
+                    if (naturalComparison) recordClock(name, "preWake")
                     val wake = SystemClock.uptimeMillis()
                     synchronizedKey(KeyEvent.KEYCODE_WAKEUP)
                     await("$name public wake eligibility", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
+                    if (naturalComparison) recordClock(name, "awake")
                     // The injected input is synchronous. Global accessibility
                     // idle is not the service's admission or visibility gate.
                     check(power.isInteractive && keyguard.isKeyguardLocked) { "$name public wake lost eligibility after input" }
@@ -161,7 +239,7 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                         if (mode == KeyguardOrbRenderMode.SURFACE_LIVE) {
                             await("$name distinct successor submission", 10_000) { sample().second?.firstDistinctUptimeMs != null }
                         }
-                        if (index == 1) {
+                        if (index == 1 && !naturalComparison) {
                             val intervalStart = SystemClock.uptimeMillis()
                             SystemClock.sleep(5_000)
                             val end = checkNotNull(sample().second)
@@ -171,7 +249,7 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                         }
                         record("WAKE", "name=$name wake=$wake attached=$attached firstPost=${first.firstPostUptimeMs} distinct=${sample().second?.firstDistinctUptimeMs ?: "UNOBSERVED"} meaning=producer_not_presentation")
                     } else {
-                        if (index == 1) {
+                        if (index == 1 && !naturalComparison) {
                             val intervalStart = SystemClock.uptimeMillis()
                             SystemClock.sleep(5_000)
                             val state = sample().first
@@ -187,9 +265,11 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                     record("FAILURE", "${failures.last()} interactive=${power.isInteractive} locked=${keyguard.isKeyguardLocked} route=${sample().first}")
                 } finally {
                     runCatching {
+                        if (naturalComparison) recordClock(name, "preUnlock")
                         val hide = SystemClock.uptimeMillis()
                         shell("wm dismiss-keyguard")
                         await("$name unlocked and detached", 8_000) { !keyguard.isKeyguardLocked && sample().first?.visible != true }
+                        if (naturalComparison) recordClock(name, "postUnlock")
                         record("WITHDRAWN", "name=$name trigger=$hide detached=${SystemClock.uptimeMillis()} physicalRemoval=UNOBSERVED")
                     }.onFailure { failures += "$name-cleanup:${it.javaClass.simpleName}:${it.message}" }
                 }
@@ -218,6 +298,12 @@ class KeyguardR12ServiceTimingInstrumentationTest {
     }
 
     private fun record(stage: String, detail: String) { evidence.appendLine("$stage up=${SystemClock.uptimeMillis()} $detail") }
+    private fun recordClock(wake: String, phase: String) {
+        val before = SystemClock.uptimeMillis()
+        val elapsedNs = SystemClock.elapsedRealtimeNanos()
+        val after = SystemClock.uptimeMillis()
+        record("CLOCK", "name=$wake phase=$phase uptimeBeforeMs=$before elapsedNs=$elapsedNs uptimeAfterMs=$after")
+    }
     private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(automation.executeShellCommand(command)).bufferedReader().use { it.readText() }
     private fun synchronizedKey(keyCode: Int) {
         val downAt = SystemClock.uptimeMillis()

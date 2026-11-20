@@ -372,6 +372,7 @@ internal class KeyguardWindowSnapshotReader(
 
         if (canBatch && authorityIsCurrent()) {
             val candidate = requireNotNull(activeCandidate)
+            if (KeyguardR15AcquisitionTestHooks.ENABLED) KeyguardR15AcquisitionTestHooks.candidate(candidate)
             timing.activeCandidateWindowId = candidate.id
             val startedAt = SystemClock.uptimeMillis()
             activeRoot = runCatching {
@@ -511,8 +512,14 @@ internal class KeyguardWindowSnapshotReader(
                     val startedAt = SystemClock.uptimeMillis()
                     val acquisition = runCatching {
                         KeyguardWindowAcquisitionCalls.child(prefetchFlags, Build.VERSION.SDK_INT,
-                            batched = { flags -> node.getChild(index, flags) },
-                            legacy = { node.getChild(index) })
+                            batched = { flags ->
+                                if (KeyguardR15AcquisitionTestHooks.ENABLED) KeyguardR15AcquisitionTestHooks.child(windowId, index, flags)
+                                node.getChild(index, flags)
+                            },
+                            legacy = {
+                                if (KeyguardR15AcquisitionTestHooks.ENABLED) KeyguardR15AcquisitionTestHooks.child(windowId, index, null)
+                                node.getChild(index)
+                            })
                     }
                     val child = acquisition.getOrNull()
                     timing.child(windowId, index, SystemClock.uptimeMillis() - startedAt)

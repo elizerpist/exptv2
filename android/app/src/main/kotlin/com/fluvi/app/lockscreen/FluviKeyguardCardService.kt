@@ -1293,6 +1293,10 @@ class FluviKeyguardCardService : AccessibilityService() {
         } finally { activeInspectionCount.decrementAndGet() }
         val finished = SystemClock.uptimeMillis()
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.READ_END, request.id, request.attachGeneration)
+        if (KeyguardR15AcquisitionTestHooks.ENABLED) {
+            KeyguardR15AcquisitionTestHooks.outcome(request.id, result.decision, result.surfaceReason,
+                authorityIsCurrent(request), started, finished)
+        }
         inspectionProbeForTest?.readCompleted(request, result.decision, result.surfaceReason,
             result.rootUnavailable, result.walkTruncated, result.abortedStale, started, finished)
         return CompletedInspection(request, result, started, finished)
@@ -1727,16 +1731,20 @@ class FluviKeyguardCardService : AccessibilityService() {
             val ticket = inspectionFreshness.beforeRead(request)
             ticket to firstAcquisition.take(request, ticket)
         }
+        val selectedRootOnly = if (KeyguardR15AcquisitionTestHooks.ENABLED) {
+            KeyguardR15AcquisitionTestHooks.begin(request, freshness, initialRootOnly)
+        } else initialRootOnly
         val result = windowSnapshotReader.read(
             request = KeyguardWindowSnapshotReader.Request(
                 knownOwn = knownOwnOverlayIdentity,
                 attachGeneration = request.attachGeneration,
                 freshness = freshness?.reason ?: KeyguardWindowFreshness.FRAMEWORK_EVENT,
-                initialRootOnly = initialRootOnly,
+                initialRootOnly = selectedRootOnly,
             ),
             authorityIsCurrent = { freshness != null && authorityIsCurrent(request) },
             onFreshnessEstablished = { freshness?.let(inspectionFreshness::boundaryEstablished) },
         )
+        if (KeyguardR15AcquisitionTestHooks.ENABLED) KeyguardR15AcquisitionTestHooks.finish(result)
         if (result.abortedStale) inspectionsAbortedDuringWalk.incrementAndGet()
         if (result.nodeReadsAfterInvalidation > 0) {
             nodeReadsAfterInvalidation.addAndGet(result.nodeReadsAfterInvalidation.toLong())

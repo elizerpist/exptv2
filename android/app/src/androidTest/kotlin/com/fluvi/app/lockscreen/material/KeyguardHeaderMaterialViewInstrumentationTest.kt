@@ -26,6 +26,7 @@ import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
 import com.fluvi.app.lockscreen.KeyguardCardContentOverflow
 import com.fluvi.app.lockscreen.KeyguardFrameCommitObservation
 import com.fluvi.app.lockscreen.KeyguardCardWindow
+import com.fluvi.app.lockscreen.KeyguardR15AcquisitionTestHooks
 import com.fluvi.app.lockscreen.KeyguardDrawPublication
 import com.fluvi.app.lockscreen.KeyguardFirstDrawOwner
 import com.fluvi.app.lockscreen.KeyguardFirstDrawEvent
@@ -78,6 +79,69 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         val edit = prefs.edit()
         if (priorRoutePresent) edit.putString("mode", priorRoute) else edit.remove("mode")
         check(edit.commit())
+    }
+
+    /** Deterministic detached-route RED before any motion eligibility guard.
+     * The callback proves the production observer consumed the real setting. */
+    @Test fun r15DetachedMotionOffRevokesPreparedLiveEligibility() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        val resolver = context.contentResolver
+        val automation = instrumentation.uiAutomation
+        val saved = android.provider.Settings.Global.getString(resolver,
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE)
+        fun setScale(value: String?) {
+            automation.adoptShellPermissionIdentity(android.Manifest.permission.WRITE_SECURE_SETTINGS)
+            try {
+                check(android.provider.Settings.Global.putString(resolver,
+                    android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, value))
+            } finally { automation.dropShellPermissionIdentity() }
+        }
+        val args = InstrumentationRegistry.getArguments()
+        val runId = java.util.UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
+        val evidence = File(context.filesDir, "keyguard-service-probe/r15/$runId/motion-red.txt")
+        check(evidence.parentFile?.mkdirs() == true || evidence.parentFile?.isDirectory == true)
+        val latch = CountDownLatch(1)
+        val observedAt = java.util.concurrent.atomic.AtomicLong(-1)
+        var window: KeyguardCardWindow? = null
+        var activity: KeyguardMaterialTestActivity? = null
+        try {
+            setScale("1")
+            check(context.getSharedPreferences("fluvi_keyguard_orb_diagnostic_route", Context.MODE_PRIVATE)
+                .edit().putString("mode", "SURFACE_LIVE").commit())
+            activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
+            val targetActivity = activity
+            val settings = KeyguardCardSettings(requested = true, showFinancialDetails = true,
+                presentationMode = KeyguardCardPresentationMode.ORB, animationMode = KeyguardCardAnimationMode.ORB_ONLY)
+            val profile = calibratedOrbProfile()
+            var eligibleBefore = false
+            instrumentation.runOnMainSync {
+                val target = KeyguardCardWindow(targetActivity, onOpen = {}, onToggle = {}, onInteractionStarted = {},
+                    onPositionCommitted = { _, _, _, _ -> }, onInteractionDiagnostic = { _, _ -> })
+                window = target
+                target.prepareRetainedView(settings, profile)
+                check(target.renderModeStatus().effective.name == "SURFACE_LIVE")
+                eligibleBefore = target.preparedInitialLiveOrb(settings, profile)
+            }
+            check(eligibleBefore) { "fixture did not reach detached prepared LIVE eligibility" }
+            KeyguardR15AcquisitionTestHooks.motionObserver = { allowed ->
+                if (!allowed) { observedAt.set(SystemClock.uptimeMillis()); latch.countDown() }
+            }
+            val changedAt = SystemClock.uptimeMillis()
+            setScale("0")
+            check(latch.await(8, TimeUnit.SECONDS)) { "production motion observer was not reached" }
+            var eligibleAfter = true
+            instrumentation.runOnMainSync { eligibleAfter = checkNotNull(window).preparedInitialLiveOrb(settings, profile) }
+            evidence.writeText("source=${args.getString("sourceSha")} run=$runId prepared=true route=SURFACE_LIVE " +
+                "changed=$changedAt observer=${observedAt.get()} eligibleBefore=$eligibleBefore eligibleAfter=$eligibleAfter\n")
+            assertFalse("motion-off must revoke detached LIVE eligibility after the real observer", eligibleAfter)
+        } finally {
+            KeyguardR15AcquisitionTestHooks.motionObserver = null
+            instrumentation.runOnMainSync { window?.dispose(); activity?.finish() }
+            setScale(saved)
+        }
     }
 
     /** Real retained panel/route ownership; this is not a service compositor gate. */

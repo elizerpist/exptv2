@@ -56,4 +56,26 @@ class KeyguardFirstAcquisitionTest {
         assertFalse(gate.take(request(1, stale), ticket()))
         assertTrue(gate.take(request(2), ticket()))
     }
+
+    @Test fun debugComparisonChangesOnlyAnAlreadyConsumedEligibleOpportunity() {
+        try {
+            KeyguardR15AcquisitionTestHooks.observer = null
+            val stock = KeyguardFirstAcquisition().also { it.begin(owner, true) }
+            KeyguardR15AcquisitionTestHooks.stockArm = true
+            val stockFirst = stock.take(request(1), ticket())
+            assertTrue(stockFirst)
+            assertFalse(KeyguardR15AcquisitionTestHooks.begin(request(1), ticket(), stockFirst))
+            assertFalse(KeyguardR15AcquisitionTestHooks.begin(request(2), ticket(), stock.take(request(2), ticket())))
+
+            val candidate = KeyguardFirstAcquisition().also { it.begin(owner, true) }
+            KeyguardR15AcquisitionTestHooks.stockArm = false
+            val candidateFirst = candidate.take(request(3), ticket())
+            assertTrue(candidateFirst)
+            assertTrue(KeyguardR15AcquisitionTestHooks.begin(request(3), ticket(), candidateFirst))
+            assertFalse(KeyguardR15AcquisitionTestHooks.begin(request(4), ticket(), candidate.take(request(4), ticket())))
+        } finally {
+            KeyguardR15AcquisitionTestHooks.stockArm = false
+            KeyguardR15AcquisitionTestHooks.observer = null
+        }
+    }
 }

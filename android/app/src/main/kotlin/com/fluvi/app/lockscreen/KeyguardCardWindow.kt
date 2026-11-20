@@ -98,6 +98,7 @@ internal class KeyguardCardWindow(
             val allowed = android.provider.Settings.Global.getFloat(serviceContext.contentResolver,
                 android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
             surfacePresenter?.setMotionAllowed(allowed)
+            if (KeyguardR15AcquisitionTestHooks.ENABLED) KeyguardR15AcquisitionTestHooks.motionChanged(allowed)
         }
     }
     private var firstRootDrawObservation: KeyguardFirstDrawObservation? = null
