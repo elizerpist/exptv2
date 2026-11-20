@@ -13042,3 +13042,114 @@ Return source/test/orchestrator/graph/artifact SHAs and raw evidence URLs. Provi
 A generation-owning Main transaction can retire the previously composed R16 LIVE ORB while a revoked producer is still busy; later old work cannot reveal it; a newly authorized G2 and the regular first animation remain correct. The externally observed difference, privacy transitions, exact-source controls and delivery gates decide qualification. If no qualifying visual difference is measurable, decline promotion, preserve the product experiment/evidence and stop at the first identified decision boundary. Do not claim a new handset result. Report implementation, automatic qualification, Human APK delivery and physical acceptance separately. PHYSICAL VALIDATION — PENDING, USER ONLY.
 
 FLUVI_R16_ORB_LAYER_RETIREMENT_END
+
+## 2026-11-20 — Owner correction: deliver the R16 phone-test APK before release qualification
+
+The owner explicitly needs an installable APK to perform physical validation. The preceding reviewer handoff incorrectly made that APK wait for proof which the handset test is intended to help supply. This entry changes the order of delivery. The first external deliverable is a signed, directly downloadable R16 HUMAN_DIAGNOSTIC profile APK for the Nothing A142. A negative, incomplete or unrun automated result must be disclosed with the build. Production promotion and final qualification remain separate decisions. The target at review was fe3da0f6540b09c73399e8291ff528b802183c1e (journal only). The established implementation specification follows by immutable reference.
+
+FLUVI_R16_PHONE_APK_FIRST_BEGIN
+
+1. TITLE / TASK INTENT
+
+Implement the R16 ORB layer-retirement change and deliver its installable phone-test APK as soon as the candidate builds. Send the verified direct APK link while independent qualification continues. The owner will perform physical validation on a Nothing A142, API 35.
+
+2. AUTHORITATIVE APPLICATION STATE
+
+Use elizerpist/exptv2, coordination branch fix/orb-v4-latency-lockscreen. The full technical R16 contract is in fe3da0f6540b09c73399e8291ff528b802183c1e:docs/FLUVI_ENGINEERING_JOURNAL.md between FLUVI_R16_ORB_LAYER_RETIREMENT_BEGIN and END. Execute its 21 sections with this newer delivery order. Its prior requirements to withhold an APK, download link or installation request until visual/privacy/performance/28-row/full/Human/dashboard qualification are superseded for the phone-test APK, including sections 15–21. Read all earlier instructions to that effect as conditions for promotion and a release-qualified verdict only.
+
+3. HARD PREFLIGHT
+
+Read the full current journal, MILESTONE_COMMITS.md, cited keyguard milestones, reports, and the complete three rule assets specified with paths and hashes in section 3 of the immutable R16 handoff. Fetch current refs and inspect in-progress candidate work. Resume it when present. The phone-tested R14 runtime is b6c71cfc350819e9a10a33e3e4cb6e078a4198d9; the R15 experiment base is 536987c2345bf0c0cc2cb297b68c7227a0aed3c8. Select the actual R16 application commit that includes the runtime fix and diagnostics. Build neither the journal-only commit nor an old R14/R15 binary as a substitute.
+
+4. PHYSICAL USER EVIDENCE
+
+The reported symptoms are late first appearance, delayed disappearance and occasional flicker. R16 targets disappearance after a visibility decision and measures first appearance and motion as controls. A physical result can only be collected after the user receives the exact binary.
+
+5. DRIVE LOG AUDIT
+
+Use the archived R14 phone capture and R15 hosted evidence pinned in the R16 handoff, sections 4–6. This correction introduces a delivery instruction, no new measurement.
+
+6. COMMIT / AGENT-EVIDENCE AUDIT
+
+Keep the 12/28 R15 result and the closed acquisition comparison as historical results. Link each new result to its actual source. If the R16 profile build already exists for the correct source, verify and deliver those bytes immediately. Otherwise continue directly to its build.
+
+7. GRAPH PROVENANCE AND IMPACT
+
+Use the original R16 graph/source inventory and verify affected Kotlin calls. Regenerate the final source graph for the report; its completion is independent of delivering the phone-test binary.
+
+8. CURRENT SOURCE FACTS
+
+scripts/build-human-diagnostic-apk.sh requires FLUVI_BUILD_COMMIT and builds flutter --profile through the normal app entry point with human_diagnostic purpose, physical rail diagnostics, onscreen diagnostics and the project demo configuration. Output is build/app/outputs/flutter-apk/app-profile.apk. The ordinary build-human-diagnostic-apk workflow job depends on three successful jobs. Its boundary test checks those dependencies. Use the same actual build script directly for experimental phone delivery.
+
+9. PROVEN / UNPROVEN / MISSING
+
+Artifact verification proves which bytes were delivered. Report the exact status of visual, privacy, timing, lifecycle and regression tests when sending the link. Label unresolved claims as unresolved; a build or an install does not certify the fix.
+
+10. ROOT-CAUSE AND CORRECTION
+
+Apply the selected R16 fix for old composed LIVE pixels following producer revocation. The selected packaging correction is independent: invoke the Human profile builder on the first coherent R16 candidate and publish its result without making availability depend on completion of qualification.
+
+11. SCOPE
+
+Preserve all functional/privacy checks, operator controls and the stock acquisition behavior specified for R16. Test build status is “EXPERIMENTAL — FOR PHYSICAL VALIDATION”. If a test identifies a concrete problem, state the affected scenario prominently beside the link. For a suspected disclosure, specify a demo-data test setup and the affected transition. Keep formal release labels accurate.
+
+12. LAYERS / BOUNDS / OWNERSHIP
+
+| Component / owner | Required result | Check |
+|---|---|---|
+| R16 presenter / worker / service | Real layer retirement and capture visible through the normal profile configuration | Verify candidate source, route eligibility and inclusion in the built APK |
+| Human packaging / coding agent | One signed com.fluvi.app profile APK containing arm64-v8a suitable for the Nothing A142 | Verify manifest, version, ABI, build identity and upgrade signer |
+| Prerelease or immutable artifact branch / coding agent | Stable HTTPS URL serving APK bytes directly | Download that exact URL and compare byte count, hash, ZIP and signature |
+| Normal release workflow / reviewer | Independent actual qualification verdict | Preserve existing assertions and report every open gate |
+
+13. REQUIRED CHECKS FOR PHONE DELIVERY
+
+The file must exist, be a readable APK, contain the R16 candidate and arm64 app payload, and have a valid signature for the established update path. Verify source SHA, HUMAN_DIAGNOSTIC purpose, package/version, byte length, SHA-256 and signing certificate on the downloaded bytes. Prior phone artifact certificate SHA-256 is faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. Use the existing signer and compatible version for an in-place install. Resolve signing/packaging errors at source; do not instruct the owner to uninstall Fluvi or delete their data. Heavy device gates, privacy classification, performance comparisons and dashboard CI do not precede this delivery.
+
+14. IMPLEMENTATION CONTRACT
+
+Finish the R16 runtime slice and its targeted diagnostics, commit it to a pinned candidate ref, then run the following from a clean checkout of that exact app SHA. Verify the remote candidate ref at the same SHA.
+
+    set -euo pipefail
+    app_sha=$(git rev-parse HEAD)
+    export FLUVI_BUILD_COMMIT="$app_sha"
+    flutter pub get
+    bash scripts/build-human-diagnostic-apk.sh
+    built=build/app/outputs/flutter-apk/app-profile.apk
+    test -s "$built"
+    apk="fluvi_R16_HUMAN_DIAGNOSTIC_${app_sha:0:12}.apk"
+    cp "$built" "$apk"
+    unzip -tq "$apk"
+    sha256sum "$apk"
+
+Use the known signing-capable environment, JDK 17, pinned Flutter 3.41.4, and Android SDK/build-tools. Use aapt/aapt2 and SDK apksigner as installed. Preserve before and after SHA receipts. A debug APK, AndroidTest APK, Actions run page or ZIP-only link does not fulfill the phone delivery.
+
+15. PERFORMANCE AND PRIVACY GATES
+
+Run the original R16 measured controls and use them to decide promotion. They may run alongside or after handset delivery. Send the link even when a device fixture fails, an image is unclassified, the aggregate is below 28/28 or the measured gain is still unknown. Publish incremental evidence against the same SHA. If a later product fix changes the APK, give it a new immutable link and identify what changed.
+
+16. IMPLEMENTATION ORDER
+
+Resume or implement candidate → build Human profile → verify and publish APK → independently download and verify → send the owner its direct link immediately → continue qualification and the journal. If a usable R16 candidate already exists, do not wait for report/graph/test-harness edits to deliver it. Return the link as an intermediate update when the agent interface supports one. If it only supports a final response, make the verified link the first item in the first available delivery response.
+
+17. VALIDATION AND RECOVERY
+
+Run the repository's cheap relevant checks in parallel with packaging where feasible. Use the established SDK-tools path and run apksigner verify --verbose --print-certs on the actual downloaded APK. Complete the user's physical test instructions below. For local disk/toolchain failure, move the exact source to a provisioned signing-capable runner and invoke the same builder; monitor through completion. For a packaging failure, repair it and make a new source-pinned attempt. Preserve existing evidence. Do not rerun unchanged full CI to obtain an APK. Only a genuine unresolved build/signing/publication failure after trying the available routes can leave delivery blocked; provide the precise failed step, log and attempted recovery. An incomplete test suite is not such a failure.
+
+18. COMMIT DISCIPLINE
+
+Pin and name application source, orchestration source and artifact identity separately. Keep the published test APK available for the user's whole test. Keep qualification evidence and promotion decisions in the shared journal; preserve earlier entries.
+
+19. PUSH / BUILD / DIRECT DOWNLOAD
+
+Publish to a dedicated R16 validation prerelease or the established SHA-pinned Git LFS artifact route. Prefer a complete direct HTTPS .apk URL usable on Android. For a new GitHub prerelease, use a unique tag derived from the full app SHA, attach the APK to the prerelease targeted at that SHA, and set --prerelease --latest=false. A same-tag asset may be reused only after verifying identical bytes. Never overwrite a different file under the user's existing download URL. If the Releases route is unavailable, publish the exact signed binary through the proven immutable LFS media-download route and verify the returned body is the full APK. On either route independently retrieve the actual URL, for example with curl --fail --location --output, then check the downloaded bytes before reporting delivery. Keep the ordinary gated release job intact. If local compilation cannot complete and that job is gated, use a dedicated manual candidate-only build on the established hosted workflow with the same pinned builder and signing setup; it must not depend on the device/qualification matrix. A queued job is an intermediate state.
+
+20. COMPLETION REPORT AND PHONE TEST
+
+Lead with “Download R16 phone-test APK” as a direct link. Give full application SHA, HUMAN_DIAGNOSTIC/profile, package version, bytes, SHA-256, signer, known issues and the current automatic verdict. Supply this short physical test: install as an update on the Nothing A142; select ORB / orbOnly / full / SURFACE_LIVE with LIGHT capture; perform one initial and three warm lock–wake–unlock cycles; note late first appearance, post-unlock persistence or flicker by cycle; freeze/export the capture with its build and capture ID. The user may start immediately upon delivery. No video is required to provide feedback.
+
+21. DEFINITION OF DONE
+
+For the requested phone handoff, completion means the owner has a verified direct download of the real R16 Human profile APK and can start the physical test. Publish four separate statuses: implementation, automated qualification, phone-test APK delivery, and physical acceptance. The release-qualified APK is a subsequent milestone. Physical acceptance belongs to the owner.
+
+FLUVI_R16_PHONE_APK_FIRST_END
