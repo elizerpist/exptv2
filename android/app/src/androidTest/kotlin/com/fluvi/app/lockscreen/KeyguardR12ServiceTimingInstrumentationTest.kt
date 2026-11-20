@@ -49,6 +49,12 @@ class KeyguardR12ServiceTimingInstrumentationTest {
     /** Optional test-only control at the first real authorized attachment. */
     internal var firstVisibleControl: ((KeyguardOrbRenderMode) -> Unit)? = null
     internal var serviceConnectedControl: ((FluviKeyguardCardService) -> Unit)? = null
+    internal var initialModeOverride: KeyguardOrbRenderMode? = null
+    internal var expectedModeForWake: ((Int, KeyguardOrbRenderMode) -> KeyguardOrbRenderMode)? = null
+    internal var wakeVisibleControl: ((Int, KeyguardOrbRenderMode) -> Unit)? = null
+    internal var retainSelectionAfterTest = false
+    internal var fixtureRunIdOverride: String? = null
+    internal var wakeCount = 4
 
     /** One process/arm only. The host must run both reverse-order blocks on
      * one device and collect independent video; this method is not a visual
@@ -63,12 +69,39 @@ class KeyguardR12ServiceTimingInstrumentationTest {
         val source = requireNotNull(args.getString("sourceSha"))
         require(source.matches(Regex("[0-9a-f]{40}")))
         val observations = java.util.Collections.synchronizedList(mutableListOf<KeyguardR15AcquisitionTestHooks.Observation>())
+        val firstWakeReads = java.util.Collections.synchronizedMap(mutableMapOf<Pair<Long, Long>, KeyguardCardInspectionRequest>())
+        val firstWakeStarts = java.util.Collections.synchronizedMap(mutableMapOf<Long, Long>())
+        val firstWakeResults = java.util.Collections.synchronizedMap(mutableMapOf<Long, String>())
         val overflow = java.util.concurrent.atomic.AtomicInteger()
         check(!FluviKeyguardCardServiceRegistry.connected)
         KeyguardR15AcquisitionTestHooks.stockArm = arm == "stock"
+        KeyguardR15AcquisitionTestHooks.observeIneligible = true
         KeyguardR15AcquisitionTestHooks.observer = { item ->
             synchronized(observations) {
-                if (observations.size < 64) observations.add(item) else overflow.incrementAndGet()
+                val first = firstWakeReads[item.request.session to item.request.wakeGeneration]
+                if (item.eligible || first?.id == item.request.id) {
+                    if (observations.size < 64) observations.add(item) else overflow.incrementAndGet()
+                }
+            }
+        }
+        serviceConnectedControl = { service ->
+            service.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
+                override fun started(request: KeyguardCardInspectionRequest) {
+                    if (firstWakeReads.putIfAbsent(request.session to request.wakeGeneration, request) == null) {
+                        firstWakeStarts[request.id] = SystemClock.uptimeMillis()
+                    }
+                }
+                override fun readCompleted(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
+                    reason: KeyguardSurfaceReason, rootUnavailable: Boolean, walkTruncated: Boolean,
+                    abortedStale: Boolean, startedAt: Long, finishedAt: Long) {
+                    if (firstWakeReads[request.session to request.wakeGeneration]?.id == request.id) {
+                        firstWakeResults[request.id] = org.json.JSONObject().put("request", request.id)
+                            .put("session", request.session).put("wake", request.wakeGeneration)
+                            .put("start", startedAt).put("finish", finishedAt).put("decision", decision.name)
+                            .put("reason", reason.name).put("rootUnavailable", rootUnavailable)
+                            .put("walkTruncated", walkTruncated).put("abortedStale", abortedStale).toString()
+                    }
+                }
             }
         }
         naturalComparison = true
@@ -77,6 +110,8 @@ class KeyguardR12ServiceTimingInstrumentationTest {
         } finally {
             KeyguardR15AcquisitionTestHooks.observer = null
             KeyguardR15AcquisitionTestHooks.stockArm = false
+            KeyguardR15AcquisitionTestHooks.observeIneligible = false
+            serviceConnectedControl = null
             naturalComparison = false
             val directory = File(context.filesDir, "keyguard-service-probe/r15/$runId/acquisition")
             check(directory.mkdirs() || directory.isDirectory)
@@ -95,6 +130,11 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                     put("readStart", item.started); put("readEnd", item.finished); put("inspectionEnd", item.inspectionFinished)
                     put("eligible", item.eligible); put("rootCalled", timing.activeRootCallCount > 0)
                     put("rootFlags", timing.activeRootPrefetchFlags ?: org.json.JSONObject.NULL)
+                    put("rootAccepted", timing.activeRootAccepted); put("activeRootMs", timing.activeRootTotalMs)
+                    put("returnedRoot", timing.returnedRootWindowId ?: org.json.JSONObject.NULL)
+                    put("windowsMs", timing.getWindowsMs); put("perWindowRootMs", timing.rootAcquisitionTotalMs)
+                    put("childMs", timing.childAcquisitionTotalMs); put("firstChildMs", timing.firstChildAcquisitionMs ?: org.json.JSONObject.NULL)
+                    put("childMaxMs", timing.childAcquisitionMaxMs); put("localMs", timing.localProcessingMs)
                     put("windowId", item.candidate?.id ?: org.json.JSONObject.NULL)
                     put("windowType", item.candidate?.type ?: org.json.JSONObject.NULL)
                     put("displayId", item.candidate?.displayId ?: org.json.JSONObject.NULL)
@@ -116,6 +156,13 @@ class KeyguardR12ServiceTimingInstrumentationTest {
             }
             File(directory, "$arm-block$block.jsonl").writeText(lines.joinToString("\n", postfix = if (lines.isEmpty()) "" else "\n"))
             File(directory, "$arm-block$block-overflow.txt").writeText("${overflow.get()}\n")
+            val firstLines = synchronized(firstWakeReads) { firstWakeReads.values.toList() }.map { request ->
+                firstWakeResults[request.id] ?: org.json.JSONObject().put("request", request.id)
+                    .put("session", request.session).put("wake", request.wakeGeneration)
+                    .put("start", firstWakeStarts[request.id] ?: org.json.JSONObject.NULL)
+                    .put("completion", "UNOBSERVED").toString()
+            }
+            File(directory, "$arm-block$block-first-inspections.jsonl").writeText(firstLines.joinToString("\n", postfix = if (firstLines.isEmpty()) "" else "\n"))
         }
         val rows = synchronized(observations) { observations.toList() }
         assertEquals("bounded first-read observer overflow", 0, overflow.get())
@@ -148,8 +195,8 @@ class KeyguardR12ServiceTimingInstrumentationTest {
         val source = requireNotNull(args.getString("sourceSha"))
         require(source.matches(Regex("[0-9a-f]{40}"))) { "missing exact source SHA" }
         val modeText = requireNotNull(args.getString("r12Mode"))
-        val mode = KeyguardOrbRenderMode.entries.single { it.name == modeText }
-        val runId = UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
+        val mode = initialModeOverride ?: KeyguardOrbRenderMode.entries.single { it.name == modeText }
+        val runId = UUID.fromString(fixtureRunIdOverride ?: requireNotNull(args.getString("runUuid"))).toString()
         automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         automation.serviceInfo = automation.serviceInfo.apply {
             flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
@@ -200,14 +247,17 @@ class KeyguardR12ServiceTimingInstrumentationTest {
             val capture = KeyguardCardDiagnostics.startCapture(context, source, "debug", "FULL")
             captureStarted = true
             captureId = capture["captureId"].toString()
-            record("PROCESS", "source=$source run=$runId capture=$captureId mode=${mode.name} pid=${android.os.Process.myPid()}")
+            val startTicks = File("/proc/self/stat").readText().substringAfterLast(')').trim().split(Regex("\\s+"))[19]
+            record("PROCESS", "source=$source run=$runId capture=$captureId mode=${mode.name} pid=${android.os.Process.myPid()} startTicks=$startTicks")
             val services = listOf(otherServices(), component.flattenToString()).filter { it.isNotBlank() }.joinToString(":")
             setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, services)
             setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
             await("real accessibility service connected", 10_000) { FluviKeyguardCardServiceRegistry.connected }
             serviceConnectedControl?.invoke(checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation()))
-            repeat(4) { index ->
+            require(wakeCount in 1..4)
+            repeat(wakeCount) { index ->
                 val name = if (index == 0) "cold" else "warm$index"
+                val wakeMode = expectedModeForWake?.invoke(index, mode) ?: mode
                 try {
                     synchronizedKey(KeyEvent.KEYCODE_SLEEP)
                     await("$name completed sleep admission", 8_000) {
@@ -217,6 +267,7 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                     await("$name previous service window withdrawn", 5_000) { sample().first?.visible != true }
                     if (naturalComparison || firstVisibleControl != null) recordClock(name, "preWake")
                     val wake = SystemClock.uptimeMillis()
+                    record("WAKE_TRIGGER", "name=$name wake=$wake")
                     synchronizedKey(KeyEvent.KEYCODE_WAKEUP)
                     await("$name public wake eligibility", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
                     if (naturalComparison || firstVisibleControl != null) recordClock(name, "awake")
@@ -225,7 +276,7 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                     check(power.isInteractive && keyguard.isKeyguardLocked) { "$name public wake lost eligibility after input" }
                     await("$name actual locked service window", 20_000) {
                         val state = sample().first
-                        power.isInteractive && keyguard.isKeyguardLocked && state?.visible == true && state.effective == mode
+                        power.isInteractive && keyguard.isKeyguardLocked && state?.visible == true && state.effective == wakeMode
                     }
                     val attached = SystemClock.uptimeMillis()
                     var surfaceCount = -1
@@ -236,11 +287,11 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                             (it.layoutParams as? WindowManager.LayoutParams)?.type == WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
                         }.sumOf(::count)
                     }
-                    assertEquals("real service must own the selected holder route", if (mode == KeyguardOrbRenderMode.LEGACY_R11) 0 else 1, surfaceCount)
-                    if (mode != KeyguardOrbRenderMode.LEGACY_R11) {
+                    assertEquals("real service must own the selected holder route", if (wakeMode == KeyguardOrbRenderMode.LEGACY_R11) 0 else 1, surfaceCount)
+                    if (wakeMode != KeyguardOrbRenderMode.LEGACY_R11) {
                         await("$name first current target post", 15_000) { (sample().second?.submissions ?: 0L) > 0L }
                         val first = checkNotNull(sample().second)
-                        if (mode == KeyguardOrbRenderMode.SURFACE_LIVE) {
+                        if (wakeMode == KeyguardOrbRenderMode.SURFACE_LIVE) {
                             await("$name distinct successor submission", 10_000) { sample().second?.firstDistinctUptimeMs != null }
                         }
                         if (index == 1 && !naturalComparison) {
@@ -248,7 +299,7 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                             SystemClock.sleep(5_000)
                             val end = checkNotNull(sample().second)
                             check(end.coherent && end.submissions >= first.submissions)
-                            if (mode == KeyguardOrbRenderMode.SURFACE_LIVE) check(end.submissions > first.submissions)
+                            if (wakeMode == KeyguardOrbRenderMode.SURFACE_LIVE) check(end.submissions > first.submissions)
                             record("LOCKED_INTERVAL", "name=$name start=$intervalStart end=${SystemClock.uptimeMillis()} postsStart=${first.submissions} postsEnd=${end.submissions}")
                         }
                         record("WAKE", "name=$name wake=$wake attached=$attached firstPost=${first.firstPostUptimeMs} distinct=${sample().second?.firstDistinctUptimeMs ?: "UNOBSERVED"} meaning=producer_not_presentation")
@@ -257,14 +308,15 @@ class KeyguardR12ServiceTimingInstrumentationTest {
                             val intervalStart = SystemClock.uptimeMillis()
                             SystemClock.sleep(5_000)
                             val state = sample().first
-                            check(power.isInteractive && keyguard.isKeyguardLocked && state?.visible == true && state.effective == mode) {
+                            check(power.isInteractive && keyguard.isKeyguardLocked && state?.visible == true && state.effective == wakeMode) {
                                 "legacy locked interval lost its actual service owner"
                             }
                             record("LOCKED_INTERVAL", "name=$name start=$intervalStart end=${SystemClock.uptimeMillis()} postsStart=UNOBSERVED postsEnd=UNOBSERVED route=LEGACY_R11")
                         }
                         record("WAKE", "name=$name wake=$wake attached=$attached firstPost=UNOBSERVED distinct=UNOBSERVED route=LEGACY_R11")
                     }
-                    if (index == 0) firstVisibleControl?.invoke(mode)
+                    if (index == 0) firstVisibleControl?.invoke(wakeMode)
+                    wakeVisibleControl?.invoke(index, wakeMode)
                 } catch (error: Throwable) {
                     failures += "$name:${error.javaClass.simpleName}:${error.message}"
                     record("FAILURE", "${failures.last()} interactive=${power.isInteractive} locked=${keyguard.isKeyguardLocked} route=${sample().first}")
@@ -289,7 +341,8 @@ class KeyguardR12ServiceTimingInstrumentationTest {
             runCatching {
                 setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, otherServices())
                 await("service disconnect", 8_000) { !FluviKeyguardCardServiceRegistry.connected }
-                restore(savedSettings); restore(savedMaterial); restore(savedMode)
+                restore(savedSettings); restore(savedMaterial)
+                if (!retainSelectionAfterTest) restore(savedMode)
                 shell("input keyevent KEYCODE_WAKEUP")
                 shell("wm dismiss-keyguard")
                 if (savedLock == "true" || savedLock == "false") shell("locksettings set-disabled $savedLock")
@@ -337,7 +390,7 @@ class KeyguardR12ServiceTimingInstrumentationTest {
         } }
         check(edit.commit())
     }
-    private fun materialProfile(): Map<String, Any> = mapOf(
+    internal fun materialProfile(): Map<String, Any> = mapOf(
         "schemaVersion" to 1, "shaderAbiVersion" to 6, "sourceShaderHash" to KeyguardMaterialProfile.SOURCE_SHADER_HASH,
         "publisherSession" to "r12-service-timing", "publisherRevision" to 1L, "sceneIdentity" to "fixture|balance|month",
         "effectId" to "dualTide", "effectShaderId" to 1, "phase" to .25, "elapsedSeconds" to 1.0, "phaseSpeed" to .4,

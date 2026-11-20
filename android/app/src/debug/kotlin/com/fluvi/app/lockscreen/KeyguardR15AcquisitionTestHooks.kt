@@ -10,6 +10,11 @@ internal object KeyguardR15AcquisitionTestHooks {
     @Volatile var observer: ((Observation) -> Unit)? = null
     @Volatile var observeIneligible = false
     @Volatile var motionObserver: ((Boolean) -> Unit)? = null
+    @Volatile var financialObserver: ((Long?, com.fluvi.app.runtime.FluviFinancialOrbWork.Scope) -> Unit)? = null
+
+    fun financialCompleted(requestId: Long?, scope: com.fluvi.app.runtime.FluviFinancialOrbWork.Scope) {
+        runCatching { financialObserver?.invoke(requestId, scope) }
+    }
 
     data class Observation(
         val request: KeyguardCardInspectionRequest,

@@ -2501,6 +2501,9 @@ class FluviKeyguardCardService : AccessibilityService() {
             if (scope != null) {
                 if (!scope.completed) scope.finish(false, false, returned = false)
                 com.fluvi.app.runtime.FluviFinancialOrbWork.end(scope)
+                if (KeyguardR15AcquisitionTestHooks.ENABLED) {
+                    KeyguardR15AcquisitionTestHooks.financialCompleted(causingInspectionRequestId, scope)
+                }
                 if (owner === KeyguardCardDiagnostics.drawEvidenceOwner()) {
                     // Fields are converted to strings by the diagnostic worker.
                     // A capture rotation cannot attach this scope to the new owner.

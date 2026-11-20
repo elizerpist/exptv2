@@ -3,6 +3,7 @@ package com.fluvi.app.lockscreen
 /** Compile-time disabled; no comparison switch is available in profile. */
 internal object KeyguardR15AcquisitionTestHooks {
     const val ENABLED = false
+    fun financialCompleted(requestId: Long?, scope: com.fluvi.app.runtime.FluviFinancialOrbWork.Scope) = Unit
     fun motionChanged(allowed: Boolean) = Unit
     fun begin(request: KeyguardCardInspectionRequest, ticket: KeyguardInspectionFreshness.Ticket?, eligible: Boolean) = eligible
     fun candidate(metadata: KeyguardWindowReaderWindowMetadata) = Unit

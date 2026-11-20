@@ -87,10 +87,16 @@ internal class KeyguardOrbSurfacePresenter(
         observe(target, "ROUTE_SELECTED", if (live) "SURFACE_LIVE" else "SURFACE_STATIC")
         child.holder.addCallback(object : SurfaceHolder.Callback2 {
             override fun surfaceCreated(holder: SurfaceHolder) {
+                if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+                    KeyguardOrbSurfaceWorkerTestHooks.holderBoundary?.invoke(target, "CREATED", 0L)
+                }
                 observe(target, "HOLDER_CREATED", "callback")
             }
 
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+                    KeyguardOrbSurfaceWorkerTestHooks.holderBoundary?.invoke(target, "CHANGED", 0L)
+                }
                 if (current !== target || target.revoked) return
                 observe(target, "HOLDER_CHANGED", "${width}x$height")
                 if (width != target.width || height != target.height || !holder.surface.isValid) {
@@ -103,7 +109,13 @@ internal class KeyguardOrbSurfacePresenter(
             override fun surfaceDestroyed(holder: SurfaceHolder) {
                 val started = SystemClock.uptimeMillis()
                 val unexpected = current === target && !target.revoked
+                if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+                    KeyguardOrbSurfaceWorkerTestHooks.holderBoundary?.invoke(target, "DESTROY_BEGIN", 0L)
+                }
                 worker.surfaceDestroyed(target)
+                if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+                    KeyguardOrbSurfaceWorkerTestHooks.holderBoundary?.invoke(target, "DESTROY_RETURN", 0L)
+                }
                 observe(target, "HOLDER_DESTROYED", "drainMs:${SystemClock.uptimeMillis() - started}")
                 if (unexpected) failIfCurrent(target, "surfaceDestroyedUnexpectedly")
             }
@@ -113,7 +125,11 @@ internal class KeyguardOrbSurfacePresenter(
             }
 
             override fun surfaceRedrawNeededAsync(holder: SurfaceHolder, drawingFinished: Runnable) {
-                worker.requestRedraw(target, KeyguardOrbSurfaceRedrawCompletion { drawingFinished.run() })
+                if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+                    worker.requestRedraw(target, KeyguardOrbSurfaceWorkerTestHooks.redrawCompletion(target, drawingFinished))
+                } else {
+                    worker.requestRedraw(target, KeyguardOrbSurfaceRedrawCompletion { drawingFinished.run() })
+                }
             }
         })
         root.addView(child, FrameLayout.LayoutParams(width, height, Gravity.CENTER))
