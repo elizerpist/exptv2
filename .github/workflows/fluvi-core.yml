@@ -1,4 +1,4 @@
-name: R20 stock first frame splash correction (orchestration only)
+name: R21 stock reveal handoff witness (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -23,7 +23,7 @@ jobs:
       matrix:
         include:
           - arm: stock
-            source: bc41ec11b293923f664b50cd79ed36b5f6fad53b
+            source: 5b09e7009ea2303231c8fdbcb0c09e5a74f704ff
     runs-on: ubuntu-latest
     timeout-minutes: 70
     env:
@@ -73,12 +73,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git apply --check "$GITHUB_WORKSPACE/harness/scripts/r20-stock-probes.patch"
-          git apply "$GITHUB_WORKSPACE/harness/scripts/r20-stock-probes.patch"
-          python3 "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py"
+          git apply --check "$GITHUB_WORKSPACE/harness/scripts/r21-stock-observers.patch"
+          git apply "$GITHUB_WORKSPACE/harness/scripts/r21-stock-observers.patch"
           git status --short > "$RUNNER_TEMP/r19-api35/fixture-modified-files.txt"
           git diff > "$RUNNER_TEMP/r19-api35/fixture.patch"
-          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r20-stock-probes.patch" "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py" > "$RUNNER_TEMP/r19-api35/fixture-sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r21-stock-observers.patch" > "$RUNNER_TEMP/r19-api35/fixture-sha256.txt"
       - name: Assemble app and instrumentation APKs
         run: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
       - name: Enable KVM
@@ -95,7 +94,7 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r19-api35-qualification.sh"
+          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r21-stock-witness.sh"
       - name: Verify independent JVM result
         if: always()
         run: if test -s "$RUNNER_TEMP/r19-api35/unit.exit"; then test "$(cat "$RUNNER_TEMP/r19-api35/unit.exit")" = 0; else echo 'JVM suite NOT RUN'; fi
@@ -103,7 +102,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r20-stock-splash-fix-${{ matrix.arm }}-${{ github.run_id }}
+          name: r21-stock-reveal-${{ matrix.arm }}-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r19-api35/**
             app/build/app/reports/tests/**

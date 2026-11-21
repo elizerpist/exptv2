@@ -1,0 +1,159 @@
+diff --git a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
+index 8370d393..72b9c1e4 100644
+--- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
++++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
+@@ -9,6 +9,8 @@ import android.content.Context
+ import android.content.SharedPreferences
+ import android.graphics.Bitmap
+ import android.os.Build
++import android.os.Handler
++import android.os.Looper
+ import android.os.ParcelFileDescriptor
+ import android.os.PowerManager
+ import android.os.SystemClock
+@@ -26,6 +28,7 @@ import java.util.concurrent.CountDownLatch
+ import java.util.concurrent.TimeUnit
+ import java.util.concurrent.atomic.AtomicBoolean
+ import java.util.concurrent.atomic.AtomicLong
++import java.util.concurrent.atomic.AtomicReference
+ import org.junit.Assert.*
+ import org.junit.Test
+ import org.junit.runner.RunWith
+@@ -41,14 +44,15 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
+ 
+     @Test fun stableInitialFullUsesOneVirginOutputWithoutReadinessRead() = runService(false)
+     @Test fun externalIngressWhileFirstPaintIsHeldCannotUseOldProof() = runService(true)
++    @Test fun r21StockSubmittedDirectOrbWithBenignIngressWitness() = runService(false, true)
+ 
+-    private fun runService(changeScene: Boolean) {
++    private fun runService(changeScene: Boolean, r21Witness: Boolean = false) {
+         assertEquals(35, Build.VERSION.SDK_INT)
+         val args = InstrumentationRegistry.getArguments()
+         val source = requireNotNull(args.getString("sourceSha"))
+         require(source.matches(Regex("[0-9a-f]{40}")))
+         val run = args.getString("runUuid")?.let { UUID.fromString(it).toString() } ?: UUID.randomUUID().toString()
+-        val dir = File(context.filesDir, "keyguard-service-probe/r19/$run/${if (changeScene) "changed" else "stable"}")
++        val dir = File(context.filesDir, "keyguard-service-probe/r19/$run/${if (r21Witness) "r21-stock" else if (changeScene) "changed" else "stable"}")
+         check(!dir.exists() && dir.mkdirs())
+         val keyguard = context.getSystemService(KeyguardManager::class.java)
+         val power = context.getSystemService(PowerManager::class.java)
+@@ -72,6 +76,9 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
+         val paintEntered = CountDownLatch(1)
+         val releasePaint = CountDownLatch(1)
+         val held = AtomicBoolean(false)
++        val ack = AtomicReference<Runnable?>(); val ackHeld = CountDownLatch(1)
++        val readDone = CountDownLatch(1); val readResult = AtomicReference<String?>()
++        val oldDispatcher = KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone
+         var captureStarted = false
+         var report: String? = null
+         val errors = mutableListOf<String>()
+@@ -123,13 +130,49 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
+                         abortedStale: Boolean, startedAt: Long, finishedAt: Long) {
+                         reads.add("end id=${request.id} decision=$decision reason=$reason rootUnavailable=$rootUnavailable " +
+                             "truncated=$walkTruncated stale=$abortedStale start=$startedAt end=$finishedAt")
++                        if (request.id == injectedRequest.get() && request.id != 0L) {
++                            readResult.set("$decision/$reason/$rootUnavailable/$walkTruncated/$abortedStale")
++                            readDone.countDown()
++                        }
+                     }
+                 }
+             }
++            if (r21Witness) KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = { task ->
++                if (ack.compareAndSet(null, task)) ackHeld.countDown() else Handler(Looper.getMainLooper()).post(task)
++            }
+             shell("input keyevent KEYCODE_SLEEP")
+             await("sleep and keyguard", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+             shell("input keyevent KEYCODE_WAKEUP")
+             await("locked wake", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
++            if (r21Witness) {
++                assertTrue("NOT REACHED: stock real reveal acknowledgement", ackHeld.await(20, TimeUnit.SECONDS))
++                var before: String? = null
++                await("stock actual native apply return", 10_000) {
++                    val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
++                    before = text.lineSequence().firstOrNull { it.startsWith(" R18_PIPELINE ") &&
++                        it.contains("r19Intent=EMPTY") && !it.contains("revealApply=UNOBSERVED/") &&
++                        !it.contains("bufferReady=UNOBSERVED") }
++                    before != null
++                }
++                File(dir, "before-ingress.txt").writeText(checkNotNull(before) + "\n")
++                saveScreenshot(File(dir, "02-before-ingress.png"))
++                instrumentation.runOnMainSync {
++                    val at = SystemClock.uptimeMillis(); injectedAt.set(at)
++                    service.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
++                        AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, -1, Display.DEFAULT_DISPLAY, 0,
++                        "com.android.systemui", at))
++                }
++                assertTrue("NOT REACHED: injected real inspection did not finish", readDone.await(10, TimeUnit.SECONDS))
++                File(dir, "read-result.txt").writeText("request=${injectedRequest.get()} result=${readResult.get()}\n")
++                val after = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
++                File(dir, "after-ingress.txt").writeText(after)
++                saveScreenshot(File(dir, "03-after-ingress.png"))
++                assertEquals("NOT REACHED: fresh actual scene was not complete MAIN/FULL",
++                    "SHOW_FULL/MAIN_CONFIRMED/false/false/false", readResult.get())
++                assertFalse("stock withdrew the submitted owner solely on ordinary ingress",
++                    after.contains("sceneChangedBeforeSubmit"))
++                instrumentation.runOnMainSync { checkNotNull(ack.getAndSet(null)).run() }
++            }
+             if (changeScene) {
+                 assertTrue("real first FULL paint was not reached", paintEntered.await(20, TimeUnit.SECONDS))
+                 instrumentation.runOnMainSync {
+@@ -187,6 +230,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
+         } catch (error: Throwable) {
+             errors += "${error.javaClass.simpleName}:${error.message}"
+         } finally {
++            KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = oldDispatcher
++            ack.getAndSet(null)?.let { Handler(Looper.getMainLooper()).post(it) }
+             releasePaint.countDown()
+             KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock = null
+             runCatching { if (captureStarted && report == null) {
+diff --git a/android/app/src/debug/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt b/android/app/src/debug/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+index 8d618f8a..c4fd49f8 100644
+--- a/android/app/src/debug/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
++++ b/android/app/src/debug/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+@@ -4,6 +4,7 @@ package com.fluvi.app.lockscreen.material
+  * This does not create visibility authority or synthesize a platform event. */
+ internal object KeyguardOrbSurfaceWorkerTestHooks {
+     const val ENABLED = true
++    @Volatile var dispatchRevealDone: ((Runnable) -> Unit)? = null
+     @Volatile var afterCanvasLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     @Volatile var afterCanvasPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     @Volatile var afterPosterCreated: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+diff --git a/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbR18Presenter.kt b/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbR18Presenter.kt
+index 45737079..8f29f6d2 100644
+--- a/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbR18Presenter.kt
++++ b/android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbR18Presenter.kt
+@@ -214,7 +214,9 @@ internal class KeyguardOrbR18Presenter(
+             owner.get() === current && !current.target.revoked && crossGrantBoundary()
+         }, completed = { success ->
+             if (success && owner.get() === current && !current.target.revoked) worker.grantPresentation(current.target)
+-            main.post { done(success && owner.get() === current && !current.target.revoked) }
++            val acknowledgement = Runnable { done(success && owner.get() === current && !current.target.revoked) }
++            val dispatcher = if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone else null
++            if (dispatcher != null) dispatcher(acknowledgement) else main.post(acknowledgement)
+         })
+     }
+ 
+diff --git a/android/app/src/profile/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt b/android/app/src/profile/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+index 79da6715..92bc912d 100644
+--- a/android/app/src/profile/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
++++ b/android/app/src/profile/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+@@ -3,6 +3,7 @@ package com.fluvi.app.lockscreen.material
+ /** Profile artifacts have no installed instrumentation barrier. */
+ internal object KeyguardOrbSurfaceWorkerTestHooks {
+     const val ENABLED = false
++    val dispatchRevealDone: ((Runnable) -> Unit)? = null
+     val afterCanvasLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     val afterCanvasPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     val afterPosterCreated: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+diff --git a/android/app/src/release/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt b/android/app/src/release/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+index 357c9b2f..f515c371 100644
+--- a/android/app/src/release/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
++++ b/android/app/src/release/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt
+@@ -3,6 +3,7 @@ package com.fluvi.app.lockscreen.material
+ /** Release artifacts have no installed instrumentation barrier. */
+ internal object KeyguardOrbSurfaceWorkerTestHooks {
+     const val ENABLED = false
++    val dispatchRevealDone: ((Runnable) -> Unit)? = null
+     val afterCanvasLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     val afterCanvasPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+     val afterPosterCreated: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
