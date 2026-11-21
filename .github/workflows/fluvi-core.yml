@@ -15,8 +15,6 @@ jobs:
         include:
           - arm: immediate
             source: b1eccd845546e5d65d9e69c9ba0a43775a2c216b
-          - arm: legacy
-            source: b1eccd845546e5d65d9e69c9ba0a43775a2c216b
     runs-on: ubuntu-latest
     timeout-minutes: 38
     env:

@@ -99,7 +99,7 @@
 @@ -2968 +3022 @@
 -                            categories.all { it == "SAFE_STANDBY" || it == "SAFE_NEUTRAL" })
 +                            categories.all { it == "SAFE_STANDBY" || it == "SAFE_NEUTRAL" || it == "SAFE_CLIPPED_NEW_NEUTRAL" })
-@@ -3032,0 +3087,300 @@
+@@ -3032,0 +3087,323 @@
 +    /** The old application binary is unchanged in the parent arm: this is
 +     * a real attached panel with a one-shot rejection at the WM boundary. */
 +    @Test fun attachedOrbRestrictionPrecedesFailedLayout() {
@@ -272,8 +272,31 @@
 +                val mem = android.app.ActivityManager.MemoryInfo()
 +                f.activity.getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(mem)
 +                assertTrue("NOT REACHED: insufficient memory for bounded full-screen strip", availableHeap >= requiredBytes && mem.availMem >= requiredBytes)
-+                val before = requireNotNull(f.instrumentation.uiAutomation.takeScreenshot())
-+                val beforeCrop = Bitmap.createBitmap(before, bounds.left, bounds.top, size, size)
++                // The first transaction callback does not prove the resized
++                // compositor image has arrived. Establish a real independent
++                // FULL control before the timed downgrade; retain mismatches.
++                var beforeCandidate: Bitmap? = null
++                var beforeCropCandidate: Bitmap? = null
++                val referenceDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
++                var precheck = 0
++                while (beforeCandidate == null && precheck < 16 && System.nanoTime() < referenceDeadline) {
++                    val screen = requireNotNull(f.instrumentation.uiAutomation.takeScreenshot())
++                    val crop = Bitmap.createBitmap(screen, bounds.left, bounds.top, size, size)
++                    persistPanelEvidence(f.activity, "r22-4-bounded-$background-precheck-$precheck-full", screen)
++                    persistPanelEvidence(f.activity, "r22-4-bounded-$background-precheck-$precheck-crop", crop)
++                    precheck += 1
++                    if (wholeRoiDifference(refs.full, crop).nearlyEqual()) {
++                        beforeCandidate = screen
++                        beforeCropCandidate = crop
++                    } else {
++                        crop.recycle()
++                        screen.recycle()
++                        Thread.sleep(24)
++                    }
++                }
++                assertTrue("NOT REACHED: resized compositor never showed independently calibrated FULL", beforeCandidate != null)
++                val before = requireNotNull(beforeCandidate)
++                val beforeCrop = requireNotNull(beforeCropCandidate)
 +                val underlayCrop = Bitmap.createBitmap(underlay, bounds.left, bounds.top, size, size)
 +                val oldSize = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
 +                val clipped = requireNotNull(refs.neutralAnimated.copy(Bitmap.Config.ARGB_8888, true))
@@ -400,40 +423,40 @@
 +        } finally { refsA.recycle(); refsB.recycle() }
 +    }
 +
-@@ -3063,0 +3418,2 @@
+@@ -3063,0 +3441,2 @@
 +                    // getGlobalVisibleRect is root-relative for this separate
 +                    // panel window; screenshots use physical screen coordinates.
-@@ -3065,0 +3422,6 @@
+@@ -3065,0 +3445,6 @@
 +                    val rootScreen = IntArray(2)
 +                    val childScreen = IntArray(2)
 +                    root.getLocationOnScreen(rootScreen)
 +                    orb.getLocationOnScreen(childScreen)
 +                    rootBounds.offset(rootScreen[0], rootScreen[1])
 +                    childBounds.offset(rootScreen[0], rootScreen[1])
-@@ -3068 +3430,2 @@
+@@ -3068 +3453,2 @@
 -                        childBounds.width() == size && childBounds.height() == size && rootBounds.contains(childBounds)
 +                        childBounds.width() == size && childBounds.height() == size && rootBounds.contains(childBounds) &&
 +                        childBounds.left == childScreen[0] && childBounds.top == childScreen[1]
-@@ -4262,0 +4626 @@
+@@ -4262,0 +4649 @@
 +        initialBackground: Int? = null,
-@@ -4266 +4630 @@
+@@ -4266 +4653 @@
 -        val fixture = OrbRetirementFixture(label, recoveryHook, initialProfile)
 +        val fixture = OrbRetirementFixture(label, recoveryHook, initialProfile, initialBackground)
-@@ -4271,0 +4636 @@
+@@ -4271,0 +4659 @@
 +            fixture.underlay?.recycle()
-@@ -4291,0 +4657 @@
+@@ -4291,0 +4680 @@
 +        private val initialBackground: Int?,
-@@ -4299,0 +4666 @@
+@@ -4299,0 +4689 @@
 +        var underlay: Bitmap? = null
-@@ -4329 +4696 @@
+@@ -4329 +4719 @@
 -        fun endNaturalCadence(): List<CadenceSample> = synchronized(cadenceLock) {
 +        fun endNaturalCadence(leaveNaturalTime: Boolean = false): List<CadenceSample> = synchronized(cadenceLock) {
-@@ -4331 +4698 @@
+@@ -4331 +4721 @@
 -            controlledTime.useNaturalTime = false
 +            if (!leaveNaturalTime) controlledTime.useNaturalTime = false
-@@ -4334,0 +4702 @@
+@@ -4334,0 +4725 @@
 +        fun restoreControlledMaterialTime() { controlledTime.useNaturalTime = false }
-@@ -4365,0 +4734,11 @@
+@@ -4365,0 +4757,11 @@
 +            if (initialBackground != null) {
 +                val backgroundCommit = CountDownLatch(1)
 +                instrumentation.runOnMainSync {
@@ -445,17 +468,17 @@
 +                assertTrue("NOT REACHED: pre-panel underlay did not commit", backgroundCommit.await(8, TimeUnit.SECONDS))
 +                underlay = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
 +            }
-@@ -4373 +4752,2 @@
+@@ -4373 +4775,2 @@
 -            KeyguardOrbBufferRendererTestHooks.ownershipObserver = ownership
 +            KeyguardOrbBufferRendererTestHooks.ownershipObserver =
 +                if (label == "r22-3-translucent-cadence") NoopKeyguardOrbOwnershipObserver else ownership
-@@ -5202,0 +5583,5 @@
+@@ -5202,0 +5606,5 @@
 +        // One-shot failure before the real delegate; the root remains attached.
 +        // The observer records the production state at the actual WM boundary.
 +        var rejectNextUpdate: ((View) -> Unit)? = null
 +        var rejectedUpdates = 0
 +        var rejectNextRemoval = false
-@@ -5218 +5603,7 @@
+@@ -5218 +5626,7 @@
 -        override fun updateViewLayout(view: View, params: ViewGroup.LayoutParams) =
 +        override fun updateViewLayout(view: View, params: ViewGroup.LayoutParams) {
 +            rejectNextUpdate?.let { observe ->
@@ -464,9 +487,9 @@
 +                observe(view)
 +                throw IllegalStateException("r22-4-injected-update-before-delegate")
 +            }
-@@ -5219,0 +5611 @@
+@@ -5219,0 +5634 @@
 +        }
-@@ -5221,0 +5614,4 @@
+@@ -5221,0 +5637,4 @@
 +            if (rejectNextRemoval) {
 +                rejectNextRemoval = false
 +                throw IllegalStateException("r22-4-injected-remove-before-delegate")

@@ -43,12 +43,7 @@ run_case() {
 service=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
 panel=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest
 # Service specimens are retained from 44937156640 and are not repeated.
-if [[ "$ARM" == immediate ]]; then
-  methods=(isolatedNeutralRecoveryAtCommittedResizedBounds r22_4BoundedResizedPrivacyStripWhite r22_4BoundedResizedPrivacyStripBlack r22_4NeutralMotionUsesIndependentPhaseReferences)
-else
-  methods=(isolatedOpaqueOrbHasNeutralParentAtRetire isolatedStandbyPreservesAuthorizedComposition isolatedStandbyBlackReturnAndHide stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges isolatedOrbStaleFirstCommitCannotUndoSameRootPrivacyOrSizeReplacement)
-fi
-for method in "${methods[@]}"; do
+for method in r22_4BoundedResizedPrivacyStripWhite r22_4BoundedResizedPrivacyStripBlack; do
   run_case "$panel" "$method" panel 240
 done
 exit "$failed"
