@@ -1,9 +1,23 @@
 {
   "schema_version": 1,
-  "source_head": "5b09e7009ea2303231c8fdbcb0c09e5a74f704ff",
-  "base_head": "58126456956ae3f5785174254d287937701e5d93",
+  "source_head": "ef310b490cf03713c0c97d3d4aab85e3b536e66d",
+  "base_head": "5b09e7009ea2303231c8fdbcb0c09e5a74f704ff",
   "changed_files": [
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorker.kt"
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt",
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt",
+    "android/app/src/debug/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationCoordinator.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbDirectOutput.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbR18Presenter.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfacePresenter.kt",
+    "android/app/src/profile/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt",
+    "android/app/src/release/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbTest.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationCoordinatorTest.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
