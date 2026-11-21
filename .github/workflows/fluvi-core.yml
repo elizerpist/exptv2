@@ -1,4 +1,4 @@
-name: R22.3 unchanged-parent structural and geometry fixtures
+name: R22.3 corrected unchanged-parent visual fixtures
 on:
   workflow_dispatch:
     inputs:
@@ -84,7 +84,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-3-parent-control-${{ github.run_id }}
+          name: r22-3-parent-visual-corrected-${{ github.run_id }}
           path: ${{ runner.temp }}/r22-3-parent/**
           if-no-files-found: warn
           retention-days: 30

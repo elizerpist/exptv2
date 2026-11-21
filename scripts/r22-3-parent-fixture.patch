@@ -154,10 +154,10 @@ index 21006969..81364a07 100644
  
      private fun independentVisibleMarkerWindow(id: String): Int? {
 diff --git a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
-index 0256d9e2..81390adf 100644
+index 0256d9e2..2a6ffe5c 100644
 --- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
 +++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
-@@ -2313,17 +2313,19 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -2313,20 +2313,23 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
          stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges()
      }
  
@@ -181,44 +181,81 @@ index 0256d9e2..81390adf 100644
          lateinit var root: FrameLayout
          lateinit var expected: View
          lateinit var material: KeyguardHeaderMaterialView
-@@ -2347,7 +2349,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
++        lateinit var neutralAnimatedView: KeyguardHeaderMaterialView
+         try {
+             instrumentation.runOnMainSync {
+                 val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+@@ -2346,9 +2349,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+                     layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
                      visibility = View.INVISIBLE
                  }
++                neutralAnimatedView = KeyguardHeaderMaterialView(activity, materialTimeSource =
++                    KeyguardMaterialTimeSource { _, _ -> calibratedMaterialTime(PHASE_A) }).apply {
++                    shape = KeyguardHeaderMaterialView.Shape.ORB
++                    layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
++                    visibility = View.INVISIBLE
++                }
                  root = FrameLayout(activity).apply {
 -                    setBackgroundColor(android.graphics.Color.WHITE)
+-                    addView(expected); addView(material)
 +                    setBackgroundColor(background)
-                     addView(expected); addView(material)
++                    addView(expected); addView(material); addView(neutralAnimatedView)
                  }
                  activity.setContentView(root)
-@@ -2374,6 +2376,20 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+             }
+@@ -2361,10 +2370,10 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+                 assertTrue("independent reference parent commit missing", receipt.await(8, TimeUnit.SECONDS))
+             }
+             parentFrame()
+-            val empty = copyMaterialView(instrumentation, expected)
++            val empty = copyMaterialView(instrumentation, expected, size)
+             instrumentation.runOnMainSync { expected.visibility = View.VISIBLE }
+             parentFrame()
+-            val standby = copyMaterialView(instrumentation, expected)
++            val standby = copyMaterialView(instrumentation, expected, size)
+             instrumentation.runOnMainSync {
+                 expected.visibility = View.INVISIBLE
+                 material.setScene(KeyguardMaterialScene(calibratedOrbProfile().neutralized(), false, System.nanoTime()), true)
+@@ -2373,7 +2382,28 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+             }
              assertTrue("neutral reference never drew", waitForBootstrap(instrumentation, material))
              parentFrame()
-             val neutral = copyMaterialView(instrumentation, material)
+-            val neutral = copyMaterialView(instrumentation, material)
++            val neutral = copyMaterialView(instrumentation, material, size)
 +            val neutralProfile = calibratedOrbProfile().neutralized()
 +            val neutralArtifact = AndroidKeyguardShaderArtifactReader.load(activity, neutralProfile.effectId, neutralProfile.usesPortal)
 +            var neutralDrawBefore = 0
 +            instrumentation.runOnMainSync {
-+                material.setBootstrapActive(false)
++                material.visibility = View.INVISIBLE
++                neutralAnimatedView.setScene(KeyguardMaterialScene(neutralProfile, false, System.nanoTime()), true)
++                neutralAnimatedView.setBootstrapActive(false)
++                neutralAnimatedView.visibility = View.VISIBLE
 +                assertEquals(KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED,
-+                    material.installPreparedShader(neutralArtifact))
-+                neutralDrawBefore = material.diagnostics().shaderDrawCount
-+                material.frame(System.nanoTime())
++                    neutralAnimatedView.installPreparedShader(neutralArtifact))
++                neutralDrawBefore = neutralAnimatedView.diagnostics().shaderDrawCount
++                neutralAnimatedView.frame(System.nanoTime())
 +            }
 +            assertTrue("independent animated neutral reference did not draw",
-+                waitForShaderDraw(instrumentation, material, neutralDrawBefore))
++                waitForShaderDraw(instrumentation, neutralAnimatedView, neutralDrawBefore))
 +            parentFrame()
-+            val neutralAnimated = copyMaterialView(instrumentation, material)
++            val neutralAnimated = copyMaterialView(instrumentation, neutralAnimatedView, size)
++            instrumentation.runOnMainSync {
++                neutralAnimatedView.visibility = View.INVISIBLE
++                material.visibility = View.VISIBLE
++            }
              val profile = calibratedOrbProfile()
              val artifact = AndroidKeyguardShaderArtifactReader.load(activity, profile.effectId, profile.usesPortal)
              var before = 0
-@@ -2387,13 +2403,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -2386,14 +2416,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+             }
              assertTrue("independent full reference did not draw", waitForShaderDraw(instrumentation, material, before))
              parentFrame()
-             val full = copyMaterialView(instrumentation, material)
+-            val full = copyMaterialView(instrumentation, material)
 -            persistPanelEvidence(activity, "r22-2-reference-standby", standby)
 -            persistPanelEvidence(activity, "r22-2-reference-neutral", neutral)
 -            persistPanelEvidence(activity, "r22-2-reference-empty", empty)
 -            persistPanelEvidence(activity, "r22-2-reference-full", full)
++            val full = copyMaterialView(instrumentation, material, size)
 +            val referenceLabel = "r22-3-reference-$size-${Integer.toHexString(background)}"
 +            persistPanelEvidence(activity, "$referenceLabel-standby", standby)
 +            persistPanelEvidence(activity, "$referenceLabel-neutral-bootstrap", neutral)
@@ -232,7 +269,7 @@ index 0256d9e2..81390adf 100644
          } finally {
              instrumentation.runOnMainSync { activity.finish() }
              instrumentation.waitForIdleSync()
-@@ -2516,6 +2534,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -2516,6 +2548,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
  
      @Test fun isolatedStandbyPreservesAuthorizedComposition() {
          for (background in listOf(android.graphics.Color.WHITE, android.graphics.Color.BLACK)) {
@@ -249,7 +286,7 @@ index 0256d9e2..81390adf 100644
              lateinit var translucentReference: Bitmap
              val referenceGate = RealReleaseGate().apply { releaseAll() }
              withOrbRetirementFixture("r22-2-translucent-reference-$background", referenceGate,
-@@ -2584,7 +2612,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -2584,7 +2626,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                  val with = mutableListOf<OrbRetirementCapture>()
                  try {
                      phases.forEachIndexed { index, phase ->
@@ -264,7 +301,7 @@ index 0256d9e2..81390adf 100644
                      }
                      assertTrue(compareMaterialPixels(without[0].bitmap, without[1].bitmap).nearlyEqual())
                      assertTrue(compareMaterialPixels(without[0].bitmap, without[2].bitmap).meaningful())
-@@ -2618,7 +2652,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -2618,7 +2666,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                          root.width / 2f, root.height / 2f, 0)
                      try { assertTrue(root.dispatchTouchEvent(down)); assertTrue(root.dispatchTouchEvent(up)) }
                      finally { down.recycle(); up.recycle() }
@@ -278,7 +315,7 @@ index 0256d9e2..81390adf 100644
                      fixture.window.updateMaterial(calibratedOrbProfile().copy(opacity = .5f), fixture.settings)
                      assertEquals("nonopaque blend must disarm standby immediately", null, root.passiveStandbyObservation())
                  }
-@@ -2682,7 +2721,6 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -2682,7 +2735,6 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                  } finally { terminalScreen.recycle() }
                  fixture.ownership.assertBoundedSingleRenderer()
              } } finally { translucentReference.recycle() }
@@ -286,7 +323,7 @@ index 0256d9e2..81390adf 100644
      }
  
      @Test fun stalePressureCannotSwitchReplacement() {
-@@ -2746,6 +2784,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -2746,6 +2798,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
  
      @Test fun stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges() {
          val refs = passiveReferences()
@@ -294,7 +331,7 @@ index 0256d9e2..81390adf 100644
          val gate = RealReleaseGate().apply { delayTickets = true }
          try { withOrbRetirementFixture("r08-stale-privacy-size", gate) { fixture ->
              fun show(): KeyguardOrbBufferProducerFrame {
-@@ -2798,11 +2837,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -2798,11 +2851,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                  }
                  val neutralTicket = gate.awaitTicket(c.lease.attachment, fullTicket.lease.generation)
                  assertEquals(calibratedOrbProfile().neutralized().visualKey, neutralTicket.lease.visualKey)
@@ -314,7 +351,7 @@ index 0256d9e2..81390adf 100644
                  }
                  fun recordSafeStrip(label: String) {
                      val samples = mutableListOf<Bitmap>()
-@@ -2823,9 +2867,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -2823,9 +2881,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                                  samples += sample
                                  persistPanelEvidence(fixture.activity, "$label-full-$index", screen)
                                  persistPanelEvidence(fixture.activity, "$label-$index", sample)
@@ -327,7 +364,7 @@ index 0256d9e2..81390adf 100644
                                  val centerY = (b.top + b.height() / 2).coerceIn(0, screen.height - 1)
                                  val leftX = (b.left - 4).coerceIn(0, screen.width - 1)
                                  val rightX = (b.right + 4).coerceIn(0, screen.width - 1)
-@@ -2833,29 +2877,33 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -2833,29 +2891,33 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                                  for (y in 0 until sample.height) for (x in 0 until sample.width) {
                                      if (sample.getPixel(x, y) and 0x00ffffff == 0x00ffffff) whitePixels += 1
                                  }
@@ -375,7 +412,7 @@ index 0256d9e2..81390adf 100644
                                      "$rightX,$centerY:${screen.getPixel(rightX, centerY)} expected=safe-neutral"
                              } finally { screen.recycle() }
                              Thread.sleep(16)
-@@ -2928,6 +2976,104 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -2928,6 +2990,104 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                  fullCrop.recycle()
              }
              fixture.ownership.assertBoundedSingleRenderer()
@@ -480,7 +517,7 @@ index 0256d9e2..81390adf 100644
          } } finally { refs.recycle() }
      }
  
-@@ -4342,9 +4488,21 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+@@ -4342,9 +4502,21 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
              val produced = samples.await(requestId)
              assertEquals("producer evidence must identify the submitted frame", produced.frame, submitted)
              persistProducerEvidence(activity, "r06-$label-$suffix-producer", produced)
@@ -503,3 +540,36 @@ index 0256d9e2..81390adf 100644
                  persist = { evidenceLabel, image -> persistPanelEvidence(activity, evidenceLabel, image) },
                  accepts = accepts,
                  onTimeout = {
+@@ -4382,7 +4554,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+         fun assertNormalHideOrder(lease: KeyguardOrbBufferLease) {
+             val events = windowBoundaries.filter { it.first == lease.attachment }
+             val local = events.indexOfFirst { it.second == "LOCAL_HIDE_APPLIED" }
+-            val child = events.indexOfFirst { it.second == "ISOLATED_LAYER_HIDE_SUBMITTED" }
++            // Earlier material replacements on the same attachment submit
++            // their own child hides while the root remains authorized. Select
++            // the terminal child hide after this operation's local hide.
++            val child = events.indices.firstOrNull { it > local &&
++                events[it].second == "ISOLATED_LAYER_HIDE_SUBMITTED" } ?: -1
+             val removeBegin = events.indexOfFirst { it.second == "REMOVE_VIEW_BEGIN" }
+             val removeReturn = events.indexOfFirst { it.second == "REMOVE_VIEW_RETURN" }
+             assertTrue("root/child/remove boundaries out of order: $events",
+@@ -5080,7 +5256,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+         }
+     }
+ 
+-    private fun copyMaterialView(instrumentation: Instrumentation, view: View): Bitmap {
++    private fun copyMaterialView(instrumentation: Instrumentation, view: View, expectedSize: Int = 168): Bitmap {
+         lateinit var bounds: Rect
+         instrumentation.runOnMainSync {
+             val location = IntArray(2)
+@@ -5093,8 +5269,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+         try {
+             assertTrue("material view bounds outside screenshot: $bounds",
+                 bounds.intersect(0, 0, screen.width, screen.height))
+-            assertEquals(168, bounds.width())
+-            assertEquals(168, bounds.height())
++            assertEquals(expectedSize, bounds.width())
++            assertEquals(expectedSize, bounds.height())
+             return Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
+         } finally {
+             screen.recycle()

@@ -42,9 +42,7 @@ run_case() {
 }
 service=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
 panel=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest
-for method in r22CalibrationPreservesNonSuppressingAutomation r22SupersededOpeningWalkYieldsToFreshInspection r22YieldedWalkCannotGrantAfterExclusion r22StableOpeningReadIsNotYielded r22UnstagedOpeningObservation; do
-  run_case "$service" "$method" service 180
-done
+# Service specimens are retained from 44937156640 and are not repeated.
 for method in isolatedOpaqueOrbHasNeutralParentAtRetire stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges isolatedStandbyPreservesAuthorizedComposition isolatedStandbyBlackReturnAndHide isolatedNeutralRecoveryAtCommittedResizedBounds; do
   seconds=180
   if [[ "$method" == stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges ]]; then seconds=240; fi
