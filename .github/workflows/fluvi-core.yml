@@ -1,4 +1,4 @@
-name: R19 Exact-Source Code Graph (orchestration only)
+name: R20 Exact-Source Code Graph (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -17,12 +17,12 @@ on:
 permissions:
   contents: write
 jobs:
-  r19-exact-source-graph:
+  r20-exact-source-graph:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      APP_SHA: bc41ec11b293923f664b50cd79ed36b5f6fad53b
-      TOOLING_BASE: 1fb0a2c5c7d51fc0f1a7b3806d120ea32af7fd47
+      APP_SHA: 58126456956ae3f5785174254d287937701e5d93
+      TOOLING_BASE: a0157e2f7a838565d31ae90b15d78a50b1eb5eae
     steps:
       - uses: actions/checkout@v5
         with:
@@ -51,7 +51,7 @@ jobs:
           dart pub global activate scip_dart 1.6.2
           dart pub global run scip_dart ./
           test -s index.scip
-          sha256sum index.scip > "$RUNNER_TEMP/r19-index-sha256.txt"
+          sha256sum index.scip > "$RUNNER_TEMP/r20-index-sha256.txt"
       - name: Test and generate graph
         shell: bash
         run: |
@@ -63,12 +63,12 @@ jobs:
           dart pub get
           dart analyze
           dart test
-          dart run bin/fluvi_codegraph.dart generate --index "$source_dir/index.scip" --graph "$tooling_dir/docs/codegraph" --source-root "$source_dir" --source-head "$APP_SHA" --source-ref "$APP_SHA" | tee "$RUNNER_TEMP/r19-graph-generation.txt"
+          dart run bin/fluvi_codegraph.dart generate --index "$source_dir/index.scip" --graph "$tooling_dir/docs/codegraph" --source-root "$source_dir" --source-head "$APP_SHA" --source-ref "$APP_SHA" | tee "$RUNNER_TEMP/r20-graph-generation.txt"
           for symbol in KeyguardTimingCaptureBridge KeyguardTimingCaptureSnapshot DebugConsoleDialog; do
             printf '\n## %s\n' "$symbol"
             dart run bin/fluvi_codegraph.dart query --graph "$tooling_dir/docs/codegraph" --symbol "$symbol"
-          done > "$RUNNER_TEMP/r19-graph-query.txt"
-          printf 'source_dir=%s\ntooling_dir=%s\n' "$source_dir" "$tooling_dir" > "$RUNNER_TEMP/r19-worktrees.txt"
+          done > "$RUNNER_TEMP/r20-graph-query.txt"
+          printf 'source_dir=%s\ntooling_dir=%s\n' "$source_dir" "$tooling_dir" > "$RUNNER_TEMP/r20-worktrees.txt"
           python3 - "$tooling_dir/docs/codegraph" "$APP_SHA" "$source_dir/index.scip" <<'PY'
           import hashlib,json,pathlib,sys
           root=pathlib.Path(sys.argv[1]);m=json.loads((root/'manifest.json').read_text())
@@ -86,15 +86,16 @@ jobs:
                   count+=1
           print('verified_shards=',count,'documents=',m['document_count'],'repo_symbols=',m['repository_defined_symbol_count'])
           PY
-          report="$tooling_dir/docs/codegraph-r19-presentation-pipeline-bc41ec11.md"
-          printf '# R19 first-authorized ORB source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
+          report="$tooling_dir/docs/codegraph-r20-presentation-pipeline-58126456.md"
+          printf '# R20 first-authorized ORB source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
           printf 'The Dart SCIP manifest is `docs/codegraph/manifest.json`; Kotlin has no SCIP coverage and the following is source navigation, not a generated call graph. The output/host lifecycle is Main-owned and visual presentation remains an independently measured outcome.\n\n' >> "$report"
           printf '```text\n' >> "$report"
           if command -v rg >/dev/null 2>&1; then search=(rg -n); else search=(grep -nE); fi
-          (cd "$source_dir" && "${search[@]}" 'reserveBeforeMain|startR18|applyInspection|readSystemWindows|R18_PIPELINE|R19_|firstPhysical|allocatedAt|r19AllocatedAt|reservedReq|firstAuthorizedOrb|advanceR19First|invalidateR19Scene|requireRead|sceneSerial|FirstPaintTicket|authorizeDirectFirst|prepareHiddenDirect|beginDirectPresentation|queueReveal|crossSubmitBoundary|sealR18|class KeyguardFirstAuthorizedOrb|class KeyguardOrbPresentationCoordinator|class KeyguardOrbInertHost|class KeyguardOrbDirectOutput|class KeyguardOrbR18Presenter|fun (stage|reveal|retire|seal|dispose|borrow|releaseBorrow)|addTransactionCompletedListener|presentFence|draw|surfaceReady' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardWindow,KeyguardCardSettings,KeyguardSystemState,KeyguardWindowSnapshotReader,KeyguardInspectionFreshness,KeyguardFirstAuthorizedOrb,KeyguardOrbInertHost,KeyguardOrbPresentationCoordinator}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardOrbDirectOutput,KeyguardOrbR18Presenter,KeyguardOrbSurfacePresenter,KeyguardOrbSurfaceWorker,KeyguardOrbSurfaceMetrics}.kt) >> "$report"
+          (cd "$source_dir" && "${search[@]}" 'reserveBeforeMain|startR18|applyInspection|readSystemWindows|R18_PIPELINE|R19_|R20_|firstPhysical|allocatedAt|r20AllocatedAt|reservedReq|firstAuthorizedOrb|advanceR20First|invalidateR20Scene|requireRead|sceneSerial|FirstPaintTicket|authorizeDirectFirst|prepareHiddenDirect|beginDirectPresentation|queueReveal|crossSubmitBoundary|sealR18|class KeyguardFirstAuthorizedOrb|class KeyguardOrbPresentationCoordinator|class KeyguardOrbInertHost|class KeyguardOrbDirectOutput|class KeyguardOrbR18Presenter|fun (stage|reveal|retire|seal|dispose|borrow|releaseBorrow)|addTransactionCompletedListener|presentFence|draw|surfaceReady' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardWindow,KeyguardCardSettings,KeyguardSystemState,KeyguardWindowSnapshotReader,KeyguardInspectionFreshness,KeyguardFirstAuthorizedOrb,KeyguardOrbInertHost,KeyguardOrbPresentationCoordinator}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardOrbDirectOutput,KeyguardOrbR18Presenter,KeyguardOrbSurfacePresenter,KeyguardOrbSurfaceWorker,KeyguardOrbSurfaceMaterial,KeyguardOrbSurfaceMetrics}.kt) >> "$report"
+          (cd "$source_dir" && "${search[@]}" 'r20AuthorizedFullFirstMiss|r20ExactAuthorizedPosterHit|r20FailedFirstLock|r20HeldFirstWrite|r20FirstFrameBreakdown|r12PreparedPictureMatchesCanonical' android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt) >> "$report"
           printf '\n```\n' >> "$report"
-          cp "$RUNNER_TEMP/r19-graph-query.txt" "$tooling_dir/docs/codegraph-r19-query-bc41ec11.txt"
-          sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$RUNNER_TEMP/r19-manifest-sha256.txt"
+          cp "$RUNNER_TEMP/r20-graph-query.txt" "$tooling_dir/docs/codegraph-r20-query-58126456.txt"
+          sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$RUNNER_TEMP/r20-manifest-sha256.txt"
       - name: Publish graph to independent immutable tooling branch
         shell: bash
         run: |
@@ -102,21 +103,21 @@ jobs:
           cd tooling
           git config user.name 'Fluvi Graph Bot'
           git config user.email 'fluvi-graph@users.noreply.github.com'
-          git add docs/codegraph docs/codegraph-r19-presentation-pipeline-bc41ec11.md docs/codegraph-r19-query-bc41ec11.txt
+          git add docs/codegraph docs/codegraph-r20-presentation-pipeline-58126456.md docs/codegraph-r20-query-58126456.txt
           git diff --cached --check
-          git commit -m 'graph: index R19 first-authorized ORB application source [skip ci]'
-          git rev-parse HEAD | tee "$RUNNER_TEMP/r19-graph-commit.txt"
-          test -z "$(git ls-remote origin refs/heads/tooling/r19-presentation-pipeline-bc41ec11b293)"
-          git push origin HEAD:refs/heads/tooling/r19-presentation-pipeline-bc41ec11b293
+          git commit -m 'graph: index R20 first-authorized ORB application source [skip ci]'
+          git rev-parse HEAD | tee "$RUNNER_TEMP/r20-graph-commit.txt"
+          test -z "$(git ls-remote origin refs/heads/tooling/r20-presentation-pipeline-58126456956a)"
+          git push origin HEAD:refs/heads/tooling/r20-presentation-pipeline-58126456956a
       - name: Preserve graph and receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r19-graph-bc41ec11b293-run-${{ github.run_id }}
+          name: r20-graph-58126456956a-run-${{ github.run_id }}
           path: |
             tooling/docs/codegraph/**
-            tooling/docs/codegraph-r19-*.md
-            tooling/docs/codegraph-r19-*.txt
-            ${{ runner.temp }}/r19-*.txt
+            tooling/docs/codegraph-r20-*.md
+            tooling/docs/codegraph-r20-*.txt
+            ${{ runner.temp }}/r20-*.txt
           if-no-files-found: warn
           retention-days: 30
