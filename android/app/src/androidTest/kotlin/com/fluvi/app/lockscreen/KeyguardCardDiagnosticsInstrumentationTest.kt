@@ -159,6 +159,52 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
     }
 
+    @Test fun r20FirstFrameBreakdownSurvivesFreezeAndReplacement() {
+        for (mode in listOf("LIGHT", "FULL")) {
+            KeyguardCardDiagnostics.startCapture(context, "r20-$mode", "profile", mode)
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 921, 4, "wake", 20_000))
+            fun edge(phase: String, at: Long, req: Long, attachment: Long, output: Long,
+                     extra: Map<String, Any> = emptyMap()) {
+                KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", phase,
+                    serviceSession = 921, wakeEpoch = 4, requestId = req, attachGeneration = attachment,
+                    diagnosticContext = owner, observedUptimeMs = at,
+                    fields = mapOf<String, Any>("r18Host" to 7, "r18Output" to output,
+                        "r18Child" to 500 + output, "r18Privacy" to "full", "r19Intent" to "EMPTY") + extra)
+            }
+            edge("WAKE_ADOPTED", 20_000, 201, 8, 30)
+            edge("R19_ALLOCATED", 19_000, 201, 8, 30)
+            edge("FALLBACK:first", 20_040, 201, 8, 30)
+            // A late delivery retains G1 and its actual ticket, even if the
+            // eventual grant came from a later compatible request.
+            edge("R19_PROOF_CONSUMED", 20_025, 209, 8, 30, mapOf("r19SceneNow" to 77))
+            edge("R20_FIRST_FRAME", 20_020, 201, 8, 30, mapOf(
+                "r20Method" to "DIRECT_MISS", "r20EntryNs" to 1001L, "r20PainterStartNs" to 1002L,
+                "r20PainterEndNs" to 1003L, "r20ConfigureEndNs" to 1004L,
+                "r20LockBeginNs" to 1005L, "r20LockReturnNs" to 1006L,
+                "r20DrawEndNs" to 1007L, "r20PostReturnNs" to 1008L))
+            edge("WAKE_ADOPTED", 20_100, 301, 9, 31)
+            edge("R20_FIRST_FRAME", 20_110, 301, 9, 31, mapOf(
+                "r20Method" to "BITMAP_HIT", "r20EntryNs" to 2001L,
+                "r20LockBeginNs" to 2005L, "r20Failure" to "LOCK"))
+            repeat(80) { index -> KeyguardCardDiagnostics.captureEvent(context, "ACCESSIBILITY_EVENT", "pressure",
+                diagnosticContext = owner, observedUptimeMs = 20_200L + index, fields = mapOf("eventAgeMs" to index)) }
+            val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            assertTrue("UTF-8 report exceeds budget", frozen.toByteArray(Charsets.UTF_8).size <= 32_768)
+            val rows = frozen.lineSequence().filter { it.startsWith(" R18_PIPELINE ") }.toList()
+            assertEquals(2, rows.size)
+            assertTrue(rows[0].contains("alloc=19000"))
+            assertTrue(rows[0].contains("firstMethod=DIRECT_MISS firstTicket=201"))
+            assertTrue(rows[0].contains("firstNs=1001/1002/1003/1004/1005/1006/1007/1008"))
+            assertTrue(rows[0].contains("consumedReq=209"))
+            assertTrue(rows[1].contains("firstMethod=BITMAP_HIT firstTicket=301"))
+            assertTrue(rows[1].contains("firstFailure=LOCK"))
+            assertTrue(rows[1].contains("firstNs=2001/UNOBSERVED/UNOBSERVED/UNOBSERVED/2005/UNOBSERVED/UNOBSERVED/UNOBSERVED"))
+            edge("R20_FIRST_FRAME", 20_300, 999, 8, 30, mapOf("r20Method" to "STALE"))
+            assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+            KeyguardCardDiagnostics.clearCapture(context)
+        }
+    }
+
     @Test fun r12SurfaceEvidenceRetainsItsShowOwnerInLight() = r12SurfaceEvidence("LIGHT")
     @Test fun r12SurfaceEvidenceRetainsItsShowOwnerInFull() = r12SurfaceEvidence("FULL")
 

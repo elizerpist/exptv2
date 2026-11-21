@@ -748,21 +748,30 @@ class FluviKeyguardCardService : AccessibilityService() {
     /** Worker-only scalar observation; capture association belongs to the
      * original exact output, even after replacement or withdrawal. */
     private fun onR19Observation(observation: KeyguardOrbSurfaceObservation) {
-        if (observation.stage != "R19_PAINT_ENTER" && observation.stage != "POSTER") return
+        if (observation.stage != "R19_PAINT_ENTER" && observation.stage != "POSTER" &&
+            observation.stage != "R20_FIRST_FRAME") return
         val binding = synchronized(queueLock) { r18DrainBindings.firstOrNull {
             it?.attachment == observation.attachment && it.generation == observation.generation
         } } ?: return
         val context = binding.diagnosticContext ?: return
         if (context.captureId == null || !KeyguardCardDiagnostics.wantsEvent("R18_PIPELINE")) return
         val phase = if (observation.stage == "POSTER") "R19_POSTER" else observation.stage
+        val first = observation.firstFrame
         KeyguardCardDiagnostics.captureEvent(this, "R18_PIPELINE", phase,
             serviceSession = binding.token.stamp.authority.serviceSession,
             wakeEpoch = binding.token.stamp.authority.wakeGeneration,
-            requestId = binding.token.stamp.firstRequestId, attachGeneration = observation.attachment,
+            requestId = first?.requestId ?: binding.token.stamp.firstRequestId, attachGeneration = observation.attachment,
             observedUptimeMs = observation.observedAtUptimeMs, diagnosticContext = context,
-            surfaceMetrics = observation.metrics, deferredFields = { mapOf(
-                "r18Host" to binding.token.stamp.hostGeneration, "r18Output" to observation.generation,
-                "r19Poster" to if (observation.stage == "POSTER") observation.detail else "UNOBSERVED") })
+            surfaceMetrics = observation.metrics, deferredFields = {
+                fun ns(value: Long?) = value?.takeIf { it > 0 } ?: "UNOBSERVED"
+                mapOf("r18Host" to binding.token.stamp.hostGeneration, "r18Output" to observation.generation,
+                    "r19Poster" to if (observation.stage == "POSTER") observation.detail else "UNOBSERVED",
+                    "r20Method" to (first?.method ?: "UNOBSERVED"), "r20EntryNs" to ns(first?.entryNs),
+                    "r20PainterStartNs" to ns(first?.painterStartNs), "r20PainterEndNs" to ns(first?.painterEndNs),
+                    "r20ConfigureEndNs" to ns(first?.configureEndNs), "r20LockBeginNs" to ns(first?.lockBeginNs),
+                    "r20LockReturnNs" to ns(first?.lockReturnNs), "r20DrawEndNs" to ns(first?.drawEndNs),
+                    "r20PostReturnNs" to ns(first?.postReturnNs), "r20Failure" to (first?.failure ?: "UNOBSERVED"))
+            })
     }
 
     private fun onR18Receipt(attachment: Long, generation: Long,

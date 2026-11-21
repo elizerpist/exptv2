@@ -58,6 +58,15 @@ internal class KeyguardOrbSurfaceTarget(
     var shellNeedsClear = true
 }
 
+/** First-write milestones use the monotonic nanosecond clock. Zero means
+ * that the boundary was not observed, not that it took no time. */
+internal data class KeyguardR20FirstFrameObservation(
+    val requestId: Long, val method: String, val entryNs: Long,
+    val painterStartNs: Long, val painterEndNs: Long, val configureEndNs: Long,
+    val lockBeginNs: Long, val lockReturnNs: Long, val drawEndNs: Long,
+    val postReturnNs: Long, val failure: String?,
+)
+
 /** Immutable, once-per-boundary observations. A post is not a physical
  * presentation or an independently sampled composited pixel. */
 internal data class KeyguardOrbSurfaceObservation(
@@ -68,6 +77,7 @@ internal data class KeyguardOrbSurfaceObservation(
     val detail: String,
     val full: Boolean,
     val metrics: KeyguardOrbSurfaceMetrics? = null,
+    val firstFrame: KeyguardR20FirstFrameObservation? = null,
 )
 
 /** Owns the single platform-managed holder producer and its frame clock.
@@ -100,6 +110,25 @@ internal class KeyguardOrbSurfaceWorker(
         val phase: KeyguardMaterialTime,
     )
 
+    /** These objects are worker-owned and exist only during one authorized
+     * first write; no private image or Android surface crosses this state. */
+    private data class FirstSelection(
+        val target: KeyguardOrbSurfaceTarget,
+        val ticket: KeyguardR19FirstPaintTicket,
+        val phase: KeyguardMaterialTime,
+        val request: Long,
+        val direct: Boolean,
+    )
+    private class FirstMeasurement(
+        val target: KeyguardOrbSurfaceTarget,
+        val ticket: KeyguardR19FirstPaintTicket,
+        val entryNs: Long,
+    ) {
+        var method = "UNOBSERVED"
+        var painterStartNs = 0L; var painterEndNs = 0L; var configureEndNs = 0L
+        var lockBeginNs = 0L; var lockReturnNs = 0L; var drawEndNs = 0L; var postReturnNs = 0L
+    }
+
     private val thread = HandlerThread("Fluvi-orb-surface").apply { start() }
     private val handler = Handler(thread.looper)
     private val preparationGeneration = AtomicLong()
@@ -116,6 +145,8 @@ internal class KeyguardOrbSurfaceWorker(
     private var previousPainter: KeyguardOrbSurfacePainter? = null
     private var transitionStartedNs = 0L
     private var currentPoster: Poster? = null
+    private var firstSelection: FirstSelection? = null
+    private var firstMeasurement: FirstMeasurement? = null
     private var firstPosted = false
     private var framePending = false
     private var pendingRedraw: KeyguardOrbSurfaceRedrawCompletion? = null
@@ -201,6 +232,9 @@ internal class KeyguardOrbSurfaceWorker(
             previousScene = null
             previousPainter = null
             currentPoster = null
+            firstSelection = null
+            firstMeasurement?.target?.let { finishFirstObservation(it, "REPLACED") }
+            firstMeasurement = null
             firstPosted = false
             target.surfaceReady = true
             if (runCatching { created(target) }.isFailure) {
@@ -224,7 +258,7 @@ internal class KeyguardOrbSurfaceWorker(
         val accepted = handler.post {
             if (!disposed && !target.revoked && currentTarget === target && authorizedTarget.get() === target &&
                 request == preparationGeneration.get() && target.firstDirectAuthorization.get() === ticket)
-                prepareAuthorized(target, safe, request)
+                prepareAuthorized(target, safe, request, ticket)
         }
         return accepted
     }
@@ -245,34 +279,64 @@ internal class KeyguardOrbSurfaceWorker(
             previousScene = null
             previousPainter = null
             currentPoster = null
+            firstSelection = null
+            firstMeasurement?.target?.let { finishFirstObservation(it, "REPLACED") }
+            firstMeasurement = null
             firstPosted = false
             prepareAuthorized(target, safe, request)
         }
     }
 
-    private fun prepareAuthorized(target: KeyguardOrbSurfaceTarget, safe: KeyguardMaterialProfile, request: Long) {
-            if (target.directOutput != null) observe(target, "R19_PAINT_ENTER", "worker")
-            val phase = if (lastPostedVisual == safe.visualKey && lastPostedFull == target.full) {
-                KeyguardMaterialTime(lastPostedElapsed, lastPostedPhase, lastPostedBackground, lastPostedInterior)
-            } else initialPhase(safe)
-            try {
-                val key = posterKey(safe, target.full, target.width, target.height, target.densityDpi, phase)
-                val hit = posters.containsKey(key)
-                val poster = getOrMakePoster(safe, target.full, target.width, target.height, target.densityDpi, phase) {
-                    authorizedTarget.get() === target && !target.revoked && request == preparationGeneration.get()
-                }
-                if (target.revoked || currentTarget !== target || authorizedTarget.get() !== target ||
-                    request != preparationGeneration.get()) return
+    private fun prepareAuthorized(target: KeyguardOrbSurfaceTarget, safe: KeyguardMaterialProfile, request: Long,
+                                  firstTicket: KeyguardR19FirstPaintTicket? = null) {
+        val enteredNs = if (firstTicket != null && runCatching { isCaptureActive() }.getOrDefault(false)) System.nanoTime() else 0L
+        if (target.directOutput != null) observe(target, "R19_PAINT_ENTER", "worker")
+        val phase = if (lastPostedVisual == safe.visualKey && lastPostedFull == target.full) {
+            KeyguardMaterialTime(lastPostedElapsed, lastPostedPhase, lastPostedBackground, lastPostedInterior)
+        } else initialPhase(safe)
+        val measurement = if (firstTicket != null && enteredNs != 0L)
+            FirstMeasurement(target, firstTicket, enteredNs).also { firstMeasurement = it } else null
+        val valid = {
+            !disposed && authorizedTarget.get() === target && currentTarget === target && !target.revoked &&
+                request == preparationGeneration.get() &&
+                (firstTicket == null || target.firstDirectAuthorization.get() === firstTicket)
+        }
+        try {
+            // The same exact supported size and complete cache key apply to
+            // both the poster path and the ticket-qualified direct miss.
+            validatePosterSize(target.width, target.height)
+            if (!valid()) throw StalePreparation()
+            val key = posterKey(safe, target.full, target.width, target.height, target.densityDpi, phase)
+            val cached = posters[key]
+            if (firstTicket != null) firstSelection = FirstSelection(target, firstTicket, phase, request, cached == null)
+            if (firstTicket != null && cached == null) {
+                measurement?.method = "DIRECT_MISS"
+                if (measurement != null) measurement.painterStartNs = System.nanoTime()
+                val now = System.nanoTime()
+                val scene = KeyguardMaterialScene(safe, target.full, now).anchoredAt(phase, now)
+                val painter = KeyguardOrbSurfacePainter(context, safe, target.width, target.height)
+                if (measurement != null) measurement.painterEndNs = System.nanoTime()
+                if (!valid()) throw StalePreparation()
+                currentPoster = null
+                currentPainter = painter
+                currentScene = scene
+            } else {
+                if (measurement != null) measurement.method = "BITMAP_HIT"
+                val poster = cached ?: getOrMakePoster(safe, target.full, target.width, target.height,
+                    target.densityDpi, phase, valid)
+                if (!valid()) throw StalePreparation()
                 currentPoster = poster
                 currentPainter = poster.painter
                 currentScene = poster.scene.anchoredAt(poster.phase, System.nanoTime())
-                observe(target, "POSTER", if (hit) "hit" else "missPreparedOnWorker")
-                drawIfReady(target)
-            } catch (_: StalePreparation) {
-                // A newer material/lifetime owns the next worker message.
-            } catch (error: Throwable) {
-                fail(target, "prepare:${error.javaClass.simpleName}")
+                observe(target, "POSTER", if (cached != null) "hit" else "missPreparedOnWorker")
             }
+            drawIfReady(target)
+        } catch (_: StalePreparation) {
+            finishFirstObservation(target, "STALE_PREPARE")
+        } catch (error: Throwable) {
+            finishFirstObservation(target, "PREPARE:${error.javaClass.simpleName}")
+            fail(target, "prepare:${error.javaClass.simpleName}")
+        }
     }
 
     /** A compatible palette/effect update retains the running phase and the
@@ -284,10 +348,20 @@ internal class KeyguardOrbSurfaceWorker(
             if (disposed || currentTarget !== target || target.revoked || request != preparationGeneration.get()) return@post
             val old = currentScene
             if (old == null) {
+                finishFirstObservation(target, "SUPERSEDED")
+                firstSelection = null
                 prepareAuthorized(target, safe, request)
                 return@post
             }
-            if (old.profile.visualKey == safe.visualKey) return@post
+            if (old.profile.visualKey == safe.visualKey) {
+                val selection = firstSelection
+                if (!firstPosted && selection?.target === target &&
+                    target.firstDirectAuthorization.get() === selection.ticket) {
+                    firstSelection = selection.copy(request = request)
+                    drawIfReady(target)
+                }
+                return@post
+            }
             try {
                 val now = System.nanoTime()
                 old.timeAtInto(now, currentFrameTime)
@@ -301,13 +375,16 @@ internal class KeyguardOrbSurfaceWorker(
                 }
                 if (target.revoked || currentTarget !== target || authorizedTarget.get() !== target ||
                     request != preparationGeneration.get()) return@post
+                val replacingFirst = firstSelection?.target === target
+                if (replacingFirst) finishFirstObservation(target, "SUPERSEDED")
+                firstSelection = null
                 previousScene = if (target.live) old else null
                 previousPainter = if (target.live) currentPainter else null
                 transitionStartedNs = now
                 currentScene = next
                 currentPainter = poster.painter
                 currentPoster = poster
-                scheduleFrame()
+                if (replacingFirst && !firstPosted) drawIfReady(target) else scheduleFrame()
             } catch (_: StalePreparation) {
                 // The most recent queued semantic update will prepare instead.
             } catch (error: Throwable) {
@@ -387,6 +464,8 @@ internal class KeyguardOrbSurfaceWorker(
                 if (lastPostedFull) lastPostedVisual = null
             }
             if (currentTarget === target) {
+                finishFirstObservation(target, "REVOKED")
+                firstSelection = null
                 stopClock()
                 cancelRedraw()
                 currentTarget = null
@@ -424,7 +503,8 @@ internal class KeyguardOrbSurfaceWorker(
         authorizedTarget.getAndSet(null)?.let { it.revoked = true; it.access.revoke() }
         handler.postAtFrontOfQueue {
             disposed = true
-            currentTarget?.let { it.revoked = true; it.access.revoke() }
+            currentTarget?.let { finishFirstObservation(it, "DISPOSED"); it.revoked = true; it.access.revoke() }
+            firstSelection = null
             stopClock()
             cancelRedraw()
             currentTarget = null
@@ -446,17 +526,27 @@ internal class KeyguardOrbSurfaceWorker(
         phase.backgroundPhase, phase.interiorPhase,
     )
 
+    private fun validatePosterSize(width: Int, height: Int) {
+        val supported = context.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
+        require(supported in 1..4096 && width == supported && height == supported)
+    }
+
     private fun getOrMakePoster(profile: KeyguardMaterialProfile, full: Boolean, width: Int, height: Int,
                                 densityDpi: Int, phase: KeyguardMaterialTime,
                                 valid: () -> Boolean): Poster {
-        val supported = context.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
-        require(supported in 1..4096 && width == supported && height == supported)
+        validatePosterSize(width, height)
         if (!valid()) throw StalePreparation()
         val key = posterKey(profile, full, width, height, densityDpi, phase)
         posters[key]?.let { return it }
         val scene = KeyguardMaterialScene(profile, full, System.nanoTime()).anchoredAt(phase, System.nanoTime())
         val painter = KeyguardOrbSurfacePainter(context, profile, width, height)
         val poster = Poster(key, painter.makePoster(phase), painter, scene, phase)
+        if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+            runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterWarmPosterCreated?.invoke(full) }
+            authorizedTarget.get()?.let { current ->
+                runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterPosterCreated?.invoke(current) }
+            }
+        }
         if (!valid()) {
             poster.bitmap.recycle()
             throw StalePreparation()
@@ -469,7 +559,7 @@ internal class KeyguardOrbSurfaceWorker(
     private fun drawIfReady(target: KeyguardOrbSurfaceTarget) {
         if (currentTarget !== target || target.revoked || !target.surfaceReady) return
         if (target.directOutput == null && target.ownsOutput && target.shellNeedsClear && !clearHost(target)) return
-        if (currentPoster == null) return
+        if (currentPoster == null && firstSelection?.let { it.target === target && it.direct } != true) return
         if (!firstPosted) draw(target, System.nanoTime())
         if (target.live && target.motionAllowed && firstPosted && !target.revoked) scheduleFrame()
     }
@@ -520,6 +610,29 @@ internal class KeyguardOrbSurfaceWorker(
         val painter = currentPainter ?: return
         if (currentTarget !== target || target.revoked || !target.surfaceReady) return
         val first = !firstPosted
+        val selection = if (first) firstSelection else null
+        if (selection != null && (selection.target !== target || authorizedTarget.get() !== target ||
+                target.firstDirectAuthorization.get() !== selection.ticket ||
+                selection.request != preparationGeneration.get())) {
+            finishFirstObservation(target, "STALE_SELECTION")
+            return
+        }
+        val firstDirect = selection?.direct == true
+        val firstTiming = if (first) firstMeasurement?.takeIf { it.target === target &&
+            (selection == null || it.ticket === selection.ticket) } else null
+        if (firstDirect) try {
+            val phase = checkNotNull(selection).phase
+            currentFrameTime.elapsedSeconds = phase.elapsedSeconds
+            currentFrameTime.phase = phase.phase
+            currentFrameTime.backgroundPhase = phase.backgroundPhase
+            currentFrameTime.interiorPhase = phase.interiorPhase
+            painter.prepare(currentFrameTime)
+            if (firstTiming != null) firstTiming.configureEndNs = System.nanoTime()
+        } catch (error: Throwable) {
+            finishFirstObservation(target, "CONFIGURE:${error.javaClass.simpleName}")
+            fail(target, "configure:${error.javaClass.simpleName}")
+            return
+        }
         var distinct = false
         var previousForFrame: KeyguardOrbSurfacePainter? = null
         // Scene arithmetic and RuntimeShader uniform updates are worker-only,
@@ -551,7 +664,14 @@ internal class KeyguardOrbSurfaceWorker(
             fail(target, "configure:${error.javaClass.simpleName}")
             return
         }
-        if (currentTarget !== target || target.revoked || !target.surfaceReady || !target.access.tryEnter()) return
+        if (currentTarget !== target || target.revoked || !target.surfaceReady ||
+            (selection != null && (authorizedTarget.get() !== target || !target.full ||
+                selection.ticket.visualKey != scene.profile.visualKey ||
+                target.firstDirectAuthorization.get() !== selection.ticket ||
+                selection.request != preparationGeneration.get())) || !target.access.tryEnter()) {
+            if (first) finishFirstObservation(target, "STALE_BEFORE_LOCK")
+            return
+        }
         val owned = target.ownedOutput
         val direct = target.directOutput
         val outputSurface: Surface? = when {
@@ -561,6 +681,10 @@ internal class KeyguardOrbSurfaceWorker(
         }
         if (target.ownsOutput && outputSurface == null) {
             target.access.leave()
+            if (selection != null && !target.revoked && currentTarget === target) {
+                finishFirstObservation(target, "BORROW")
+                fail(target, "firstBorrowUnavailable")
+            }
             return
         }
         var canvas: Canvas? = null
@@ -571,31 +695,47 @@ internal class KeyguardOrbSurfaceWorker(
         val cpuStart = if (measure) Debug.threadCpuTimeNanos() else 0L
         var lockEnd = 0L; var drawEnd = 0L; var postEnd = 0L
         var cpuLockEnd = 0L; var cpuDrawEnd = 0L; var cpuPostEnd = 0L
+        var firstFailureStage = "LOCK"
         try {
+            if (first && KeyguardOrbSurfaceWorkerTestHooks.ENABLED) KeyguardOrbSurfaceWorkerTestHooks.beforeFirstLock?.invoke(target)
+            if (firstTiming != null) firstTiming.lockBeginNs = System.nanoTime()
             canvas = if (outputSurface != null) outputSurface.lockHardwareCanvas() else checkNotNull(target.holder).lockHardwareCanvas()
+            if (firstTiming != null) firstTiming.lockReturnNs = System.nanoTime()
+            if (firstDirect) check(canvas.isHardwareAccelerated) { "direct first frame requires hardware canvas" }
             if (measure) { lockEnd = System.nanoTime(); cpuLockEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderLockReturned(SystemClock.uptimeMillis()) }
             if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
                 KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock?.invoke(target)
             }
+            firstFailureStage = "DRAW"
             canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
-            if (!firstPosted || !target.live) {
+            if (firstDirect) {
+                painter.drawPrepared(canvas)
+            } else if (first || !target.live) {
                 canvas.drawBitmap(checkNotNull(currentPoster).bitmap, 0f, 0f, bitmapPaint)
             } else {
                 previousForFrame?.drawPrepared(canvas)
                 painter.drawPrepared(canvas)
             }
+            if (firstTiming != null) firstTiming.drawEndNs = System.nanoTime()
+            if (first && KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+                runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterFirstFrameDraw?.invoke(target, if (firstDirect) "DIRECT_MISS" else "BITMAP") }
+            }
             if (measure) { drawEnd = System.nanoTime(); cpuDrawEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderDrawReturned(SystemClock.uptimeMillis()) }
+            firstFailureStage = "POST"
+            if (first && KeyguardOrbSurfaceWorkerTestHooks.ENABLED) KeyguardOrbSurfaceWorkerTestHooks.beforeFirstPost?.invoke(target)
             val submitted = canvas
             canvas = null
             if (measure) target.metrics?.holderPostEntered(SystemClock.uptimeMillis())
             if (outputSurface != null) outputSurface.unlockCanvasAndPost(submitted)
             else checkNotNull(target.holder).unlockCanvasAndPost(submitted)
             posted = true
+            if (firstTiming != null) firstTiming.postReturnNs = System.nanoTime()
             if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
                 runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost?.invoke(target) }
             }
             if (measure) { postEnd = System.nanoTime(); cpuPostEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderPostReturned(SystemClock.uptimeMillis()) }
         } catch (error: Throwable) {
+            if (first) finishFirstObservation(target, "$firstFailureStage:${error.javaClass.simpleName}")
             fail(target, "draw:${error.javaClass.simpleName}")
         } finally {
             if (canvas != null) runCatching {
@@ -615,12 +755,18 @@ internal class KeyguardOrbSurfaceWorker(
             target.metrics?.holderRecordObserved(SystemClock.uptimeMillis())
             if (target.revoked) target.metrics?.r16PinLateOperation()
         }
-        if (!posted || currentTarget !== target || target.revoked) return
+        if (!posted || currentTarget !== target || target.revoked ||
+            (selection != null && (authorizedTarget.get() !== target ||
+                target.firstDirectAuthorization.get() !== selection.ticket ||
+                selection.request != preparationGeneration.get()))) {
+            if (first) finishFirstObservation(target, "STALE_AFTER_POST")
+            return
+        }
         if (!firstPosted) {
             firstPosted = true
             target.firstPostedVisualKey = scene.profile.visualKey
             target.firstPostedWasFull = scene.full
-            val phase = checkNotNull(currentPoster).phase
+            val phase = selection?.phase ?: checkNotNull(currentPoster).phase
             currentScene = scene.anchoredAt(phase, System.nanoTime())
             lastPostedElapsed = phase.elapsedSeconds
             lastPostedPhase = phase.phase
@@ -628,7 +774,9 @@ internal class KeyguardOrbSurfaceWorker(
             lastPostedInterior = phase.interiorPhase
             lastPostedVisual = scene.profile.visualKey
             lastPostedFull = scene.full
+            firstSelection = null
             runCatching { onFirstPosted(target, SystemClock.uptimeMillis()) }
+            finishFirstObservation(target, null)
         } else if (target.live) {
             lastPostedElapsed = currentFrameTime.elapsedSeconds
             lastPostedPhase = currentFrameTime.phase
@@ -646,6 +794,20 @@ internal class KeyguardOrbSurfaceWorker(
             lastPostedFull = scene.full
         }
         cancelRedraw()
+    }
+
+    private fun finishFirstObservation(target: KeyguardOrbSurfaceTarget, failure: String?) {
+        val item = firstMeasurement?.takeIf { it.target === target } ?: return
+        firstMeasurement = null
+        runCatching {
+            if (isCaptureActive()) {
+                val snapshot = KeyguardR20FirstFrameObservation(item.ticket.requestId, item.method, item.entryNs,
+                    item.painterStartNs, item.painterEndNs, item.configureEndNs, item.lockBeginNs, item.lockReturnNs,
+                    item.drawEndNs, item.postReturnNs, failure)
+                target.reporter?.invoke(KeyguardOrbSurfaceObservation(target.attachment, target.generation,
+                    "R20_FIRST_FRAME", SystemClock.uptimeMillis(), "first", target.full, target.metrics, snapshot))
+            }
+        }
     }
 
     private fun observe(target: KeyguardOrbSurfaceTarget, stage: String, detail: String) {

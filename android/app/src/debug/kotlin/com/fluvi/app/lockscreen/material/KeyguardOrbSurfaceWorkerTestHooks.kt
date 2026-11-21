@@ -6,6 +6,11 @@ internal object KeyguardOrbSurfaceWorkerTestHooks {
     const val ENABLED = true
     @Volatile var afterCanvasLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
     @Volatile var afterCanvasPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+    @Volatile var afterPosterCreated: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+    @Volatile var afterWarmPosterCreated: ((Boolean) -> Unit)? = null
+    @Volatile var afterFirstFrameDraw: ((KeyguardOrbSurfaceTarget, String) -> Unit)? = null
+    @Volatile var beforeFirstLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+    @Volatile var beforeFirstPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
     @Volatile var holderBoundary: ((KeyguardOrbSurfaceTarget, String, Long) -> Unit)? = null
     private val nextRedraw = java.util.concurrent.atomic.AtomicLong()
     fun redrawCompletion(target: KeyguardOrbSurfaceTarget, finished: Runnable): KeyguardOrbSurfaceRedrawCompletion {

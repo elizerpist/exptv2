@@ -996,7 +996,7 @@ internal object KeyguardCardDiagnostics {
             "GRANT", "INPUT_ARMED", "REVEAL_QUEUED", "REVEAL_APPLIED", "SEALED", "OUTPUT_DRAINED", "FALLBACK",
             "R19_ALLOCATED", "R19_FIRST_POSITIVE", "R19_PROOF_ACCEPTED", "R19_PROOF_EXPIRED", "R19_EXPIRED_SYSTEM",
             "R19_EXPIRED_INGRESS", "R19_EXPIRED_DISPLAY",
-            "R19_PAINT_REQUEST", "R19_PAINT_ENTER", "R19_POSTER", "R19_PROOF_CONSUMED")
+            "R19_PAINT_REQUEST", "R19_PAINT_ENTER", "R19_POSTER", "R19_PROOF_CONSUMED", "R20_FIRST_FRAME")
         if (phase in retained) {
             if (phase == "INPUT_ARMED" && !timeline.values.containsKey(phase)) attempt.attachCount += 1
             timeline.values.putIfAbsent(phase, event.uptimeMs.toString())
@@ -1014,6 +1014,12 @@ internal object KeyguardCardDiagnostics {
         if (event.reason == "R19_FIRST_POSITIVE") {
             timeline.values.putIfAbsent("r19PositiveRequest", event.requestId?.toString() ?: "UNOBSERVED")
             listOf("r19SceneRead", "r19Freshness", "r19ReadStart", "r19RootMs", "r19RootFlags", "r19ChildFlags")
+                .forEach { retainField(it) }
+        }
+        if (event.reason == "R20_FIRST_FRAME") {
+            event.requestId?.let { timeline.values.putIfAbsent("r20Ticket", it.toString()) }
+            listOf("r20Method", "r20EntryNs", "r20PainterStartNs", "r20PainterEndNs", "r20ConfigureEndNs",
+                "r20LockBeginNs", "r20LockReturnNs", "r20DrawEndNs", "r20PostReturnNs", "r20Failure")
                 .forEach { retainField(it) }
         }
         if (event.reason == "R19_PROOF_CONSUMED") {
@@ -2245,6 +2251,8 @@ internal object KeyguardCardDiagnostics {
                         append(" firstReadRootMs=${firstPhysical?.activeRootTotalMs ?: "UNOBSERVED"} firstReadChildMs=${firstPhysical?.childAcquisitionTotalMs ?: "UNOBSERVED"} firstReadFlags=${firstPhysical?.activeRootFlags ?: "UNOBSERVED"}/${firstPhysical?.acceptedChildFlags ?: "UNOBSERVED"} firstReadIncomplete=${firstPhysical?.rootUnavailable ?: "UNOBSERVED"}/${firstPhysical?.walkTruncated ?: "UNOBSERVED"}")
                         append(" firstPositive=${value("r19PositiveRequest")}@${value("R19_FIRST_POSITIVE")} readStart=${value("r19ReadStart")} rootMs=${value("r19RootMs")} flags=${value("r19RootFlags")}/${value("r19ChildFlags")}")
                         append(" scene=${value("r19SceneRead")}/${value("r19SceneConsume")} freshness=${value("r19Freshness")} proofAccepted=${value("R19_PROOF_ACCEPTED")} proofExpired=${value("R19_PROOF_EXPIRED")} systemExpired=${value("R19_EXPIRED_SYSTEM")} ingressExpired=${value("R19_EXPIRED_INGRESS")} displayExpired=${value("R19_EXPIRED_DISPLAY")} consumed=${value("R19_PROOF_CONSUMED")} consumedReq=${value("r19ConsumedRequest")}")
+                        append(" firstMethod=${value("r20Method")} firstTicket=${value("r20Ticket")} firstFailure=${value("r20Failure")}")
+                        append(" firstNs=${value("r20EntryNs")}/${value("r20PainterStartNs")}/${value("r20PainterEndNs")}/${value("r20ConfigureEndNs")}/${value("r20LockBeginNs")}/${value("r20LockReturnNs")}/${value("r20DrawEndNs")}/${value("r20PostReturnNs")} firstNsClock=monotonic")
                         append(" paint=${value("R19_PAINT_REQUEST")}/${value("R19_PAINT_ENTER")} poster=${value("r19Poster")}@${value("R19_POSTER")} activeStart=${motion?.activeStartedAtUptimeMs ?: "UNOBSERVED"} firstMotion=${motion?.firstDistinctUptimeMs ?: "UNOBSERVED"} activePosts=${motion?.activeSubmissions ?: "UNOBSERVED"} gaps=${motion?.retainedGaps ?: "UNOBSERVED"}/${motion?.p95GapNs ?: "UNOBSERVED"}/${motion?.worstGapNs ?: "UNOBSERVED"}/${motion?.gapsOver50Ms ?: "UNOBSERVED"}")
                         appendLine(" backend=R18_DIRECT_ATTEMPT omittedGenerations=${attempt.r18GenerationOmitted} physicalFirstPixel=UNOBSERVED physicalLastPixel=UNOBSERVED")
                     }
