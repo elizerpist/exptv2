@@ -63,15 +63,24 @@ jobs:
           flutter pub get
           test -z "$(git status --porcelain --untracked-files=no)"
           printf 'application_sha=%s\nharness_sha=%s\narm=%s\n' "$APP_SHA" "$GITHUB_SHA" "$ARM" > "$RUNNER_TEMP/r19-api35/identity.txt"
+      - name: Configure runner-only plugin repository fallback
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.gradle/init.d"
+          cp "$GITHUB_WORKSPACE/harness/scripts/r22-3-plugin-repos.init.gradle" "$HOME/.gradle/init.d/fluvi-r22-3-repositories.gradle"
+          sha256sum "$HOME/.gradle/init.d/fluvi-r22-3-repositories.gradle" > "$RUNNER_TEMP/r19-api35/repository-fallback-sha256.txt"
       - name: Run the complete application and core JVM suites
         shell: bash
         run: |
+          set +e
           set -uo pipefail
           (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r19-api35/unit.log"
           printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r19-api35/unit.exit"
       - name: Compile profile and release Kotlin independently
         shell: bash
         run: |
+          set +e
           set -uo pipefail
           (cd android && ./gradlew :app:compileProfileKotlin :app:compileReleaseKotlin --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r19-api35/flavor-compile.log"
           printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r19-api35/flavor-compile.exit"
