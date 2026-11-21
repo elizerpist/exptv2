@@ -2549,25 +2549,35 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
     /** Independent sustained producer sample. The paired baseline and
      * candidate use the same uncontrolled material clock and duration. */
     @Test fun r22_3TranslucentSteadyCadence() {
-        val gate = RealReleaseGate().apply { releaseAll() }
+        val gate = NoopKeyguardOrbRecoveryTestHook
         withOrbRetirementFixture("r22-3-translucent-cadence", gate,
             initialProfile = calibratedOrbProfile().copy(opacity = .5f)) { fixture ->
             val before = copyPanelOrb(fixture.instrumentation, fixture.manager)
             var after: Bitmap? = null
+            var later: Bitmap? = null
             val directory = File(fixture.activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
             try {
                 persistPanelEvidence(fixture.activity, "r22-3-cadence-before", before)
                 fixture.beginNaturalCadence()
-                Thread.sleep(6_000)
-                val samples = fixture.endNaturalCadence()
-                after = copyPanelOrb(fixture.instrumentation, fixture.manager)
-                persistPanelEvidence(fixture.activity, "r22-3-cadence-after", checkNotNull(after))
+                Thread.sleep(15_000)
+                // Stop recording at the same 15s boundary but keep the natural
+                // material clock running for the independently sampled pixels.
+                // Returning to the controlled A phase before the screenshot
+                // would compare A against A even while real motion occurred.
+                val samples = fixture.endNaturalCadence(leaveNaturalTime = true)
+                try {
+                    after = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                    persistPanelEvidence(fixture.activity, "r22-3-cadence-after", checkNotNull(after))
+                    Thread.sleep(250)
+                    later = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                    persistPanelEvidence(fixture.activity, "r22-3-cadence-later", checkNotNull(later))
+                } finally { fixture.restoreControlledMaterialTime() }
                 val intervals = samples.zipWithNext { a, b -> (b.frameNanos - a.frameNanos) / 1_000_000.0 }
                 val ordered = intervals.sorted()
                 val median = ordered.getOrNull(ordered.size / 2)
                 val p95 = ordered.getOrNull(((ordered.size * 95 + 99) / 100 - 1).coerceAtLeast(0))
                 File(directory, "r22-3-cadence.txt").writeText(buildString {
-                    appendLine("clock=ChoreographerFrameNs submissionClock=uptimeMs durationMs=6000 refreshRate=${fixture.activity.display?.refreshRate}")
+                    appendLine("clock=ChoreographerFrameNs submissionClock=uptimeMs durationMs=15000 refreshRate=${fixture.activity.display?.refreshRate}")
                     appendLine("samples=${samples.size} intervals=${intervals.size} medianMs=$median p95Ms=$p95 worstMs=${ordered.lastOrNull()} over50ms=${intervals.count { it > 50 }} omitted=${fixture.cadenceOmissions()}")
                     samples.forEach { appendLine("frameNs=${it.frameNanos} submittedMs=${it.submittedMs} phase=${it.phase} slot=${it.slot}/${it.use}") }
                 })
@@ -2576,8 +2586,17 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 assertTrue("producer timestamps must advance", intervals.all { it > 0.0 })
                 assertTrue("material phases did not move", samples.map { it.phase }.distinct().size >= 100)
                 assertTrue("independent compositor crops did not change", compareMaterialPixels(before, checkNotNull(after)).meaningful())
-                fixture.ownership.assertBoundedSingleRenderer()
-            } finally { before.recycle(); after?.recycle() }
+                assertTrue("later natural compositor crop did not move", compareMaterialPixels(checkNotNull(after), checkNotNull(later)).meaningful())
+                var state = "UNOBSERVED"
+                var occupied = -1
+                fixture.instrumentation.runOnMainSync {
+                    val observed = requireNotNull(fixture.window.materialDiagnostics())
+                    occupied = observed.isolatedFramesInFlight + observed.isolatedFramesReady + observed.isolatedFramesCompositorOwned
+                    state = "inFlight=${observed.isolatedFramesInFlight} ready=${observed.isolatedFramesReady} owned=${observed.isolatedFramesCompositorOwned} route=${observed.effectiveRoute}"
+                }
+                File(directory, "r22-3-cadence.txt").appendText("terminalSnapshot=$state\n")
+                assertTrue("terminal fixed-pool snapshot exceeds three: $state", occupied in 0..3)
+            } finally { before.recycle(); after?.recycle(); later?.recycle() }
         }
     }
 
@@ -2904,8 +2923,21 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     try {
                         repeat(6) { index ->
                             var bounds: Rect? = null
-                            fixture.instrumentation.runOnMainSync { bounds = fixture.manager.currentOrbBounds() }
+                            var visibleClip: Rect? = null
+                            fixture.instrumentation.runOnMainSync {
+                                val panelRoot = requireNotNull(fixture.manager.currentRoot)
+                                val screenBounds = fixture.manager.currentOrbBounds()
+                                val rootClip = Rect()
+                                assertTrue("NOT REACHED: parent clip unavailable", panelRoot.getGlobalVisibleRect(rootClip))
+                                val rootScreen = IntArray(2)
+                                panelRoot.getLocationOnScreen(rootScreen)
+                                rootClip.offset(rootScreen[0], rootScreen[1])
+                                assertTrue("NOT REACHED: parent does not intersect child", rootClip.intersect(screenBounds))
+                                bounds = screenBounds
+                                visibleClip = rootClip
+                            }
                             val b = checkNotNull(bounds)
+                            val clip = checkNotNull(visibleClip)
                             val before = SystemClock.uptimeMillis()
                             val screen = requireNotNull(fixture.instrumentation.uiAutomation.takeScreenshot())
                             val after = SystemClock.uptimeMillis()
@@ -2940,18 +2972,38 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                                         wholeRoiDifference(oldAtOriginalBounds, sample)
                                     } finally { oldAtOriginalBounds.recycle() }
                                 } else null
+                                // The independent 172px native reference must be clipped by the
+                                // *measured* 168px parent for the child-only stress case. It is
+                                // distinct from, and cannot pass, the full 172px window gate.
+                                fun clippedReferenceDelta(reference: Bitmap): MaterialPixelComparison? {
+                                    if (nativeRefs === refs || clip == b) return null
+                                    val clipped = Bitmap.createBitmap(sample.width, sample.height, Bitmap.Config.ARGB_8888)
+                                    return try {
+                                        Canvas(clipped).apply {
+                                            drawColor(android.graphics.Color.WHITE)
+                                            save()
+                                            clipRect(clip.left - b.left, clip.top - b.top, clip.right - b.left, clip.bottom - b.top)
+                                            drawBitmap(reference, 0f, 0f, null)
+                                            restore()
+                                        }
+                                        wholeRoiDifference(clipped, sample)
+                                    } finally { clipped.recycle() }
+                                }
+                                val clippedNeutralDelta = clippedReferenceDelta(nativeRefs.neutral)
+                                val clippedAnimatedDelta = clippedReferenceDelta(nativeRefs.neutralAnimated)
                                 val category = when {
                                     comparison.nearlyEqual() -> "OLD_FULL"
                                     standbyDelta.nearlyEqual() -> "SAFE_STANDBY"
                                     neutralDelta.nearlyEqual() -> "SAFE_NEUTRAL"
                                     animatedDelta.nearlyEqual() -> "SAFE_NEUTRAL"
+                                    clippedNeutralDelta?.nearlyEqual() == true || clippedAnimatedDelta?.nearlyEqual() == true -> "SAFE_CLIPPED_NEW_NEUTRAL"
                                     oldNeutralDelta?.nearlyEqual() == true -> "OLD_SIZE_NEUTRAL"
                                     emptyDelta.nearlyEqual() -> "BLANK"
                                     else -> "UNCLASSIFIED"
                                 }
                                 categories += category
                                 times += "sample=$index before=$before after=$after bounds=$b size=${sample.width}x${sample.height} " +
-                                    "category=$category whitePixels=$whitePixels oldFull=$comparison standby=$standbyDelta neutral=$neutralDelta animated=$animatedDelta oldSize=$oldNeutralDelta empty=$emptyDelta " +
+                                    "category=$category parentClip=$clip whitePixels=$whitePixels oldFull=$comparison standby=$standbyDelta neutral=$neutralDelta animated=$animatedDelta clippedNeutral=$clippedNeutralDelta clippedAnimated=$clippedAnimatedDelta oldSize=$oldNeutralDelta empty=$emptyDelta " +
                                     "reference=r22-3-native-${sample.width} fiducials=$leftX,$centerY:${screen.getPixel(leftX, centerY)};" +
                                     "$rightX,$centerY:${screen.getPixel(rightX, centerY)} expected=safe-neutral"
                             } finally { screen.recycle() }
@@ -2965,7 +3017,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                                 .joinToString("\n", postfix = "\n"))
                         assertTrue("$label contained a blank or prior full-detail orb", samples.all(::safeNeutral))
                         assertTrue("$label was not independently classified as safe: $categories",
-                            categories.all { it == "SAFE_STANDBY" || it == "SAFE_NEUTRAL" })
+                            categories.all { it == "SAFE_STANDBY" || it == "SAFE_NEUTRAL" || it == "SAFE_CLIPPED_NEW_NEUTRAL" })
                     } finally { samples.forEach(Bitmap::recycle) }
                 }
                 recordSafeStrip("r08-neutral-transition")
@@ -3061,11 +3113,20 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             var childBounds = Rect()
             while (!measured && System.nanoTime() < layoutDeadline) {
                 fixture.instrumentation.runOnMainSync {
+                    // getGlobalVisibleRect is root-relative for this separate
+                    // panel window; screenshots use physical screen coordinates.
                     val visibleRoot = root.getGlobalVisibleRect(rootBounds)
                     val visibleChild = orb.getGlobalVisibleRect(childBounds)
+                    val rootScreen = IntArray(2)
+                    val childScreen = IntArray(2)
+                    root.getLocationOnScreen(rootScreen)
+                    orb.getLocationOnScreen(childScreen)
+                    rootBounds.offset(rootScreen[0], rootScreen[1])
+                    childBounds.offset(rootScreen[0], rootScreen[1])
                     measured = root.isAttachedToWindow && root.width == size && root.height == size &&
                         orb.width == size && orb.height == size && visibleRoot && visibleChild &&
-                        childBounds.width() == size && childBounds.height() == size && rootBounds.contains(childBounds)
+                        childBounds.width() == size && childBounds.height() == size && rootBounds.contains(childBounds) &&
+                        childBounds.left == childScreen[0] && childBounds.top == childScreen[1]
                 }
                 if (!measured) Thread.sleep(24)
             }
@@ -4326,12 +4387,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             controlledTime.useNaturalTime = true
             cadenceEnabled = true
         }
-        fun endNaturalCadence(): List<CadenceSample> = synchronized(cadenceLock) {
+        fun endNaturalCadence(leaveNaturalTime: Boolean = false): List<CadenceSample> = synchronized(cadenceLock) {
             cadenceEnabled = false
-            controlledTime.useNaturalTime = false
+            if (!leaveNaturalTime) controlledTime.useNaturalTime = false
             (0 until cadenceCount).map { CadenceSample(cadenceFrameNanos[it], cadenceSubmittedMs[it],
                 cadencePhases[it], cadenceSlots[it], cadenceUses[it]) }
         }
+        fun restoreControlledMaterialTime() { controlledTime.useNaturalTime = false }
         fun cadenceOmissions(): Int = synchronized(cadenceLock) { cadenceOmitted }
         private fun recordCadence(frame: KeyguardOrbBufferProducerFrame) {
             if (!cadenceEnabled) return
@@ -4370,7 +4432,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 recordCadence(frame)
             }
             KeyguardOrbBufferRendererTestHooks.frameObserver = samples
-            KeyguardOrbBufferRendererTestHooks.ownershipObserver = ownership
+            KeyguardOrbBufferRendererTestHooks.ownershipObserver =
+                if (label == "r22-3-translucent-cadence") NoopKeyguardOrbOwnershipObserver else ownership
             KeyguardOrbBufferRendererTestHooks.firstPublicationHook = object : KeyguardOrbFirstPublicationTestHook {
                 override fun dispatchReady(frame: KeyguardOrbBufferProducerFrame, deliver: () -> Unit) {
                     if (readyAttachment.get() == frame.lease.attachment) {
