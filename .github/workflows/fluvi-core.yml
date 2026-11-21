@@ -1,4 +1,4 @@
-name: R22.2 opening and privacy qualification (orchestration only)
+name: R22.3 opening and privacy qualification (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -23,7 +23,7 @@ jobs:
       matrix:
         include:
           - arm: candidate
-            source: fe8931a69c96e964f78561a3100e3d776dfe5dfc
+            source: b1eccd845546e5d65d9e69c9ba0a43775a2c216b
     runs-on: ubuntu-latest
     timeout-minutes: 70
     env:
@@ -69,6 +69,18 @@ jobs:
           set -uo pipefail
           (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r19-api35/unit.log"
           printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r19-api35/unit.exit"
+      - name: Compile profile and release Kotlin independently
+        shell: bash
+        run: |
+          set -uo pipefail
+          (cd android && ./gradlew :app:compileProfileKotlin :app:compileReleaseKotlin --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r19-api35/flavor-compile.log"
+          printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r19-api35/flavor-compile.exit"
+      - name: Record target before fixture-only panel patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd android && ./gradlew :app:assembleDebug --no-daemon --max-workers=3 --console=plain)
+          sha256sum build/app/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/r19-api35/target-before-fixture.txt"
       - name: Apply separately recorded calibrated panel fixture
         shell: bash
         run: |
@@ -81,7 +93,9 @@ jobs:
           test "$(git diff --name-only | wc -l)" = 1
           git diff --name-only | grep -Fx android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt
       - name: Assemble app and instrumentation APKs
-        run: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
+        run: |
+          (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
+          sha256sum -c "$RUNNER_TEMP/r19-api35/target-before-fixture.txt"
       - name: Enable KVM
         run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
       - name: Run service, panel and diagnostics on API35
@@ -100,11 +114,14 @@ jobs:
       - name: Verify independent JVM result
         if: always()
         run: if test -s "$RUNNER_TEMP/r19-api35/unit.exit"; then test "$(cat "$RUNNER_TEMP/r19-api35/unit.exit")" = 0; else echo 'JVM suite NOT RUN'; exit 1; fi
+      - name: Verify independent profile and release compilation
+        if: always()
+        run: if test -s "$RUNNER_TEMP/r19-api35/flavor-compile.exit"; then test "$(cat "$RUNNER_TEMP/r19-api35/flavor-compile.exit")" = 0; else echo 'profile/release compile NOT RUN'; exit 1; fi
       - name: Preserve all raw results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-2-candidate-qualification-${{ matrix.arm }}-${{ github.run_id }}
+          name: r22-3-candidate-qualification-${{ matrix.arm }}-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r19-api35/**
             app/build/app/reports/tests/**

@@ -89,11 +89,13 @@ cat "$out/r20-canonical.txt"
 if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r20-canonical.txt" || ! grep -Eq '^OK \(1 test\)' "$out/r20-canonical.txt"; then failed=1; fi
 # Each additional renderer control is a separate specimen; continue after a
 # failure so the distinct compositor and lifecycle evidence is retained.
-for method in isolatedOpaqueOrbHasNeutralParentAtRetire isolatedStandbyPreservesAuthorizedComposition stalePressureCannotSwitchReplacement isolatedOrbStaleFirstCommitCannotUndoSameRootPrivacyOrSizeReplacement r09MixedSizeHeldOldUseLeavesCurrentSuccessorCapacity disposedWindowCannotBeRevivedByDelayedPressureTicket isolatedOrbFirstDirectDisposeDoesNotWaitForWorkerOrOldCommit isolatedOrbWithdrawalDoesNotWaitForBlockedRendererFrame; do
+for method in isolatedOpaqueOrbHasNeutralParentAtRetire isolatedStandbyPreservesAuthorizedComposition isolatedStandbyBlackReturnAndHide isolatedNeutralRecoveryAtCommittedResizedBounds stalePressureCannotSwitchReplacement isolatedOrbStaleFirstCommitCannotUndoSameRootPrivacyOrSizeReplacement r09MixedSizeHeldOldUseLeavesCurrentSuccessorCapacity disposedWindowCannotBeRevivedByDelayedPressureTicket isolatedOrbFirstDirectDisposeDoesNotWaitForWorkerOrOldCommit isolatedOrbWithdrawalDoesNotWaitForBlockedRendererFrame; do
   run=$(python3 -c 'import uuid; print(uuid.uuid4())')
   printf '%s\n' "$run" > "$out/$method-uuid.txt"
   adb shell am force-stop com.fluvi.app || true
   adb logcat -c || true
+  # Earlier case evidence has already been copied to its own named tar.
+  adb shell run-as com.fluvi.app rm -rf files/keyguard-material-smoke || true
   rc=0
   timeout -k 5s 300s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" \
     -e class "com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#$method" \
@@ -108,6 +110,7 @@ done
 # unchanged assertion. This result remains separate from the panel suite.
 adb shell am force-stop com.fluvi.app || true
 adb logcat -c || true
+adb shell run-as com.fluvi.app rm -rf files/keyguard-material-smoke || true
 run=$(python3 -c 'import uuid; print(uuid.uuid4())')
 printf '%s\n' "$run" > "$out/r08-privacy-uuid.txt"
 rc=0
