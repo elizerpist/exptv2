@@ -22,7 +22,7 @@ adb shell pm list instrumentation > "$out/instrumentation-list.txt"
 grep -F 'com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner' "$out/instrumentation-list.txt"
 timeout -k 2s 60s bash scripts/prepare-keyguard-lower-environment.sh "$out/preflight"
 failed=0
-for method in r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck r21ExclusionRetiresSubmittedOrbWithMainAckHeld; do
+for method in r22SupersededOpeningWalkYieldsToFreshInspection r22YieldedWalkCannotGrantAfterExclusion r22StableOpeningReadIsNotYielded; do
   run=$(python3 -c 'import uuid; print(uuid.uuid4())')
   printf '%s\n' "$run" > "$out/$method-uuid.txt"
   adb shell am force-stop com.fluvi.app || true
@@ -31,9 +31,34 @@ for method in r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck r21Exclusi
   timeout -k 5s 180s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" -e class "com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest#$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/$method.txt" 2>&1 || rc=$?
   printf '%s\n' "$rc" > "$out/$method.exit"
   adb logcat -b all -d -v monotonic > "$out/$method-logcat.txt" 2>&1 || true
-  adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r19/$run" > "$out/$method-evidence.tar" 2> "$out/$method-evidence.stderr" || true
+  adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r22/$run" > "$out/$method-evidence.tar" 2> "$out/$method-evidence.stderr" || true
   cat "$out/$method.txt"
   if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then failed=1; fi
+  if [[ "$method" == r22SupersededOpeningWalkYieldsToFreshInspection ]]; then
+    # A submitted service output is not by itself a calibrated FULL, motion,
+    # underlay or true-hide comparison. Preserve the partial result explicitly.
+    member=$(tar -tf "$out/$method-evidence.tar" 2>/dev/null | grep '/result.txt$' | head -1 || true)
+    if [[ -n "$member" ]]; then
+      tar -xOf "$out/$method-evidence.tar" "$member" > "$out/$method-visual-status.txt" || true
+      if grep -q 'visualCalibration=UNESTABLISHED' "$out/$method-visual-status.txt"; then
+        echo 'T3 calibrated service composite: NOT REACHED / UNESTABLISHED'
+        failed=1
+      fi
+    fi
+  fi
+done
+# A frozen report is produced, then recovered after a real process stop.
+for mode in LIGHT FULL; do
+  for phase in prepareFrozenCapture verifyRecoveredCapture; do
+    adb shell am force-stop com.fluvi.app || true
+    rc=0
+    timeout -k 5s 180s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e r22Mode "$mode" \
+      -e class "com.fluvi.app.lockscreen.KeyguardR22RecoveryInstrumentationTest#$phase" \
+      com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/recovery-$mode-$phase.txt" 2>&1 || rc=$?
+    printf '%s\n' "$rc" > "$out/recovery-$mode-$phase.exit"
+    cat "$out/recovery-$mode-$phase.txt"
+    if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/recovery-$mode-$phase.txt" || ! grep -Eq '^OK \(1 test\)' "$out/recovery-$mode-$phase.txt"; then failed=1; fi
+  done
 done
 # One API35 panel and reducer block; the actual-service specimens above are separate.
 adb shell am force-stop com.fluvi.app || true
