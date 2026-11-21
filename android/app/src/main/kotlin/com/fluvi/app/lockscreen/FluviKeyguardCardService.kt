@@ -4173,6 +4173,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                         "isolatedFirstCommit" to (summary.isolatedFirstHandoff?.let {
                             "receipt:${it.commitReceiptAtUptimeMs ?: "UNOBSERVED"},main:${it.commitMainAtUptimeMs ?: "UNOBSERVED"},bootstrapRetired:${it.bootstrapRetiredAtUptimeMs ?: "UNOBSERVED"}"
                         } ?: "UNOBSERVED"),
+                        "r22Passive" to (summary.passiveStandby?.let {
+                            "backend:${it.backend},eligible:${it.eligibility},lease:${it.attachment}/${it.generation},draw:${it.firstDrawAtUptimeMs ?: "UNOBSERVED"},exit:${it.lastExitReason}"
+                        } ?: "backend:UNAVAILABLE,eligible:UNAVAILABLE,lease:UNAVAILABLE,draw:UNOBSERVED,exit:UNAVAILABLE"),
                         "r08Route" to summary.effectiveRoute,
                         "r08Origin" to (summary.recovery?.let {
                             "${if (it.inherited) "inherited" else "entered"}:renderer:${it.rendererId},attach:${it.originAttachment},gen:${it.originGeneration},child:${it.childId},grant:${it.grantId},cause:${it.reason}"
@@ -4226,6 +4229,12 @@ class FluviKeyguardCardService : AccessibilityService() {
                         "orbDrawGaps" to summary.orbGaps.compact(),
                         "backgroundDrawGaps" to summary.backgroundGaps.compact(),
                     ) },
+                ) else traceKeyguard(
+                    "ATTACHMENT_RENDER_SUMMARY", "withdrawalBoundary",
+                    requestId = causingInspectionRequestId,
+                    observedUptimeMs = removeReturnedAt,
+                    operation = hideOperation,
+                    fields = mapOf("r22Passive" to "backend:DIRECT,eligible:UNAVAILABLE,lease:UNAVAILABLE,draw:UNOBSERVED,exit:UNAVAILABLE"),
                 )
             }
             if (wasAttachedBefore && removed) KeyguardCardDiagnostics.record(this, "KG|DETACH", reason, false)

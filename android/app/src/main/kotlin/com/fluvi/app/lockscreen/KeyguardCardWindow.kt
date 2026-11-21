@@ -262,6 +262,9 @@ internal class KeyguardCardWindow(
                 }
                 orb.setStaticBitmap(null)
             }
+            // A retained legacy root must not carry its passive paint into
+            // a different presentation owner.
+            current.clearPassiveStandby()
             if (surfacePresenter == null) surfacePresenter = KeyguardOrbSurfacePresenter(
                 context = serviceContext,
                 root = current,

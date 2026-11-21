@@ -25,6 +25,32 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         KeyguardCardDiagnostics.clearCapture(context)
     }
 
+    @Test fun r22PassiveStandbySummarySurvivesLightExport() = passiveStandbyExport("LIGHT")
+    @Test fun r22PassiveStandbySummarySurvivesFullExport() = passiveStandbyExport("FULL")
+
+    private fun passiveStandbyExport(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r22-2", "profile", mode)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 901, 1, "wake", 100))
+        val show = KeyguardCardDiagnostics.newShowOperation(owner, 11, 22)
+        val hide = KeyguardCardDiagnostics.newHideOperation(owner, 11, 23, 150)
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "show", operation = show, observedUptimeMs = 110)
+        KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_RETURN", "added", operation = show, observedUptimeMs = 111)
+        KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "hide", operation = hide, observedUptimeMs = 150)
+        KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_RETURN", "removed", operation = hide, observedUptimeMs = 151)
+        val fact = "backend:ISOLATED,eligible:DISARMED,lease:11/7,draw:121,exit:privacy"
+        KeyguardCardDiagnostics.captureEvent(context, "ATTACHMENT_RENDER_SUMMARY", "withdrawal", operation = hide,
+            observedUptimeMs = 152, fields = mapOf("r22Passive" to fact))
+        repeat(250) { index ->
+            KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure", diagnosticContext = owner,
+                observedUptimeMs = 200L + index, requestId = 1000L + index)
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue("$mode export exceeded its UTF-8 budget", report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        assertTrue("missing explicitly named omission metadata", report.contains("omittedPassiveStandbyRecordIds="))
+        assertTrue("exact attachment's standby record must survive or name its omission",
+            report.contains("r22Passive=$fact") || !report.contains("omittedPassiveStandbyRecordIds=none"))
+    }
+
     @Test fun r22PostClaimQueueEvidenceSurvivesLightPressureAndFreeze() = r22PostClaimQueueEvidence("LIGHT")
     @Test fun r22PostClaimQueueEvidenceSurvivesFullPressureAndFreeze() = r22PostClaimQueueEvidence("FULL")
 

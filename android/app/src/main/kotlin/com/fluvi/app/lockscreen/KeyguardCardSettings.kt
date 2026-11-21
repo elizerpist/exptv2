@@ -941,7 +941,7 @@ internal object KeyguardCardDiagnostics {
     private val RENDER_SUMMARY_KEYS = setOf(
         "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped",
         "isolatedCompletionGapMaxMs",
-        "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit",
+        "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit", "r22Passive",
         "r09Placement", "r09FirstWork", "r09FirstFrames",
         "r10Cold0", "r10Cold0b", "r10Cold0c", "r10Cold0d", "r10Cold1", "r10Cold1b", "r10Cold1c", "r10Cold1d",
         "r10Live0", "r10Live0b", "r10Live0c", "r10Live0d", "r10Live1", "r10Live1b", "r10Live1c", "r10Live1d",
@@ -2631,6 +2631,10 @@ internal object KeyguardCardDiagnostics {
             val criticalOmissions = omittedRecords.filterNot { it.endsWith(":raw") || it.endsWith(":spineRows") || it.endsWith(":detail") || ":drawGap:" in it }
             val omittedGaps = omittedRecords.filter { ":drawGap:" in it }
             appendLine("omittedCriticalRecordIds=${compactRecordIds(criticalOmissions, 384)}")
+            val omittedPassive = attemptsForCausalEvidence.flatMap { attempt ->
+                attempt.shows.filter { "r22Passive" in it.renderSummary }.map { "a${attempt.id}:show${it.operationId}" }
+            }.filter { it !in selected }
+            appendLine("omittedPassiveStandbyRecordIds=${compactRecordIds(omittedPassive, 128)}")
             appendLine("drawGapEvidenceExported=${selected.keys.count { ":drawGap:" in it }} drawGapEvidenceOmitted=${omittedGaps.size}")
             appendLine("omittedDrawGapRecordIds=${compactRecordIds(omittedGaps, 384)}")
             appendLine("incompleteExportAttemptIds=${incompleteAttempts.joinToString(",").ifBlank { "none" }}")
@@ -2838,7 +2842,7 @@ internal object KeyguardCardDiagnostics {
 
     private val compactRenderKeys = setOf(
         "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped",
-        "isolatedCompletionGapMaxMs", "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit",
+        "isolatedCompletionGapMaxMs", "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit", "r22Passive",
         "r09FirstWork", "r09FirstFrames", "r08Route", "r08Origin",
         "shaderFrames", "shaderCalls", "phaseAdvances", "drawGapCount", "drawGapTotalMs", "drawGapMaxMs",
         "clockRunning", "liveState", "drawEvidenceMode", "drawEvidenceOmitted", "drawObservedFrames",

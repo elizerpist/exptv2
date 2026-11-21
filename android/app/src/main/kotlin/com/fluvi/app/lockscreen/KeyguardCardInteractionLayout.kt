@@ -1,6 +1,13 @@
 package com.fluvi.app.lockscreen
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
+import android.os.SystemClock
+import android.view.View
+import kotlin.math.min
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
@@ -91,6 +98,132 @@ internal class KeyguardCardInteractionLayout(
          * rollback updateViewLayout would delay removal for no user benefit. */
         fun onDragCancel(reason: String, restorePosition: Boolean)
         fun onInteractionFinished()
+    }
+
+    /** Root-local, nonfinancial paint owned by one attached isolated lease.
+     * It is always underneath the normal children and never participates in
+     * input, accessibility, display authority or buffer release. */
+    internal data class PassiveStandbyObservation(
+        val attachment: Long,
+        val generation: Long,
+        val firstDrawAtUptimeMs: Long?,
+        val hasDrawn: Boolean,
+    )
+
+    private class PassiveStandby(
+        val target: View,
+        val attachment: Long,
+        val generation: Long,
+        val left: Int,
+        val top: Int,
+        val width: Int,
+        val height: Int,
+        val paint: Paint,
+        val recordDraw: Boolean,
+    ) {
+        var hasDrawn = false
+        var firstDrawAtUptimeMs: Long? = null
+        fun observation() = PassiveStandbyObservation(attachment, generation, firstDrawAtUptimeMs, hasDrawn)
+    }
+
+    private var passiveStandby: PassiveStandby? = null
+    // A previous parent submission can outlive the in-memory paint state.
+    private var passiveBackingMayExist = false
+    private var passiveStateEpoch = 0L
+
+    /** Main-owned configuration. No material profile or scene is retained. */
+    internal fun configurePassiveStandby(target: View, attachment: Long, generation: Long,
+                                        width: Int, height: Int, recordDraw: Boolean): String {
+        if (!isAttachedToWindow || !isShown || target.parent !== this || !target.isAttachedToWindow ||
+            attachment <= 0L || generation <= 0L) return "OWNER_UNAVAILABLE"
+        if (width <= 4 || height <= 4 || target.width != width || target.height != height ||
+            this.width <= 0 || this.height <= 0) return "LAYOUT_PENDING"
+        if (!validPassiveGeometry(target, target.left, target.top, width, height)) return "GEOMETRY_INELIGIBLE"
+        val rootLocation = IntArray(2)
+        val targetLocation = IntArray(2)
+        getLocationInSurface(rootLocation)
+        target.getLocationInSurface(targetLocation)
+        if (targetLocation[0] != rootLocation[0] + target.left ||
+            targetLocation[1] != rootLocation[1] + target.top) return "SURFACE_MISMATCH"
+        val old = passiveStandby
+        if (old != null && old.target === target && old.attachment == attachment && old.generation == generation &&
+            old.left == target.left && old.top == target.top && old.width == width && old.height == height &&
+            old.recordDraw == recordDraw) return "ELIGIBLE"
+        val colors = intArrayOf(0xff657489.toInt(), 0xff8592a4.toInt(), 0xff657489.toInt())
+        val stops = floatArrayOf(0f, .5f, 1f)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(target.left.toFloat(), (target.top + height).toFloat(),
+                (target.left + width).toFloat(), target.top.toFloat(), colors, stops, Shader.TileMode.CLAMP)
+            alpha = 255
+        }
+        passiveStateEpoch += 1L
+        passiveStandby = PassiveStandby(target, attachment, generation, target.left, target.top,
+            width, height, paint, recordDraw)
+        invalidate()
+        return "ELIGIBLE"
+    }
+
+    internal fun passiveStandbyObservation(): PassiveStandbyObservation? = passiveStandby?.observation()
+    internal fun passiveBackingMayExist(): Boolean = passiveBackingMayExist
+    internal fun passiveStateEpoch(): Long = passiveStateEpoch
+    internal fun confirmPassiveBackingCleared(epoch: Long) {
+        if (passiveStandby == null && passiveStateEpoch == epoch) passiveBackingMayExist = false
+    }
+
+    /** The last submitted parent buffer remains intact until the next real
+     * root traversal; clearing this state never delays child revocation. */
+    internal fun clearPassiveStandby(recordObservation: Boolean = false): PassiveStandbyObservation? {
+        val old = passiveStandby ?: return null
+        passiveStandby = null
+        passiveStateEpoch += 1L
+        invalidate()
+        return if (recordObservation) old.observation() else null
+    }
+
+    private fun validPassiveGeometry(target: View, left: Int, top: Int, width: Int, height: Int): Boolean =
+        target.parent === this && target.visibility != View.GONE && target.width == width && target.height == height &&
+            target.left == left && target.top == top && left >= 0 && top >= 0 &&
+            left + width <= this.width && top + height <= this.height &&
+            alpha == 1f && target.alpha == 1f && matrix.isIdentity && target.matrix.isIdentity &&
+            translationX == 0f && translationY == 0f && target.translationX == 0f && target.translationY == 0f &&
+            passiveAncestorsUntransformed()
+
+    private fun passiveAncestorsUntransformed(): Boolean {
+        var ancestor = parent
+        while (ancestor is View) {
+            if (ancestor.alpha != 1f || !ancestor.matrix.isIdentity ||
+                ancestor.translationX != 0f || ancestor.translationY != 0f) return false
+            ancestor = ancestor.parent
+        }
+        return true
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        val state = passiveStandby
+        if (state != null) {
+            if (isAttachedToWindow && isShown && state.target.isAttachedToWindow &&
+                validPassiveGeometry(state.target, state.left, state.top, state.width, state.height)) {
+                canvas.drawCircle(state.left + state.width / 2f, state.top + state.height / 2f,
+                    (min(state.width, state.height) / 2f - 2f).coerceAtLeast(0f), state.paint)
+                state.hasDrawn = true
+                passiveBackingMayExist = true
+                if (state.recordDraw && state.firstDrawAtUptimeMs == null) {
+                    state.firstDrawAtUptimeMs = SystemClock.uptimeMillis()
+                }
+            } else {
+                // A new owner/layout must explicitly qualify a fresh paint.
+                passiveStandby = null
+                passiveStateEpoch += 1L
+            }
+        }
+        super.dispatchDraw(canvas)
+    }
+
+    override fun onDetachedFromWindow() {
+        passiveStandby = null
+        passiveBackingMayExist = false
+        passiveStateEpoch += 1L
+        super.onDetachedFromWindow()
     }
 
     var listener: Listener? = null

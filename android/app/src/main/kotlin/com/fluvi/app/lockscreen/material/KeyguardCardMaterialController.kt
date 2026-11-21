@@ -10,6 +10,7 @@ import android.provider.Settings
 import android.view.View
 import com.fluvi.app.R
 import com.fluvi.app.lockscreen.KeyguardCardAnimationMode
+import com.fluvi.app.lockscreen.KeyguardCardInteractionLayout
 import com.fluvi.app.lockscreen.KeyguardCardPresentationMode
 import com.fluvi.app.lockscreen.KeyguardMainWorkEvidence
 import java.util.IdentityHashMap
@@ -64,6 +65,16 @@ private fun KeyguardOrbPressureTicket.episode(
 ) = KeyguardOrbRecoveryEpisode(rendererId, lease.attachment, lease.generation,
     System.identityHashCode(child), System.identityHashCode(grant), reason, startedAt, offeredAt,
     opportunities, slots, attachment, inherited, claimedAt, restoredAt = restoredAt, anchor = anchor)
+
+/** Bounded capture-owned facts; this never authorizes a draw or a buffer. */
+internal data class KeyguardPassiveStandbySummary(
+    val backend: String,
+    val eligibility: String,
+    val attachment: Long,
+    val generation: Long,
+    val firstDrawAtUptimeMs: Long?,
+    val lastExitReason: String,
+)
 
 /** Owns scene application and one Choreographer clock for both retained
  * decorative views. It deliberately has no WindowManager or financial API. */
@@ -192,6 +203,17 @@ internal class KeyguardCardMaterialController(
     private var isolatedOrbPausedTime: KeyguardMaterialTime? = null
     private var activeOrbLease: KeyguardOrbBufferLease? = null
     private var activeOrbLeaseFull: Boolean? = null
+    private var passiveEvidenceOwner: Any? = null
+    private var passiveSummary: KeyguardPassiveStandbySummary? = null
+    private data class PassiveClearGate(
+        val root: KeyguardCardInteractionLayout,
+        val attachment: Long,
+        val configuration: MaterialConfiguration,
+        val epoch: Long,
+    )
+    private var passiveClearGate: PassiveClearGate? = null
+    private var passiveBlendRecheck: Runnable? = null
+    private val passiveHandler = Handler(Looper.getMainLooper())
     private var restrictiveTransitionActive = false
     private var restrictiveReconcilePending = false
     private var currentFirstPublication: KeyguardOrbFirstPublicationToken? = null
@@ -263,6 +285,12 @@ internal class KeyguardCardMaterialController(
             val next = readAnimationsEnabled()
             if (next == animationsAllowed) return
             animationsAllowed = next
+            if (!next) disarmPassiveStandby("motion-disabled")
+            else {
+                val lease = activeOrbLease
+                val scene = latestOrbScene
+                if (lease != null && scene != null) reconcilePassiveStandby(attachedRoot, lease, scene)
+            }
             // This is a user animation preference transition, not a new
             // material scene. Keep the scene/phase and only reconcile clock.
             reconcileClock()
@@ -370,6 +398,7 @@ internal class KeyguardCardMaterialController(
             reconcileClock()
             return
         }
+        if (passiveClearGate?.configuration != configuration) passiveClearGate = null
         val priorConfiguration = appliedConfiguration
         val restrictiveTransition = priorConfiguration?.full == true && !isFull
         if (restrictiveTransition) restrictiveTransitionActive = true
@@ -439,6 +468,23 @@ internal class KeyguardCardMaterialController(
         if (isolatedOrbRequested && isolatedOrbFailedVisualKey != sceneVisualKey) {
             isolatedOrbFailed = false
             isolatedOrbFailedVisualKey = null
+        }
+        // If a previously submitted parent buffer contains the neutral
+        // backing, a nonopaque/blended replacement must not be published
+        // until a guard-free parent frame commits. The old child is retired
+        // immediately; only the new output can wait behind that receipt.
+        val passiveRoot = attachedRoot as? KeyguardCardInteractionLayout
+        val nextOpaqueFull = isolatedScene?.full == true && isolatedScene.profile.opacity == 1f &&
+            isolatedScene.profile.colors.all { (it ushr 24) == 0xff } && isolatedPrevious == null
+        if (passiveRoot != null && (!isolatedOrbRequested || !nextOpaqueFull)) {
+            disarmPassiveStandby("configuration")
+            if (!restrictiveTransition && attached && isolatedOrbRequested && passiveRoot.passiveBackingMayExist()) {
+                activeOrbLease = null
+                activeOrbLeaseFull = null
+                currentFirstPublication = null
+                if (isolatedOrbRendererDelegate.isInitialized()) isolatedOrbRenderer.retire("passive-ineligible")
+                gatePassiveReplacement(passiveRoot, configuration)
+            }
         }
         if (isolatedOrbRequested && latestOrbScene?.full == true && scene?.full == false &&
             isolatedOrbRendererDelegate.isInitialized()
@@ -595,6 +641,12 @@ internal class KeyguardCardMaterialController(
             orb.setBootstrapActive(false)
         }
         if (!attached) {
+            passiveClearGate = null
+            passiveBlendRecheck?.let(passiveHandler::removeCallbacks)
+            passiveBlendRecheck = null
+            passiveEvidenceOwner = drawEvidenceOwner()
+            passiveSummary = if (passiveEvidenceOwner != null) KeyguardPassiveStandbySummary(
+                effectiveRoute, "UNOBSERVED", attachment, 0L, null, "UNOBSERVED") else null
             submittedVisibleScene = null
             submittedVisibleArtifact = null
             submittedVisibleAttachment = 0L
@@ -680,6 +732,10 @@ internal class KeyguardCardMaterialController(
         // keep that one valid async intent. A real withdrawal, pending show,
         // replacement or disposal still invalidates it below.
         if (!attached && !authorizedShowPending && reason == "hide") return
+        disarmPassiveStandby(reason)
+        passiveClearGate = null
+        passiveBlendRecheck?.let(passiveHandler::removeCallbacks)
+        passiveBlendRecheck = null
         firstOfferReporter = null
         detachedPrimeArmed = false
         authorizedShowPending = false
@@ -767,6 +823,9 @@ internal class KeyguardCardMaterialController(
             recoveryEpisodeOwner != null && recoveryEpisodeOwner === drawEvidenceOwner()
         },
         effectiveRoute = effectiveRoute,
+        passiveStandby = passiveSummary?.takeIf {
+            passiveEvidenceOwner != null && passiveEvidenceOwner === drawEvidenceOwner()
+        },
         worker = withdrawalWorkerSnapshot?.takeIf {
             withdrawalWorkerOwner != null && withdrawalWorkerOwner === drawEvidenceOwner()
         } ?: buffer,
@@ -1212,6 +1271,103 @@ internal class KeyguardCardMaterialController(
         view === orb && detachedIsolatedBackendSelected &&
             isolatedOrbEffective
 
+    private fun rememberPassive(reason: String,
+                                observation: KeyguardCardInteractionLayout.PassiveStandbyObservation? = null,
+                                exit: String? = null) {
+        val owner = passiveEvidenceOwner ?: return
+        if (owner !== drawEvidenceOwner()) return
+        val previous = passiveSummary
+        val ownerAttachment = observation?.attachment ?: activeAttachment.takeIf { it > 0L } ?: previous?.attachment ?: 0L
+        val ownerGeneration = observation?.generation ?: activeOrbLease?.generation ?: previous?.generation ?: 0L
+        val sameLease = previous?.attachment == ownerAttachment && previous?.generation == ownerGeneration
+        // Once an actual passive draw is observed, keep its original lease
+        // across same-attachment material replacements and later callbacks.
+        if (previous?.firstDrawAtUptimeMs != null && !sameLease) return
+        passiveSummary = KeyguardPassiveStandbySummary(
+            backend = if (observation != null) "ISOLATED" else effectiveRoute, eligibility = reason,
+            attachment = ownerAttachment, generation = ownerGeneration,
+            firstDrawAtUptimeMs = observation?.firstDrawAtUptimeMs ?: previous?.firstDrawAtUptimeMs?.takeIf { sameLease },
+            lastExitReason = exit ?: previous?.lastExitReason?.takeIf { sameLease } ?: "UNOBSERVED",
+        )
+    }
+
+    private fun disarmPassiveStandby(reason: String) {
+        passiveBlendRecheck?.let(passiveHandler::removeCallbacks)
+        passiveBlendRecheck = null
+        val capture = passiveEvidenceOwner != null && passiveEvidenceOwner === drawEvidenceOwner()
+        val observed = (attachedRoot as? KeyguardCardInteractionLayout)?.clearPassiveStandby(capture)
+        if (observed != null) rememberPassive("DISARMED", observed, reason)
+    }
+
+    /** A clean parent commit belongs to the same root, attachment and
+     * configuration. It never delays a hide or an old-child retirement. */
+    private fun gatePassiveReplacement(root: KeyguardCardInteractionLayout, configuration: MaterialConfiguration) {
+        val observer = root.viewTreeObserver
+        val gate = PassiveClearGate(root, activeAttachment, configuration, root.passiveStateEpoch())
+        passiveClearGate = gate
+        if (observer.isAlive) {
+            runCatching {
+                observer.registerFrameCommitCallback {
+                    root.post {
+                        if (passiveClearGate === gate && attached && attachedRoot === root &&
+                            activeAttachment == gate.attachment && appliedConfiguration == gate.configuration &&
+                            root.isAttachedToWindow) {
+                            root.confirmPassiveBackingCleared(gate.epoch)
+                            if (!root.passiveBackingMayExist()) {
+                                passiveClearGate = null
+                                reconcileIsolatedOrbTarget(root)
+                                reconcileClock()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        root.invalidate()
+    }
+
+    private fun reconcilePassiveStandby(root: View?, lease: KeyguardOrbBufferLease, scene: KeyguardMaterialScene) {
+        val container = root as? KeyguardCardInteractionLayout
+        val reason = when {
+            !attached || activeAttachment != lease.attachment || root !== attachedRoot -> "OWNER_UNAVAILABLE"
+            !isolatedOrbEffective || !animationsAllowed || !scene.profile.animated ||
+                mode != KeyguardCardAnimationMode.ORB_ONLY ||
+                presentationMode != KeyguardCardPresentationMode.ORB -> "ROUTE_INELIGIBLE"
+            !scene.full || scene.profile.opacity != 1f || scene.profile.colors.any { (it ushr 24) != 0xff } -> "NONOPAQUE_OR_DISCREET"
+            container == null -> "ROOT_UNAVAILABLE"
+            else -> null
+        }
+        if (reason != null) {
+            disarmPassiveStandby(reason)
+            rememberPassive(reason)
+            return
+        }
+        val transitionRemaining = if (latestOrbPreviousScene != null && isolatedTransitionStartedNanos > 0L)
+            isolatedTransitionStartedNanos + 180_000_000L - System.nanoTime() else 0L
+        if (transitionRemaining > 0L) {
+            disarmPassiveStandby("BLENDING")
+            rememberPassive("BLENDING")
+            val currentRoot = checkNotNull(container)
+            val task = Runnable {
+                passiveBlendRecheck = null
+                if (attached && attachedRoot === currentRoot && activeOrbLease == lease &&
+                    latestOrbScene === scene && passiveClearGate == null) {
+                    reconcilePassiveStandby(currentRoot, lease, scene)
+                }
+            }
+            passiveBlendRecheck = task
+            passiveHandler.postDelayed(task, ((transitionRemaining + 999_999L) / 1_000_000L).coerceAtLeast(1L))
+            return
+        }
+        val targetRoot = checkNotNull(container)
+        val status = targetRoot.configurePassiveStandby(orb, lease.attachment, lease.generation,
+            lease.width, lease.height, passiveEvidenceOwner != null && passiveEvidenceOwner === drawEvidenceOwner())
+        if (status != "ELIGIBLE") disarmPassiveStandby(status)
+        if (passiveEvidenceOwner != null && passiveEvidenceOwner === drawEvidenceOwner()) {
+            rememberPassive(status, targetRoot.passiveStandbyObservation())
+        }
+    }
+
     private fun canUseIsolatedOrb(
         scene: KeyguardMaterialScene?,
         animationMode: KeyguardCardAnimationMode,
@@ -1234,6 +1390,7 @@ internal class KeyguardCardMaterialController(
         if (!isolatedOrbEffective ||
             Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE
         ) return
+        if (passiveClearGate != null) return
         val scene = latestOrbScene ?: return
         val artifact = latestOrbArtifact?.takeIf {
             it.effectId == scene.profile.effectId && it.usesPortal == scene.profile.usesPortal
@@ -1242,6 +1399,22 @@ internal class KeyguardCardMaterialController(
         val (width, height) = warmupDimensions(orb)
         val attachment = if (attached) activeAttachment else 0L
         val previous = activeOrbLease
+        if (attached && previous != null && (previous.width != width || previous.height != height)) {
+            val container = root as? KeyguardCardInteractionLayout
+            disarmPassiveStandby("size-change")
+            val configuration = appliedConfiguration
+            if (container != null && container.passiveBackingMayExist() && configuration != null) {
+                activeOrbLease = null
+                activeOrbLeaseFull = null
+                currentFirstPublication = null
+                if (isolatedOrbRendererDelegate.isInitialized()) isolatedOrbRenderer.retire("passive-size-change")
+                gatePassiveReplacement(container, configuration)
+                orb.setBootstrapActive(true)
+                orb.visibility = View.VISIBLE
+                orb.invalidate()
+                return
+            }
+        }
         val lease = if (previous != null && previous.attachment == attachment &&
             activeOrbLeaseFull == scene.full &&
             previous.visualKey == scene.profile.visualKey &&
@@ -1257,6 +1430,7 @@ internal class KeyguardCardMaterialController(
         )
         activeOrbLease = lease
         activeOrbLeaseFull = scene.full
+        if (attached) reconcilePassiveStandby(root, lease, scene)
         if (attached && previous != null && previous != lease) {
             // The current View scene is already selected. It is a static
             // bootstrap only; the new child stays the sole animated owner.
@@ -1326,6 +1500,7 @@ internal class KeyguardCardMaterialController(
             currentFirstPublication !== token || !isolatedOrbRenderer.ownsFirstPublication(token)
         ) return
         currentFirstPublication = null
+        latestOrbScene?.let { reconcilePassiveStandby(attachedRoot, lease, it) }
         orb.setBootstrapActive(false)
         orb.visibility = View.INVISIBLE
         if (firstHandoffToken === token && firstHandoffCaptureOwner != null &&
@@ -1346,6 +1521,8 @@ internal class KeyguardCardMaterialController(
 
     private fun onIsolatedOrbFailure(lease: KeyguardOrbBufferLease, error: Throwable) {
         if (activeOrbLease != lease) return
+        disarmPassiveStandby("producer-failure")
+        passiveClearGate = null
         isolatedOrbFailed = true
         currentFirstPublication = null
         isolatedOrbFailedVisualKey = lease.visualKey
@@ -1393,6 +1570,8 @@ internal class KeyguardCardMaterialController(
             return
         }
 
+        disarmPassiveStandby("pressure-view")
+        passiveClearGate = null
         val claimedAt = SystemClock.uptimeMillis()
         val now = System.nanoTime()
         val anchor = scene.timeAt(now)
@@ -1487,6 +1666,7 @@ internal data class KeyguardAttachmentRenderSummary(
     val isolatedFirstHandoff: KeyguardIsolatedFirstHandoffSnapshot?,
     val recovery: KeyguardOrbRecoveryEpisode? = null,
     val effectiveRoute: String = "UNAVAILABLE",
+    val passiveStandby: KeyguardPassiveStandbySummary? = null,
     val worker: KeyguardOrbBufferRendererSnapshot? = null,
     val observedAt: Long = 0L,
 )
