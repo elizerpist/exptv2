@@ -1,4 +1,4 @@
-name: R22.2 unchanged-parent fixture witness
+name: R22.2 corrected visual observer on unchanged candidate
 on:
   workflow_dispatch:
     inputs:
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     env:
-      APP_SHA: 1296c9b34d5e18c26ea3960cd8a0a8b2a9cc9cc5
+      APP_SHA: fe8931a69c96e964f78561a3100e3d776dfe5dfc
     steps:
       - uses: actions/checkout@v5
         with:
@@ -56,10 +56,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-2-fixture-only.patch" > "$RUNNER_TEMP/r22-2-fixture/fixture-patch-sha256.txt"
-          git apply "$GITHUB_WORKSPACE/harness/scripts/r22-2-fixture-only.patch"
+          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-2-visual-observer.patch" > "$RUNNER_TEMP/r22-2-fixture/fixture-patch-sha256.txt"
+          git apply "$GITHUB_WORKSPACE/harness/scripts/r22-2-visual-observer.patch"
           git diff --name-only > "$RUNNER_TEMP/r22-2-fixture/changed-files.txt"
-          test "$(wc -l < "$RUNNER_TEMP/r22-2-fixture/changed-files.txt")" = 3
+          test "$(wc -l < "$RUNNER_TEMP/r22-2-fixture/changed-files.txt")" = 1
           if grep -v '^android/app/src/androidTest/' "$RUNNER_TEMP/r22-2-fixture/changed-files.txt"; then exit 1; fi
           git diff > "$RUNNER_TEMP/r22-2-fixture/actual-fixture.patch"
           (cd android && ./gradlew :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
@@ -67,7 +67,7 @@ jobs:
           sha256sum build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$RUNNER_TEMP/r22-2-fixture/test-apk-sha256.txt"
       - name: Enable KVM
         run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
-      - name: Run unchanged-parent control on API35
+      - name: Run the corrected visual observer on API35
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -84,7 +84,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-2-unchanged-parent-${{ github.run_id }}
+          name: r22-2-visual-observer-${{ github.run_id }}
           path: ${{ runner.temp }}/r22-2-fixture/**
           if-no-files-found: warn
           retention-days: 30
