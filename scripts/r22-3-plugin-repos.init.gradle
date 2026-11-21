@@ -1,0 +1,12 @@
+// Runner-only fallback: the Flutter included build's default plugin portal
+// intermittently returned missing Kotlin artifacts. Prefer the official
+// Maven Central repository; do not modify the application checkout.
+gradle.beforeSettings { settings ->
+    settings.pluginManagement {
+        repositories {
+            mavenCentral()
+            gradlePluginPortal()
+            google()
+        }
+    }
+}

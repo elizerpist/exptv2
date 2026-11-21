@@ -1,0 +1,96 @@
+--- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
++++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
+@@ -2869,8 +2869,21 @@
+                     try {
+                         repeat(6) { index ->
+                             var bounds: Rect? = null
+-                            fixture.instrumentation.runOnMainSync { bounds = fixture.manager.currentOrbBounds() }
++                            var visibleClip: Rect? = null
++                            fixture.instrumentation.runOnMainSync {
++                                val panelRoot = requireNotNull(fixture.manager.currentRoot)
++                                val screenBounds = fixture.manager.currentOrbBounds()
++                                val rootClip = Rect()
++                                assertTrue("NOT REACHED: parent clip unavailable", panelRoot.getGlobalVisibleRect(rootClip))
++                                val rootScreen = IntArray(2)
++                                panelRoot.getLocationOnScreen(rootScreen)
++                                rootClip.offset(rootScreen[0], rootScreen[1])
++                                assertTrue("NOT REACHED: parent does not intersect child", rootClip.intersect(screenBounds))
++                                bounds = screenBounds
++                                visibleClip = rootClip
++                            }
+                             val b = checkNotNull(bounds)
++                            val clip = checkNotNull(visibleClip)
+                             val before = SystemClock.uptimeMillis()
+                             val screen = requireNotNull(fixture.instrumentation.uiAutomation.takeScreenshot())
+                             val after = SystemClock.uptimeMillis()
+@@ -2905,18 +2918,38 @@
+                                         wholeRoiDifference(oldAtOriginalBounds, sample)
+                                     } finally { oldAtOriginalBounds.recycle() }
+                                 } else null
++                                // The independent 172px native reference must be clipped by the
++                                // *measured* 168px parent for the child-only stress case. It is
++                                // distinct from, and cannot pass, the full 172px window gate.
++                                fun clippedReferenceDelta(reference: Bitmap): MaterialPixelComparison? {
++                                    if (nativeRefs === refs || clip == b) return null
++                                    val clipped = Bitmap.createBitmap(sample.width, sample.height, Bitmap.Config.ARGB_8888)
++                                    return try {
++                                        Canvas(clipped).apply {
++                                            drawColor(android.graphics.Color.WHITE)
++                                            save()
++                                            clipRect(clip.left - b.left, clip.top - b.top, clip.right - b.left, clip.bottom - b.top)
++                                            drawBitmap(reference, 0f, 0f, null)
++                                            restore()
++                                        }
++                                        wholeRoiDifference(clipped, sample)
++                                    } finally { clipped.recycle() }
++                                }
++                                val clippedNeutralDelta = clippedReferenceDelta(nativeRefs.neutral)
++                                val clippedAnimatedDelta = clippedReferenceDelta(nativeRefs.neutralAnimated)
+                                 val category = when {
+                                     comparison.nearlyEqual() -> "OLD_FULL"
+                                     standbyDelta.nearlyEqual() -> "SAFE_STANDBY"
+                                     neutralDelta.nearlyEqual() -> "SAFE_NEUTRAL"
+                                     animatedDelta.nearlyEqual() -> "SAFE_NEUTRAL"
++                                    clippedNeutralDelta?.nearlyEqual() == true || clippedAnimatedDelta?.nearlyEqual() == true -> "SAFE_CLIPPED_NEW_NEUTRAL"
+                                     oldNeutralDelta?.nearlyEqual() == true -> "OLD_SIZE_NEUTRAL"
+                                     emptyDelta.nearlyEqual() -> "BLANK"
+                                     else -> "UNCLASSIFIED"
+                                 }
+                                 categories += category
+                                 times += "sample=$index before=$before after=$after bounds=$b size=${sample.width}x${sample.height} " +
+-                                    "category=$category whitePixels=$whitePixels oldFull=$comparison standby=$standbyDelta neutral=$neutralDelta animated=$animatedDelta oldSize=$oldNeutralDelta empty=$emptyDelta " +
++                                    "category=$category parentClip=$clip whitePixels=$whitePixels oldFull=$comparison standby=$standbyDelta neutral=$neutralDelta animated=$animatedDelta clippedNeutral=$clippedNeutralDelta clippedAnimated=$clippedAnimatedDelta oldSize=$oldNeutralDelta empty=$emptyDelta " +
+                                     "reference=r22-3-native-${sample.width} fiducials=$leftX,$centerY:${screen.getPixel(leftX, centerY)};" +
+                                     "$rightX,$centerY:${screen.getPixel(rightX, centerY)} expected=safe-neutral"
+                             } finally { screen.recycle() }
+@@ -2930,7 +2963,7 @@
+                                 .joinToString("\n", postfix = "\n"))
+                         assertTrue("$label contained a blank or prior full-detail orb", samples.all(::safeNeutral))
+                         assertTrue("$label was not independently classified as safe: $categories",
+-                            categories.all { it == "SAFE_STANDBY" || it == "SAFE_NEUTRAL" })
++                            categories.all { it == "SAFE_STANDBY" || it == "SAFE_NEUTRAL" || it == "SAFE_CLIPPED_NEW_NEUTRAL" })
+                     } finally { samples.forEach(Bitmap::recycle) }
+                 }
+                 recordSafeStrip("r08-neutral-transition")
+@@ -3026,11 +3059,20 @@
+             var childBounds = Rect()
+             while (!measured && System.nanoTime() < layoutDeadline) {
+                 fixture.instrumentation.runOnMainSync {
++                    // getGlobalVisibleRect is root-relative for this separate
++                    // panel window; screenshots use physical screen coordinates.
+                     val visibleRoot = root.getGlobalVisibleRect(rootBounds)
+                     val visibleChild = orb.getGlobalVisibleRect(childBounds)
++                    val rootScreen = IntArray(2)
++                    val childScreen = IntArray(2)
++                    root.getLocationOnScreen(rootScreen)
++                    orb.getLocationOnScreen(childScreen)
++                    rootBounds.offset(rootScreen[0], rootScreen[1])
++                    childBounds.offset(rootScreen[0], rootScreen[1])
+                     measured = root.isAttachedToWindow && root.width == size && root.height == size &&
+                         orb.width == size && orb.height == size && visibleRoot && visibleChild &&
+-                        childBounds.width() == size && childBounds.height() == size && rootBounds.contains(childBounds)
++                        childBounds.width() == size && childBounds.height() == size && rootBounds.contains(childBounds) &&
++                        childBounds.left == childScreen[0] && childBounds.top == childScreen[1]
+                 }
+                 if (!measured) Thread.sleep(24)
+             }

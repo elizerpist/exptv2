@@ -1,4 +1,4 @@
-name: R22.3 corrected unchanged-parent visual fixtures
+name: R22.3 affected visual controls with measured screen clip
 on:
   workflow_dispatch:
     inputs:
@@ -7,15 +7,21 @@ on:
         default: true
 permissions:
   contents: read
-defaults:
-  run:
-    working-directory: app
 jobs:
-  api35-fixture:
+  api35-affected:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arm: parent
+            source: fe8931a69c96e964f78561a3100e3d776dfe5dfc
+          - arm: candidate
+            source: b1eccd845546e5d65d9e69c9ba0a43775a2c216b
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 38
     env:
-      APP_SHA: fe8931a69c96e964f78561a3100e3d776dfe5dfc
+      APP_SHA: ${{ matrix.source }}
+      ARM: ${{ matrix.arm }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -41,33 +47,47 @@ jobs:
           flutter-version: '3.41.4'
           channel: stable
           cache: true
+      - name: Configure runner-only plugin repository fallback
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cp "$GITHUB_WORKSPACE/harness/scripts/r22-3-plugin-repos.init.gradle" "$HOME/.gradle/init.d/fluvi-r22-3-repositories.gradle"
       - name: Build and identify unchanged target APK
+        working-directory: app
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/r22-3-parent"
+          out="$RUNNER_TEMP/r22-3-visual-$ARM"
+          mkdir -p "$out"
           test "$(git rev-parse HEAD)" = "$APP_SHA"
           flutter pub get
           test -z "$(git status --porcelain --untracked-files=no)"
           (cd android && ./gradlew :app:assembleDebug --no-daemon --max-workers=3 --console=plain)
-          sha256sum build/app/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/r22-3-parent/original-target-sha256.txt"
-          printf 'application_sha=%s\nharness_sha=%s\n' "$APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r22-3-parent/identity.txt"
-      - name: Apply androidTest-only fixture and build test APK
+          sha256sum build/app/outputs/apk/debug/app-debug.apk > "$out/original-target-sha256.txt"
+          printf 'application_sha=%s\nharness_sha=%s\narm=%s\n' "$APP_SHA" "$GITHUB_SHA" "$ARM" > "$out/identity.txt"
+      - name: Apply recorded test-only geometry corrections
+        working-directory: app
         shell: bash
         run: |
           set -euo pipefail
-          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-3-parent-fixture.patch" > "$RUNNER_TEMP/r22-3-parent/fixture-patch-sha256.txt"
-          git apply "$GITHUB_WORKSPACE/harness/scripts/r22-3-parent-fixture.patch"
-          git diff --name-only > "$RUNNER_TEMP/r22-3-parent/changed-files.txt"
-          test -s "$RUNNER_TEMP/r22-3-parent/changed-files.txt"
-          if grep -v '^android/app/src/androidTest/' "$RUNNER_TEMP/r22-3-parent/changed-files.txt"; then exit 1; fi
-          git diff > "$RUNNER_TEMP/r22-3-parent/actual-fixture.patch"
+          out="$RUNNER_TEMP/r22-3-visual-$ARM"
+          if [[ "$ARM" == parent ]]; then
+            sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-3-parent-fixture.patch" > "$out/parent-fixture-sha256.txt"
+            git apply "$GITHUB_WORKSPACE/harness/scripts/r22-3-parent-fixture.patch"
+          fi
+          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-3-visual-$ARM.patch" > "$out/correction-sha256.txt"
+          git apply "$GITHUB_WORKSPACE/harness/scripts/r22-3-visual-$ARM.patch"
+          git diff --name-only > "$out/changed-files.txt"
+          test -s "$out/changed-files.txt"
+          if grep -v '^android/app/src/androidTest/' "$out/changed-files.txt"; then exit 1; fi
+          git diff > "$out/actual-fixture.patch"
           (cd android && ./gradlew :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
-          sha256sum -c "$RUNNER_TEMP/r22-3-parent/original-target-sha256.txt"
-          sha256sum build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$RUNNER_TEMP/r22-3-parent/test-apk-sha256.txt"
+          sha256sum -c "$out/original-target-sha256.txt"
+          sha256sum build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$out/test-apk-sha256.txt"
       - name: Enable KVM
         run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
-      - name: Run independent controls on API35
+      - name: Run the two affected controls on API35
+        timeout-minutes: 15
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -79,12 +99,12 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r22-3-parent-control.sh"
+          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r22-3-visual-affected.sh"
       - name: Preserve results on every outcome
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-3-parent-visual-corrected-${{ github.run_id }}
-          path: ${{ runner.temp }}/r22-3-parent/**
+          name: r22-3-visual-corrected-${{ matrix.arm }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/r22-3-visual-${{ matrix.arm }}/**
           if-no-files-found: warn
           retention-days: 30
