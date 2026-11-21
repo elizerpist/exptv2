@@ -1,112 +1,24 @@
-name: R20 candidate first FULL frame qualification (orchestration only)
+name: R20 independent Maven availability probe
 on:
   workflow_dispatch:
     inputs:
       native_diagnostic:
         type: boolean
         default: true
-      run_nightly:
-        type: boolean
-        default: false
-      run_baseline_profile:
-        type: boolean
-        default: false
 permissions:
   contents: read
-defaults:
-  run:
-    working-directory: app
 jobs:
-  api35:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arm: candidate
-            source: 5b09e7009ea2303231c8fdbcb0c09e5a74f704ff
+  repository-probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 70
-    env:
-      APP_SHA: ${{ matrix.source }}
-      ARM: ${{ matrix.arm }}
+    timeout-minutes: 4
     steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ env.APP_SHA }}
-          path: app
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.sha }}
-          path: harness
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.41.4'
-          channel: stable
-          cache: true
-      - name: Resolve packages and verify application identity
+      - name: Check the three previously rate-limited immutable POM URLs
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/r19-api35"
-          test "$(git rev-parse HEAD)" = "$APP_SHA"
-          flutter pub get
-          test -z "$(git status --porcelain --untracked-files=no)"
-          printf 'application_sha=%s\nharness_sha=%s\narm=%s\n' "$APP_SHA" "$GITHUB_SHA" "$ARM" > "$RUNNER_TEMP/r19-api35/identity.txt"
-      - name: Run the complete application and core JVM suites
-        shell: bash
-        run: |
-          set -uo pipefail
-          (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r19-api35/unit.log"
-          printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r19-api35/unit.exit"
-      - name: Apply only separately identified test fixture overlays
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py"
-          git status --short > "$RUNNER_TEMP/r19-api35/fixture-modified-files.txt"
-          git diff > "$RUNNER_TEMP/r19-api35/fixture.patch"
-          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py" > "$RUNNER_TEMP/r19-api35/fixture-sha256.txt"
-      - name: Assemble app and instrumentation APKs
-        run: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
-      - name: Enable KVM
-        run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
-      - name: Run service, panel and diagnostics on API35
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          emulator-build: 15081367
-          target: default
-          arch: x86_64
-          profile: pixel_7
-          cores: 4
-          ram-size: 2048M
-          disable-animations: false
-          emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r19-api35-qualification.sh"
-      - name: Verify independent JVM result
-        if: always()
-        run: if test -s "$RUNNER_TEMP/r19-api35/unit.exit"; then test "$(cat "$RUNNER_TEMP/r19-api35/unit.exit")" = 0; else echo 'JVM suite NOT RUN'; fi
-      - name: Preserve all raw results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: r20-candidate-first-frame-${{ matrix.arm }}-${{ github.run_id }}
-          path: |
-            ${{ runner.temp }}/r19-api35/**
-            app/build/app/reports/tests/**
-            app/build/fluvi-core/reports/tests/**
-            app/build/app/test-results/**
-            app/build/fluvi-core/test-results/**
-          if-no-files-found: warn
-          retention-days: 30
+          for module in kotlin-stdlib kotlin-gradle-plugins-bom kotlin-gradle-plugin-api; do
+            url="https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/$module/2.0.21/$module-2.0.21.pom"
+            status=$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 20 "$url")
+            printf '%s %s\n' "$module" "$status"
+            test "$status" = 200
+          done
