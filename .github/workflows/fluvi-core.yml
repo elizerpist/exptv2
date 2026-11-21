@@ -1,4 +1,4 @@
-name: R22.3 paired cadence, matched observers and 15s sample
+name: R22.3 paired cadence, 15s and natural-time pixel sampling
 on:
   workflow_dispatch:
     inputs:
@@ -105,7 +105,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-3-paired-matched-15s-cadence-${{ github.run_id }}
+          name: r22-3-paired-natural-pixels-${{ github.run_id }}
           path: ${{ runner.temp }}/r22-3-cadence/**
           if-no-files-found: warn
           retention-days: 30

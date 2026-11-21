@@ -1,8 +1,6 @@
 --- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
 +++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
-@@ -2514,6 +2514,49 @@
-         } finally { refs.recycle() }
-     }
+@@ -2516,2 +2516,56 @@
  
 +    /** Independent sustained producer sample. The paired baseline and
 +     * candidate use the same uncontrolled material clock and duration. */
@@ -12,14 +10,24 @@
 +            initialProfile = calibratedOrbProfile().copy(opacity = .5f)) { fixture ->
 +            val before = copyPanelOrb(fixture.instrumentation, fixture.manager)
 +            var after: Bitmap? = null
++            var later: Bitmap? = null
 +            val directory = File(fixture.activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
 +            try {
 +                persistPanelEvidence(fixture.activity, "r22-3-cadence-before", before)
 +                fixture.beginNaturalCadence()
 +                Thread.sleep(15_000)
-+                val samples = fixture.endNaturalCadence()
-+                after = copyPanelOrb(fixture.instrumentation, fixture.manager)
-+                persistPanelEvidence(fixture.activity, "r22-3-cadence-after", checkNotNull(after))
++                // Stop recording at the same 15s boundary but keep the natural
++                // material clock running for the independently sampled pixels.
++                // Returning to the controlled A phase before the screenshot
++                // would compare A against A even while real motion occurred.
++                val samples = fixture.endNaturalCadence(leaveNaturalTime = true)
++                try {
++                    after = copyPanelOrb(fixture.instrumentation, fixture.manager)
++                    persistPanelEvidence(fixture.activity, "r22-3-cadence-after", checkNotNull(after))
++                    Thread.sleep(250)
++                    later = copyPanelOrb(fixture.instrumentation, fixture.manager)
++                    persistPanelEvidence(fixture.activity, "r22-3-cadence-later", checkNotNull(later))
++                } finally { fixture.restoreControlledMaterialTime() }
 +                val intervals = samples.zipWithNext { a, b -> (b.frameNanos - a.frameNanos) / 1_000_000.0 }
 +                val ordered = intervals.sorted()
 +                val median = ordered.getOrNull(ordered.size / 2)
@@ -34,6 +42,7 @@
 +                assertTrue("producer timestamps must advance", intervals.all { it > 0.0 })
 +                assertTrue("material phases did not move", samples.map { it.phase }.distinct().size >= 100)
 +                assertTrue("independent compositor crops did not change", compareMaterialPixels(before, checkNotNull(after)).meaningful())
++                assertTrue("later natural compositor crop did not move", compareMaterialPixels(checkNotNull(after), checkNotNull(later)).meaningful())
 +                var state = "UNOBSERVED"
 +                var occupied = -1
 +                fixture.instrumentation.runOnMainSync {
@@ -43,25 +52,17 @@
 +                }
 +                File(directory, "r22-3-cadence.txt").appendText("terminalSnapshot=$state\n")
 +                assertTrue("terminal fixed-pool snapshot exceeds three: $state", occupied in 0..3)
-+            } finally { before.recycle(); after?.recycle() }
++            } finally { before.recycle(); after?.recycle(); later?.recycle() }
 +        }
 +    }
 +
      @Test fun isolatedStandbyPreservesAuthorizedComposition() {
-         for (background in listOf(android.graphics.Color.WHITE, android.graphics.Color.BLACK)) {
-             lateinit var translucentReference: Bitmap
-@@ -4075,6 +4118,8 @@
- 
-     /** Reuses the existing real-window and calibrated pixel oracles. This
+@@ -4077,2 +4131,4 @@
       * fixture never supplies a release callback, fence or visibility grant. */
 +    private data class CadenceSample(val frameNanos: Long, val submittedMs: Long, val phase: Float, val slot: Long, val use: Long)
 +
      private inner class OrbRetirementFixture(
-         private val label: String,
-         private val recoveryHook: KeyguardOrbRecoveryTestHook,
-@@ -4102,6 +4147,40 @@
-         )
-         private val controlledTime = ControlledOrbTimeSource(calibratedMaterialTime(PHASE_A))
+@@ -4104,2 +4160,37 @@
          private val submissions = SubmittedFrameTracker()
 +        private val cadenceLock = Any()
 +        @Volatile private var cadenceEnabled = false
@@ -77,12 +78,13 @@
 +            controlledTime.useNaturalTime = true
 +            cadenceEnabled = true
 +        }
-+        fun endNaturalCadence(): List<CadenceSample> = synchronized(cadenceLock) {
++        fun endNaturalCadence(leaveNaturalTime: Boolean = false): List<CadenceSample> = synchronized(cadenceLock) {
 +            cadenceEnabled = false
-+            controlledTime.useNaturalTime = false
++            if (!leaveNaturalTime) controlledTime.useNaturalTime = false
 +            (0 until cadenceCount).map { CadenceSample(cadenceFrameNanos[it], cadenceSubmittedMs[it],
 +                cadencePhases[it], cadenceSlots[it], cadenceUses[it]) }
 +        }
++        fun restoreControlledMaterialTime() { controlledTime.useNaturalTime = false }
 +        fun cadenceOmissions(): Int = synchronized(cadenceLock) { cadenceOmitted }
 +        private fun recordCadence(frame: KeyguardOrbBufferProducerFrame) {
 +            if (!cadenceEnabled) return
@@ -98,11 +100,7 @@
 +            }
 +        }
          private val samples = CalibratedProducerSamples()
-         private val nextGate = AtomicReference<OrbSteadyGate?>()
-         private val gates = mutableListOf<OrbSteadyGate>()
-@@ -4121,9 +4200,13 @@
-         fun start() {
-             KeyguardOrbBufferRendererTestHooks.recoveryHook = recoveryHook
+@@ -4123,5 +4214,9 @@
              KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
 -            KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions
 +            KeyguardOrbBufferRendererTestHooks.publicationObserver = KeyguardOrbBufferPublicationObserver { frame ->
@@ -114,23 +112,14 @@
 +            KeyguardOrbBufferRendererTestHooks.ownershipObserver =
 +                if (label == "r22-3-translucent-cadence") NoopKeyguardOrbOwnershipObserver else ownership
              KeyguardOrbBufferRendererTestHooks.firstPublicationHook = object : KeyguardOrbFirstPublicationTestHook {
-                 override fun dispatchReady(frame: KeyguardOrbBufferProducerFrame, deliver: () -> Unit) {
-                     if (readyAttachment.get() == frame.lease.attachment) {
-@@ -4801,12 +4884,17 @@
- 
-         private val selected = AtomicReference(Sample(null, initial))
+@@ -4803,2 +4898,3 @@
          private val sampled = ThreadLocal<Sample?>()
 +        @Volatile var useNaturalTime = false
  
-         fun submit(requestId: Long, time: KeyguardMaterialTime) {
-             selected.set(Sample(requestId, time))
-         }
- 
+@@ -4809,2 +4905,6 @@
          override fun timeAt(scene: KeyguardMaterialScene, frameTimeNanos: Long): KeyguardMaterialTime {
 +            if (useNaturalTime) {
 +                sampled.remove()
 +                return scene.timeAt(frameTimeNanos)
 +            }
              val sample = selected.get()
-             sampled.set(sample)
-             return sample.time
