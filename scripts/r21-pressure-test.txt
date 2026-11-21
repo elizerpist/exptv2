@@ -1,4 +1,5 @@
     @Test fun r21PhoneShapeProtectsDirectAndFinalWithdrawalCore() {
+        val modeFailures = mutableListOf<String>()
         for (mode in listOf("LIGHT", "FULL")) {
             KeyguardCardDiagnostics.clearCapture(context)
             KeyguardCardDiagnostics.startCapture(context, "r21-pressure", "profile", mode)
@@ -75,6 +76,7 @@
                 java.io.File(dir, "$mode-live.txt").writeText(live)
                 java.io.File(dir, "$mode-frozen.txt").writeText(frozen)
             }
+            try {
             val bytes = frozen.toByteArray(Charsets.UTF_8).size
             assertTrue("budget $bytes", bytes <= 32_768 && frozen.contains("exportBytes=$bytes\n"))
             val rows = frozen.lineSequence().filter { it.startsWith(" R21_CORE ") }.toList()
@@ -91,6 +93,8 @@
             KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", "R21_ACK", diagnosticContext = oldOwner,
                 observedUptimeMs = 999_999, fields = mapOf("r18Host" to 101, "r18Output" to 201, "r21Ordinal" to 9999))
             assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+            } catch (error: AssertionError) { modeFailures += "$mode: ${error.message}" }
         }
+        assertTrue(modeFailures.joinToString("; "), modeFailures.isEmpty())
     }
 
