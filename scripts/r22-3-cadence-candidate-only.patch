@@ -9,6 +9,24 @@
          withOrbRetirementFixture("r22-3-translucent-cadence", gate,
              initialProfile = calibratedOrbProfile().copy(opacity = .5f)) { fixture ->
              val before = copyPanelOrb(fixture.instrumentation, fixture.manager)
+@@ -2558,7 +2558,7 @@
+             try {
+                 persistPanelEvidence(fixture.activity, "r22-3-cadence-before", before)
+                 fixture.beginNaturalCadence()
+-                Thread.sleep(6_000)
++                Thread.sleep(15_000)
+                 val samples = fixture.endNaturalCadence()
+                 after = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                 persistPanelEvidence(fixture.activity, "r22-3-cadence-after", checkNotNull(after))
+@@ -2567,7 +2567,7 @@
+                 val median = ordered.getOrNull(ordered.size / 2)
+                 val p95 = ordered.getOrNull(((ordered.size * 95 + 99) / 100 - 1).coerceAtLeast(0))
+                 File(directory, "r22-3-cadence.txt").writeText(buildString {
+-                    appendLine("clock=ChoreographerFrameNs submissionClock=uptimeMs durationMs=6000 refreshRate=${fixture.activity.display?.refreshRate}")
++                    appendLine("clock=ChoreographerFrameNs submissionClock=uptimeMs durationMs=15000 refreshRate=${fixture.activity.display?.refreshRate}")
+                     appendLine("samples=${samples.size} intervals=${intervals.size} medianMs=$median p95Ms=$p95 worstMs=${ordered.lastOrNull()} over50ms=${intervals.count { it > 50 }} omitted=${fixture.cadenceOmissions()}")
+                     samples.forEach { appendLine("frameNs=${it.frameNanos} submittedMs=${it.submittedMs} phase=${it.phase} slot=${it.slot}/${it.use}") }
+                 })
 @@ -2576,7 +2576,15 @@
                  assertTrue("producer timestamps must advance", intervals.all { it > 0.0 })
                  assertTrue("material phases did not move", samples.map { it.phase }.distinct().size >= 100)
