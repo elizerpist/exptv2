@@ -5,7 +5,8 @@
 - **APK delivery:** BLOCKED by those gates. Exact-source signed HUMAN_DIAGNOSTIC profile APK is locally staged only; no direct installation link was published.
 - **Physical acceptance:** PENDING — user only; no candidate handset result.
 
-Public evidence (APK-free): https://media.githubusercontent.com/media/elizerpist/exptv2/41d4c3ad42e8a62cc650011fa5ccca639f368268/r22_3-evidence-final-b1eccd845546.tar.gz  
+Public evidence (APK-free): https://media.githubusercontent.com/media/elizerpist/exptv2/41d4c3ad42e8a62cc650011fa5ccca639f368268/r22_3-evidence-final-b1eccd845546.tar.gz
+
 Evidence length: **64,016,180 bytes**; SHA-256: `b2ea21274f0b87dd0c66fc9e67576c139156e94bdb2882a7c81d8807241a1b9e`. The URL was anonymously fetched and verified independently by both Python and curl streams against the local bytes. It contains raw emulator captures, screenshots, videos, test output, exact patches, scripts, checksums and rules; no APK or key.
 
 Application `b1eccd845546e5d65d9e69c9ba0a43775a2c216b`, parent `fe8931a69c96e964f78561a3100e3d776dfe5dfc`; original user handoff `85956f096724d89a5dea5e0921e4373c00ac91cb`. The coordination journal is kept independently. R21 `ef310b490cf03713c0c97d3d4aab85e3b536e66d` is the last phone-tested source. R22.3 physical acceptance is pending and only the owner can supply it.
