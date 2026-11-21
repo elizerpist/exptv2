@@ -15,7 +15,21 @@
                      }
                      assertTrue(compareMaterialPixels(without[0].bitmap, without[1].bitmap).nearlyEqual())
                      assertTrue(compareMaterialPixels(without[0].bitmap, without[2].bitmap).meaningful())
-@@ -4342,9 +4348,21 @@
+@@ -2618,7 +2624,12 @@
+                         root.width / 2f, root.height / 2f, 0)
+                     try { assertTrue(root.dispatchTouchEvent(down)); assertTrue(root.dispatchTouchEvent(up)) }
+                     finally { down.recycle(); up.recycle() }
+-                    assertTrue("standby changed the ORB tap route", fixture.interactionEvents.contains("KG|ORB_TAP"))
++                }
++                // View posts PerformClick; let the actual Main queue process
++                // that callback before observing its existing diagnostic.
++                fixture.instrumentation.waitForIdleSync()
++                assertTrue("standby changed the ORB tap route", fixture.interactionEvents.contains("KG|ORB_TAP"))
++                fixture.instrumentation.runOnMainSync {
+                     fixture.window.updateMaterial(calibratedOrbProfile().copy(opacity = .5f), fixture.settings)
+                     assertEquals("nonopaque blend must disarm standby immediately", null, root.passiveStandbyObservation())
+                 }
+@@ -4342,9 +4353,21 @@
              val produced = samples.await(requestId)
              assertEquals("producer evidence must identify the submitted frame", produced.frame, submitted)
              persistProducerEvidence(activity, "r06-$label-$suffix-producer", produced)

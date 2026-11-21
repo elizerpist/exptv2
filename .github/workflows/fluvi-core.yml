@@ -1,4 +1,4 @@
-name: R22.2 corrected visual observer on unchanged candidate
+name: R22.2 corrected visual tap observer on unchanged candidate
 on:
   workflow_dispatch:
     inputs:
@@ -84,7 +84,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-2-visual-observer-${{ github.run_id }}
+          name: r22-2-visual-tap-${{ github.run_id }}
           path: ${{ runner.temp }}/r22-2-fixture/**
           if-no-files-found: warn
           retention-days: 30
