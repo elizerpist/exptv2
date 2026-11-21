@@ -1,0 +1,214 @@
+diff --git a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
+index be6e4a65..de717261 100644
+--- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
++++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
+@@ -2552 +2552 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-        val gate = RealReleaseGate().apply { releaseAll() }
++        val gate = NoopKeyguardOrbRecoveryTestHook
+@@ -2556,0 +2557 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
++            var later: Bitmap? = null
+@@ -2561,4 +2562,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-                Thread.sleep(6_000)
+-                val samples = fixture.endNaturalCadence()
+-                after = copyPanelOrb(fixture.instrumentation, fixture.manager)
+-                persistPanelEvidence(fixture.activity, "r22-3-cadence-after", checkNotNull(after))
++                Thread.sleep(15_000)
++                // Stop recording at the same 15s boundary but keep the natural
++                // material clock running for the independently sampled pixels.
++                // Returning to the controlled A phase before the screenshot
++                // would compare A against A even while real motion occurred.
++                val samples = fixture.endNaturalCadence(leaveNaturalTime = true)
++                try {
++                    after = copyPanelOrb(fixture.instrumentation, fixture.manager)
++                    persistPanelEvidence(fixture.activity, "r22-3-cadence-after", checkNotNull(after))
++                    Thread.sleep(250)
++                    later = copyPanelOrb(fixture.instrumentation, fixture.manager)
++                    persistPanelEvidence(fixture.activity, "r22-3-cadence-later", checkNotNull(later))
++                } finally { fixture.restoreControlledMaterialTime() }
+@@ -2570 +2580 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-                    appendLine("clock=ChoreographerFrameNs submissionClock=uptimeMs durationMs=6000 refreshRate=${fixture.activity.display?.refreshRate}")
++                    appendLine("clock=ChoreographerFrameNs submissionClock=uptimeMs durationMs=15000 refreshRate=${fixture.activity.display?.refreshRate}")
+@@ -2579,2 +2589,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-                fixture.ownership.assertBoundedSingleRenderer()
+-            } finally { before.recycle(); after?.recycle() }
++                assertTrue("later natural compositor crop did not move", compareMaterialPixels(checkNotNull(after), checkNotNull(later)).meaningful())
++                var state = "UNOBSERVED"
++                var occupied = -1
++                fixture.instrumentation.runOnMainSync {
++                    val observed = requireNotNull(fixture.window.materialDiagnostics())
++                    occupied = observed.isolatedFramesInFlight + observed.isolatedFramesReady + observed.isolatedFramesCompositorOwned
++                    state = "inFlight=${observed.isolatedFramesInFlight} ready=${observed.isolatedFramesReady} owned=${observed.isolatedFramesCompositorOwned} route=${observed.effectiveRoute}"
++                }
++                File(directory, "r22-3-cadence.txt").appendText("terminalSnapshot=$state\n")
++                assertTrue("terminal fixed-pool snapshot exceeds three: $state", occupied in 0..3)
++            } finally { before.recycle(); after?.recycle(); later?.recycle() }
+@@ -2907 +2926,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-                            fixture.instrumentation.runOnMainSync { bounds = fixture.manager.currentOrbBounds() }
++                            var visibleClip: Rect? = null
++                            fixture.instrumentation.runOnMainSync {
++                                val panelRoot = requireNotNull(fixture.manager.currentRoot)
++                                val screenBounds = fixture.manager.currentOrbBounds()
++                                val rootClip = Rect()
++                                assertTrue("NOT REACHED: parent clip unavailable", panelRoot.getGlobalVisibleRect(rootClip))
++                                val rootScreen = IntArray(2)
++                                panelRoot.getLocationOnScreen(rootScreen)
++                                rootClip.offset(rootScreen[0], rootScreen[1])
++                                assertTrue("NOT REACHED: parent does not intersect child", rootClip.intersect(screenBounds))
++                                bounds = screenBounds
++                                visibleClip = rootClip
++                            }
+@@ -2908,0 +2940 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
++                            val clip = checkNotNull(visibleClip)
+@@ -2942,0 +2975,19 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
++                                // The independent 172px native reference must be clipped by the
++                                // *measured* 168px parent for the child-only stress case. It is
++                                // distinct from, and cannot pass, the full 172px window gate.
++                                fun clippedReferenceDelta(reference: Bitmap): MaterialPixelComparison? {
++                                    if (nativeRefs === refs || clip == b) return null
++                                    val clipped = Bitmap.createBitmap(sample.width, sample.height, Bitmap.Config.ARGB_8888)
++                                    return try {
++                                        Canvas(clipped).apply {
++                                            drawColor(android.graphics.Color.WHITE)
++                                            save()
++                                            clipRect(clip.left - b.left, clip.top - b.top, clip.right - b.left, clip.bottom - b.top)
++                                            drawBitmap(reference, 0f, 0f, null)
++                                            restore()
++                                        }
++                                        wholeRoiDifference(clipped, sample)
++                                    } finally { clipped.recycle() }
++                                }
++                                val clippedNeutralDelta = clippedReferenceDelta(nativeRefs.neutral)
++                                val clippedAnimatedDelta = clippedReferenceDelta(nativeRefs.neutralAnimated)
+@@ -2947,0 +2999 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
++                                    clippedNeutralDelta?.nearlyEqual() == true || clippedAnimatedDelta?.nearlyEqual() == true -> "SAFE_CLIPPED_NEW_NEUTRAL"
+@@ -2954 +3006 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-                                    "category=$category whitePixels=$whitePixels oldFull=$comparison standby=$standbyDelta neutral=$neutralDelta animated=$animatedDelta oldSize=$oldNeutralDelta empty=$emptyDelta " +
++                                    "category=$category parentClip=$clip whitePixels=$whitePixels oldFull=$comparison standby=$standbyDelta neutral=$neutralDelta animated=$animatedDelta clippedNeutral=$clippedNeutralDelta clippedAnimated=$clippedAnimatedDelta oldSize=$oldNeutralDelta empty=$emptyDelta " +
+@@ -2968 +3020 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-                            categories.all { it == "SAFE_STANDBY" || it == "SAFE_NEUTRAL" })
++                            categories.all { it == "SAFE_STANDBY" || it == "SAFE_NEUTRAL" || it == "SAFE_CLIPPED_NEW_NEUTRAL" })
+@@ -3032,0 +3085,82 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
++    /** The old application binary is unchanged in the parent arm: this is
++     * a real attached panel with a one-shot rejection at the WM boundary. */
++    @Test fun attachedOrbRestrictionPrecedesFailedLayout() {
++        val refs = passiveReferences()
++        val gate = RealReleaseGate().apply { releaseAll() }
++        try {
++            withOrbRetirementFixture("r22-4-attached-layout-failure", gate) { fixture ->
++                val first = fixture.awaitFirstToken(fixture.initialLease.attachment)
++                val before = copyPanelOrb(fixture.instrumentation, fixture.manager)
++                val evidence = File(fixture.activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
++                var after: Bitmap? = null
++                try {
++                    persistPanelEvidence(fixture.activity, "r22-4-failed-layout-before", before)
++                    assertTrue("NOT REACHED: initial isolated FULL pixels differ from independent reference",
++                        compareMaterialPixels(refs.full, before).nearlyEqual())
++                    lateinit var retainedRoot: View
++                    var entryAttached = false
++                    var entryFull: Boolean? = null
++                    var entryRevoke = false
++                    var oldChild = -1
++                    var result = KeyguardCardWindow.Result.NO_OP
++                    var afterFull: Boolean? = null
++                    var replayFull: Boolean? = null
++                    var afterAttached = false
++                    var afterPrimary = ""
++                    var replayPrimary = ""
++                    val discreet = FluviFinancialCardPresenter.discreet()
++                    val next = fixture.settings.copy(showFinancialDetails = false,
++                        orbPosition = KeyguardCardOrbPosition(.72f, .5f))
++                    fixture.instrumentation.runOnMainSync {
++                        retainedRoot = requireNotNull(fixture.manager.currentRoot)
++                        oldChild = System.identityHashCode(first.child)
++                        fixture.manager.rejectNextUpdate = { view ->
++                            entryAttached = view === retainedRoot && view.isAttachedToWindow
++                            entryFull = fixture.window.currentPresentationFull()
++                            entryRevoke = gate.retirementSnapshot().any {
++                                it.lease == first.lease && it.child == oldChild && it.event == "main-hide-attempt-finished"
++                            }
++                        }
++                        result = fixture.window.showOrUpdate(discreet, next)
++                        afterAttached = fixture.window.isAttached && retainedRoot.isAttachedToWindow &&
++                            fixture.manager.currentRoot === retainedRoot
++                        afterFull = fixture.window.currentPresentationFull()
++                        afterPrimary = retainedRoot.findViewById<android.widget.TextView>(
++                            R.id.fluvi_financial_snapshot_primary).text.toString()
++                        fixture.window.updateMaterial(calibratedOrbProfile(), next)
++                        fixture.window.updateLayoutSettings(next)
++                        replayFull = fixture.window.currentPresentationFull()
++                        replayPrimary = retainedRoot.findViewById<android.widget.TextView>(
++                            R.id.fluvi_financial_snapshot_primary).text.toString()
++                    }
++                    after = copyPanelOrb(fixture.instrumentation, fixture.manager)
++                    persistPanelEvidence(fixture.activity, "r22-4-failed-layout-after-replay", checkNotNull(after))
++                    File(evidence, "r22-4-attached-layout-result.txt").writeText(
++                        "attachment=${first.lease.attachment} generation=${first.lease.generation} " +
++                        "child=$oldChild slot=${first.slotId} use=${first.useGeneration} " +
++                        "root=${System.identityHashCode(retainedRoot)} entryAttached=$entryAttached " +
++                        "entryFull=$entryFull entryRevoked=$entryRevoke result=$result " +
++                        "afterAttached=$afterAttached afterFull=$afterFull replayFull=$replayFull " +
++                        "afterPrimary=$afterPrimary replayPrimary=$replayPrimary " +
++                        "rejected=${fixture.manager.rejectedUpdates} " +
++                        "retirements=${gate.retirementSnapshot()}\n")
++                    assertEquals("NOT REACHED: manager did not reject exactly one geometry update", 1,
++                        fixture.manager.rejectedUpdates)
++                    assertTrue("NOT REACHED: original root was not attached at update", entryAttached && afterAttached)
++                    assertEquals("failed WM update must remain truthful", KeyguardCardWindow.Result.FAILED, result)
++                    assertEquals("permitted presentation must be durable at WM entry", false, entryFull)
++                    assertTrue("old exact child was not retired before the fallible WM update", entryRevoke)
++                    assertEquals("failed layout retained FULL", false, afterFull)
++                    assertEquals("settings replay restored FULL", false, replayFull)
++                    assertEquals(discreet.primary, afterPrimary)
++                    assertEquals(discreet.primary, replayPrimary)
++                    fixture.ownership.assertBoundedSingleRenderer()
++                } finally {
++                    fixture.instrumentation.runOnMainSync { fixture.manager.rejectNextUpdate = null }
++                    before.recycle()
++                    after?.recycle()
++                }
++            }
++        } finally { refs.recycle() }
++    }
++
+@@ -3063,0 +3198,2 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
++                    // getGlobalVisibleRect is root-relative for this separate
++                    // panel window; screenshots use physical screen coordinates.
+@@ -3065,0 +3202,6 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
++                    val rootScreen = IntArray(2)
++                    val childScreen = IntArray(2)
++                    root.getLocationOnScreen(rootScreen)
++                    orb.getLocationOnScreen(childScreen)
++                    rootBounds.offset(rootScreen[0], rootScreen[1])
++                    childBounds.offset(rootScreen[0], rootScreen[1])
+@@ -3068 +3210,2 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-                        childBounds.width() == size && childBounds.height() == size && rootBounds.contains(childBounds)
++                        childBounds.width() == size && childBounds.height() == size && rootBounds.contains(childBounds) &&
++                        childBounds.left == childScreen[0] && childBounds.top == childScreen[1]
+@@ -4329 +4472 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-        fun endNaturalCadence(): List<CadenceSample> = synchronized(cadenceLock) {
++        fun endNaturalCadence(leaveNaturalTime: Boolean = false): List<CadenceSample> = synchronized(cadenceLock) {
+@@ -4331 +4474 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-            controlledTime.useNaturalTime = false
++            if (!leaveNaturalTime) controlledTime.useNaturalTime = false
+@@ -4334,0 +4478 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
++        fun restoreControlledMaterialTime() { controlledTime.useNaturalTime = false }
+@@ -4373 +4517,2 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-            KeyguardOrbBufferRendererTestHooks.ownershipObserver = ownership
++            KeyguardOrbBufferRendererTestHooks.ownershipObserver =
++                if (label == "r22-3-translucent-cadence") NoopKeyguardOrbOwnershipObserver else ownership
+@@ -5202,0 +5348,4 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
++        // One-shot failure before the real delegate; the root remains attached.
++        // The observer records the production state at the actual WM boundary.
++        var rejectNextUpdate: ((View) -> Unit)? = null
++        var rejectedUpdates = 0
+@@ -5218 +5367,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+-        override fun updateViewLayout(view: View, params: ViewGroup.LayoutParams) =
++        override fun updateViewLayout(view: View, params: ViewGroup.LayoutParams) {
++            rejectNextUpdate?.let { observe ->
++                rejectNextUpdate = null
++                rejectedUpdates += 1
++                observe(view)
++                throw IllegalStateException("r22-4-injected-update-before-delegate")
++            }
+@@ -5219,0 +5375 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
++        }

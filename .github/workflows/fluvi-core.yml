@@ -1,4 +1,4 @@
-name: R22.3 affected visual controls with measured screen clip
+name: R22.4 unchanged parent attached layout failure
 on:
   workflow_dispatch:
     inputs:
@@ -14,8 +14,6 @@ jobs:
       matrix:
         include:
           - arm: parent
-            source: fe8931a69c96e964f78561a3100e3d776dfe5dfc
-          - arm: candidate
             source: b1eccd845546e5d65d9e69c9ba0a43775a2c216b
     runs-on: ubuntu-latest
     timeout-minutes: 38
@@ -65,28 +63,24 @@ jobs:
           (cd android && ./gradlew :app:assembleDebug --no-daemon --max-workers=3 --console=plain)
           sha256sum build/app/outputs/apk/debug/app-debug.apk > "$out/original-target-sha256.txt"
           printf 'application_sha=%s\nharness_sha=%s\narm=%s\n' "$APP_SHA" "$GITHUB_SHA" "$ARM" > "$out/identity.txt"
-      - name: Apply recorded test-only geometry corrections
+      - name: Apply parent-compatible test-only fixture after target build
         working-directory: app
         shell: bash
         run: |
           set -euo pipefail
           out="$RUNNER_TEMP/r22-3-visual-$ARM"
-          if [[ "$ARM" == parent ]]; then
-            sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-3-parent-fixture.patch" > "$out/parent-fixture-sha256.txt"
-            git apply "$GITHUB_WORKSPACE/harness/scripts/r22-3-parent-fixture.patch"
-          fi
-          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-3-visual-$ARM.patch" > "$out/correction-sha256.txt"
-          git apply "$GITHUB_WORKSPACE/harness/scripts/r22-3-visual-$ARM.patch"
+          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-4-parent-fixture.patch" > "$out/fixture-sha256.txt"
+          git apply --unidiff-zero "$GITHUB_WORKSPACE/harness/scripts/r22-4-parent-fixture.patch"
           git diff --name-only > "$out/changed-files.txt"
           test -s "$out/changed-files.txt"
           if grep -v '^android/app/src/androidTest/' "$out/changed-files.txt"; then exit 1; fi
           git diff > "$out/actual-fixture.patch"
-          (cd android && ./gradlew :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
+          (cd android && ./gradlew :app:compileDebugKotlin :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
           sha256sum -c "$out/original-target-sha256.txt"
           sha256sum build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$out/test-apk-sha256.txt"
       - name: Enable KVM
         run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
-      - name: Run the two affected controls on API35
+      - name: Run the single attached-failure control on API35
         timeout-minutes: 15
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -99,12 +93,12 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r22-3-visual-affected.sh"
+          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r22-4-parent-attached.sh"
       - name: Preserve results on every outcome
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-3-visual-corrected-${{ matrix.arm }}-${{ github.run_id }}
+          name: r22-4-parent-attached-${{ matrix.arm }}-${{ github.run_id }}
           path: ${{ runner.temp }}/r22-3-visual-${{ matrix.arm }}/**
           if-no-files-found: warn
           retention-days: 30
