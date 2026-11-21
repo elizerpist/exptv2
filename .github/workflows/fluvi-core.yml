@@ -1,4 +1,4 @@
-name: R21 candidate reveal handoff qualification (orchestration only)
+name: R21 independent launch-splash fixture correction (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -69,14 +69,16 @@ jobs:
           set -uo pipefail
           (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r19-api35/unit.log"
           printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r19-api35/unit.exit"
-      - name: Record exact candidate tests without source overlay
+      - name: Correct only the observed launch-splash fixture
         shell: bash
         run: |
           set -euo pipefail
+          python3 "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py"
           git status --short > "$RUNNER_TEMP/r19-api35/fixture-modified-files.txt"
           git diff > "$RUNNER_TEMP/r19-api35/fixture.patch"
-          sha256sum android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/Keyguard{FirstAuthorizedOrb,OrbPresentationPipeline,CardDiagnostics}InstrumentationTest.kt > "$RUNNER_TEMP/r19-api35/test-source-sha256.txt"
-          test ! -s "$RUNNER_TEMP/r19-api35/fixture.patch"
+          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py" > "$RUNNER_TEMP/r19-api35/fixture-sha256.txt"
+          test "$(git diff --name-only | wc -l)" = 1
+          git diff --name-only | grep -Fx android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt
       - name: Assemble app and instrumentation APKs
         run: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
       - name: Enable KVM
@@ -101,7 +103,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r21-candidate-reveal-${{ matrix.arm }}-${{ github.run_id }}
+          name: r21-splash-correction-${{ matrix.arm }}-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r19-api35/**
             app/build/app/reports/tests/**

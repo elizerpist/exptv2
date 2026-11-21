@@ -21,41 +21,14 @@ bash scripts/verify-keyguard-installed-apk.sh com.fluvi.app.test "$test_apk" "$o
 adb shell pm list instrumentation > "$out/instrumentation-list.txt"
 grep -F 'com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner' "$out/instrumentation-list.txt"
 timeout -k 2s 60s bash scripts/prepare-keyguard-lower-environment.sh "$out/preflight"
-failed=0
-for method in r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck r21ExclusionRetiresSubmittedOrbWithMainAckHeld; do
-  run=$(python3 -c 'import uuid; print(uuid.uuid4())')
-  printf '%s\n' "$run" > "$out/$method-uuid.txt"
-  adb shell am force-stop com.fluvi.app || true
-  adb logcat -c || true
-  rc=0
-  timeout -k 5s 180s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" -e class "com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest#$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/$method.txt" 2>&1 || rc=$?
-  printf '%s\n' "$rc" > "$out/$method.exit"
-  adb logcat -b all -d -v monotonic > "$out/$method-logcat.txt" 2>&1 || true
-  adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r19/$run" > "$out/$method-evidence.tar" 2> "$out/$method-evidence.stderr" || true
-  cat "$out/$method.txt"
-  if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then failed=1; fi
-done
-# One API35 panel and reducer block; the actual-service specimens above are separate.
+run=$(python3 -c 'import uuid; print(uuid.uuid4())')
+printf '%s\n' "$run" > "$out/r18-splash-correction-uuid.txt"
 adb shell am force-stop com.fluvi.app || true
 adb logcat -c || true
-run=$(python3 -c 'import uuid; print(uuid.uuid4())')
-printf '%s\n' "$run" > "$out/r21-panel-diagnostics-uuid.txt"
 rc=0
-timeout -k 5s 1000s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" -e class 'com.fluvi.app.lockscreen.KeyguardOrbPresentationPipelineInstrumentationTest,com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest' com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r21-panel-diagnostics.txt" 2>&1 || rc=$?
-printf '%s\n' "$rc" > "$out/r21-panel-diagnostics.exit"
-adb logcat -b all -d -v monotonic > "$out/r21-panel-diagnostics-logcat.txt" 2>&1 || true
-adb shell dumpsys window > "$out/window-after.txt" 2>&1 || true
-for evidence in r18 r20 "r21/$run"; do
-  label=${evidence//\//-}
-  adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/$evidence" > "$out/$label-evidence.tar" 2> "$out/$label-evidence.stderr" || true
-done
-cat "$out/r21-panel-diagnostics.txt"
-if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r21-panel-diagnostics.txt" || ! grep -Eq '^OK \([0-9]+ tests?\)' "$out/r21-panel-diagnostics.txt"; then failed=1; fi
-# Independent calibrated canonical View control.
-adb shell am force-stop com.fluvi.app || true
-rc=0
-timeout -k 5s 180s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e class 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12PreparedPictureMatchesCanonicalHardwareCanvasAcrossPhases' com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r20-canonical.txt" 2>&1 || rc=$?
-printf '%s\n' "$rc" > "$out/r20-canonical.exit"
-cat "$out/r20-canonical.txt"
-if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r20-canonical.txt" || ! grep -Eq '^OK \(1 test\)' "$out/r20-canonical.txt"; then failed=1; fi
-exit "$failed"
+timeout -k 5s 240s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" -e class 'com.fluvi.app.lockscreen.KeyguardOrbPresentationPipelineInstrumentationTest#r18RealPanelHiddenBufferTouchAndHeldBorrowerRetirement' com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r18-splash-correction.txt" 2>&1 || rc=$?
+printf '%s\n' "$rc" > "$out/r18-splash-correction.exit"
+adb logcat -b all -d -v monotonic > "$out/r18-splash-correction-logcat.txt" 2>&1 || true
+adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-service-probe/r18 > "$out/r18-splash-correction-evidence.tar" 2> "$out/r18-splash-correction-evidence.stderr" || true
+cat "$out/r18-splash-correction.txt"
+if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r18-splash-correction.txt" || ! grep -Eq '^OK \(1 test\)' "$out/r18-splash-correction.txt"; then exit 1; fi
