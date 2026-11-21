@@ -542,7 +542,6 @@ internal class KeyguardOrbSurfaceWorker(
         val painter = KeyguardOrbSurfacePainter(context, profile, width, height)
         val poster = Poster(key, painter.makePoster(phase), painter, scene, phase)
         if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
-            runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterWarmPosterCreated?.invoke(full) }
             authorizedTarget.get()?.let { current ->
                 runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterPosterCreated?.invoke(current) }
             }
@@ -553,6 +552,9 @@ internal class KeyguardOrbSurfaceWorker(
         }
         while (posters.size >= 2) posters.remove(posters.keys.first())
         posters[key] = poster
+        if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+            runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterWarmPosterCreated?.invoke(full) }
+        }
         return poster
     }
 
