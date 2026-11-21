@@ -22,7 +22,7 @@ adb shell pm list instrumentation > "$out/instrumentation-list.txt"
 grep -F 'com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner' "$out/instrumentation-list.txt"
 timeout -k 2s 60s bash scripts/prepare-keyguard-lower-environment.sh "$out/preflight"
 failed=0
-for method in r22SupersededOpeningWalkYieldsToFreshInspection r22YieldedWalkCannotGrantAfterExclusion r22StableOpeningReadIsNotYielded r22UnstagedOpeningObservation; do
+for method in r22CalibrationPreservesNonSuppressingAutomation r22SupersededOpeningWalkYieldsToFreshInspection r22YieldedWalkCannotGrantAfterExclusion r22StableOpeningReadIsNotYielded r22UnstagedOpeningObservation; do
   run=$(python3 -c 'import uuid; print(uuid.uuid4())')
   printf '%s\n' "$run" > "$out/$method-uuid.txt"
   adb shell am force-stop com.fluvi.app || true
@@ -45,6 +45,8 @@ for method in r22SupersededOpeningWalkYieldsToFreshInspection r22YieldedWalkCann
         grep -q 'visualCalibration=PASS ' "$out/$method-visual-status.txt" || failed=1 ;;
       r22YieldedWalkCannotGrantAfterExclusion)
         grep -q 'visualCalibration=PASS_NEGATIVE ' "$out/$method-visual-status.txt" || failed=1 ;;
+      r22CalibrationPreservesNonSuppressingAutomation)
+        if ! tar -xOf "$out/$method-evidence.tar" "$(tar -tf "$out/$method-evidence.tar" | grep '/sequence.txt$' | head -1)" | grep -q 'AUTOMATION_CONTROL_REACHED'; then failed=1; fi ;;
       r22UnstagedOpeningObservation) : ;;
     esac
   fi
@@ -85,12 +87,31 @@ timeout -k 5s 180s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e clas
 printf '%s\n' "$rc" > "$out/r20-canonical.exit"
 cat "$out/r20-canonical.txt"
 if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r20-canonical.txt" || ! grep -Eq '^OK \(1 test\)' "$out/r20-canonical.txt"; then failed=1; fi
+# Each additional renderer control is a separate specimen; continue after a
+# failure so the distinct compositor and lifecycle evidence is retained.
+for method in isolatedOpaqueOrbHasNeutralParentAtRetire isolatedStandbyPreservesAuthorizedComposition stalePressureCannotSwitchReplacement isolatedOrbStaleFirstCommitCannotUndoSameRootPrivacyOrSizeReplacement r09MixedSizeHeldOldUseLeavesCurrentSuccessorCapacity disposedWindowCannotBeRevivedByDelayedPressureTicket isolatedOrbFirstDirectDisposeDoesNotWaitForWorkerOrOldCommit isolatedOrbWithdrawalDoesNotWaitForBlockedRendererFrame; do
+  run=$(python3 -c 'import uuid; print(uuid.uuid4())')
+  printf '%s\n' "$run" > "$out/$method-uuid.txt"
+  adb shell am force-stop com.fluvi.app || true
+  adb logcat -c || true
+  rc=0
+  timeout -k 5s 300s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" \
+    -e class "com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#$method" \
+    com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/$method.txt" 2>&1 || rc=$?
+  printf '%s\n' "$rc" > "$out/$method.exit"
+  adb logcat -b all -d -v monotonic > "$out/$method-logcat.txt" 2>&1 || true
+  adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-material-smoke > "$out/$method-evidence.tar" 2> "$out/$method-evidence.stderr" || true
+  cat "$out/$method.txt"
+  if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then failed=1; fi
+done
 # Focused R08 privacy discriminator, with the original six samples and
 # unchanged assertion. This result remains separate from the panel suite.
 adb shell am force-stop com.fluvi.app || true
 adb logcat -c || true
+run=$(python3 -c 'import uuid; print(uuid.uuid4())')
+printf '%s\n' "$run" > "$out/r08-privacy-uuid.txt"
 rc=0
-timeout -k 5s 240s adb shell am instrument -w -r -e sourceSha "$APP_SHA" \
+timeout -k 5s 240s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" \
   -e class 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges' \
   com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r08-privacy.txt" 2>&1 || rc=$?
 printf '%s\n' "$rc" > "$out/r08-privacy.exit"

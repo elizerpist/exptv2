@@ -1,4 +1,4 @@
-name: R22.1 first-inspection qualification (orchestration only)
+name: R22.2 opening and privacy qualification (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -23,7 +23,7 @@ jobs:
       matrix:
         include:
           - arm: candidate
-            source: 1296c9b34d5e18c26ea3960cd8a0a8b2a9cc9cc5
+            source: fe8931a69c96e964f78561a3100e3d776dfe5dfc
     runs-on: ubuntu-latest
     timeout-minutes: 70
     env:
@@ -104,7 +104,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-candidate-inspection-${{ matrix.arm }}-${{ github.run_id }}
+          name: r22-2-candidate-qualification-${{ matrix.arm }}-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r19-api35/**
             app/build/app/reports/tests/**
