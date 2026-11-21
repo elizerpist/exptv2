@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      APP_SHA: 58126456956ae3f5785174254d287937701e5d93
+      APP_SHA: 5b09e7009ea2303231c8fdbcb0c09e5a74f704ff
       TOOLING_BASE: a0157e2f7a838565d31ae90b15d78a50b1eb5eae
     steps:
       - uses: actions/checkout@v5
@@ -86,7 +86,7 @@ jobs:
                   count+=1
           print('verified_shards=',count,'documents=',m['document_count'],'repo_symbols=',m['repository_defined_symbol_count'])
           PY
-          report="$tooling_dir/docs/codegraph-r20-presentation-pipeline-58126456.md"
+          report="$tooling_dir/docs/codegraph-r20-presentation-pipeline-5b09e700.md"
           printf '# R20 first-authorized ORB source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
           printf 'The Dart SCIP manifest is `docs/codegraph/manifest.json`; Kotlin has no SCIP coverage and the following is source navigation, not a generated call graph. The output/host lifecycle is Main-owned and visual presentation remains an independently measured outcome.\n\n' >> "$report"
           printf '```text\n' >> "$report"
@@ -94,7 +94,7 @@ jobs:
           (cd "$source_dir" && "${search[@]}" 'reserveBeforeMain|startR18|applyInspection|readSystemWindows|R18_PIPELINE|R19_|R20_|firstPhysical|allocatedAt|r20AllocatedAt|reservedReq|firstAuthorizedOrb|advanceR20First|invalidateR20Scene|requireRead|sceneSerial|FirstPaintTicket|authorizeDirectFirst|prepareHiddenDirect|beginDirectPresentation|queueReveal|crossSubmitBoundary|sealR18|class KeyguardFirstAuthorizedOrb|class KeyguardOrbPresentationCoordinator|class KeyguardOrbInertHost|class KeyguardOrbDirectOutput|class KeyguardOrbR18Presenter|fun (stage|reveal|retire|seal|dispose|borrow|releaseBorrow)|addTransactionCompletedListener|presentFence|draw|surfaceReady' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardWindow,KeyguardCardSettings,KeyguardSystemState,KeyguardWindowSnapshotReader,KeyguardInspectionFreshness,KeyguardFirstAuthorizedOrb,KeyguardOrbInertHost,KeyguardOrbPresentationCoordinator}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardOrbDirectOutput,KeyguardOrbR18Presenter,KeyguardOrbSurfacePresenter,KeyguardOrbSurfaceWorker,KeyguardOrbSurfaceMaterial,KeyguardOrbSurfaceMetrics}.kt) >> "$report"
           (cd "$source_dir" && "${search[@]}" 'r20AuthorizedFullFirstMiss|r20ExactAuthorizedPosterHit|r20FailedFirstLock|r20HeldFirstWrite|r20FirstFrameBreakdown|r12PreparedPictureMatchesCanonical' android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt) >> "$report"
           printf '\n```\n' >> "$report"
-          cp "$RUNNER_TEMP/r20-graph-query.txt" "$tooling_dir/docs/codegraph-r20-query-58126456.txt"
+          cp "$RUNNER_TEMP/r20-graph-query.txt" "$tooling_dir/docs/codegraph-r20-query-5b09e700.txt"
           sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$RUNNER_TEMP/r20-manifest-sha256.txt"
       - name: Publish graph to independent immutable tooling branch
         shell: bash
@@ -103,17 +103,17 @@ jobs:
           cd tooling
           git config user.name 'Fluvi Graph Bot'
           git config user.email 'fluvi-graph@users.noreply.github.com'
-          git add docs/codegraph docs/codegraph-r20-presentation-pipeline-58126456.md docs/codegraph-r20-query-58126456.txt
+          git add docs/codegraph docs/codegraph-r20-presentation-pipeline-5b09e700.md docs/codegraph-r20-query-5b09e700.txt
           git diff --cached --check
           git commit -m 'graph: index R20 first-authorized ORB application source [skip ci]'
           git rev-parse HEAD | tee "$RUNNER_TEMP/r20-graph-commit.txt"
-          test -z "$(git ls-remote origin refs/heads/tooling/r20-presentation-pipeline-58126456956a)"
-          git push origin HEAD:refs/heads/tooling/r20-presentation-pipeline-58126456956a
+          test -z "$(git ls-remote origin refs/heads/tooling/r20-presentation-pipeline-5b09e7009ea2)"
+          git push origin HEAD:refs/heads/tooling/r20-presentation-pipeline-5b09e7009ea2
       - name: Preserve graph and receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r20-graph-58126456956a-run-${{ github.run_id }}
+          name: r20-graph-5b09e7009ea2-run-${{ github.run_id }}
           path: |
             tooling/docs/codegraph/**
             tooling/docs/codegraph-r20-*.md
