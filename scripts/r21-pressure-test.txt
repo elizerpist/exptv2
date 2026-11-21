@@ -1,0 +1,96 @@
+    @Test fun r21PhoneShapeProtectsDirectAndFinalWithdrawalCore() {
+        for (mode in listOf("LIGHT", "FULL")) {
+            KeyguardCardDiagnostics.clearCapture(context)
+            KeyguardCardDiagnostics.startCapture(context, "r21-pressure", "profile", mode)
+            val expected = linkedMapOf<Long, Pair<Long, Long>>()
+            var oldOwner: KeyguardDiagnosticContext? = null
+            repeat(8) { index ->
+                val attempt = index + 1L; val base = attempt * 10_000L; val attach = 100 + attempt
+                val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 921, attempt, "wake", base))
+                if (index == 0) oldOwner = owner
+                val request = base + 1
+                val metric = KeyguardOrbSurfaceMetrics().apply { beginDirectPresentation(base + 13) }
+                fun edge(phase: String, at: Long, extra: Map<String, Any> = emptyMap()) {
+                    KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", phase,
+                        serviceSession = 921, wakeEpoch = attempt, requestId = request,
+                        attachGeneration = attach, diagnosticContext = owner, observedUptimeMs = at,
+                        surfaceMetrics = metric, fields = mapOf<String, Any>("r18Host" to attach,
+                            "r18Output" to 200 + attempt, "r18Child" to 300 + attempt,
+                            "r18Privacy" to "full", "r19Intent" to "EMPTY") + extra)
+                }
+                edge("WAKE_ADOPTED", base, mapOf("r18Reservation" to base - 100))
+                edge("R19_ALLOCATED", base - 100)
+                edge("R19_PROOF_CONSUMED", base + 9, mapOf("r19SceneNow" to 4))
+                edge("R20_FIRST_FRAME", base + 10, mapOf("r20Method" to "DIRECT_MISS", "r20EntryNs" to 1001L))
+                val facts = mapOf<String, Any>("r21Reservation" to 500 + attempt, "r21Reveal" to 1,
+                    "r21Proof" to base + 2, "r21Ordinal" to 2, "r21SubmitPhase" to "CROSSED", "r21Result" to "ACCEPTED")
+                edge("R21_CROSS", base + 11, facts)
+                edge("R21_NATIVE_APPLY", base + 12, facts + mapOf("r21Ordinal" to 3, "r21SubmitPhase" to "APPLIED"))
+                edge("R21_INGRESS", base + 13, facts + mapOf("r21Ordinal" to 4, "r21SubmitPhase" to "APPLIED",
+                    "r21Result" to "RECHECK_OFFERED", "r21EventAt" to base + 12, "r21CallbackAt" to base + 13,
+                    "r21Offered" to base + 3, "r21EventType" to 4194304, "r21WindowChanges" to 1, "r21Own" to false))
+                edge("R21_ACK", base + 14, facts + mapOf("r21Ordinal" to 5, "r21SubmitPhase" to "ACKNOWLEDGED"))
+                val first = KeyguardCardDiagnostics.newShowOperation(owner, attach, request)
+                KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", operation = first, observedUptimeMs = base + 15)
+                KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_RETURN", "wake", operation = first, observedUptimeMs = base + 16)
+                val firstHide = KeyguardCardDiagnostics.newHideOperation(owner, attach, base + 4, base + 18)
+                KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "first", operation = firstHide, observedUptimeMs = base + 19)
+                KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "first", operation = firstHide,
+                    observedUptimeMs = base + 19, fields = mapOf("attachedBefore" to true))
+                KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_APPLIED", "first", operation = firstHide, observedUptimeMs = base + 20)
+                KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_RETURN", "first", operation = firstHide, observedUptimeMs = base + 21)
+                val finalHide = if (attempt == 6L) firstHide else {
+                    val nextAttach = 1000 + attempt
+                    val next = KeyguardCardDiagnostics.newShowOperation(owner, nextAttach, base + 5)
+                    KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "successor", operation = next, observedUptimeMs = base + 25)
+                    KeyguardCardDiagnostics.captureEvent(context, "ADD_VIEW_RETURN", "successor", operation = next, observedUptimeMs = base + 26)
+                    val holder = KeyguardOrbSurfaceMetrics().apply { record(base + 27, (base + 27) * 1_000_000, true, 1, 1, 1, 1, 1, 1) }
+                    KeyguardCardDiagnostics.captureEvent(context, "R12_SURFACE", "ROUTE_SELECTED", operation = next,
+                        observedUptimeMs = base + 27, fields = mapOf("r12Generation" to nextAttach, "r12Detail" to "SURFACE_LIVE"), surfaceMetrics = holder)
+                    val hide = KeyguardCardDiagnostics.newHideOperation(owner, nextAttach, base + 6, base + 29)
+                    KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "final", operation = hide, observedUptimeMs = base + 30)
+                    KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "final", operation = hide,
+                        observedUptimeMs = base + 30, fields = mapOf("attachedBefore" to true))
+                    KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_APPLIED", "final", operation = hide, observedUptimeMs = base + 31)
+                    KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_RETURN", "final", operation = hide, observedUptimeMs = base + 32)
+                    hide
+                }
+                expected[attempt] = first.showOperationId to finalHide.hideOperationId
+                val cleanup = KeyguardCardDiagnostics.newHideOperation(owner, if (attempt == 6L) attach else 1000 + attempt, null, base + 33)
+                KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "cleanup", operation = cleanup, observedUptimeMs = base + 34)
+                KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "cleanup", operation = cleanup,
+                    observedUptimeMs = base + 35, fields = mapOf("attachedBefore" to false))
+                repeat(210) { sample ->
+                    KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure", requestId = base + 1000 + sample,
+                        diagnosticContext = owner, observedUptimeMs = base + 100 + sample,
+                        fields = mapOf("latestSampler" to "123456789:${base + sample}/123456789/123456789:true/false"))
+                    if (sample % 35 == 34) KeyguardCardDiagnostics.captureSnapshot(context)
+                }
+            }
+            val live = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+            val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            val args = androidx.test.platform.app.InstrumentationRegistry.getArguments()
+            args.getString("runUuid")?.let { id ->
+                val dir = java.io.File(context.filesDir, "keyguard-service-probe/r21/$id").apply { mkdirs() }
+                java.io.File(dir, "$mode-live.txt").writeText(live)
+                java.io.File(dir, "$mode-frozen.txt").writeText(frozen)
+            }
+            val bytes = frozen.toByteArray(Charsets.UTF_8).size
+            assertTrue("budget $bytes", bytes <= 32_768 && frozen.contains("exportBytes=$bytes\n"))
+            val rows = frozen.lineSequence().filter { it.startsWith(" R21_CORE ") }.toList()
+            assertEquals("four protected selected cores required", 4, rows.size)
+            for (id in listOf(1L, 6L, 7L, 8L)) {
+                val row = rows.single { it.contains("attempt=$id ") }
+                val (show, hide) = checkNotNull(expected[id])
+                assertTrue(row.contains("firstShow=$show/")); assertTrue(row.contains("finalHide=$hide/"))
+                assertTrue(row.contains("reservation=${500 + id}")); assertTrue(row.contains("ingress=${id * 10_000 + 13}/4/APPLIED/RECHECK_OFFERED"))
+                assertTrue(row.contains("first=${id * 10_000 + 1}/DIRECT_MISS/")); assertTrue(row.contains("/0 firstShow="))
+            }
+            val omissions = frozen.lineSequence().first { it.startsWith("omittedCriticalRecordIds=") }
+            assertFalse(omissions.contains("r21Core"))
+            KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", "R21_ACK", diagnosticContext = oldOwner,
+                observedUptimeMs = 999_999, fields = mapOf("r18Host" to 101, "r18Output" to 201, "r21Ordinal" to 9999))
+            assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+        }
+    }
+
