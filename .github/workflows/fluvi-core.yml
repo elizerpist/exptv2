@@ -1,4 +1,4 @@
-name: R22.2 Exact-Source Code Graph (orchestration only)
+name: R22.3 Exact-Source Code Graph (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -17,12 +17,12 @@ on:
 permissions:
   contents: write
 jobs:
-  r22-2-exact-source-graph:
+  r22-3-exact-source-graph:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      APP_SHA: fe8931a69c96e964f78561a3100e3d776dfe5dfc
-      TOOLING_BASE: b825e399b4f44b405213f9e1ef7b63763578d949
+      APP_SHA: b1eccd845546e5d65d9e69c9ba0a43775a2c216b
+      TOOLING_BASE: c32bd4a252cc7162c43426cc4af623a1b3f97d01
     steps:
       - uses: actions/checkout@v5
         with:
@@ -86,19 +86,20 @@ jobs:
                   count+=1
           print('verified_shards=',count,'documents=',m['document_count'],'repo_symbols=',m['repository_defined_symbol_count'])
           PY
-          report="$tooling_dir/docs/codegraph-r22-2-orb-qualification.md"
-          printf '# R22.2 opening and isolated ORB source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
+          report="$tooling_dir/docs/codegraph-r22-3-orb-qualification.md"
+          printf '# R22.3 opening and isolated ORB source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
           printf 'The Dart SCIP manifest is `docs/codegraph/manifest.json`; Kotlin has no SCIP coverage and the following is source navigation, not a generated call graph. The output/host lifecycle is Main-owned and visual presentation remains an independently measured outcome.\n\n' >> "$report"
           printf 'Source navigation: FluviKeyguardCardService.reserveR18WakeBeforeMain arms the original opportunity; external scene ingress and the ordinary queue offer qualify a successor. inspectSurface/readSystemWindows supply the physical reader checkpoint; KeyguardOpeningInspectionHandoff.claim validates the current token and freshness and KeyguardCardInspectionQueue.handoffOpening transfers the exact pending request. processInspectionQueue resumes the single physical reader; completed fresh inspection still reaches the existing first-authorized proof and presentation path. KeyguardCardDiagnostics reduces R22_ACQUISITION into each retained R22_CORE beside R21_CORE. The grep inventory below gives exact source locations, not proof of runtime execution.\n\n' >> "$report"
           printf '```text\n' >> "$report"
           if command -v rg >/dev/null 2>&1; then search=(rg -n); else search=(grep -nE); fi
           (cd "$source_dir" && "${search[@]}" 'KeyguardOpeningInspectionHandoff|PostClaimSnapshot|observePostClaimOffer|recordR22PostClaim|flushR22PostClaim|cutR22DiagnosticCapture|openingHandoff|claimOpeningYield|openingYieldHint|handoffOpening|abandonOpeningTransferIfActive|abandonSessionIfActive|R22_ACQUISITION|R22_CORE|recordOpeningAcquisition|offerRejection|processInspectionQueue|inspectSurface|visibleIds|markNativeApplyReturned|arbitrateIngress|revealSubmitted|recordR21|r21CoreRecord|R21_|nativeApplied|reserveBeforeMain|startR18|applyInspection|readSystemWindows|R18_PIPELINE|R19_|R20_|firstPhysical|allocatedAt|r20AllocatedAt|reservedReq|firstAuthorizedOrb|advanceR20First|invalidateR20Scene|requireRead|sceneSerial|FirstPaintTicket|authorizeDirectFirst|prepareHiddenDirect|beginDirectPresentation|queueReveal|crossSubmitBoundary|sealR18|class KeyguardFirstAuthorizedOrb|class KeyguardOrbPresentationCoordinator|class KeyguardOrbInertHost|class KeyguardOrbDirectOutput|class KeyguardOrbR18Presenter|fun (stage|reveal|retire|seal|dispose|borrow|releaseBorrow)|addTransactionCompletedListener|presentFence|draw|surfaceReady' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardWindow,KeyguardCardSettings,KeyguardSystemState,KeyguardWindowSnapshotReader,KeyguardCardInspectionQueue,KeyguardOpeningInspectionHandoff,KeyguardInspectionFreshness,KeyguardFirstAuthorizedOrb,KeyguardOrbInertHost,KeyguardOrbPresentationCoordinator}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardOrbDirectOutput,KeyguardOrbR18Presenter,KeyguardOrbSurfacePresenter,KeyguardOrbSurfaceWorker,KeyguardOrbSurfaceMaterial,KeyguardOrbSurfaceMetrics}.kt) >> "$report"
           (cd "$source_dir" && "${search[@]}" 'r22SupersededOpening|r22YieldedWalk|r22StableOpening|r22UnstagedOpening|r22PostClaimQueueEvidence|stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges|independentOpeningScene|independentShadeWindow|postClaimObserved|awaitServiceMatch|verifyExclusionPixels|returnedMainIsConsumedBeforeYield|pendingAfterClaimIsReported|r21SubmittedPanel|r21PanelCancels|r21PanelRetires|r21PhoneShape|r21SubmittedDirect|r21Exclusion|r20AuthorizedFullFirstMiss|r20ExactAuthorizedPosterHit|r20FailedFirstLock|r20HeldFirstWrite|r20FirstFrameBreakdown|r12PreparedPictureMatchesCanonical' android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22VisualCalibration.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22RecoveryInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR22PostClaimEvidenceTest.kt android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR22ReaderHandoffTest.kt) >> "$report"
-          printf '\n# R22.2 source-derived ownership and framework callbacks\n' >> "$report"
-          (cd "$source_dir" && "${search[@]}" 'PassiveStandby|passiveStandby|passiveBacking|passiveClear|gatePassiveReplacement|dispatchDraw|configurePassive|clearPassive|confirmPassive|onIsolatedOrbFirstCommitted|reconcileIsolatedOrbTarget|onIsolatedOrbFailure|onDetached|dispose|retire\(|hideLayer|release|fence' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{KeyguardCardInteractionLayout,KeyguardCardWindow,FluviKeyguardCardService,KeyguardCardSettings}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardCardMaterialController,KeyguardOrbBufferRenderer}.kt) >> "$report"
-          (cd "$source_dir" && "${search[@]}" 'getUiAutomation|FLAG_DONT_SUPPRESS|KeyguardR22VisualCalibration|takeScreenshot|r22CalibrationPreserves|isolatedOpaqueOrbHasNeutralParentAtRetire|isolatedStandbyPreservesAuthorizedComposition|stalePressureCannotRestore|passiveStandbyExport|r22PassiveStandby' android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/{KeyguardR22FirstInspectionFixture,KeyguardR22VisualCalibration,KeyguardFirstAuthorizedOrbInstrumentationTest,KeyguardCardDiagnosticsInstrumentationTest}.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt) >> "$report"
+          printf '\n# R22.3 source-derived ownership and framework callbacks\n' >> "$report"
+          (cd "$source_dir" && "${search[@]}" 'OpeningEvidence|openingEligibleCheckpoint|captureOriginalOpeningEvidence|r22AFirstRoot|r22AFirstChild|r22AInvalid|r22ACheckpoint|pressureProgress|noteAcceptedReleaseProgress|translucentSteadySkipped|onReleaseBoundary|replayEarlyRelease|publishSteady|consumeRelease|awaitFence|finishFence|evaluatePressure|PassiveStandby|passiveStandby|passiveBacking|passiveClear|gatePassiveReplacement|dispatchDraw|configurePassive|clearPassive|confirmPassive|onIsolatedOrbFirstCommitted|reconcileIsolatedOrbTarget|onIsolatedOrbFailure|onDetached|dispose|retire\(|hideLayer|release|fence' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{KeyguardCardInteractionLayout,KeyguardCardWindow,FluviKeyguardCardService,KeyguardCardSettings}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardCardMaterialController,KeyguardOrbBufferRenderer}.kt) >> "$report"
+          (cd "$source_dir" && "${search[@]}" 'independentlyWalkActiveTree|isolatedNeutralRecoveryAtCommittedResizedBounds|isolatedStandbyBlackReturnAndHide|getUiAutomation|FLAG_DONT_SUPPRESS|KeyguardR22VisualCalibration|takeScreenshot|r22CalibrationPreserves|isolatedOpaqueOrbHasNeutralParentAtRetire|isolatedStandbyPreservesAuthorizedComposition|stalePressureCannotRestore|passiveStandbyExport|r22PassiveStandby' android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/{KeyguardR22FirstInspectionFixture,KeyguardR22VisualCalibration,KeyguardFirstAuthorizedOrbInstrumentationTest,KeyguardCardDiagnosticsInstrumentationTest}.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt) >> "$report"
+          (cd "$source_dir" && "${search[@]}" 'synchronousSteadyReceipt|earlyValidFence|wrongLeaseSlotOrUse|firstDirectPath|priorAcceptedUse|failureBeforeApply|throwingObserver|actualWorkerMixedSize|translucentSteadyLeaves|twoSlotLimit|cleanOriginalOffersAtPostMarker|incompleteOriginalChildCannot' android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/{KeyguardOrbSteadyCapacityTest,KeyguardOrbPressurePolicyTest}.kt android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR22ReaderHandoffTest.kt) >> "$report"
           printf '\n```\n' >> "$report"
-          cp "$RUNNER_TEMP/r22-graph-query.txt" "$tooling_dir/docs/codegraph-r22-2-orb-query.txt"
+          cp "$RUNNER_TEMP/r22-graph-query.txt" "$tooling_dir/docs/codegraph-r22-3-orb-query.txt"
           sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$RUNNER_TEMP/r22-manifest-sha256.txt"
       - name: Publish graph to independent immutable tooling branch
         shell: bash
@@ -107,17 +108,17 @@ jobs:
           cd tooling
           git config user.name 'Fluvi Graph Bot'
           git config user.email 'fluvi-graph@users.noreply.github.com'
-          git add docs/codegraph docs/codegraph-r22-2-orb-qualification.md docs/codegraph-r22-2-orb-query.txt
+          git add docs/codegraph docs/codegraph-r22-3-orb-qualification.md docs/codegraph-r22-3-orb-query.txt
           git diff --cached --check
-          git commit -m 'graph: index R22.2 opening and ORB qualification application source [skip ci]'
+          git commit -m 'graph: index R22.3 opening and ORB qualification application source [skip ci]'
           git rev-parse HEAD | tee "$RUNNER_TEMP/r22-graph-commit.txt"
-          test -z "$(git ls-remote origin refs/heads/tooling/r22-2-orb-fe8931a69c96)"
-          git push origin HEAD:refs/heads/tooling/r22-2-orb-fe8931a69c96
+          test -z "$(git ls-remote origin refs/heads/tooling/r22-3-orb-b1eccd845546)"
+          git push origin HEAD:refs/heads/tooling/r22-3-orb-b1eccd845546
       - name: Preserve graph and receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-2-graph-fe8931a69c96-run-${{ github.run_id }}
+          name: r22-3-graph-b1eccd845546-run-${{ github.run_id }}
           path: |
             tooling/docs/codegraph/**
             tooling/docs/codegraph-r22-*.md
