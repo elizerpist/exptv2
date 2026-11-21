@@ -12,6 +12,8 @@ internal object KeyguardR15AcquisitionTestHooks {
     @Volatile var historicalRootOnlyOptIn = false
     @Volatile var observer: ((Observation) -> Unit)? = null
     @Volatile var observeIneligible = false
+    @Volatile var afterReturnedChild: ((KeyguardCardInspectionRequest, Int, Int, Boolean, Boolean) -> Unit)? = null
+    @Volatile var beforeChildCall: ((KeyguardCardInspectionRequest, Int, Int) -> Unit)? = null
     @Volatile var motionObserver: ((Boolean) -> Unit)? = null
     @Volatile var financialObserver: ((Long?, com.fluvi.app.runtime.FluviFinancialOrbWork.Scope) -> Unit)? = null
 
@@ -75,12 +77,22 @@ internal object KeyguardR15AcquisitionTestHooks {
 
     fun child(window: Int, index: Int, flags: Int?) {
         val pending = active.get() ?: return
+        runCatching { beforeChildCall?.invoke(pending.request, window, index) }
         if (!pending.childCalled) {
             pending.childCalled = true
             pending.childWindow = window
             pending.childIndex = index
             pending.childFlags = flags
         }
+    }
+
+    fun returnedChild(window: Int, index: Int, present: Boolean) {
+        val pending = active.get() ?: return
+        runCatching { afterReturnedChild?.invoke(pending.request, window, index, present, pending.eligible) }
+    }
+
+    fun yielded(requestId: Long) {
+        if (active.get()?.request?.id == requestId) active.remove()
     }
 
     fun finish(result: KeyguardWindowSnapshotReader.Result) {

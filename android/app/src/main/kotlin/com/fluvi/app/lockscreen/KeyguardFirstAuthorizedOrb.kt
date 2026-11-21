@@ -83,6 +83,20 @@ internal class KeyguardFirstAuthorizedOrb(private val lock: Any = Any()) {
         next
     }
 
+    /** Diagnostic-only explanation at the same scalar comparison boundary.
+     * The caller may hold the shared lock across offer and this observation. */
+    fun offerRejection(requestId: Long, readSceneSerial: Long?, freshnessRevision: Long?,
+                       hostGeneration: Long, outputGeneration: Long): String = synchronized(lock) {
+        when {
+            readSceneSerial == null || freshnessRevision == null -> "MISSING_ENDPOINT"
+            readSceneSerial != scene -> "SCENE_CHANGED"
+            requestId < newestRead -> "NEWER_READ_FINISHED"
+            requestId < newestRequiredRead -> "NEWER_READ_REQUIRED"
+            requestId <= 0 || freshnessRevision < 0 || hostGeneration <= 0 || outputGeneration <= 0 -> "INVALID_IDENTITY"
+            else -> "UNOBSERVED"
+        }
+    }
+
     fun isCurrent(proof: Proof): Boolean = synchronized(lock) {
         retained == proof && proof.sceneSerial == scene && proof.requestId >= newestRead &&
             proof.requestId >= newestRequiredRead

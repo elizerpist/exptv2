@@ -8,6 +8,8 @@ internal object KeyguardR15AcquisitionTestHooks {
     fun begin(request: KeyguardCardInspectionRequest, ticket: KeyguardInspectionFreshness.Ticket?, eligible: Boolean) = eligible
     fun candidate(metadata: KeyguardWindowReaderWindowMetadata) = Unit
     fun child(window: Int, index: Int, flags: Int?) = Unit
+    fun returnedChild(window: Int, index: Int, present: Boolean) = Unit
+    fun yielded(requestId: Long) = Unit
     fun finish(result: KeyguardWindowSnapshotReader.Result) = Unit
     fun outcome(requestId: Long, decision: KeyguardCardVisibility, reason: KeyguardSurfaceReason,
                 authorityCurrent: Boolean, started: Long, finished: Long) = Unit

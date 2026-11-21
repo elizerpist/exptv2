@@ -47,6 +47,10 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
     @Test fun r21ExclusionRetiresSubmittedOrbWithMainAckHeld() = runService(false, true)
 
+    @Test fun r22SupersededOpeningWalkYieldsToFreshInspection() = KeyguardR22FirstInspectionFixture().run("positive")
+    @Test fun r22YieldedWalkCannotGrantAfterExclusion() = KeyguardR22FirstInspectionFixture().run("negative")
+    @Test fun r22StableOpeningReadIsNotYielded() = KeyguardR22FirstInspectionFixture().run("stable")
+
     private fun runService(changeScene: Boolean, r21Negative: Boolean? = null) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()

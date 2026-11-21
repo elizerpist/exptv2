@@ -92,6 +92,8 @@ internal data class KeyguardInspectionAuthority(
 internal interface KeyguardInspectionProbeForTest {
     fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> = actual
     fun started(request: KeyguardCardInspectionRequest) {}
+    fun yielded(request: KeyguardCardInspectionRequest, successor: KeyguardCardInspectionRequest,
+        startedAt: Long, finishedAt: Long, visited: Int) {}
     /** The physical read has completed; this callback runs on the reader,
      * before its Main handoff. A test may hold this worker without blocking
      * the event-ingress thread. The classifier and authority are unchanged. */
@@ -181,6 +183,9 @@ internal class KeyguardWakeCycleOwner {
 internal class KeyguardCardInspectionQueue {
     private var active: KeyguardCardInspectionRequest? = null
     private var pending: KeyguardCardInspectionRequest? = null
+    // Exact transfer recorded before the old reader begins unwinding.
+    private var openingTransferFrom: KeyguardCardInspectionRequest? = null
+    private var openingTransferTo: KeyguardCardInspectionRequest? = null
     // Only a completed detached negative may leave its ordered Main apply
     // behind the physical reader. The reserved successor remains separately
     // attributable to that decision even if a newer request is coalesced.
@@ -209,10 +214,49 @@ internal class KeyguardCardInspectionQueue {
     /** Completes [request] and returns exactly one coalesced successor. */
     fun complete(request: KeyguardCardInspectionRequest): KeyguardCardInspectionRequest? {
         if (active != request || preceding != null) return null
+        if (openingTransferTo == request) {
+            openingTransferFrom = null
+            openingTransferTo = null
+        }
         val next = pending
         pending = null
         active = next
         return next
+    }
+
+    /** A still-running opening walk may hand its one reader to an exact,
+     * already offered successor. Unlike R12, no completed predecessor waits
+     * for Main. The service validates opportunity/authority/freshness while
+     * holding its queue lock before calling this scalar transition. */
+    fun handoffOpening(
+        opening: KeyguardCardInspectionRequest,
+        successor: KeyguardCardInspectionRequest,
+    ): KeyguardCardInspectionRequest? {
+        if (preceding != null || active != opening || pending != successor) return null
+        val promoted = complete(opening) ?: return null
+        openingTransferFrom = opening
+        openingTransferTo = promoted
+        return promoted
+    }
+
+    /** Used only after the owning service job was torn down while its reader
+     * was unwinding. A late cleanup can never touch another active owner. */
+    fun abandonSessionIfActive(owner: KeyguardCardInspectionRequest): Boolean {
+        if (active != owner || preceding != null ||
+            pending?.let { it.session != owner.session } == true) return false
+        active = null
+        pending = null
+        openingTransferFrom = null
+        openingTransferTo = null
+        return true
+    }
+
+    /** Covers teardown during A's object recycling, before the typed result
+     * has returned to its coroutine. Never follows a newer transfer or owner. */
+    fun abandonOpeningTransferIfActive(opening: KeyguardCardInspectionRequest): Boolean {
+        if (openingTransferFrom != opening) return false
+        val successor = openingTransferTo ?: return false
+        return abandonSessionIfActive(successor)
     }
 
     fun clearPending() {

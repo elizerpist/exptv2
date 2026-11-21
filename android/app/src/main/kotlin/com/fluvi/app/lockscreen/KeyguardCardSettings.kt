@@ -790,6 +790,8 @@ internal object KeyguardCardDiagnostics {
         var r14RecoveryOmitted: Int = 0,
         val r18Generations: LinkedHashMap<String, R18Timeline> = linkedMapOf(),
         var r18GenerationOmitted: Int = 0,
+        /** One bounded opening-read timeline per capture-owned attempt. */
+        val r22Opening: LinkedHashMap<String, String> = linkedMapOf(),
         val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
         /** This compact causal spine is independent of the raw event ring.
          * A later hidden-state storm cannot evict an earlier wake/attach/hide
@@ -911,7 +913,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
-        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY", "R18_PIPELINE",
+        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY", "R18_PIPELINE", "R22_ACQUISITION",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "R15_SURFACE_REVOKED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
@@ -1053,6 +1055,63 @@ internal object KeyguardCardDiagnostics {
             val prefix = if (event.reason == "REVEAL_RECEIPT") "reveal" else "retire"
             listOf("r18ApplyBegin", "r18ApplyEnd", "r18Commit", "r18LatchNs", "r18PresentNs", "r18PresentState")
                 .forEach { field -> retainField(field, "$prefix:$field") }
+        }
+    }
+
+    private fun reduceR22(attempt: TimingAttempt, event: TimingEvent) {
+        val values = attempt.r22Opening
+        if (event.reason == "WAIT" || event.reason == "PROOF_REJECTED" || event.reason == "PROOF_ACCEPTED") {
+            val reservation = event.fields["r22Reservation"] ?: return
+            val existing = values["r22Reservation"] ?: values["observationReservation"]
+            if (existing != null && existing != reservation) return
+            values["observationReservation"] = reservation
+        }
+        if (event.reason == "WAIT") {
+            if (!values.containsKey("firstWait")) {
+                values["firstWait"] = event.fields["r22Wait"] ?: "UNOBSERVED"
+                values["firstWaitAt"] = event.uptimeMs.toString()
+                values["firstWaitRequest"] = event.fields["r22WaitRequest"] ?: "UNOBSERVED"
+            }
+            values["lastWait"] = event.fields["r22Wait"] ?: "UNOBSERVED"
+            values["lastWaitAt"] = event.uptimeMs.toString()
+            return
+        }
+        if (event.reason == "PROOF_REJECTED" || event.reason == "PROOF_ACCEPTED") {
+            if (!values.containsKey("positiveAt")) {
+                values["positiveAt"] = event.uptimeMs.toString()
+                values["positiveRequest"] = event.fields["r22Positive"] ?: "UNOBSERVED"
+                values["positiveRejection"] = event.fields["r22Reject"] ?: "UNOBSERVED"
+            }
+            return
+        }
+        val opening = event.fields["r22Opening"] ?: return
+        if (values["r22Opening"] != null && values["r22Opening"] != opening) return
+        val reservation = event.fields["r22Reservation"]
+        if (reservation != null && values["observationReservation"]?.let { it != reservation } == true) {
+            listOf("firstWait", "firstWaitAt", "firstWaitRequest", "lastWait", "lastWaitAt",
+                "positiveAt", "positiveRequest", "positiveRejection", "observationReservation").forEach(values::remove)
+        }
+        values["r22Opening"] = opening
+        listOf("r22Reservation", "r22AStart", "r22Scene", "r22IngressAt", "r22IngressScene",
+            "r22FirstOffer", "r22FirstOfferAt", "r22LatestOffer", "r22LatestOfferAt", "r22Framework",
+            "r22IngressId", "r22EventType", "r22Display", "r22EventAt", "r22Replaced", "r22Replacement", "r22Claimed", "r22ClaimAt", "r22AEnd", "r22Checkpoint", "r22CheckpointAt", "r22Visited",
+            "r22Roots", "r22Children", "r22Why", "r22Call", "r22CallBegin", "r22CallEnd").forEach { key ->
+            event.fields[key]?.takeIf { it != "UNOBSERVED" }?.let { values[key] = it }
+        }
+        when (event.reason) {
+            "A_FINISHED", "A_STALE", "YIELDED" -> {
+                values["aOutcome"] = event.reason
+                listOf("r22Decision", "r22Reason", "r22Incomplete").forEach { key ->
+                    event.fields[key]?.takeIf { it != "UNOBSERVED" }?.let { values["a:$key"] = it }
+                }
+            }
+            "B_START", "B_FINISHED" -> {
+                val expected = values["r22Claimed"] ?: values["r22LatestOffer"]
+                if (event.requestId?.toString() != expected) return
+                listOf("r22BStart", "r22BEnd", "r22Decision", "r22Reason", "r22Incomplete").forEach { key ->
+                    event.fields[key]?.takeIf { it != "UNOBSERVED" }?.let { values["b:$key"] = it }
+                }
+            }
         }
     }
 
@@ -1829,6 +1888,7 @@ internal object KeyguardCardDiagnostics {
                     }
                 }
                 "R18_PIPELINE" -> reduceR18(attempt, event)
+                "R22_ACQUISITION" -> reduceR22(attempt, event)
                 "R12_SURFACE" -> {
                     val show = showEpisode()
                     if (show != null) reduceSurface(show, event)
@@ -2049,6 +2109,7 @@ internal object KeyguardCardDiagnostics {
             timeline.copy(values = LinkedHashMap(timeline.values),
                 r19MetricSnapshot = timeline.r19Metrics?.snapshot() ?: timeline.r19MetricSnapshot, r19Metrics = null)
         }),
+        r22Opening = LinkedHashMap(attempt.r22Opening),
         pendingHideCommits = ArrayDeque(attempt.pendingHideCommits),
         pendingR11 = ArrayDeque(attempt.pendingR11.map { it.copy(fields = it.fields.toMap()) }),
         pendingR12 = ArrayDeque(attempt.pendingR12.map { it.copy(fields = it.fields.toMap()) }),
@@ -2226,7 +2287,10 @@ internal object KeyguardCardDiagnostics {
         // A short direct/withdrawal core for every selected ORB wake is
         // admitted before potentially lengthy episode and financial records.
         attemptsForCausalEvidence.filter { it.presentationMode == "ORB" || it.r18Generations.isNotEmpty() }
-            .forEach { attempt -> select("a${attempt.id}:r21Core", r21CoreRecord(attempt), attempt.id) }
+            .forEach { attempt ->
+                select("a${attempt.id}:r21Core", r21CoreRecord(attempt), attempt.id)
+                select("a${attempt.id}:r22Core", r22CoreRecord(attempt), attempt.id)
+            }
         // Reserve a readable, owner-qualified core for every selected show
         // and hide before optional long renderer histories can consume space.
         // Round-robin across attempts keeps a busy wake from starving others.
@@ -2544,6 +2608,35 @@ internal object KeyguardCardDiagnostics {
         append(" readEndMain=${v(finalHide?.cause?.finishedAtUptimeMs)}/${v(finalHide?.cause?.mainApplyStartedAtUptimeMs)} localRemove=${v(finalHide?.localHideAppliedAtUptimeMs)}/${v(finalHide?.removeReturnAtUptimeMs)}")
         append(" retire=${v(retired?.get("retire:r18ApplyBegin"))}/${v(retired?.get("retire:r18ApplyEnd"))} finalLayer=${v(finalLayer?.hostId)}/${v(finalLayer?.childId)}/${v(finalLayer?.retireBegin)}/${v(finalLayer?.retireEnd)} terminalNoop=${v(terminal?.operationId)}")
         appendLine(" omitted=${attempt.r18GenerationOmitted}/${attempt.omittedShowEpisodes}/${attempt.omittedHideEpisodes} clock=uptimeMs physical=UNOBSERVED")
+    }
+
+    /** A distinct row for each selected wake; only exact recorded request and
+     * reservation identities are joined. Nanosecond frame data is labelled. */
+    private fun r22CoreRecord(attempt: TimingAttempt): String = buildString {
+        val values = attempt.r22Opening
+        val reservation = values["r22Reservation"]
+        val opening = values["r22Opening"]
+        val direct = attempt.r18Generations.values.firstOrNull { timeline ->
+            val token = timeline.values["r21Reservation"]
+            (reservation != null && token == reservation) ||
+                (opening != null && timeline.values["r19ReservedRequest"] == opening &&
+                    (token == null || (reservation != null && token == reservation)))
+        }
+        fun v(key: String) = values[key]?.take(48) ?: "UNOBSERVED"
+        fun d(key: String) = direct?.values?.get(key)?.take(48) ?: "UNOBSERVED"
+        append(" R22_CORE v=1 attempt=${attempt.id} session=${attempt.serviceSession} wake=${attempt.wakeEpoch} wakeAt=${attempt.startedUptimeMs}")
+        append(" opening=${v("r22Opening")}/${v("r22Reservation")} aStartScene=${v("r22AStart")}/${v("r22Scene")}")
+        append(" ingress=${v("r22IngressAt")}/${v("r22IngressScene")} call=${v("r22Call")}/${v("r22CallBegin")}/${v("r22CallEnd")}")
+        append(" offered=${v("r22FirstOffer")}@${v("r22FirstOfferAt")}/${v("r22LatestOffer")}@${v("r22LatestOfferAt")}/${v("r22Framework")}")
+        append(" event=${v("r22IngressId")}/${v("r22EventType")}/${v("r22Display")}@${v("r22EventAt")}")
+        append(" replaced=${v("r22Replaced")}/${v("r22Replacement")}")
+        append(" checkpoint=${v("r22Checkpoint")}@${v("r22CheckpointAt")} counts=${v("r22Visited")}/${v("r22Roots")}/${v("r22Children")}")
+        append(" outcome=${v("aOutcome")}/${v("r22Why")} aEnd=${v("r22AEnd")} aResult=${v("a:r22Decision")}/${v("a:r22Reason")}/${v("a:r22Incomplete")}")
+        append(" claimed=${v("r22Claimed")}@${v("r22ClaimAt")} b=${v("b:r22BStart")}/${v("b:r22BEnd")}/${v("b:r22Decision")}/${v("b:r22Reason")}/${v("b:r22Incomplete")}")
+        append(" positive=${v("positiveRequest")}@${v("positiveAt")}/${v("positiveRejection")} consumed=${d("r19ConsumedRequest")} hostReady=${d("HOST_READY")}/${d("HIDDEN_BOUND")}")
+        append(" wait=${v("firstWait")}@${v("firstWaitAt")}/${v("lastWait")}@${v("lastWaitAt")}")
+        append(" apply=${d("r21NATIVE_APPLYAt")} firstPostNs=${d("r20PostReturnNs")} seal=${d("r21SEALAt")} retire=${d("retire:r18ApplyEnd")}")
+        appendLine(" clock=uptimeMs firstPostClock=System.nanoTime physical=UNOBSERVED")
     }
 
     private fun firstDrawEpisode(attempt: TimingAttempt, time: (ShowEpisode) -> Long?): ShowEpisode? =

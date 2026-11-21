@@ -168,4 +168,19 @@ class KeyguardWindowSnapshotReaderPolicyTest {
         type: Int = AccessibilityWindowInfo.TYPE_APPLICATION,
         displayId: Int = Display.DEFAULT_DISPLAY,
     ) = KeyguardWindowReaderWindowMetadata(id, type, displayId, active)
+    @Test fun `opening yield inventory excludes unknown overlays and other foreign windows`() {
+        val system = KeyguardWindowReaderWindowMetadata(10, 3, 0, true)
+        val own = KeyguardWindowReaderWindowMetadata(11, 4, 0, false)
+        val identity = KeyguardOwnOverlayIdentity(11, 0, 7)
+        assertTrue(KeyguardWindowSnapshotReaderPolicy.cleanOpeningInventory(true, listOf(system), null, 7, system))
+        assertTrue(KeyguardWindowSnapshotReaderPolicy.cleanOpeningInventory(true, listOf(system, own), identity, 7, system))
+        assertFalse(KeyguardWindowSnapshotReaderPolicy.cleanOpeningInventory(false, listOf(system), null, 7, system))
+        assertFalse(KeyguardWindowSnapshotReaderPolicy.cleanOpeningInventory(true, listOf(system, own), null, 7, system))
+        assertFalse(KeyguardWindowSnapshotReaderPolicy.cleanOpeningInventory(true, listOf(system, own), identity, 8, system))
+        assertFalse(KeyguardWindowSnapshotReaderPolicy.cleanOpeningInventory(true,
+            listOf(system, KeyguardWindowReaderWindowMetadata(12, 1, 0, false)), identity, 7, system))
+        assertFalse(KeyguardWindowSnapshotReaderPolicy.cleanOpeningInventory(true, listOf(own), null, 7, own))
+        assertFalse(KeyguardWindowSnapshotReaderPolicy.cleanOpeningInventory(true, emptyList(), null, 7, null))
+    }
+
 }

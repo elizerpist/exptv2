@@ -378,6 +378,92 @@ class KeyguardCardInspectionQueueTest {
         assertTrue(queue.hasCurrentWork(authority, excludingId = cause.id))
     }
 
+    @Test fun `opening handoff claims only its exact active and pending pair`() {
+        val queue = KeyguardCardInspectionQueue()
+        val a = request(1, "wake")
+        val b = request(2, "window")
+        assertTrue(queue.offer(a))
+        assertFalse(queue.offer(b))
+        assertNull(queue.handoffOpening(request(9, "wrong"), b))
+        assertNull(queue.handoffOpening(a, request(3, "wrong")))
+        assertEquals(a, queue.activeRequest())
+        assertEquals(b, queue.pendingRequest())
+        assertEquals(b, queue.handoffOpening(a, b))
+        assertEquals(b, queue.activeRequest())
+        assertNull(queue.pendingRequest())
+        assertNull(queue.handoffOpening(a, b))
+        assertNull(queue.complete(a))
+    }
+
+    @Test fun `replacement before claim is not relabelled but after claim remains pending`() {
+        val queue = KeyguardCardInspectionQueue()
+        val a = request(1, "wake")
+        val b = request(2, "window")
+        val c = request(3, "window")
+        queue.offer(a); queue.offer(b); queue.offer(c)
+        assertNull(queue.handoffOpening(a, b))
+        assertEquals(c, queue.handoffOpening(a, c))
+        val later = request(4, "window")
+        assertFalse(queue.offer(later))
+        assertEquals(c, queue.activeRequest())
+        assertEquals(later, queue.pendingRequest())
+        assertEquals(later, queue.complete(c))
+    }
+
+    @Test fun `completed read ahead predecessor cannot be reclassified as opening handoff`() {
+        val queue = KeyguardCardInspectionQueue()
+        val a = request(1, "wake")
+        val b = request(2, "window")
+        val c = request(3, "window")
+        queue.offer(a); queue.offer(b)
+        assertEquals(b, queue.reserveSuccessor(a) { true })
+        queue.offer(c)
+        assertNull(queue.handoffOpening(b, c))
+        assertEquals(b, queue.successorForPreceding(a))
+        assertTrue(queue.finishPreceding(a))
+        assertEquals(c, queue.complete(b))
+    }
+
+    @Test fun `late teardown cannot remove a newer active request`() {
+        val queue = KeyguardCardInspectionQueue()
+        val a = request(1, "wake")
+        val b = request(2, "window")
+        queue.offer(a); queue.offer(b)
+        assertEquals(b, queue.handoffOpening(a, b))
+        assertFalse(queue.abandonSessionIfActive(a))
+        assertEquals(b, queue.activeRequest())
+        assertTrue(queue.abandonSessionIfActive(b))
+        assertNull(queue.activeRequest())
+    }
+
+    @Test fun `teardown during old reader unwind finds only exact promoted owner`() {
+        val queue = KeyguardCardInspectionQueue()
+        val a = request(1, "wake")
+        val b = request(2, "window")
+        val c = request(3, "window")
+        queue.offer(a); queue.offer(b)
+        assertEquals(b, queue.handoffOpening(a, b))
+        queue.offer(c)
+        assertFalse(queue.abandonOpeningTransferIfActive(c))
+        assertEquals(b, queue.activeRequest())
+        assertTrue(queue.abandonOpeningTransferIfActive(a))
+        assertNull(queue.activeRequest())
+        assertNull(queue.pendingRequest())
+    }
+
+    @Test fun `late unwind cleanup cannot discard a successor after promoted owner completed`() {
+        val queue = KeyguardCardInspectionQueue()
+        val a = request(1, "wake")
+        val b = request(2, "window")
+        val c = request(3, "window")
+        queue.offer(a); queue.offer(b)
+        assertEquals(b, queue.handoffOpening(a, b))
+        queue.offer(c)
+        assertEquals(c, queue.complete(b))
+        assertFalse(queue.abandonOpeningTransferIfActive(a))
+        assertEquals(c, queue.activeRequest())
+    }
+
     private fun request(id: Long, trigger: String) = KeyguardCardInspectionRequest(
         id = id,
         trigger = trigger,
