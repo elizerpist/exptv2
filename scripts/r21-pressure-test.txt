@@ -55,7 +55,7 @@
                     KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_RETURN", "final", operation = hide, observedUptimeMs = base + 32)
                     hide
                 }
-                expected[attempt] = first.showOperationId to finalHide.hideOperationId
+                expected[attempt] = requireNotNull(first.showOperationId) to requireNotNull(finalHide.hideOperationId)
                 val cleanup = KeyguardCardDiagnostics.newHideOperation(owner, if (attempt == 6L) attach else 1000 + attempt, null, base + 33)
                 KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "cleanup", operation = cleanup, observedUptimeMs = base + 34)
                 KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "cleanup", operation = cleanup,
