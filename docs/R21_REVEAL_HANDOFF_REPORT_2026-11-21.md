@@ -89,7 +89,7 @@ Coverage is scoped as follows; PARTIAL means the requested end-to-end proof was 
 | R4 callback chain and exact-owner cleanup | PASS compile debug/profile/release/AndroidTest and candidate panel controls; actual-service and physical cleanup qualification remain NOT ESTABLISHED. |
 | R5 bounded capture/export | PARTIAL: candidate LIGHT/FULL phone-shaped selected core and immutable identifiers survived the exercised 31KB pressure test; stock lacked the relevant rows. The phone's 308 drops, maximal field sizes, complete coalescing and recovered-R21 matrix were not reproduced. |
 | T1 stock/candidate order | PARTIAL: candidate deterministic JVM controls PASS; stock actual-service structural witness NOT REACHED, not a repair-absent native RED. Stock calibrated initial image PASS does not establish the ingress sequence. |
-| T2 calibrated panel | PASS for executed candidate pre-cross, in-flight, submitted-before-ack/motion and synthetic negative controls; no inference about an independent real service scene. |
+| T2 calibrated panel | PARTIAL: candidate pre-cross, in-flight, submitted-before-ack/motion and synthetic negative controls PASS; the complete requested failure/interaction matrix and independent real service scene are not established. |
 | T3 real positive/negative service | FAIL / NOT REACHED in both arms before the intended reveal/held-ack and fresh read; required negative shade/credential after submission remains UNTESTED. |
 | T4 capture pressure/recovery | PARTIAL as R5 above; existing exporter tests ran, but the maximal/recovery matrix is not fully covered. |
 | 16-wake matched AB/BA | NOT RUN: stock and candidate real-service eligibility prerequisites failed. |
