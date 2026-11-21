@@ -103,6 +103,8 @@ internal interface KeyguardOrbRecoveryTestHook {
     fun dispatchRelease(lease: KeyguardOrbBufferLease, slotId: Long, use: Long,
                         fence: SyncFence?, deliver: () -> Unit) = deliver()
     fun dispatchTicket(ticket: KeyguardOrbPressureTicket, deliver: () -> Unit) = deliver()
+    fun onReleaseBoundary(lease: KeyguardOrbBufferLease, slot: Long, use: Long, childIdentity: Int,
+                          stage: String, uptimeMs: Long) = Unit
     fun onRetirementEvent(lease: KeyguardOrbBufferLease, childIdentity: Int, event: String, uptimeMs: Long) = Unit
     fun onPlacement(lease: KeyguardOrbBufferLease, childIdentity: Int, submitted: Boolean) = Unit
 }
@@ -185,6 +187,8 @@ internal data class KeyguardOrbBufferRendererSnapshot(
     val positionSuppressions: Int = 0,
     val firstWork: KeyguardOrbFirstWorkSnapshot? = null,
     val coldWork: List<KeyguardOrbColdWorkSnapshot> = emptyList(),
+    /** Advisory cumulative count of optional translucent steady ticks skipped. */
+    val translucentSteadySkipped: Long = 0L,
 )
 
 private data class KeyguardOrbBufferAttachment(
@@ -381,7 +385,7 @@ internal class KeyguardOrbPressureTicket(
 internal class KeyguardOrbPressurePolicy {
     private var grant: Any? = null
     private var reason: KeyguardOrbPressureReason? = null
-    private var progress = 0
+    private var progress = 0L
     var startedAt = 0L
         private set
     var opportunities = 0
@@ -397,7 +401,7 @@ internal class KeyguardOrbPressurePolicy {
     fun observe(
         grant: Any?, eligible: Boolean, slotCount: Int, oldUnreleased: Int,
         oldOwned: Int, free: Int, currentInFlight: Boolean, wrongSizeOld: Boolean,
-        currentCompatible: Boolean, progress: Int, now: Long, opportunity: Boolean,
+        currentCompatible: Boolean, progress: Long, now: Long, opportunity: Boolean,
     ): KeyguardOrbPressureReason? {
         // FREE storage can be resized, and unallocated capacity can be
         // constructed without touching an old compositor-owned buffer.
@@ -491,14 +495,20 @@ private class KeyguardOrbRetiringLayer(
 
 /** Presence is distinct from the nullable platform fence carried by a
  * release receipt. A receipt is consumed exactly once by its slot/use key. */
-internal data class KeyguardOrbReleaseReceipt<T>(val value: T?)
+internal data class KeyguardOrbReleaseReceipt<T>(
+    val value: T?, val receiptAt: Long? = null, val childIdentity: Int? = null,
+    val lease: KeyguardOrbBufferLease? = null,
+)
 
 internal class KeyguardOrbEarlyReleaseReceiptStore<T> {
     private val values = mutableMapOf<Pair<Long, Long>, KeyguardOrbReleaseReceipt<T>>()
+    // The usual steady path needs no new Pair/allocation when no receipt raced.
+    val hasPending: Boolean get() = values.isNotEmpty()
 
-    fun record(key: Pair<Long, Long>, value: T?): Boolean {
+    fun record(key: Pair<Long, Long>, value: T?, receiptAt: Long? = null,
+               childIdentity: Int? = null, lease: KeyguardOrbBufferLease? = null): Boolean {
         if (values.containsKey(key)) return false
-        values[key] = KeyguardOrbReleaseReceipt(value)
+        values[key] = KeyguardOrbReleaseReceipt(value, receiptAt, childIdentity, lease)
         return true
     }
 
@@ -859,6 +869,7 @@ internal class KeyguardOrbBufferRenderer(
                 positionSuppressions = positionSuppressions,
                 firstWork = workerSnapshot.firstWork,
                 coldWork = workerSnapshot.coldWork,
+                translucentSteadySkipped = workerSnapshot.translucentSteadySkipped,
             )
         }
 
@@ -1527,12 +1538,16 @@ internal class KeyguardOrbBufferRenderer(
         private var running = false
         private var disposed = false
         private val pressurePolicy = KeyguardOrbPressurePolicy()
+        /** Worker-owned progress for the current grant. Merely probing the
+         * pool or replaying a retained receipt never advances this token. */
+        private var pressureProgress = 0L
         private var lastPressureFrameNanos = Long.MIN_VALUE
         private var offeredPressure: KeyguardOrbPressureTicket? = null
         private var restoringPressure: KeyguardOrbPressureTicket? = null
         @Volatile private var produced = 0
         @Volatile private var published = 0
         @Volatile private var dropped = 0
+        @Volatile private var translucentSteadySkipped = 0L
         @Volatile private var failures = 0
         @Volatile private var snapshotInFlight = 0
         @Volatile private var snapshotReady = 0
@@ -1611,6 +1626,7 @@ internal class KeyguardOrbBufferRenderer(
             val lastCompletionAt: Long,
             val firstWork: KeyguardOrbFirstWorkSnapshot? = null,
             val coldWork: List<KeyguardOrbColdWorkSnapshot> = emptyList(),
+            val translucentSteadySkipped: Long = 0L,
         )
 
         init {
@@ -1898,13 +1914,11 @@ internal class KeyguardOrbBufferRenderer(
                 firstLeaseSubmitted = frame.lease
                 frame.firstOffer?.observe("ack", SystemClock.uptimeMillis(), frame)
                 published += 1
+                notePublicationProgress(frame.lease)
                 recordCurrentFrame(slot)
                 resetPressure()
                 observeOwnership("first-submitted", slot = slot, log = false)
-                earlyReleaseReceipts.take(frame.slotId to frame.useGeneration)?.let { receipt ->
-                    slot.earlyReceiptRetained = false
-                    consumeRelease(frame.slotId, frame.useGeneration, receipt.value, replayed = true)
-                }
+                replayEarlyRelease(slot)
                 publishSlotSnapshot()
                 if (running) requestFrame()
             }
@@ -1914,20 +1928,24 @@ internal class KeyguardOrbBufferRenderer(
                     releaseFence: SyncFence?, childIdentity: Int, postAlways: Boolean = true) {
             val receiptAt = SystemClock.uptimeMillis()
             if (recoveryHook !== NoopKeyguardOrbRecoveryTestHook) {
+                runCatching { recoveryHook.onReleaseBoundary(lease, slotId, useGeneration, childIdentity,
+                    "callback-entry", receiptAt) }
                 recoveryHook.dispatchRelease(lease, slotId, useGeneration, releaseFence) {
-                    releaseActual(slotId, useGeneration, releaseFence, childIdentity, postAlways, receiptAt)
+                    runCatching { recoveryHook.onReleaseBoundary(lease, slotId, useGeneration, childIdentity,
+                        "hook-delivery", SystemClock.uptimeMillis()) }
+                    releaseActual(lease, slotId, useGeneration, releaseFence, childIdentity, postAlways, receiptAt)
                 }
                 return
             }
-            releaseActual(slotId, useGeneration, releaseFence, childIdentity, postAlways, receiptAt)
+            releaseActual(lease, slotId, useGeneration, releaseFence, childIdentity, postAlways, receiptAt)
         }
 
-        private fun releaseActual(slotId: Long, useGeneration: Long, releaseFence: SyncFence?,
+        private fun releaseActual(lease: KeyguardOrbBufferLease, slotId: Long, useGeneration: Long, releaseFence: SyncFence?,
                                   childIdentity: Int, postAlways: Boolean, receiptAt: Long) {
             // Preserve the steady path's original direct Worker receipt; a
             // first publication still posts its acknowledgement as before.
             if (!postAlways && Looper.myLooper() == thread.looper) {
-                consumeRelease(slotId, useGeneration, releaseFence, childIdentity, receiptAt = receiptAt)
+                consumeRelease(slotId, useGeneration, releaseFence, childIdentity, receiptAt = receiptAt, expectedLease = lease)
                 return
             }
             handler.post {
@@ -1939,7 +1957,7 @@ internal class KeyguardOrbBufferRenderer(
                 // apply may have thrown after transfer. Preserve the path
                 // selected by that acknowledgement rather than inventing a
                 // successful direct return in the release callback.
-                consumeRelease(slotId, useGeneration, releaseFence, childIdentity, receiptAt = receiptAt)
+                consumeRelease(slotId, useGeneration, releaseFence, childIdentity, receiptAt = receiptAt, expectedLease = lease)
             }
         }
 
@@ -1951,30 +1969,36 @@ internal class KeyguardOrbBufferRenderer(
             publicationPath: String? = null,
             replayed: Boolean = false,
             receiptAt: Long? = null,
+            expectedLease: KeyguardOrbBufferLease? = null,
         ) {
             if (Looper.myLooper() != thread.looper) {
                 handler.post {
-                    consumeRelease(slotId, useGeneration, releaseFence, childIdentity, publicationPath, replayed, receiptAt)
+                    consumeRelease(slotId, useGeneration, releaseFence, childIdentity, publicationPath, replayed, receiptAt, expectedLease)
                 }
                 return
             }
             val slot = slots.firstOrNull { it.id == slotId }
             if (slot != null && slot.useGeneration == useGeneration &&
-                slot.state == SlotState.READY_FOR_MAIN
+                (expectedLease == null || slot.lease == expectedLease) && slot.state == SlotState.READY_FOR_MAIN
             ) {
                 // SurfaceFlinger may release a transaction before the Main
                 // acknowledgement runnable reaches the renderer handler.
                 // Retain this exact fence rather than treating READY as FREE.
                 val key = slotId to useGeneration
-                val recorded = earlyReleaseReceipts.record(key, releaseFence)
+                val recorded = earlyReleaseReceipts.record(key, releaseFence, receiptAt, childIdentity, expectedLease)
                 if (recorded) {
                     if (childIdentity != null) slot.childIdentity = childIdentity
                     if (publicationPath != null) slot.publicationPath = publicationPath
                     else if (slot.publicationPath == "first/ready") slot.publicationPath = "first/release-before-ack"
+                    noteAcceptedReleaseProgress(slot)
                     slot.callbackReceived = true
                     slot.fencePending = releaseFence?.isValid == true
                     slot.earlyReceiptRetained = true
-                    observeOwnership("release-received", slot = slot, log = false)
+                    if (ownershipObserver !== NoopKeyguardOrbOwnershipObserver || slot.retired) {
+                        observeOwnership("release-received", slot = slot,
+                            detail = "callbackEntry=${receiptAt ?: "UNOBSERVED"},workerAt=${SystemClock.uptimeMillis()},state=READY_FOR_MAIN",
+                            log = slot.retired)
+                    }
                     if (slot.retired) notifyRetiredUse(slot, "release-received", receiptAt ?: SystemClock.uptimeMillis())
                     desired?.let { evaluatePressure(it, false) }
                 } else {
@@ -1986,20 +2010,42 @@ internal class KeyguardOrbBufferRenderer(
                     detail = if (recorded) "retained" else "duplicate")
                 return
             }
-            if (slot == null || slot.useGeneration != useGeneration || slot.state != SlotState.PUBLISHED) {
+            if (slot == null || slot.useGeneration != useGeneration ||
+                (expectedLease != null && slot.lease != expectedLease) || slot.state != SlotState.PUBLISHED) {
                 releaseFence?.close()
                 return
             }
             if (childIdentity != null) slot.childIdentity = childIdentity
             if (publicationPath != null) slot.publicationPath = publicationPath
+            if (!slot.callbackReceived) noteAcceptedReleaseProgress(slot)
             slot.callbackReceived = true
             slot.fencePending = releaseFence?.isValid == true
             slot.state = SlotState.WAIT_RELEASE_FENCE
-            if (!replayed) observeOwnership("release-received", slot = slot, log = slot.retired)
+            if (!replayed && (ownershipObserver !== NoopKeyguardOrbOwnershipObserver || slot.retired)) {
+                observeOwnership("release-received", slot = slot,
+                    detail = "callbackEntry=${receiptAt ?: "UNOBSERVED"},workerAt=${SystemClock.uptimeMillis()},state=PUBLISHED",
+                    log = slot.retired)
+            }
             if (slot.retired && !replayed) notifyRetiredUse(slot, "release-received", receiptAt ?: SystemClock.uptimeMillis())
             desired?.let { evaluatePressure(it, false) }
             awaitFence(slotId, useGeneration, SlotState.WAIT_RELEASE_FENCE, releaseFence)
             publishSlotSnapshot()
+        }
+
+        /** A callback may have entered synchronously inside either first or
+         * steady apply. Preserve its original owner and receipt time, then
+         * feed it once into the same real-fence path after acknowledgement. */
+        private fun replayEarlyRelease(slot: Slot) {
+            if (!earlyReleaseReceipts.hasPending) return
+            val receipt = earlyReleaseReceipts.take(slot.id to slot.useGeneration) ?: return
+            slot.earlyReceiptRetained = false
+            if (ownershipObserver !== NoopKeyguardOrbOwnershipObserver || slot.retired) {
+                observeOwnership("release-replayed", slot = slot,
+                    detail = "callbackEntry=${receipt.receiptAt ?: "UNOBSERVED"},workerAt=${SystemClock.uptimeMillis()}",
+                    log = slot.retired)
+            }
+            consumeRelease(slot.id, slot.useGeneration, receipt.value, receipt.childIdentity,
+                replayed = true, receiptAt = receipt.receiptAt, expectedLease = receipt.lease ?: slot.lease)
         }
 
         fun dropReady(frame: ReadyFrame) {
@@ -2035,12 +2081,13 @@ internal class KeyguardOrbBufferRenderer(
                                 snapshotFirstFrameAt.takeIf { it > 0L }, snapshotFirstFrameSlot.takeIf { it >= 0L },
                                 snapshotFirstFrameUse.takeIf { it >= 0L }, snapshotSecondFrameAt.takeIf { it > 0L },
                                 snapshotSecondFrameSlot.takeIf { it >= 0L }, snapshotSecondFrameUse.takeIf { it >= 0L })
-                        }, coldSnapshot)
+                        }, coldSnapshot, translucentSteadySkipped)
                     if (before == snapshotSequence) return value
                 }
             }
             return Snapshot(produced, published, dropped, failures, 0, 0, 0, false,
-                -1, -1, -1, -1, completionGapMaxMs, 0, 0, 0, -1, -1, 0, false, 0)
+                -1, -1, -1, -1, completionGapMaxMs, 0, 0, 0, -1, -1, 0, false, 0,
+                translucentSteadySkipped = translucentSteadySkipped)
         }
 
         override fun doFrame(frameTimeNanos: Long) {
@@ -2089,6 +2136,25 @@ internal class KeyguardOrbBufferRenderer(
 
         /** No allocations on ordinary frame opportunities. The snapshot is
          * constructed once, only when a qualifying transition is offered. */
+        private fun notePublicationProgress(lease: KeyguardOrbBufferLease) {
+            val grant = publicationTarget.current()
+            if (running && !disposed && attachedLease == lease && desired?.lease == lease &&
+                grant?.active == true && grant.lease == lease) pressureProgress += 1L
+        }
+
+        /** A real accepted receipt is progress, but its buffer remains owned
+         * until its actual release fence completes. Retired generations and
+         * duplicate/replayed receipts cannot refresh the current grant. */
+        private fun noteAcceptedReleaseProgress(slot: Slot) {
+            val spec = desired ?: return
+            val grant = publicationTarget.current()
+            if (running && !disposed && attachedLease == spec.lease && slot.lease == spec.lease &&
+                grant?.active == true && grant.lease == spec.lease &&
+                slot.buffer.width == spec.lease.width && slot.buffer.height == spec.lease.height) {
+                pressureProgress += 1L
+            }
+        }
+
         private fun evaluatePressure(spec: KeyguardOrbBufferRenderSpec, opportunity: Boolean) {
             val grant = publicationTarget.current()
             val eligible = running && !disposed && attachedLease == spec.lease &&
@@ -2124,7 +2190,7 @@ internal class KeyguardOrbBufferRenderer(
                 publishSlotSnapshot()
             }
             val reason = pressurePolicy.observe(grant, eligible, slots.size, oldUnreleased, oldOwned, free,
-                currentInFlight, wrongSizeOld, currentCompatible, published, now, opportunity)
+                currentInFlight, wrongSizeOld, currentCompatible, pressureProgress, now, opportunity)
             if (reason == null) {
                 val offer = offeredPressure
                 if (offer != null && (offer.claim.cancel() || !offer.claim.isClaimed())) offeredPressure = null
@@ -2220,23 +2286,43 @@ internal class KeyguardOrbBufferRenderer(
             val recordCold = coldOwner != null && timingOwner() === coldOwner && coldLease == spec.lease &&
                 coldRecords.count { (it.attachment == 0L) == (spec.lease.attachment == 0L) } < 2
             val resourcesStart = if (recordCold) SystemClock.uptimeMillis() else 0L
-            if (!ensureResources(spec)) return
-            val resourcesEnd = if (recordCold) SystemClock.uptimeMillis() else 0L
             // A stale RenderRequest owns only its own slot while its render
-            // fence drains. Do not make an otherwise FREE slot unavailable
-            // during lease revocation/re-attachment; READY and RENDERING still
-            // cap the active hand-off to one current frame.
+            // fence drains. READY and RENDERING still cap the active hand-off
+            // to one current frame; inspect before allocating a new slot/use.
             if (slots.any {
                     it.state == SlotState.READY_FOR_MAIN ||
                         it.state == SlotState.RENDERING
                 }) return
+            val target = publicationTarget.current()
+            if (spec.lease.attachment > 0L && running && !disposed && attachedLease == spec.lease &&
+                target?.active == true && target.lease == spec.lease && firstLeaseSubmitted == spec.lease &&
+                spec.scene.full && spec.scene.profile.opacity < 1f) {
+                var ownedByThisLease = 0
+                var otherOwner = false
+                var slotIndex = 0
+                while (slotIndex < slots.size) {
+                    val existing = slots[slotIndex++]
+                    if (existing.state != SlotState.FREE) {
+                        if (existing.lease != spec.lease) { otherOwner = true; break }
+                        ownedByThisLease++
+                    }
+                }
+                // The optional steady tick must leave a third slot available
+                // for a replacement. It cannot cancel an outstanding use or
+                // affect an already admitted first frame.
+                if (!otherOwner && ownedByThisLease >= 2) {
+                    translucentSteadySkipped += 1L
+                    return
+                }
+            }
+            if (!ensureResources(spec)) return
+            val resourcesEnd = if (recordCold) SystemClock.uptimeMillis() else 0L
             val index = slots.indexOfFirst { it.state == SlotState.FREE &&
                 it.buffer.width == spec.lease.width && it.buffer.height == spec.lease.height }
             if (index < 0) {
                 dropped += 1
                 return
             }
-            val target = publicationTarget.current()
             if (recoveryHook !== NoopKeyguardOrbRecoveryTestHook && spec.lease.attachment > 0L) {
                 // A configured positive lease may render before Main installs
                 // its grant. The test's one-use setup must not let that
@@ -2520,39 +2606,77 @@ internal class KeyguardOrbBufferRenderer(
             val submittedSlot = frame.slotId
             val submittedUse = frame.useGeneration
             val childIdentity = System.identityHashCode(target.child)
-            runCatching {
+            var transaction: SurfaceControl.Transaction? = null
+            var applyStarted = false
+            var applyReturned = false
+            var submissionError: Throwable? = null
+            try {
                 steadyPublicationBarrier.afterGrantValidated(frame.producerFrame)
-                SurfaceControl.Transaction()
-                    .setBuffer(
-                        target.child,
-                        frame.buffer,
-                        frame.fence,
-                        Consumer { releaseFence -> release(submittedLease, submittedSlot, submittedUse,
-                            releaseFence, childIdentity, postAlways = false) },
-                    )
-                    .apply()
-                if (publicationObserver !== NoopKeyguardOrbBufferPublicationObserver) {
-                    runCatching { publicationObserver.onSubmitted(frame.producerFrame) }
+                transaction = SurfaceControl.Transaction()
+                transaction.setBuffer(
+                    target.child,
+                    frame.buffer,
+                    frame.fence,
+                    Consumer { releaseFence -> release(submittedLease, submittedSlot, submittedUse,
+                        releaseFence, childIdentity, postAlways = false) },
+                )
+                applyStarted = true
+                transaction.apply()
+                applyReturned = true
+            } catch (error: Throwable) {
+                submissionError = error
+            } finally {
+                // Closing the transaction wrapper is never a release receipt.
+                runCatching { transaction?.close() }
+                    .onFailure { Log.w("FluviOrbOwnership", "steady transaction close failed", it) }
+            }
+            if (!applyReturned) {
+                if (!applyStarted) {
+                    // No compositor transfer was attempted: retain the normal
+                    // producer-fence cleanup for this unsubmitted use.
+                    discardRenderResult(slot, frame.fence)
+                } else {
+                    // apply() may throw after transfer. Quarantine this exact
+                    // use; only a real receipt/fence may make it writable.
+                    slot.state = SlotState.PUBLISHED
+                    slot.publicationPath = "steady/apply-unknown"
+                    runCatching {
+                        observeOwnership("steady-apply-unknown", slot = slot, target = target)
+                        replayEarlyRelease(slot)
+                    }.onFailure { Log.w("FluviOrbOwnership", "uncertain transfer evidence failed; use retained", it) }
                 }
-                // SurfaceControl owns the submitted acquire fence. Slot
-                // reuse still waits for its later release callback/fence,
-                // never for transaction commitment.
-                slot.state = SlotState.PUBLISHED
-                published += 1
+                failures += 1
+                runCatching { onFailure(frame.lease, checkNotNull(submissionError)) }
+                runCatching { publishSlotSnapshot() }
+                return
+            }
+            // SurfaceControl owns the transferred fence. Acknowledge the
+            // exact use and its evidence before invoking external observers.
+            // No exception after this point may return to the producer's
+            // pre-transfer discard path.
+            slot.state = SlotState.PUBLISHED
+            published += 1
+            runCatching {
+                notePublicationProgress(frame.lease)
                 recordCurrentFrame(slot)
+                resetPressure()
+                observeOwnership("steady-submitted", slot = slot, target = target, log = false)
+                replayEarlyRelease(slot)
                 frame.firstOffer?.let { token ->
                     if (token.steadyObserved.compareAndSet(false, true)) {
                         token.observe("steady", SystemClock.uptimeMillis(), frame)
                     }
                 }
-                resetPressure()
-                observeOwnership("steady-submitted", slot = slot, target = target, log = false)
+                if (publicationObserver !== NoopKeyguardOrbBufferPublicationObserver) {
+                    runCatching { publicationObserver.onSubmitted(frame.producerFrame) }
+                        .onFailure { Log.w("FluviOrbOwnership", "steady observer failed after transfer", it) }
+                }
+                publishSlotSnapshot()
             }.onFailure { error ->
-                discardRenderResult(slot, frame.fence)
                 failures += 1
-                onFailure(frame.lease, error)
+                Log.w("FluviOrbOwnership", "steady bookkeeping failed after transfer; use retained", error)
+                runCatching { onFailure(frame.lease, error) }
             }
-            publishSlotSnapshot()
         }
 
         /** Capture only the first two acknowledged app submissions for the original

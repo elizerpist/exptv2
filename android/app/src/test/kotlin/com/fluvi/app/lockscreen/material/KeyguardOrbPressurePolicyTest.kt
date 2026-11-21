@@ -4,10 +4,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.LooperMode
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** These examples describe decisions, not release: none can free a buffer. */
+@RunWith(RobolectricTestRunner::class)
+@LooperMode(LooperMode.Mode.PAUSED)
+@Config(sdk = [35], manifest = Config.NONE, shadows = [KeyguardOrbSteadyCapacityTest.TransactionShadow::class,
+    KeyguardOrbSteadyCapacityTest.BufferShadow::class, KeyguardOrbSteadyCapacityTest.FenceShadow::class])
 class KeyguardOrbPressurePolicyTest {
     private val grant = Any()
     private val policy = KeyguardOrbPressurePolicy()
@@ -19,7 +27,7 @@ class KeyguardOrbPressurePolicyTest {
         currentCompatible: Boolean = false, progress: Int = 0,
         opportunity: Boolean = true,
     ) = policy.observe(grant, eligible, 3, oldUnreleased, oldOwned, free,
-        currentInFlight, wrongSizeOld, currentCompatible, progress, time, opportunity)
+        currentInFlight, wrongSizeOld, currentCompatible, progress.toLong(), time, opportunity)
 
     @Test fun threeRetiredUnreleasedUsesBlockImmediatelyButRequireAnExactGrant() {
         assertNull(sample(100, grant = null, eligible = false, oldUnreleased = 3, oldOwned = 3))
@@ -89,6 +97,12 @@ class KeyguardOrbPressurePolicyTest {
         assertNull(sample(130, oldOwned = 1, wrongSizeOld = true, currentCompatible = true))
         assertEquals(KeyguardOrbPressureReason.WRONG_SIZE_OLD,
             sample(160, oldOwned = 1, wrongSizeOld = true, currentCompatible = true))
+    }
+
+    @Test fun actualWorkerMixedSizeReceiptRestartsThePressureObservation() {
+        val fixture = KeyguardOrbSteadyCapacityTest()
+        fixture.setup()
+        try { fixture.assertRealWorkerReceiptRestartsMixedSizePressure() } finally { fixture.cleanup() }
     }
 
     @Test fun cancellationAndClaimHaveExactlyOneWinnerEvenWhenConcurrent() {

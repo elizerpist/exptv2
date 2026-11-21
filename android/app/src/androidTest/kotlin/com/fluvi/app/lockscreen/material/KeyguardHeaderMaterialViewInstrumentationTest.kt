@@ -2313,20 +2313,23 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges()
     }
 
-    private data class PassiveReferences(val standby: Bitmap, val neutral: Bitmap, val empty: Bitmap, val full: Bitmap) {
-        fun recycle() { standby.recycle(); neutral.recycle(); empty.recycle(); full.recycle() }
+    private data class PassiveReferences(val standby: Bitmap, val neutral: Bitmap, val neutralAnimated: Bitmap,
+        val empty: Bitmap, val full: Bitmap) {
+        fun recycle() { standby.recycle(); neutral.recycle(); neutralAnimated.recycle(); empty.recycle(); full.recycle() }
     }
 
     /** Independent hardware-View references on the same white panel and
      * dimensions. No candidate crop or callback is used to create them. */
-    private fun passiveReferences(): PassiveReferences {
+    private fun passiveReferences(sizeOverride: Int? = null, background: Int = android.graphics.Color.WHITE): PassiveReferences {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext,
             KeyguardMaterialTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
-        val size = activity.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
+        val size = sizeOverride ?: activity.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
+        require(size > 0)
         lateinit var root: FrameLayout
         lateinit var expected: View
         lateinit var material: KeyguardHeaderMaterialView
+        lateinit var neutralAnimatedView: KeyguardHeaderMaterialView
         try {
             instrumentation.runOnMainSync {
                 val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
@@ -2346,9 +2349,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
                     visibility = View.INVISIBLE
                 }
+                neutralAnimatedView = KeyguardHeaderMaterialView(activity, materialTimeSource =
+                    KeyguardMaterialTimeSource { _, _ -> calibratedMaterialTime(PHASE_A) }).apply {
+                    shape = KeyguardHeaderMaterialView.Shape.ORB
+                    layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
+                    visibility = View.INVISIBLE
+                }
                 root = FrameLayout(activity).apply {
-                    setBackgroundColor(android.graphics.Color.WHITE)
-                    addView(expected); addView(material)
+                    setBackgroundColor(background)
+                    addView(expected); addView(material); addView(neutralAnimatedView)
                 }
                 activity.setContentView(root)
             }
@@ -2361,10 +2370,10 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 assertTrue("independent reference parent commit missing", receipt.await(8, TimeUnit.SECONDS))
             }
             parentFrame()
-            val empty = copyMaterialView(instrumentation, expected)
+            val empty = copyMaterialView(instrumentation, expected, size)
             instrumentation.runOnMainSync { expected.visibility = View.VISIBLE }
             parentFrame()
-            val standby = copyMaterialView(instrumentation, expected)
+            val standby = copyMaterialView(instrumentation, expected, size)
             instrumentation.runOnMainSync {
                 expected.visibility = View.INVISIBLE
                 material.setScene(KeyguardMaterialScene(calibratedOrbProfile().neutralized(), false, System.nanoTime()), true)
@@ -2373,7 +2382,28 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             }
             assertTrue("neutral reference never drew", waitForBootstrap(instrumentation, material))
             parentFrame()
-            val neutral = copyMaterialView(instrumentation, material)
+            val neutral = copyMaterialView(instrumentation, material, size)
+            val neutralProfile = calibratedOrbProfile().neutralized()
+            val neutralArtifact = AndroidKeyguardShaderArtifactReader.load(activity, neutralProfile.effectId, neutralProfile.usesPortal)
+            var neutralDrawBefore = 0
+            instrumentation.runOnMainSync {
+                material.visibility = View.INVISIBLE
+                neutralAnimatedView.setScene(KeyguardMaterialScene(neutralProfile, false, System.nanoTime()), true)
+                neutralAnimatedView.setBootstrapActive(false)
+                neutralAnimatedView.visibility = View.VISIBLE
+                assertEquals(KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED,
+                    neutralAnimatedView.installPreparedShader(neutralArtifact))
+                neutralDrawBefore = neutralAnimatedView.diagnostics().shaderDrawCount
+                neutralAnimatedView.frame(System.nanoTime())
+            }
+            assertTrue("independent animated neutral reference did not draw",
+                waitForShaderDraw(instrumentation, neutralAnimatedView, neutralDrawBefore))
+            parentFrame()
+            val neutralAnimated = copyMaterialView(instrumentation, neutralAnimatedView, size)
+            instrumentation.runOnMainSync {
+                neutralAnimatedView.visibility = View.INVISIBLE
+                material.visibility = View.VISIBLE
+            }
             val profile = calibratedOrbProfile()
             val artifact = AndroidKeyguardShaderArtifactReader.load(activity, profile.effectId, profile.usesPortal)
             var before = 0
@@ -2386,14 +2416,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             }
             assertTrue("independent full reference did not draw", waitForShaderDraw(instrumentation, material, before))
             parentFrame()
-            val full = copyMaterialView(instrumentation, material)
-            persistPanelEvidence(activity, "r22-2-reference-standby", standby)
-            persistPanelEvidence(activity, "r22-2-reference-neutral", neutral)
-            persistPanelEvidence(activity, "r22-2-reference-empty", empty)
-            persistPanelEvidence(activity, "r22-2-reference-full", full)
+            val full = copyMaterialView(instrumentation, material, size)
+            val referenceLabel = "r22-3-reference-$size-${Integer.toHexString(background)}"
+            persistPanelEvidence(activity, "$referenceLabel-standby", standby)
+            persistPanelEvidence(activity, "$referenceLabel-neutral-bootstrap", neutral)
+            persistPanelEvidence(activity, "$referenceLabel-neutral-animated", neutralAnimated)
+            persistPanelEvidence(activity, "$referenceLabel-empty", empty)
+            persistPanelEvidence(activity, "$referenceLabel-full", full)
             assertTrue("standby must differ from empty", compareMaterialPixels(standby, empty).meaningful())
             assertTrue("full must differ from neutral", compareMaterialPixels(full, neutral).meaningful())
-            return PassiveReferences(standby, neutral, empty, full)
+            return PassiveReferences(standby, neutral, neutralAnimated, empty, full)
         } finally {
             instrumentation.runOnMainSync { activity.finish() }
             instrumentation.waitForIdleSync()
@@ -2514,8 +2546,53 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         } finally { refs.recycle() }
     }
 
+    /** Independent sustained producer sample. The paired baseline and
+     * candidate use the same uncontrolled material clock and duration. */
+    @Test fun r22_3TranslucentSteadyCadence() {
+        val gate = RealReleaseGate().apply { releaseAll() }
+        withOrbRetirementFixture("r22-3-translucent-cadence", gate,
+            initialProfile = calibratedOrbProfile().copy(opacity = .5f)) { fixture ->
+            val before = copyPanelOrb(fixture.instrumentation, fixture.manager)
+            var after: Bitmap? = null
+            val directory = File(fixture.activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
+            try {
+                persistPanelEvidence(fixture.activity, "r22-3-cadence-before", before)
+                fixture.beginNaturalCadence()
+                Thread.sleep(6_000)
+                val samples = fixture.endNaturalCadence()
+                after = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                persistPanelEvidence(fixture.activity, "r22-3-cadence-after", checkNotNull(after))
+                val intervals = samples.zipWithNext { a, b -> (b.frameNanos - a.frameNanos) / 1_000_000.0 }
+                val ordered = intervals.sorted()
+                val median = ordered.getOrNull(ordered.size / 2)
+                val p95 = ordered.getOrNull(((ordered.size * 95 + 99) / 100 - 1).coerceAtLeast(0))
+                File(directory, "r22-3-cadence.txt").writeText(buildString {
+                    appendLine("clock=ChoreographerFrameNs submissionClock=uptimeMs durationMs=6000 refreshRate=${fixture.activity.display?.refreshRate}")
+                    appendLine("samples=${samples.size} intervals=${intervals.size} medianMs=$median p95Ms=$p95 worstMs=${ordered.lastOrNull()} over50ms=${intervals.count { it > 50 }} omitted=${fixture.cadenceOmissions()}")
+                    samples.forEach { appendLine("frameNs=${it.frameNanos} submittedMs=${it.submittedMs} phase=${it.phase} slot=${it.slot}/${it.use}") }
+                })
+                assertEquals("cadence observation overflow", 0, fixture.cadenceOmissions())
+                assertTrue("NOT REACHED: fewer than 100 actual producer intervals: ${intervals.size}", intervals.size >= 100)
+                assertTrue("producer timestamps must advance", intervals.all { it > 0.0 })
+                assertTrue("material phases did not move", samples.map { it.phase }.distinct().size >= 100)
+                assertTrue("independent compositor crops did not change", compareMaterialPixels(before, checkNotNull(after)).meaningful())
+                fixture.ownership.assertBoundedSingleRenderer()
+            } finally { before.recycle(); after?.recycle() }
+        }
+    }
+
     @Test fun isolatedStandbyPreservesAuthorizedComposition() {
         for (background in listOf(android.graphics.Color.WHITE, android.graphics.Color.BLACK)) {
+            exerciseStandbyComposition(background)
+        }
+    }
+
+    /** Run black and terminal controls even if the separate white case fails. */
+    @Test fun isolatedStandbyBlackReturnAndHide() {
+        exerciseStandbyComposition(android.graphics.Color.BLACK)
+    }
+
+    private fun exerciseStandbyComposition(background: Int) {
             lateinit var translucentReference: Bitmap
             val referenceGate = RealReleaseGate().apply { releaseAll() }
             withOrbRetirementFixture("r22-2-translucent-reference-$background", referenceGate,
@@ -2584,7 +2661,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 val with = mutableListOf<OrbRetirementCapture>()
                 try {
                     phases.forEachIndexed { index, phase ->
-                        without += fixture.capture(phase, "without-standby-$index", ::hasVisibleMaterial)
+                        without += fixture.capture(phase, "without-standby-$index") { observed ->
+                            when (index) {
+                                0 -> hasVisibleMaterial(observed)
+                                1, 3 -> compareMaterialPixels(without[0].bitmap, observed).nearlyEqual()
+                                else -> compareMaterialPixels(without[0].bitmap, observed).meaningful()
+                            }
+                        }
                     }
                     assertTrue(compareMaterialPixels(without[0].bitmap, without[1].bitmap).nearlyEqual())
                     assertTrue(compareMaterialPixels(without[0].bitmap, without[2].bitmap).meaningful())
@@ -2618,7 +2701,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                         root.width / 2f, root.height / 2f, 0)
                     try { assertTrue(root.dispatchTouchEvent(down)); assertTrue(root.dispatchTouchEvent(up)) }
                     finally { down.recycle(); up.recycle() }
-                    assertTrue("standby changed the ORB tap route", fixture.interactionEvents.contains("KG|ORB_TAP"))
+                }
+                // View posts PerformClick; let the actual Main queue process
+                // that callback before observing its existing diagnostic.
+                fixture.instrumentation.waitForIdleSync()
+                assertTrue("standby changed the ORB tap route", fixture.interactionEvents.contains("KG|ORB_TAP"))
+                fixture.instrumentation.runOnMainSync {
                     fixture.window.updateMaterial(calibratedOrbProfile().copy(opacity = .5f), fixture.settings)
                     assertEquals("nonopaque blend must disarm standby immediately", null, root.passiveStandbyObservation())
                 }
@@ -2682,7 +2770,6 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 } finally { terminalScreen.recycle() }
                 fixture.ownership.assertBoundedSingleRenderer()
             } } finally { translucentReference.recycle() }
-        }
     }
 
     @Test fun stalePressureCannotSwitchReplacement() {
@@ -2746,6 +2833,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
 
     @Test fun stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges() {
         val refs = passiveReferences()
+        val resizedRefs = passiveReferences(refs.standby.width + 4)
         val gate = RealReleaseGate().apply { delayTickets = true }
         try { withOrbRetirementFixture("r08-stale-privacy-size", gate) { fixture ->
             fun show(): KeyguardOrbBufferProducerFrame {
@@ -2798,11 +2886,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 }
                 val neutralTicket = gate.awaitTicket(c.lease.attachment, fullTicket.lease.generation)
                 assertEquals(calibratedOrbProfile().neutralized().visualKey, neutralTicket.lease.visualKey)
+                fun matchingReferences(candidate: Bitmap): PassiveReferences = when {
+                    candidate.width == refs.full.width && candidate.height == refs.full.height -> refs
+                    candidate.width == resizedRefs.full.width && candidate.height == resizedRefs.full.height -> resizedRefs
+                    else -> error("no independently calibrated reference for ${candidate.width}x${candidate.height}")
+                }
                 fun safeNeutral(candidate: Bitmap): Boolean {
                     if (!hasVisibleMaterial(candidate)) return false
-                    val reference = Bitmap.createScaledBitmap(fullCrop, candidate.width, candidate.height, true)
-                    return try { compareMaterialPixels(reference, candidate).meaningful() }
-                    finally { if (reference !== fullCrop) reference.recycle() }
+                    val references = matchingReferences(candidate)
+                    val reference = if (references === refs) fullCrop else references.full
+                    return compareMaterialPixels(reference, candidate).meaningful()
                 }
                 fun recordSafeStrip(label: String) {
                     val samples = mutableListOf<Bitmap>()
@@ -2823,9 +2916,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                                 samples += sample
                                 persistPanelEvidence(fixture.activity, "$label-full-$index", screen)
                                 persistPanelEvidence(fixture.activity, "$label-$index", sample)
-                                val reference = Bitmap.createScaledBitmap(fullCrop, sample.width, sample.height, true)
-                                val comparison = try { compareMaterialPixels(reference, sample) }
-                                    finally { if (reference !== fullCrop) reference.recycle() }
+                                val nativeRefs = matchingReferences(sample)
+                                val reference = if (nativeRefs === refs) fullCrop else nativeRefs.full
+                                val comparison = compareMaterialPixels(reference, sample)
                                 val centerY = (b.top + b.height() / 2).coerceIn(0, screen.height - 1)
                                 val leftX = (b.left - 4).coerceIn(0, screen.width - 1)
                                 val rightX = (b.right + 4).coerceIn(0, screen.width - 1)
@@ -2833,29 +2926,33 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                                 for (y in 0 until sample.height) for (x in 0 until sample.width) {
                                     if (sample.getPixel(x, y) and 0x00ffffff == 0x00ffffff) whitePixels += 1
                                 }
-                                fun scaled(source: Bitmap): Bitmap =
-                                    if (source.width == sample.width && source.height == sample.height) source
-                                    else Bitmap.createScaledBitmap(source, sample.width, sample.height, true)
-                                val standby = scaled(refs.standby)
-                                val neutral = scaled(refs.neutral)
-                                val empty = scaled(refs.empty)
-                                val standbyDelta = wholeRoiDifference(standby, sample)
-                                val neutralDelta = wholeRoiDifference(neutral, sample)
-                                val emptyDelta = wholeRoiDifference(empty, sample)
+                                val standbyDelta = wholeRoiDifference(nativeRefs.standby, sample)
+                                val neutralDelta = wholeRoiDifference(nativeRefs.neutral, sample)
+                                val animatedDelta = wholeRoiDifference(nativeRefs.neutralAnimated, sample)
+                                val emptyDelta = wholeRoiDifference(nativeRefs.empty, sample)
+                                val oldNeutralDelta = if (nativeRefs !== refs) {
+                                    val oldAtOriginalBounds = Bitmap.createBitmap(sample.width, sample.height, Bitmap.Config.ARGB_8888)
+                                    try {
+                                        Canvas(oldAtOriginalBounds).apply {
+                                            drawColor(android.graphics.Color.WHITE)
+                                            drawBitmap(refs.neutral, 0f, 0f, null)
+                                        }
+                                        wholeRoiDifference(oldAtOriginalBounds, sample)
+                                    } finally { oldAtOriginalBounds.recycle() }
+                                } else null
                                 val category = when {
                                     comparison.nearlyEqual() -> "OLD_FULL"
                                     standbyDelta.nearlyEqual() -> "SAFE_STANDBY"
                                     neutralDelta.nearlyEqual() -> "SAFE_NEUTRAL"
+                                    animatedDelta.nearlyEqual() -> "SAFE_NEUTRAL"
+                                    oldNeutralDelta?.nearlyEqual() == true -> "OLD_SIZE_NEUTRAL"
                                     emptyDelta.nearlyEqual() -> "BLANK"
                                     else -> "UNCLASSIFIED"
                                 }
-                                if (standby !== refs.standby) standby.recycle()
-                                if (neutral !== refs.neutral) neutral.recycle()
-                                if (empty !== refs.empty) empty.recycle()
                                 categories += category
                                 times += "sample=$index before=$before after=$after bounds=$b size=${sample.width}x${sample.height} " +
-                                    "category=$category whitePixels=$whitePixels oldFull=$comparison standby=$standbyDelta neutral=$neutralDelta empty=$emptyDelta " +
-                                    "reference=r22-2-reference-standby,r22-2-reference-neutral,r22-2-reference-empty fiducials=$leftX,$centerY:${screen.getPixel(leftX, centerY)};" +
+                                    "category=$category whitePixels=$whitePixels oldFull=$comparison standby=$standbyDelta neutral=$neutralDelta animated=$animatedDelta oldSize=$oldNeutralDelta empty=$emptyDelta " +
+                                    "reference=r22-3-native-${sample.width} fiducials=$leftX,$centerY:${screen.getPixel(leftX, centerY)};" +
                                     "$rightX,$centerY:${screen.getPixel(rightX, centerY)} expected=safe-neutral"
                             } finally { screen.recycle() }
                             Thread.sleep(16)
@@ -2928,6 +3025,104 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                 fullCrop.recycle()
             }
             fixture.ownership.assertBoundedSingleRenderer()
+        } } finally { resizedRefs.recycle(); refs.recycle() }
+    }
+
+    /** A real WindowManager resize, separate from the legacy child-only clip
+     * stress: both window/root and child must commit the new measured size. */
+    @Test fun isolatedNeutralRecoveryAtCommittedResizedBounds() {
+        val baseSize = InstrumentationRegistry.getInstrumentation().targetContext.resources
+            .getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
+        val size = baseSize + 4
+        val refs = passiveReferences(size)
+        val gate = RealReleaseGate().apply { releaseAll() }
+        try { withOrbRetirementFixture("r22-3-committed-resize", gate) { fixture ->
+            val initial = fixture.awaitFirstToken(fixture.initialLease.attachment)
+            lateinit var root: View
+            lateinit var orb: View
+            fixture.instrumentation.runOnMainSync {
+                root = requireNotNull(fixture.manager.currentRoot)
+                orb = root.findViewById(R.id.fluvi_financial_snapshot_orb)
+                assertEquals(baseSize, root.width)
+                assertEquals(baseSize, orb.width)
+                val current = root.layoutParams as WindowManager.LayoutParams
+                val resized = WindowManager.LayoutParams().apply {
+                    copyFrom(current)
+                    width = size
+                    height = size
+                }
+                orb.layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
+                fixture.manager.updateViewLayout(root, resized)
+                root.requestLayout()
+            }
+            val layoutDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+            var measured = false
+            var rootBounds = Rect()
+            var childBounds = Rect()
+            while (!measured && System.nanoTime() < layoutDeadline) {
+                fixture.instrumentation.runOnMainSync {
+                    val visibleRoot = root.getGlobalVisibleRect(rootBounds)
+                    val visibleChild = orb.getGlobalVisibleRect(childBounds)
+                    measured = root.isAttachedToWindow && root.width == size && root.height == size &&
+                        orb.width == size && orb.height == size && visibleRoot && visibleChild &&
+                        childBounds.width() == size && childBounds.height() == size && rootBounds.contains(childBounds)
+                }
+                if (!measured) Thread.sleep(24)
+            }
+            assertTrue("NOT REACHED: WM/root/child did not establish unclipped $size geometry root=$rootBounds child=$childBounds", measured)
+            val committed = CountDownLatch(1)
+            fixture.instrumentation.runOnMainSync {
+                root.viewTreeObserver.registerFrameCommitCallback { committed.countDown() }
+                root.invalidate()
+            }
+            assertTrue("NOT REACHED: resized parent frame did not commit", committed.await(8, TimeUnit.SECONDS))
+            val resized = fixture.awaitReplacementToken(initial)
+            assertEquals(size, resized.lease.width)
+            assertEquals(size, resized.lease.height)
+            val before = requireNotNull(fixture.instrumentation.uiAutomation.takeScreenshot())
+            val samples = mutableListOf<Bitmap>()
+            val rows = mutableListOf<String>()
+            try {
+                persistPanelEvidence(fixture.activity, "r22-3-resized-before-full", before)
+                fixture.instrumentation.runOnMainSync {
+                    val outcome = fixture.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                        fixture.settings.copy(showFinancialDetails = false))
+                    assertTrue(outcome == KeyguardCardWindow.Result.REDACTED || outcome == KeyguardCardWindow.Result.CONTENT_UPDATED)
+                }
+                repeat(6) { index ->
+                    val at = SystemClock.uptimeMillis()
+                    val screen = requireNotNull(fixture.instrumentation.uiAutomation.takeScreenshot())
+                    try {
+                        val crop = Bitmap.createBitmap(screen, childBounds.left, childBounds.top, size, size)
+                        samples += crop
+                        persistPanelEvidence(fixture.activity, "r22-3-resized-$index-full", screen)
+                        persistPanelEvidence(fixture.activity, "r22-3-resized-$index-crop", crop)
+                        val standby = wholeRoiDifference(refs.standby, crop)
+                        val bootstrap = wholeRoiDifference(refs.neutral, crop)
+                        val animated = wholeRoiDifference(refs.neutralAnimated, crop)
+                        val empty = wholeRoiDifference(refs.empty, crop)
+                        var outsideChanged = 0
+                        for (y in 0 until screen.height) for (x in 0 until screen.width) {
+                            if (!childBounds.contains(x, y) && screen.getPixel(x, y) != before.getPixel(x, y)) outsideChanged++
+                        }
+                        rows += "sample=$index at=$at bounds=$childBounds root=$rootBounds standby=$standby bootstrap=$bootstrap animated=$animated empty=$empty outsideChanged=$outsideChanged"
+                    } finally { screen.recycle() }
+                    Thread.sleep(16)
+                }
+                assertEquals(6, samples.size)
+                assertTrue("resized crops were blank or differed from independently calibrated neutral: $rows",
+                    samples.all { sample -> hasVisibleMaterial(sample) && listOf(refs.standby, refs.neutral, refs.neutralAnimated)
+                        .any { wholeRoiDifference(it, sample).nearlyEqual() } })
+                assertTrue("resized neutral did not produce a distinct animation phase",
+                    samples.drop(1).any { compareMaterialPixels(samples.first(), it).meaningful() })
+                assertTrue("outside resized ROI changed: $rows", rows.all { it.endsWith("outsideChanged=0") })
+                fixture.ownership.assertBoundedSingleRenderer()
+            } finally {
+                File(fixture.activity.filesDir, "keyguard-material-smoke/r22-3-resized-sequence.txt")
+                    .writeText(rows.joinToString("\n", postfix = "\n"))
+                samples.forEach(Bitmap::recycle)
+                before.recycle()
+            }
         } } finally { refs.recycle() }
     }
 
@@ -3917,6 +4112,19 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         @Volatile var heldLease: KeyguardOrbBufferLease? = null
         data class RetirementBoundary(val lease: KeyguardOrbBufferLease, val child: Int, val event: String, val at: Long)
         private val retirements = java.util.concurrent.CopyOnWriteArrayList<RetirementBoundary>()
+        private val releaseBoundaries = java.util.concurrent.CopyOnWriteArrayList<String>()
+        private val releaseBoundaryOmitted = java.util.concurrent.atomic.AtomicInteger()
+        override fun onReleaseBoundary(lease: KeyguardOrbBufferLease, slot: Long, use: Long, childIdentity: Int,
+                                       stage: String, uptimeMs: Long) {
+            synchronized(releaseBoundaries) {
+                if (releaseBoundaries.size < 256) releaseBoundaries +=
+                    "lease=${lease.attachment}/${lease.generation} child=$childIdentity slot=$slot/$use stage=$stage at=$uptimeMs"
+                else releaseBoundaryOmitted.incrementAndGet()
+            }
+        }
+        fun releaseBoundarySnapshot(): List<String> = synchronized(releaseBoundaries) {
+            releaseBoundaries.toList() + "omittedReleaseBoundaries=${releaseBoundaryOmitted.get()}"
+        }
         data class PlacementBoundary(val lease: KeyguardOrbBufferLease, val child: Int, val submitted: Boolean)
         val placements = java.util.concurrent.CopyOnWriteArrayList<PlacementBoundary>()
 
@@ -4075,6 +4283,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
 
     /** Reuses the existing real-window and calibrated pixel oracles. This
      * fixture never supplies a release callback, fence or visibility grant. */
+    private data class CadenceSample(val frameNanos: Long, val submittedMs: Long, val phase: Float, val slot: Long, val use: Long)
+
     private inner class OrbRetirementFixture(
         private val label: String,
         private val recoveryHook: KeyguardOrbRecoveryTestHook,
@@ -4102,6 +4312,40 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         )
         private val controlledTime = ControlledOrbTimeSource(calibratedMaterialTime(PHASE_A))
         private val submissions = SubmittedFrameTracker()
+        private val cadenceLock = Any()
+        @Volatile private var cadenceEnabled = false
+        private var cadenceCount = 0
+        private var cadenceOmitted = 0
+        private val cadenceFrameNanos = LongArray(1024)
+        private val cadenceSubmittedMs = LongArray(1024)
+        private val cadencePhases = FloatArray(1024)
+        private val cadenceSlots = LongArray(1024)
+        private val cadenceUses = LongArray(1024)
+        fun beginNaturalCadence() = synchronized(cadenceLock) {
+            cadenceCount = 0; cadenceOmitted = 0
+            controlledTime.useNaturalTime = true
+            cadenceEnabled = true
+        }
+        fun endNaturalCadence(): List<CadenceSample> = synchronized(cadenceLock) {
+            cadenceEnabled = false
+            controlledTime.useNaturalTime = false
+            (0 until cadenceCount).map { CadenceSample(cadenceFrameNanos[it], cadenceSubmittedMs[it],
+                cadencePhases[it], cadenceSlots[it], cadenceUses[it]) }
+        }
+        fun cadenceOmissions(): Int = synchronized(cadenceLock) { cadenceOmitted }
+        private fun recordCadence(frame: KeyguardOrbBufferProducerFrame) {
+            if (!cadenceEnabled) return
+            synchronized(cadenceLock) {
+                if (!cadenceEnabled) return
+                if (cadenceCount >= cadenceFrameNanos.size) { cadenceOmitted++; return }
+                val i = cadenceCount++
+                cadenceFrameNanos[i] = frame.frameTimeNanos
+                cadenceSubmittedMs[i] = SystemClock.uptimeMillis()
+                cadencePhases[i] = frame.materialTime.phase
+                cadenceSlots[i] = frame.slotId
+                cadenceUses[i] = frame.useGeneration
+            }
+        }
         private val samples = CalibratedProducerSamples()
         private val nextGate = AtomicReference<OrbSteadyGate?>()
         private val gates = mutableListOf<OrbSteadyGate>()
@@ -4121,7 +4365,10 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         fun start() {
             KeyguardOrbBufferRendererTestHooks.recoveryHook = recoveryHook
             KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
-            KeyguardOrbBufferRendererTestHooks.publicationObserver = submissions
+            KeyguardOrbBufferRendererTestHooks.publicationObserver = KeyguardOrbBufferPublicationObserver { frame ->
+                submissions.onSubmitted(frame)
+                recordCadence(frame)
+            }
             KeyguardOrbBufferRendererTestHooks.frameObserver = samples
             KeyguardOrbBufferRendererTestHooks.ownershipObserver = ownership
             KeyguardOrbBufferRendererTestHooks.firstPublicationHook = object : KeyguardOrbFirstPublicationTestHook {
@@ -4342,9 +4589,21 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             val produced = samples.await(requestId)
             assertEquals("producer evidence must identify the submitted frame", produced.frame, submitted)
             persistProducerEvidence(activity, "r06-$label-$suffix-producer", produced)
+            var observation = 0
             val bitmap = awaitCompositorCrop(
                 label = "r06-$label-$suffix",
-                capture = { copyPanelOrb(instrumentation, manager) },
+                capture = {
+                    lateinit var bounds: Rect
+                    instrumentation.runOnMainSync { bounds = manager.currentOrbBounds() }
+                    val screen = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+                    try {
+                        val evidenceLabel = "r22-2-observer-$label-$suffix-${observation++}"
+                        persistPanelEvidence(activity, "$evidenceLabel-full", screen)
+                        val crop = Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
+                        persistPanelEvidence(activity, "$evidenceLabel-crop", crop)
+                        crop
+                    } finally { screen.recycle() }
+                },
                 persist = { evidenceLabel, image -> persistPanelEvidence(activity, evidenceLabel, image) },
                 accepts = accepts,
                 onTimeout = {
@@ -4382,7 +4641,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         fun assertNormalHideOrder(lease: KeyguardOrbBufferLease) {
             val events = windowBoundaries.filter { it.first == lease.attachment }
             val local = events.indexOfFirst { it.second == "LOCAL_HIDE_APPLIED" }
-            val child = events.indexOfFirst { it.second == "ISOLATED_LAYER_HIDE_SUBMITTED" }
+            // Earlier material replacements on the same attachment submit
+            // their own child hides while the root remains authorized. Select
+            // the terminal child hide after this operation's local hide.
+            val child = events.indices.firstOrNull { it > local &&
+                events[it].second == "ISOLATED_LAYER_HIDE_SUBMITTED" } ?: -1
             val removeBegin = events.indexOfFirst { it.second == "REMOVE_VIEW_BEGIN" }
             val removeReturn = events.indexOfFirst { it.second == "REMOVE_VIEW_RETURN" }
             assertTrue("root/child/remove boundaries out of order: $events",
@@ -4459,6 +4722,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             firstSteadyGates.forEach { details.appendLine("firstSteady attachment=${it.attachment} frame=${it.frame.get()} timedOut=${it.timedOut.get()}") }
             submittedFirst.forEach { token -> details.appendLine("firstSubmitted attachment=${token.lease.attachment} token=$token") }
             firstCommitEvidence.forEach { details.appendLine("firstCommit $it") }
+            (recoveryHook as? RealReleaseGate)?.releaseBoundarySnapshot()?.forEach { details.appendLine("releaseBoundary $it") }
             deferredCommits.forEach { (attachment, pending) -> details.appendLine("firstCommit attachment=$attachment token=${pending.token} received=${pending.receivedAtUptimeMs}") }
             ownership.snapshot().forEach { details.appendLine(it) }
             File(directory, "r06-$label-ownership.txt").writeText(details.toString())
@@ -4801,12 +5065,17 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
 
         private val selected = AtomicReference(Sample(null, initial))
         private val sampled = ThreadLocal<Sample?>()
+        @Volatile var useNaturalTime = false
 
         fun submit(requestId: Long, time: KeyguardMaterialTime) {
             selected.set(Sample(requestId, time))
         }
 
         override fun timeAt(scene: KeyguardMaterialScene, frameTimeNanos: Long): KeyguardMaterialTime {
+            if (useNaturalTime) {
+                sampled.remove()
+                return scene.timeAt(frameTimeNanos)
+            }
             val sample = selected.get()
             sampled.set(sample)
             return sample.time
@@ -5080,7 +5349,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
-    private fun copyMaterialView(instrumentation: Instrumentation, view: View): Bitmap {
+    private fun copyMaterialView(instrumentation: Instrumentation, view: View, expectedSize: Int = 168): Bitmap {
         lateinit var bounds: Rect
         instrumentation.runOnMainSync {
             val location = IntArray(2)
@@ -5093,8 +5362,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         try {
             assertTrue("material view bounds outside screenshot: $bounds",
                 bounds.intersect(0, 0, screen.width, screen.height))
-            assertEquals(168, bounds.width())
-            assertEquals(168, bounds.height())
+            assertEquals(expectedSize, bounds.width())
+            assertEquals(expectedSize, bounds.height())
             return Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
         } finally {
             screen.recycle()

@@ -2530,6 +2530,19 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "r22Decision" to (result?.decision?.name ?: "UNOBSERVED"),
                 "r22Reason" to (result?.surfaceReason?.name ?: "UNOBSERVED"),
                 "r22Incomplete" to (result?.let { "${it.rootUnavailable}/${it.walkTruncated}/${it.abortedStale}" } ?: "UNOBSERVED"),
+                "r22AFirstRoot" to (timing?.originalOpening?.let { e ->
+                    "${e.rootWindow ?: "NA"}/${e.rootStrategy ?: "NA"}/${e.rootFlags ?: "NA"}/${timing.acceptedChildPrefetchFlags ?: "NA"}"
+                } ?: "UNOBSERVED"),
+                "r22AFirstChild" to (timing?.originalOpening?.let { e ->
+                    "${e.firstOrdinal ?: "NA"}/${e.firstDepth ?: "NA"}/${e.firstParentOrdinal ?: "NA"}/${e.firstIndex ?: "NA"}/${e.firstResult ?: "NA"}"
+                } ?: "UNOBSERVED"),
+                "r22AInvalid" to (timing?.originalOpening?.let { e ->
+                    "${e.invalidOrdinal ?: "NA"}/${e.invalidDepth ?: "NA"}/${e.invalidParentOrdinal ?: "NA"}/${e.invalidIndex ?: "NA"}/${e.invalidKind ?: "NA"}/${e.exceptionClass?.take(32) ?: "NA"}"
+                } ?: "UNOBSERVED"),
+                "r22ACheckpoint" to (timing?.originalOpening?.let { e ->
+                    "${e.checkpointInstalled}/${e.checkpointState ?: "UNOBSERVED"}/${e.checkpointWindow ?: "NA"}/${e.checkpointIndex ?: "NA"}"
+                } ?: "UNOBSERVED"),
+                "r22ADecisive" to (timing?.originalOpening?.decisiveMarker ?: "UNOBSERVED"),
             ) }) }
     }
 
@@ -2865,6 +2878,14 @@ class FluviKeyguardCardService : AccessibilityService() {
                         Unit
                     }
                 } else null,
+                openingEligibleCheckpoint = if (KeyguardR15AcquisitionTestHooks.ENABLED &&
+                    yieldHandle != null && inspectionProbeForTest != null) {
+                    { window, index ->
+                        runCatching { inspectionProbeForTest?.openingEligibleCheckpoint(request, window, index) }
+                        Unit
+                    }
+                } else null,
+                captureOriginalOpeningEvidence = captureOpening && yieldHandle != null,
                 claimOpeningYield = yieldHandle?.let { handle -> { checkpoint, physicalBoundary, safeInventory, visited, roots, children ->
                     val at = SystemClock.uptimeMillis()
                     synchronized(queueLock) {
@@ -4140,6 +4161,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         "isolatedFramesProduced" to summary.isolatedFramesProduced,
                         "isolatedFramesPublished" to summary.isolatedFramesPublished,
                         "isolatedFramesDropped" to summary.isolatedFramesDropped,
+                        "isolatedTranslucentSteadySkipped" to summary.isolatedTranslucentSteadySkipped,
                         "isolatedCompletionGapMaxMs" to summary.isolatedCompletionGapMaxMs,
                         "r09Placement" to "submitted:${summary.positionSubmissions},suppressed:${summary.positionSuppressions}",
                         "r10Cold0" to coldWork(summary.coldWork.filter { it.attachment == 0L }.getOrNull(0), 0),

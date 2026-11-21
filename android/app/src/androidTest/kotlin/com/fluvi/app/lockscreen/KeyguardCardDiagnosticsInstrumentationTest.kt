@@ -39,7 +39,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_RETURN", "removed", operation = hide, observedUptimeMs = 151)
         val fact = "backend:ISOLATED,eligible:DISARMED,lease:11/7,draw:121,exit:privacy"
         KeyguardCardDiagnostics.captureEvent(context, "ATTACHMENT_RENDER_SUMMARY", "withdrawal", operation = hide,
-            observedUptimeMs = 152, fields = mapOf("r22Passive" to fact))
+            observedUptimeMs = 152, fields = mapOf("r22Passive" to fact, "isolatedTranslucentSteadySkipped" to 17))
         repeat(250) { index ->
             KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure", diagnosticContext = owner,
                 observedUptimeMs = 200L + index, requestId = 1000L + index)
@@ -49,6 +49,8 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue("missing explicitly named omission metadata", report.contains("omittedPassiveStandbyRecordIds="))
         assertTrue("exact attachment's standby record must survive or name its omission",
             report.contains("r22Passive=$fact") || !report.contains("omittedPassiveStandbyRecordIds=none"))
+        assertTrue("translucent tick count must be retained or its episode explicitly omitted",
+            report.contains("isolatedTranslucentSteadySkipped=17") || !report.contains("omittedPassiveStandbyRecordIds=none"))
     }
 
     @Test fun r22PostClaimQueueEvidenceSurvivesLightPressureAndFreeze() = r22PostClaimQueueEvidence("LIGHT")
@@ -382,6 +384,11 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                     "r22Visited" to (if (isYield) 1 else "UNOBSERVED"), "r22Roots" to 1,
                     "r22Children" to (if (attempt == 1L) 0 else 1),
                     "r22Why" to (if (isYield) "YIELDED" else if (attempt == 6L) "noQualifyingOffer" else "observedDisqualifier"),
+                    "r22AFirstRoot" to "10/ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW/7/7",
+                    "r22AFirstChild" to "1/1/1/0/PRESENT",
+                    "r22AInvalid" to "2/1/1/1/CHILD_ACQUISITION_EXCEPTION/IllegalStateException",
+                    "r22ACheckpoint" to "true/SKIPPED_TRUNCATED/10/1",
+                    "r22ADecisive" to false,
                     "r22Decision" to (if (isYield) "UNOBSERVED" else if (attempt == 7L) "HIDDEN_SHADE" else "SHOW_FULL"),
                     "r22Reason" to (if (attempt == 7L) "SHADE_MARKER" else "UNOBSERVED"),
                 )
@@ -472,6 +479,11 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             for (id in listOf(1L, 6L, 7L, 8L)) {
                 val row = openingRows.single { it.contains("attempt=$id ") }
                 assertTrue(row.contains("opening=${id * 10_000 + 1}/${500 + id}"))
+                assertTrue(row, row.contains("aRoot=10/ACTIVE_ROOT_BATCHED_PLUS_PER_WINDOW/7/7"))
+                assertTrue(row, row.contains("aFirst=1/1/1/0/PRESENT"))
+                assertTrue(row, row.contains("aInvalid=2/1/1/1/CHILD_ACQUISITION_EXCEPTION/IllegalStateException"))
+                assertTrue(row, row.contains("aCheckpoint=true/SKIPPED_TRUNCATED/10/1"))
+                assertTrue(row, row.contains("aDecisive=false"))
                 when (id) {
                     1L -> { assertTrue(row.contains("outcome=YIELDED/YIELDED")); assertTrue(row.contains("counts=1/1/0")); assertTrue(row.contains("claimed=10003@10005")) }
                     6L -> { assertTrue(row.contains("noQualifyingOffer")); assertTrue(row.contains("claimed=UNOBSERVED@")) }

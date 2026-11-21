@@ -168,6 +168,34 @@ class KeyguardR22ReaderHandoffTest {
         assertEquals(listOf(0, 1), Platform.childCalls)
     }
 
+    @Test fun cleanOriginalOffersAtPostMarkerCheckpointAndExportsItsExactBoundary() {
+        tree()
+        val h = Handoff()
+        var checkpointCalls = 0
+        val request = h.request().copy(captureOriginalOpeningEvidence = true,
+            openingEligibleCheckpoint = { window, index ->
+                assertEquals(10, window)
+                assertEquals(1, index)
+                checkpointCalls++
+                h.offerB()
+            })
+        val result = reader.read(request, { true })
+        assertEquals(h.b, result.yieldedTo)
+        assertEquals(1, checkpointCalls)
+        assertEquals(listOf(0), Platform.childCalls)
+        val evidence = requireNotNull(result.timing.originalOpening)
+        assertEquals(10, evidence.rootWindow)
+        assertEquals(1, evidence.firstOrdinal)
+        assertEquals(1, evidence.firstDepth)
+        assertEquals(1, evidence.firstParentOrdinal)
+        assertEquals(0, evidence.firstIndex)
+        assertEquals("PRESENT", evidence.firstResult)
+        assertNull(evidence.invalidKind)
+        assertTrue(evidence.checkpointInstalled)
+        assertEquals("CALLED", evidence.checkpointState)
+        assertFalse(evidence.decisiveMarker)
+    }
+
     @Test fun decisiveExclusionIsConsumedBeforeAnyPossibleYield() {
         tree(first = shadeMarker)
         val h = Handoff()
@@ -199,6 +227,38 @@ class KeyguardR22ReaderHandoffTest {
         assertNull(ambiguous.yieldedTo)
         assertEquals(KeyguardSurface.OCCLUDED, KeyguardSurfaceClassifier.classify(ambiguous.snapshots))
         assertEquals(0, second.claims)
+    }
+
+    @Test fun incompleteOriginalChildCannotYieldOrAuthorizeDespitePendingNewerRequest() {
+        tree()
+        val h = Handoff()
+        Platform.missingChild = true
+        // Offer while the real production reader is acquiring child zero. Its
+        // null return must be consumed before any later eligible checkpoint.
+        Platform.afterChild = { index ->
+            if (index == 0) { Platform.afterChild = null; h.offerB() }
+        }
+        var eligible = 0
+        val request = h.request().copy(captureOriginalOpeningEvidence = true,
+            openingEligibleCheckpoint = { _, _ -> eligible++ })
+        val result = reader.read(request, { true })
+        assertEquals("incomplete walk cannot expose an eligible checkpoint", 0, eligible)
+        val evidence = requireNotNull(result.timing.originalOpening)
+        assertEquals("NULL", evidence.firstResult)
+        assertEquals("NULL_CHILD", evidence.invalidKind)
+        assertEquals(1, evidence.invalidOrdinal)
+        assertEquals(0, evidence.invalidIndex)
+        assertEquals("SKIPPED_TRUNCATED", evidence.checkpointState)
+        assertTrue("a missing advertised edge must remain incomplete", result.walkTruncated)
+        assertTrue(result.timing.walkTruncationReasons.contains("NULL_CHILD"))
+        assertNull("an incomplete original walk cannot claim B", result.yieldedTo)
+        assertEquals(0, h.claims)
+        assertEquals(h.a, h.queue.activeRequest())
+        assertEquals(h.b, h.queue.pendingRequest())
+        assertEquals(KeyguardSurface.UNKNOWN,
+            KeyguardSurfaceClassifier.classifyDetailed(result.snapshots,
+                unavailableRoot = result.rootUnavailable, walkTruncated = result.walkTruncated).surface)
+        assertEquals(listOf(0, 1), Platform.childCalls)
     }
 
     @Test fun missingChildCannotProduceACompletePositive() {

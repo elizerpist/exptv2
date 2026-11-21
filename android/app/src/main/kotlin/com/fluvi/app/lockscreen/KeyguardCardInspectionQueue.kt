@@ -96,6 +96,7 @@ internal interface KeyguardInspectionProbeForTest {
     fun openingReserved(request: KeyguardCardInspectionRequest, reservationId: Long, armed: Boolean) {}
     fun openingChildBefore(request: KeyguardCardInspectionRequest, windowId: Int, index: Int) {}
     fun openingChildReturned(request: KeyguardCardInspectionRequest, windowId: Int, index: Int, present: Boolean) {}
+    fun openingEligibleCheckpoint(request: KeyguardCardInspectionRequest, windowId: Int, nextIndex: Int) {}
     fun postClaimObserved(snapshot: KeyguardOpeningInspectionHandoff.PostClaimSnapshot) {}
     fun yielded(request: KeyguardCardInspectionRequest, successor: KeyguardCardInspectionRequest,
         startedAt: Long, finishedAt: Long, visited: Int) {}

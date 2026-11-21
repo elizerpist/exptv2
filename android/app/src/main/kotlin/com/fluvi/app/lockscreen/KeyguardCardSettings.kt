@@ -939,7 +939,7 @@ internal object KeyguardCardDiagnostics {
         "pendingRequestId", "pendingRequestIdAtApply", "visibilityEpochBefore", "visibilityEpochAfter",
     )
     private val RENDER_SUMMARY_KEYS = setOf(
-        "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped",
+        "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped", "isolatedTranslucentSteadySkipped",
         "isolatedCompletionGapMaxMs",
         "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit", "r22Passive",
         "r09Placement", "r09FirstWork", "r09FirstFrames",
@@ -1112,7 +1112,8 @@ internal object KeyguardCardDiagnostics {
         when (event.reason) {
             "A_FINISHED", "A_STALE", "YIELDED" -> {
                 values["aOutcome"] = event.reason
-                listOf("r22Decision", "r22Reason", "r22Incomplete").forEach { key ->
+                listOf("r22Decision", "r22Reason", "r22Incomplete", "r22AFirstRoot", "r22AFirstChild",
+                    "r22AInvalid", "r22ACheckpoint", "r22ADecisive").forEach { key ->
                     event.fields[key]?.takeIf { it != "UNOBSERVED" }?.let { values["a:$key"] = it }
                 }
             }
@@ -2719,6 +2720,7 @@ internal object KeyguardCardDiagnostics {
                     (token == null || (reservation != null && token == reservation)))
         }
         fun v(key: String) = values[key]?.take(48) ?: "UNOBSERVED"
+        fun e(key: String) = values[key]?.take(120) ?: "UNOBSERVED"
         fun d(key: String) = direct?.values?.get(key)?.take(48) ?: "UNOBSERVED"
         append(" R22_CORE v=1 attempt=${attempt.id} session=${attempt.serviceSession} wake=${attempt.wakeEpoch} wakeAt=${attempt.startedUptimeMs}")
         append(" opening=${v("r22Opening")}/${v("r22Reservation")} aStartScene=${v("r22AStart")}/${v("r22Scene")}")
@@ -2728,6 +2730,8 @@ internal object KeyguardCardDiagnostics {
         append(" replaced=${v("r22Replaced")}/${v("r22Replacement")}")
         append(" checkpoint=${v("r22Checkpoint")}@${v("r22CheckpointAt")} counts=${v("r22Visited")}/${v("r22Roots")}/${v("r22Children")}")
         append(" outcome=${v("aOutcome")}/${v("r22Why")} aEnd=${v("r22AEnd")} aResult=${v("a:r22Decision")}/${v("a:r22Reason")}/${v("a:r22Incomplete")}")
+        append(" aRoot=${e("a:r22AFirstRoot")} aFirst=${e("a:r22AFirstChild")} aInvalid=${e("a:r22AInvalid")}")
+        append(" aCheckpoint=${e("a:r22ACheckpoint")} aDecisive=${e("a:r22ADecisive")}")
         append(" claimed=${v("r22Claimed")}@${v("r22ClaimAt")} b=${v("b:r22BStart")}/${v("b:r22BEnd")}/${v("b:r22Decision")}/${v("b:r22Reason")}/${v("b:r22Incomplete")}")
         append(" positive=${v("positiveRequest")}@${v("positiveAt")}/${v("positiveRejection")} consumed=${d("r19ConsumedRequest")} hostReady=${d("HOST_READY")}/${d("HIDDEN_BOUND")}")
         append(" wait=${v("firstWait")}@${v("firstWaitAt")}/${v("lastWait")}@${v("lastWaitAt")}")
@@ -2841,7 +2845,7 @@ internal object KeyguardCardDiagnostics {
     }
 
     private val compactRenderKeys = setOf(
-        "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped",
+        "clockCallbacks", "isolatedFramesProduced", "isolatedFramesPublished", "isolatedFramesDropped", "isolatedTranslucentSteadySkipped",
         "isolatedCompletionGapMaxMs", "isolatedFirstIdentity", "isolatedFirstReady", "isolatedFirstCommit", "r22Passive",
         "r09FirstWork", "r09FirstFrames", "r08Route", "r08Origin",
         "shaderFrames", "shaderCalls", "phaseAdvances", "drawGapCount", "drawGapTotalMs", "drawGapMaxMs",

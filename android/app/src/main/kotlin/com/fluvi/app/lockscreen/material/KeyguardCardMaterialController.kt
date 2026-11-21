@@ -123,6 +123,7 @@ internal class KeyguardCardMaterialController(
     private var attachmentIsolatedProducedStart = 0
     private var attachmentIsolatedPublishedStart = 0
     private var attachmentIsolatedDroppedStart = 0
+    private var attachmentTranslucentSkippedStart = 0L
     private var attachmentPositionSubmittedStart = 0
     private var attachmentPositionSuppressedStart = 0
     private var profile: KeyguardMaterialProfile? = null
@@ -662,6 +663,7 @@ internal class KeyguardCardMaterialController(
             attachmentIsolatedProducedStart = buffer?.framesProduced ?: 0
             attachmentIsolatedPublishedStart = buffer?.framesPublished ?: 0
             attachmentIsolatedDroppedStart = buffer?.framesDropped ?: 0
+            attachmentTranslucentSkippedStart = buffer?.translucentSteadySkipped ?: 0L
             attachmentPositionSubmittedStart = buffer?.positionSubmissions ?: 0
             attachmentPositionSuppressedStart = buffer?.positionSuppressions ?: 0
             currentFirstPublication = null
@@ -805,6 +807,8 @@ internal class KeyguardCardMaterialController(
         isolatedFramesPublished = (buffer?.framesPublished ?: 0) - attachmentIsolatedPublishedStart,
         isolatedFramesDropped = (buffer?.framesDropped ?: 0) - attachmentIsolatedDroppedStart,
         isolatedCompletionGapMaxMs = buffer?.completionGapMaxMs ?: 0L,
+        isolatedTranslucentSteadySkipped = ((withdrawalWorkerSnapshot ?: buffer)?.translucentSteadySkipped
+            ?: 0L).minus(attachmentTranslucentSkippedStart).coerceAtLeast(0L),
         positionSubmissions = buffer?.let { it.positionSubmissions - attachmentPositionSubmittedStart } ?: 0,
         positionSuppressions = buffer?.let { it.positionSuppressions - attachmentPositionSuppressedStart } ?: 0,
         firstWork = (withdrawalWorkerSnapshot ?: buffer)?.firstWork?.takeIf {
@@ -1669,6 +1673,7 @@ internal data class KeyguardAttachmentRenderSummary(
     val passiveStandby: KeyguardPassiveStandbySummary? = null,
     val worker: KeyguardOrbBufferRendererSnapshot? = null,
     val observedAt: Long = 0L,
+    val isolatedTranslucentSteadySkipped: Long = 0L,
 )
 
 internal data class KeyguardMaterialDiagnostics(

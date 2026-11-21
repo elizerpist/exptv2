@@ -77,6 +77,8 @@ internal class KeyguardR22FirstInspectionFixture {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val firstChildHeld = AtomicBoolean(false)
+        val firstChildObserved = AtomicBoolean(false)
+        val independentWindowId = AtomicLong(-1L)
         val entryTimedOut = AtomicBoolean(false)
         val childTimedOut = AtomicBoolean(false)
         val bEntryTimedOut = AtomicBoolean(false)
@@ -96,6 +98,11 @@ internal class KeyguardR22FirstInspectionFixture {
         var calibration: KeyguardR22VisualCalibration? = null
         var visualIdentity: KeyguardR22VisualIdentityForTest? = null
         var visualUnderlay: android.graphics.Bitmap? = null
+        var visualUnderlayFull: android.graphics.Bitmap? = null
+        var underlayBefore = 0L
+        var underlayAfter = 0L
+        var underlayBounds: android.graphics.Rect? = null
+        val inventorySamples = mutableListOf<String>()
         var visualCalibration = "NOT_REACHED"
         val b = AtomicLong(0L)
         val injectedAt = AtomicLong(0L)
@@ -215,11 +222,27 @@ internal class KeyguardR22FirstInspectionFixture {
                         }
                     }
                     override fun openingChildReturned(request: KeyguardCardInspectionRequest, windowId: Int, index: Int, present: Boolean) {
-                        if (present && request == a.get() && firstChildHeld.compareAndSet(false, true)) {
+                        if (present && request == a.get() && firstChildObserved.compareAndSet(false, true)) {
                             records.add("A_FIRST_CHILD_RETURN id=${request.id} wake=${request.wakeGeneration} window=$windowId index=$index at=${SystemClock.uptimeMillis()}")
+                            // Preserve the historical non-suppressing handle
+                            // witness; controlled cases use the later eligible checkpoint.
+                            if (scenario == "automation") {
+                                firstChildHeld.set(true)
+                                entered.countDown()
+                                if (!release.await(20, TimeUnit.SECONDS)) {
+                                    childTimedOut.set(true); records.add("A_CHILD_TIMEOUT")
+                                }
+                            }
+                        }
+                    }
+                    override fun openingEligibleCheckpoint(request: KeyguardCardInspectionRequest, windowId: Int, nextIndex: Int) {
+                        if (scenario in setOf("positive", "negative", "stable") && request == a.get() &&
+                            firstChildObserved.get() && windowId.toLong() == independentWindowId.get() &&
+                            firstChildHeld.compareAndSet(false, true)) {
+                            records.add("A_ELIGIBLE_CHECKPOINT id=${request.id} window=$windowId next=$nextIndex at=${SystemClock.uptimeMillis()}")
                             entered.countDown()
-                            if (scenario != "natural" && !release.await(20, TimeUnit.SECONDS)) {
-                                childTimedOut.set(true); records.add("A_CHILD_TIMEOUT")
+                            if (!release.await(20, TimeUnit.SECONDS)) {
+                                childTimedOut.set(true); records.add("A_CHECKPOINT_TIMEOUT")
                             }
                         }
                     }
@@ -349,12 +372,14 @@ internal class KeyguardR22FirstInspectionFixture {
             assertTrue("NOT REACHED: the exact reserved opening did not enter its physical read", entryStarted.await(20, TimeUnit.SECONDS))
             val original = checkNotNull(a.get())
             var independent = ""
-            await("NOT REACHED: independent locked SystemUI MAIN window", 8_000) {
-                independent = independentOpeningScene(service)
+            await("NOT REACHED: independently complete locked SystemUI tree", 8_000) {
+                independent = independentOpeningScene(service, requireComplete = true)
+                inventorySamples += "at=${SystemClock.uptimeMillis()} $independent"
                 independent.startsWith("VALID ")
             }
             records.add("INDEPENDENT_BEFORE_READ $independent")
-            File(dir, "independent-window-inventory.txt").writeText(independent + "\n")
+            val windowId = Regex("activeSystemUi=([0-9]+)").find(independent)?.groupValues?.get(1)?.toLongOrNull()
+            independentWindowId.set(checkNotNull(windowId) { "independent active SystemUI identity missing" })
             await("NOT REACHED: original owner host/output geometry", 8_000) {
                 instrumentation.runOnMainSync { visualIdentity = service.r22VisualIdentityForTest() }
                 visualIdentity?.let { it.reservationId == reservation.get() &&
@@ -362,11 +387,26 @@ internal class KeyguardR22FirstInspectionFixture {
             }
             assertFalse("NOT REACHED: original A entry barrier expired", entryTimedOut.get())
             val identity = checkNotNull(visualIdentity)
-            visualUnderlay = checkNotNull(calibration).captureCrop("service-underlay-before-A", identity.bounds)
-            records.add("VISUAL_OWNER_BEFORE_READ $identity")
+            // Acquire immutable geometry and pixels before A proceeds, but do
+            // not encode PNGs or write files while its real reader is held.
+            underlayBounds = android.graphics.Rect(identity.bounds)
+            underlayBefore = SystemClock.uptimeMillis()
+            visualUnderlayFull = checkNotNull(automation.takeScreenshot())
+            underlayAfter = SystemClock.uptimeMillis()
+            val screen = checkNotNull(visualUnderlayFull)
+            val bounds = checkNotNull(underlayBounds)
+            check(bounds.left >= 0 && bounds.top >= 0 && bounds.right <= screen.width && bounds.bottom <= screen.height)
+            visualUnderlay = android.graphics.Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
+            records.add("VISUAL_OWNER_BEFORE_READ $identity acquisition=$underlayBefore/$underlayAfter")
             stableReading.set(scenario == "stable")
+            if (scenario == "stable") {
+                var pendingBefore: KeyguardCardInspectionRequest? = null
+                instrumentation.runOnMainSync { pendingBefore = service.inspectionStateForTest().pending }
+                records.add("STABLE_BEFORE_RELEASE pending=${pendingBefore?.id} origin=${pendingBefore?.r14Ingress?.origin ?: "NONE"}")
+                assertNull("NOT REACHED: stable preparation has an existing pending request", pendingBefore)
+            }
             releaseEntry.countDown()
-            assertTrue("NOT REACHED: original opening did not return a real child", entered.await(20, TimeUnit.SECONDS))
+            assertTrue("NOT REACHED: original opening reached no clean eligible post-marker checkpoint", entered.await(20, TimeUnit.SECONDS))
             assertFalse("NOT REACHED: original A child barrier expired", childTimedOut.get())
             if (scenario == "stable") {
                 var pending: KeyguardCardInspectionRequest? = null
@@ -528,6 +568,26 @@ internal class KeyguardR22FirstInspectionFixture {
             releaseEntry.countDown()
             release.countDown()
             releaseB.countDown()
+            // The held reader has been released before any PNG encoding or
+            // inventory write. Keep even failed precondition samples.
+            runCatching {
+                if (inventorySamples.isNotEmpty()) File(dir, "independent-window-inventory.txt")
+                    .writeText(inventorySamples.joinToString("\n", postfix = "\n"))
+                visualUnderlayFull?.let { image ->
+                    File(dir, "service-underlay-before-A-full.png").outputStream().use {
+                        image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                }
+                visualUnderlay?.let { image ->
+                    File(dir, "service-underlay-before-A.png").outputStream().use {
+                        image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                    File(dir, "service-underlay-before-A-time.txt").writeText(
+                        "before=$underlayBefore after=$underlayAfter bounds=$underlayBounds\n")
+                }
+            }.onFailure { errors += "underlayEvidence:${it.javaClass.simpleName}:${it.message}" }
+            visualUnderlayFull?.recycle()
+            visualUnderlay?.recycle()
             if (scenario == "negative") runCatching { shell("cmd statusbar collapse") }
             KeyguardR15AcquisitionTestHooks.afterReturnedChild = null
             KeyguardR15AcquisitionTestHooks.beforeChildCall = null
@@ -567,12 +627,14 @@ internal class KeyguardR22FirstInspectionFixture {
 
     /** Independent test observer. Its facts never enter the production reader
      * or any grant; extra unresolved/foreign windows disqualify the specimen. */
-    private fun independentOpeningScene(service: FluviKeyguardCardService): String {
+    private fun independentOpeningScene(service: FluviKeyguardCardService, requireComplete: Boolean = false): String {
         val windows = runCatching { automation.windows }.getOrElse { return "INVALID windows=${it.javaClass.simpleName}" }
         val own = service.knownOwnOverlayIdentityForTest()
         var mainId: Int? = null
         var unresolved = 0
         var nonOwnDefaultWindows = 0
+        var activeTree = "UNOBSERVED"
+        var activeTreeComplete = false
         val rows = mutableListOf<String>()
         windows.forEach { window ->
             val root = runCatching { window.root }.getOrNull()
@@ -596,12 +658,56 @@ internal class KeyguardR22FirstInspectionFixture {
                     matches.forEach { it.recycle() }
                     count
                 }
-                if (window.displayId == Display.DEFAULT_DISPLAY && window.isActive && pkg == "com.android.systemui" && markers > 0) mainId = window.id
+                if (window.displayId == Display.DEFAULT_DISPLAY && window.isActive && pkg == "com.android.systemui" && markers > 0) {
+                    mainId = window.id
+                    if (requireComplete && root != null) {
+                        val result = independentlyWalkActiveTree(root)
+                        activeTreeComplete = result.first
+                        activeTree = result.second
+                    }
+                }
                 rows += "id=${window.id}/type=${window.type}/display=${window.displayId}/active=${window.isActive}/layer=${window.layer}/category=$category/mainMarkers=$markers"
             } finally { root?.recycle() }
         }
-        val prefix = if (mainId != null && unresolved == 0 && nonOwnDefaultWindows == 1) "VALID" else "INVALID"
-        return "$prefix activeSystemUi=$mainId unresolved=$unresolved nonOwnDefault=$nonOwnDefaultWindows own=$own windows=${rows.joinToString(";")}"
+        val prefix = if (mainId != null && unresolved == 0 && nonOwnDefaultWindows == 1 &&
+            (!requireComplete || activeTreeComplete)) "VALID" else "INVALID"
+        return "$prefix activeSystemUi=$mainId unresolved=$unresolved nonOwnDefault=$nonOwnDefaultWindows " +
+            "own=$own independentTree=$activeTree windows=${rows.joinToString(";")}"
+    }
+
+    /** Independent bounded walk: its result is a test precondition, never a
+     * production authorization. Null, exception, depth or node limits fail it. */
+    private fun independentlyWalkActiveTree(root: android.view.accessibility.AccessibilityNodeInfo): Pair<Boolean, String> {
+        var visited = 0
+        var nonLeaf = 0
+        var firstChild = "UNOBSERVED"
+        var failure: String? = null
+        fun walk(node: android.view.accessibility.AccessibilityNodeInfo, depth: Int) {
+            if (failure != null) return
+            if (depth > 48 || visited >= 512) { failure = "LIMIT depth=$depth visited=$visited"; return }
+            visited++
+            try {
+                if (!node.isVisibleToUser) return
+                val count = node.childCount
+                if (count > 0) nonLeaf++
+                for (index in 0 until count) {
+                    val child = try { node.getChild(index) } catch (error: Exception) {
+                        if (depth == 0 && index == 0) firstChild = "EXCEPTION:${error.javaClass.simpleName}"
+                        failure = "CHILD_EXCEPTION depth=$depth index=$index class=${error.javaClass.simpleName}"
+                        return
+                    }
+                    if (depth == 0 && index == 0) firstChild = if (child == null) "NULL" else "PRESENT"
+                    if (child == null) { failure = "NULL_CHILD depth=$depth index=$index"; return }
+                    try { walk(child, depth + 1) } finally { child.recycle() }
+                    if (failure != null) return
+                }
+            } catch (error: Exception) {
+                failure = "NODE_EXCEPTION depth=$depth class=${error.javaClass.simpleName}"
+            }
+        }
+        walk(root, 0)
+        val complete = failure == null && firstChild == "PRESENT" && nonLeaf > 0
+        return complete to "strategy=independentWindowRoot/legacyChild,visited=$visited,nonLeaf=$nonLeaf,child0=$firstChild,failure=${failure ?: "none"}"
     }
 
     private fun independentVisibleMarkerWindow(id: String): Int? {
