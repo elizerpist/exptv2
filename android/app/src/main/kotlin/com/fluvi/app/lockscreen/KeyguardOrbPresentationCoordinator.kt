@@ -28,6 +28,9 @@ internal data class KeyguardOrbPresentationStamp(
 internal class KeyguardOrbPresentationCoordinator(private val lock: Any = Any()) {
     enum class Host { NONE, INERT, READY, INPUT_ARMED, REMOVAL_PENDING, REMOVED }
     enum class Grant { NONE, PENDING, REVEAL_QUEUED, PRESENTED, REVOKED, RETIRED }
+    enum class SubmitPhase { NONE, PRE_CROSS, CROSSED, APPLIED, CANCELLED, ACKNOWLEDGED }
+    enum class IngressAction { IGNORE, CANCEL_PENDING, KEEP_SUBMITTED }
+    data class IngressDecision(val action: IngressAction, val phase: SubmitPhase, val ordinal: Long)
     class Reservation internal constructor(val id: Long, val stamp: KeyguardOrbPresentationStamp,
         val sampleId: Long, val sampleAuthority: KeyguardInspectionAuthority)
     class Reveal internal constructor(val reservation: Reservation, val proofRequestId: Long,
@@ -49,6 +52,8 @@ internal class KeyguardOrbPresentationCoordinator(private val lock: Any = Any())
         var proofRequestId: Long? = null
         var revealSequence = 0L
         var crossedSubmitBoundary = false
+        var submitPhase = SubmitPhase.NONE
+        var transitionOrdinal = 0L
     }
     private class OutputSlot(val reservation: Reservation, val output: Any) { var retired = false }
     private val slots = arrayOfNulls<OutputSlot>(2)
@@ -218,6 +223,8 @@ internal class KeyguardOrbPresentationCoordinator(private val lock: Any = Any())
         if (entry.reservation != token || !entry.adopted || !entry.imageReady ||
             entry.hostState != Host.INPUT_ARMED || entry.grantState != Grant.PENDING) return@synchronized null
         entry.grantState = Grant.REVEAL_QUEUED
+        entry.submitPhase = SubmitPhase.PRE_CROSS
+        entry.transitionOrdinal += 1
         Reveal(token, proof, entry.activeAuthority, output, host, ++entry.revealSequence)
     }
 
@@ -252,18 +259,66 @@ internal class KeyguardOrbPresentationCoordinator(private val lock: Any = Any())
         val entry = current ?: return@synchronized false
         if (entry.reservation != reveal.reservation || entry.output !== reveal.output || entry.host !== reveal.host ||
             entry.proofRequestId != reveal.proofRequestId || entry.activeAuthority != reveal.authority ||
-            entry.revealSequence != reveal.sequence || entry.grantState != Grant.REVEAL_QUEUED || entry.hostState != Host.INPUT_ARMED || entry.crossedSubmitBoundary
+            entry.revealSequence != reveal.sequence || entry.grantState != Grant.REVEAL_QUEUED || entry.hostState != Host.INPUT_ARMED || entry.submitPhase != SubmitPhase.PRE_CROSS || entry.crossedSubmitBoundary
         ) return@synchronized false
         entry.crossedSubmitBoundary = true
+        entry.submitPhase = SubmitPhase.CROSSED
+        entry.transitionOrdinal += 1
         true
+    }
+
+    /** The compositor calls this only after its captured native apply returns.
+     * A concurrently cancelled permit remains cancelled even if Android did
+     * submit pixels. The return value is this owner's transition ordinal. */
+    fun markNativeApplyReturned(reveal: Reveal): Long? = synchronized(lock) {
+        val entry = current ?: return@synchronized null
+        if (entry.reservation !== reveal.reservation || entry.output !== reveal.output || entry.host !== reveal.host ||
+            entry.proofRequestId != reveal.proofRequestId || entry.revealSequence != reveal.sequence ||
+            entry.grantState != Grant.REVEAL_QUEUED || entry.hostState != Host.INPUT_ARMED ||
+            entry.submitPhase != SubmitPhase.CROSSED) return@synchronized null
+        entry.submitPhase = SubmitPhase.APPLIED
+        ++entry.transitionOrdinal
+    }
+
+    /** Proof expiration and this scalar decision may be called under the same
+     * shared queue lock. The caller does all inspection and cleanup outside it. */
+    fun arbitrateIngress(token: Reservation, host: Any?, output: Any?, retainApplied: Boolean): IngressDecision = synchronized(lock) {
+        val entry = current
+        if (entry == null || entry.reservation !== token || host == null || output == null ||
+            entry.host !== host || entry.output !== output || entry.hostState != Host.INPUT_ARMED ||
+            (entry.grantState != Grant.PENDING && entry.grantState != Grant.REVEAL_QUEUED))
+            return@synchronized IngressDecision(IngressAction.IGNORE, entry?.submitPhase ?: SubmitPhase.NONE, 0L)
+        val phase = entry.submitPhase
+        entry.transitionOrdinal += 1
+        if (phase == SubmitPhase.APPLIED && retainApplied)
+            return@synchronized IngressDecision(IngressAction.KEEP_SUBMITTED, phase, entry.transitionOrdinal)
+        entry.submitPhase = SubmitPhase.CANCELLED
+        IngressDecision(IngressAction.CANCEL_PENDING, phase, entry.transitionOrdinal)
+    }
+
+    fun revealOrdinal(reveal: Reveal): Long? = synchronized(lock) {
+        val entry = current ?: return@synchronized null
+        if (entry.reservation !== reveal.reservation || entry.host !== reveal.host || entry.output !== reveal.output ||
+            entry.revealSequence != reveal.sequence || entry.proofRequestId != reveal.proofRequestId) null
+        else entry.transitionOrdinal
+    }
+
+    fun isAppliedPending(token: Reservation, host: Any?, output: Any?): Boolean = synchronized(lock) {
+        val entry = current
+        entry != null && entry.reservation === token && host != null && output != null &&
+            entry.host === host && entry.output === output && entry.hostState == Host.INPUT_ARMED &&
+            entry.grantState == Grant.REVEAL_QUEUED && entry.submitPhase == SubmitPhase.APPLIED
     }
 
     fun revealSubmitted(reveal: Reveal): Boolean = synchronized(lock) {
         val entry = current ?: return@synchronized false
         if (entry.reservation != reveal.reservation || entry.output !== reveal.output || entry.host !== reveal.host ||
-            entry.revealSequence != reveal.sequence || !entry.crossedSubmitBoundary || entry.grantState != Grant.REVEAL_QUEUED
+            entry.revealSequence != reveal.sequence || entry.proofRequestId != reveal.proofRequestId ||
+            entry.submitPhase != SubmitPhase.APPLIED || entry.grantState != Grant.REVEAL_QUEUED
         ) return@synchronized false
         entry.grantState = Grant.PRESENTED
+        entry.submitPhase = SubmitPhase.ACKNOWLEDGED
+        entry.transitionOrdinal += 1
         true
     }
 
@@ -277,6 +332,8 @@ internal class KeyguardOrbPresentationCoordinator(private val lock: Any = Any())
             requestId < (entry.proofRequestId ?: token.stamp.firstRequestId) ||
             entry.grantState == Grant.REVOKED || entry.grantState == Grant.RETIRED) return@synchronized null
         entry.grantState = Grant.REVOKED
+        entry.submitPhase = SubmitPhase.CANCELLED
+        entry.transitionOrdinal += 1
         entry.hostState = if (entry.host == null) Host.REMOVED else Host.REMOVAL_PENDING
         slots.firstOrNull { it?.reservation == token && it.output === entry.output }?.retired = true
         Withdrawal(token, entry.output, entry.host, entry.crossedSubmitBoundary)
@@ -304,6 +361,8 @@ internal class KeyguardOrbPresentationCoordinator(private val lock: Any = Any())
         if (entry.reservation != token || entry.grantState != Grant.REVOKED || entry.hostState != Host.REMOVED)
             return@synchronized false
         entry.grantState = Grant.RETIRED
+        entry.submitPhase = SubmitPhase.NONE
+        entry.transitionOrdinal += 1
         true
     }
 

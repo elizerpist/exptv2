@@ -1022,6 +1022,28 @@ internal object KeyguardCardDiagnostics {
                 "r20LockBeginNs", "r20LockReturnNs", "r20DrawEndNs", "r20PostReturnNs", "r20Failure")
                 .forEach { retainField(it) }
         }
+        if (event.reason.startsWith("R21_")) {
+            listOf("r21Reservation", "r21Reveal", "r21Proof").forEach { retainField(it) }
+            val kind = event.reason.removePrefix("R21_")
+            if (kind in setOf("CROSS", "NATIVE_APPLY", "INGRESS", "ACK", "SEAL", "FALLBACK")) {
+                val ordinalKey = "r21${kind}:r21Ordinal"
+                val incoming = event.fields["r21Ordinal"]?.toLongOrNull()
+                val existing = timeline.values[ordinalKey]?.toLongOrNull()
+                // Consumer arrival is not native order. An earlier scalar
+                // transition may arrive later, including at the same uptime.
+                if (!timeline.values.containsKey("r21${kind}At") ||
+                    (incoming != null && (existing == null || incoming < existing))) {
+                    timeline.values["r21${kind}At"] = event.uptimeMs.toString()
+                    listOf("r21Ordinal", "r21SubmitPhase", "r21Result", "r21Source", "r21EventType",
+                        "r21WindowChanges", "r21Display", "r21Window", "r21Own", "r21EventAt", "r21CallbackAt", "r21Offered")
+                        .forEach { field ->
+                            val key = "r21${kind}:$field"
+                            val observed = event.fields[field]?.takeIf { it != "UNOBSERVED" }
+                            if (observed == null) timeline.values.remove(key) else timeline.values[key] = observed
+                        }
+                }
+            }
+        }
         if (event.reason == "R19_PROOF_CONSUMED") {
             retainField("r19SceneNow", "r19SceneConsume")
             timeline.values.putIfAbsent("r19ConsumedRequest", event.requestId?.toString() ?: "UNOBSERVED")
@@ -2201,6 +2223,10 @@ internal object KeyguardCardDiagnostics {
             bytes += size
             return true
         }
+        // A short direct/withdrawal core for every selected ORB wake is
+        // admitted before potentially lengthy episode and financial records.
+        attemptsForCausalEvidence.filter { it.presentationMode == "ORB" || it.r18Generations.isNotEmpty() }
+            .forEach { attempt -> select("a${attempt.id}:r21Core", r21CoreRecord(attempt), attempt.id) }
         // Reserve a readable, owner-qualified core for every selected show
         // and hide before optional long renderer histories can consume space.
         // Round-robin across attempts keeps a busy wake from starving others.
@@ -2476,6 +2502,48 @@ internal object KeyguardCardDiagnostics {
         val sized = withExportBytes(report)
         check(sized.toByteArray(Charsets.UTF_8).size <= exportLimitBytes)
         return sized
+    }
+
+    /** One bounded row per selected ORB wake; no relation is inferred from
+     * close times. Show/withdrawal joins use their exact attachment identity. */
+    private fun r21CoreRecord(attempt: TimingAttempt): String = buildString {
+        val direct = attempt.r18Generations.values.firstOrNull()
+        fun value(key: String): String = direct?.values?.get(key)?.take(48) ?: "UNOBSERVED"
+        fun v(value: Any?): String = value?.toString()?.take(48) ?: "UNOBSERVED"
+        val initial = if (direct == null) attempt.shows.firstOrNull() else
+            direct.attachment?.let { attachment -> attempt.shows.firstOrNull { it.attachGeneration == attachment } }
+        val initialHide = initial?.let { actualWithdrawal(attempt, it) }
+        // This is the next recorded show, not an inferred causal successor.
+        val following = initial?.let { first -> attempt.shows.dropWhile { it.operationId != first.operationId }.drop(1).firstOrNull() }
+        val finalHide = attempt.hides.lastOrNull { it.attachedBefore == true }
+        val terminal = attempt.hides.lastOrNull { it.attachedBefore == false }
+        val ingressRequest = value("r21INGRESS:r21Offered").toLongOrNull()
+        val ingressRead = ingressRequest?.let(attempt.inspections::get)
+        val firstRead = attempt.firstPhysicalRequestId?.let(attempt.inspections::get)
+        val directMotion = (direct?.r19MetricSnapshot ?: direct?.r19Metrics?.snapshot())?.takeIf { it.coherent }
+        val winner = following ?: initial
+        val holderMotion = (winner?.r12MetricSnapshot ?: winner?.r12Metrics?.snapshot())?.takeIf { it.coherent }
+        val finalLayer = (finalHide?.r15MetricSnapshot ?: finalHide?.r15Metrics?.snapshot())
+            ?.takeIf { it.coherent }?.ownedLayer
+        val retired = direct?.values
+        append(" R21_CORE v=1 attempt=${attempt.id} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
+        append(" direct=${v(direct?.attachment)}/${v(direct?.host)}/${v(direct?.output)}/${v(direct?.child)}")
+        append(" reservation=${value("r21Reservation")} reservedReq=${value("r19ReservedRequest")} consumedReq=${value("r19ConsumedRequest")} proof=${value("r21Proof")} reveal=${value("r21Reveal")}")
+        append(" cross=${value("r21CROSSAt")}/${value("r21CROSS:r21Ordinal")} apply=${value("r21NATIVE_APPLYAt")}/${value("r21NATIVE_APPLY:r21Ordinal")}/${value("r21NATIVE_APPLY:r21Result")}")
+        append(" ingress=${value("r21INGRESSAt")}/${value("r21INGRESS:r21Ordinal")}/${value("r21INGRESS:r21SubmitPhase")}/${value("r21INGRESS:r21Result")}")
+        append(" event=${value("r21INGRESS:r21Source")}/${value("r21INGRESS:r21EventType")}/${value("r21INGRESS:r21WindowChanges")}/${value("r21INGRESS:r21Display")}/${value("r21INGRESS:r21Own")}@${value("r21INGRESS:r21EventAt")}/${value("r21INGRESS:r21CallbackAt")}")
+        append(" firstRead=${v(attempt.firstPhysicalRequestId)}/${v(attempt.firstPhysicalStartedAtUptimeMs)}/${v(firstRead?.finishedAtUptimeMs)}/${v(firstRead?.surfaceClassification)}/${v(firstRead?.surfaceReason)}/${v(firstRead?.activeRootTotalMs)}")
+        append(" offered=${value("r21INGRESS:r21Offered")} read=${v(ingressRead?.startedAtUptimeMs)}/${v(ingressRead?.finishedAtUptimeMs)}/${v(ingressRead?.surfaceClassification)}/${v(ingressRead?.surfaceReason)}")
+        append(" ack=${value("r21ACKAt")}/${value("r21ACK:r21Ordinal")} seal=${value("r21SEALAt")}/${value("r21SEAL:r21Ordinal")}/${value("r21SEAL:r21Result")}/${value("r21SEAL:r21Offered")} fallback=${value("r21FALLBACKAt")}/${value("r21FALLBACK:r21Result")}")
+        append(" first=${value("r20Ticket")}/${value("r20Method")}/${value("BUFFER_READY")}/${v(directMotion?.firstDistinctUptimeMs)}/${v(directMotion?.activeSubmissions)} firstPostNs=${value("r20PostReturnNs")}")
+        append(" firstShow=${v(initial?.operationId)}/${v(initial?.attachGeneration)}/${v(initial?.requestId)}/${v(initial?.decisionAtUptimeMs)} firstHide=${v(initialHide?.operationId)}/${v(initialHide?.localHideAppliedAtUptimeMs)}")
+        append(" following=${v(following?.operationId)}/${v(following?.attachGeneration)}/${v(following?.requestId)}/${v(following?.decisionAtUptimeMs)}")
+        append(" followingRelation=${if (following?.requestId != null && following.requestId == ingressRequest) "EXACT_OFFER" else "UNOBSERVED"}")
+        append(" winner=${v(winner?.r12Evidence?.get("route") ?: if (following == null && direct != null) "R18_DIRECT_ATTEMPT" else null)}/${v(winner?.r12Evidence?.get("firstPost"))}/${v(holderMotion?.firstDistinctUptimeMs)}")
+        append(" finalHide=${v(finalHide?.operationId)}/${v(finalHide?.attachGeneration)}/${v(finalHide?.requestId)} eventCallback=${v(finalHide?.cause?.eventTimeUptimeMs)}/${v(finalHide?.triggerReceivedAtUptimeMs)}")
+        append(" readEndMain=${v(finalHide?.cause?.finishedAtUptimeMs)}/${v(finalHide?.cause?.mainApplyStartedAtUptimeMs)} localRemove=${v(finalHide?.localHideAppliedAtUptimeMs)}/${v(finalHide?.removeReturnAtUptimeMs)}")
+        append(" retire=${v(retired?.get("retire:r18ApplyBegin"))}/${v(retired?.get("retire:r18ApplyEnd"))} finalLayer=${v(finalLayer?.hostId)}/${v(finalLayer?.childId)}/${v(finalLayer?.retireBegin)}/${v(finalLayer?.retireEnd)} terminalNoop=${v(terminal?.operationId)}")
+        appendLine(" omitted=${attempt.r18GenerationOmitted}/${attempt.omittedShowEpisodes}/${attempt.omittedHideEpisodes} clock=uptimeMs physical=UNOBSERVED")
     }
 
     private fun firstDrawEpisode(attempt: TimingAttempt, time: (ShowEpisode) -> Long?): ShowEpisode? =

@@ -138,27 +138,32 @@ internal class KeyguardOrbPresentationLane(
 
     /** This operation is never submitted by a worker frame callback. */
     fun reveal(output: KeyguardOrbDirectOutput,
-               crossGrantBoundary: () -> Boolean, completed: (Boolean) -> Unit) {
+               crossGrantBoundary: () -> Boolean, nativeApplied: () -> Boolean, completed: (Boolean) -> Unit) {
         val accepted = handler.post {
+            if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross?.invoke(output)
             if (output.isSealed() || !output.child.isValid || !runCatching { crossGrantBoundary() }.getOrDefault(false)) {
                 runCatching { completed(false) }
                 return@post
             }
             val begin = SystemClock.uptimeMillis()
             var applied = false
+            var acceptedApply = false
             try {
+                if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross?.invoke(output)
                 val transaction = SurfaceControl.Transaction()
                 try {
                     transaction.setVisibility(output.child, true)
                     attachReceipt(transaction, output, "REVEAL", begin)
+                    if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) KeyguardOrbSurfaceWorkerTestHooks.beforeRevealApply?.invoke(output)
                     transaction.apply()
                     applied = true
+                    acceptedApply = runCatching { nativeApplied() }.getOrDefault(false)
                     if (capturing()) report(output, Receipt("REVEAL", begin, SystemClock.uptimeMillis()))
                 } finally { runCatching { transaction.close() } }
             } catch (_: Throwable) {
                 fail(output, "r18RevealFailed")
             }
-            runCatching { completed(applied) }
+            runCatching { completed(applied && acceptedApply) }
         }
         if (!accepted) runCatching { completed(false) }
     }

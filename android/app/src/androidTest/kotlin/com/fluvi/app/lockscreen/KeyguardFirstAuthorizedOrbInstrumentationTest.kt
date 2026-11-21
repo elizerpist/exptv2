@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.os.SystemClock
@@ -26,6 +28,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -41,14 +44,18 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
 
     @Test fun stableInitialFullUsesOneVirginOutputWithoutReadinessRead() = runService(false)
     @Test fun externalIngressWhileFirstPaintIsHeldCannotUseOldProof() = runService(true)
+    @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
+    @Test fun r21ExclusionRetiresSubmittedOrbWithMainAckHeld() = runService(false, true)
 
-    private fun runService(changeScene: Boolean) {
+    private fun runService(changeScene: Boolean, r21Negative: Boolean? = null) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
         require(source.matches(Regex("[0-9a-f]{40}")))
         val run = args.getString("runUuid")?.let { UUID.fromString(it).toString() } ?: UUID.randomUUID().toString()
-        val dir = File(context.filesDir, "keyguard-service-probe/r19/$run/${if (changeScene) "changed" else "stable"}")
+        val specimen = if (r21Negative == null) { if (changeScene) "changed" else "stable" }
+            else if (r21Negative) "r21-negative" else "r21-positive"
+        val dir = File(context.filesDir, "keyguard-service-probe/r19/$run/$specimen")
         check(!dir.exists() && dir.mkdirs())
         val keyguard = context.getSystemService(KeyguardManager::class.java)
         val power = context.getSystemService(PowerManager::class.java)
@@ -72,6 +79,14 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         val paintEntered = CountDownLatch(1)
         val releasePaint = CountDownLatch(1)
         val held = AtomicBoolean(false)
+        val acknowledgement = AtomicReference<Runnable?>()
+        val acknowledgementHeld = CountDownLatch(1)
+        val injectedFinished = CountDownLatch(1)
+        val injectedResult = AtomicReference<String?>()
+        val negativeEnabled = AtomicBoolean(false)
+        val negativeFinished = CountDownLatch(1)
+        val negativeResult = AtomicReference<String?>()
+        val savedDispatcher = KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone
         var captureStarted = false
         var report: String? = null
         val errors = mutableListOf<String>()
@@ -123,13 +138,90 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                         abortedStale: Boolean, startedAt: Long, finishedAt: Long) {
                         reads.add("end id=${request.id} decision=$decision reason=$reason rootUnavailable=$rootUnavailable " +
                             "truncated=$walkTruncated stale=$abortedStale start=$startedAt end=$finishedAt")
+                        if (request.id == injectedRequest.get() && request.id != 0L) {
+                            injectedResult.set("$decision/$reason/$rootUnavailable/$walkTruncated/$abortedStale")
+                            injectedFinished.countDown()
+                        }
+                        if (negativeEnabled.get() && decision in setOf(KeyguardCardVisibility.HIDDEN_SHADE,
+                                KeyguardCardVisibility.HIDDEN_CREDENTIAL) && !abortedStale) {
+                            negativeResult.set("${request.id}/$decision/$reason/$rootUnavailable/$walkTruncated")
+                            negativeFinished.countDown()
+                        }
                     }
+                }
+            }
+            if (r21Negative != null) {
+                KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = { task ->
+                    if (acknowledgement.compareAndSet(null, task)) acknowledgementHeld.countDown()
+                    else Handler(Looper.getMainLooper()).post(task)
                 }
             }
             shell("input keyevent KEYCODE_SLEEP")
             await("sleep and keyguard", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
             shell("input keyevent KEYCODE_WAKEUP")
             await("locked wake", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
+            if (r21Negative != null) {
+                assertTrue("NOT REACHED: real reveal acknowledgement was never queued", acknowledgementHeld.await(20, TimeUnit.SECONDS))
+                var before: String? = null
+                await("real accepted native apply before Main acknowledgement", 10_000) {
+                    val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                    before = text.lineSequence().firstOrNull { it.startsWith(" R21_CORE ") &&
+                        it.contains("/ACCEPTED ingress=") && it.contains(" ack=UNOBSERVED/") }
+                    before != null
+                }
+                val first = checkNotNull(before)
+                val owner = first.substringAfter(" direct=").substringBefore(' ')
+                assertFalse("NOT REACHED: exact direct owner missing", owner.contains("UNOBSERVED"))
+                assertTrue("NOT REACHED: no original input-arm show", !first.contains(" firstShow=UNOBSERVED/"))
+                assertTrue("device is not locked and interactive", power.isInteractive && keyguard.isKeyguardLocked)
+                File(dir, "before-ingress.txt").writeText(first + "\n")
+                saveScreenshot(File(dir, "02-before-ingress.png"))
+                if (!r21Negative) {
+                    instrumentation.runOnMainSync {
+                        val at = SystemClock.uptimeMillis()
+                        injectedAt.set(at)
+                        service.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
+                            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, -1, Display.DEFAULT_DISPLAY, 0,
+                            "com.android.systemui", at))
+                    }
+                    assertTrue("NOT REACHED: injected request did not finish (it may have been coalesced)",
+                        injectedFinished.await(10, TimeUnit.SECONDS))
+                    assertEquals("fresh actual reader was not a complete MAIN/FULL decision",
+                        "SHOW_FULL/MAIN_CONFIRMED/false/false/false", injectedResult.get())
+                    assertTrue("injected event did not receive a request ID", injectedRequest.get() > 0)
+                    val after = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                    File(dir, "after-ingress.txt").writeText(after)
+                    val same = after.lineSequence().firstOrNull { it.startsWith(" R21_CORE ") && it.contains(" direct=$owner ") }
+                    assertNotNull("submitted exact owner was replaced", same)
+                    assertTrue("ordinary ingress did not schedule its fresh request", checkNotNull(same).contains(" offered=${injectedRequest.get()} read="))
+                    assertTrue("old owner took a fallback", same.contains(" fallback=UNOBSERVED/"))
+                    assertTrue("a second show was observed while acknowledgement was held", same.contains(" following=UNOBSERVED/"))
+                } else {
+                    negativeEnabled.set(true)
+                    File(dir, "shade-command.txt").writeText(shell("cmd statusbar expand-notifications"))
+                    assertTrue("NOT REACHED: real shade/credential decision was not observed", negativeFinished.await(12, TimeUnit.SECONDS))
+                    await("actual negative withdrew service window", 10_000) {
+                        var visible = true
+                        instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
+                        !visible
+                    }
+                    await("exact submitted owner sealed and native retirement returned", 10_000) {
+                        val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                        val row = text.lineSequence().firstOrNull { it.startsWith(" R21_CORE ") && it.contains(" direct=$owner ") }
+                        row != null && !row.contains(" seal=UNOBSERVED/") && !row.contains(" retire=UNOBSERVED/")
+                    }
+                    File(dir, "after-negative.txt").writeText(KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String)
+                    File(dir, "negative.txt").writeText("${negativeResult.get()}\n")
+                    saveScreenshot(File(dir, "03-negative-with-ack-held.png"))
+                }
+                val task = checkNotNull(acknowledgement.getAndSet(null))
+                instrumentation.runOnMainSync { task.run() }
+                if (r21Negative) {
+                    var visible = true
+                    instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
+                    assertFalse("late acknowledgement resurrected a withdrawn host", visible)
+                }
+            }
             if (changeScene) {
                 assertTrue("real first FULL paint was not reached", paintEntered.await(20, TimeUnit.SECONDS))
                 instrumentation.runOnMainSync {
@@ -146,14 +238,14 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 saveScreenshot(File(dir, "02-held-after-ingress.png"))
                 releasePaint.countDown()
             }
-            await("actual service window", 20_000) {
+            if (r21Negative != true) await("actual service window", 20_000) {
                 var visible = false
                 instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
                 visible && keyguard.isKeyguardLocked
             }
             // A WindowManager attach is insufficient. Wait for the actual
             // output's own native apply receipt, under the same attempt.
-            await("direct reveal receipt", 15_000) {
+            if (r21Negative != true) await("direct reveal receipt", 15_000) {
                 val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
                 text.lineSequence().any { it.startsWith(" R18_PIPELINE ") &&
                     !it.contains("revealApply=UNOBSERVED/") && !it.contains("bufferReady=UNOBSERVED") }
@@ -187,6 +279,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         } catch (error: Throwable) {
             errors += "${error.javaClass.simpleName}:${error.message}"
         } finally {
+            KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = savedDispatcher
+            acknowledgement.getAndSet(null)?.let { task -> Handler(Looper.getMainLooper()).post(task) }
             releasePaint.countDown()
             KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock = null
             runCatching { if (captureStarted && report == null) {
@@ -195,6 +289,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
             } }.onFailure { errors += "freeze:${it.javaClass.simpleName}:${it.message}" }
             File(dir, "reads.txt").writeText(synchronized(reads) { reads.joinToString("\n", postfix = "\n") })
             runCatching {
+                if (r21Negative == true) shell("cmd statusbar collapse")
                 setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, other)
                 await("service disconnected", 8_000) { !FluviKeyguardCardServiceRegistry.connected }
                 restore(savedSettings); restore(savedMaterial); restore(savedMode)

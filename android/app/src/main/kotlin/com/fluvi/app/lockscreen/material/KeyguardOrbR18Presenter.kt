@@ -202,7 +202,7 @@ internal class KeyguardOrbR18Presenter(
 
     /** Input and the exact fresh privacy proof must already be armed. */
     fun reveal(attachment: Long, generation: Long, crossGrantBoundary: () -> Boolean,
-               done: (Boolean) -> Unit) {
+               nativeApplied: () -> Boolean, done: (Boolean) -> Unit) {
         checkMain()
         val current = owner.get()
         if (current == null || current.attachment != attachment || current.generation != generation ||
@@ -212,9 +212,13 @@ internal class KeyguardOrbR18Presenter(
         val output = current.target.directOutput ?: run { done(false); return }
         lane.reveal(output, crossGrantBoundary = {
             owner.get() === current && !current.target.revoked && crossGrantBoundary()
+        }, nativeApplied = {
+            owner.get() === current && !current.target.revoked && nativeApplied()
         }, completed = { success ->
             if (success && owner.get() === current && !current.target.revoked) worker.grantPresentation(current.target)
-            main.post { done(success && owner.get() === current && !current.target.revoked) }
+            val acknowledgement = Runnable { done(success && owner.get() === current && !current.target.revoked) }
+            val dispatcher = if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone else null
+            if (dispatcher != null) dispatcher(acknowledgement) else main.post(acknowledgement)
         })
     }
 

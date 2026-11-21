@@ -114,6 +114,26 @@ class KeyguardFirstAuthorizedOrbTest {
         assertFalse(coordinator.mayAct(token, host))
     }
 
+    @Test fun r21AppliedOwnerSurvivesWhileTheConsumedProofExpires() {
+        val lock = Any(); val gate = KeyguardFirstAuthorizedOrb(lock); val coordinator = KeyguardOrbPresentationCoordinator(lock)
+        val previous = authority.copy(wakeGeneration = authority.wakeGeneration - 1)
+        val stamp = KeyguardOrbPresentationStamp(authority, 10, 13, 14, 15, 168, 168, 420, true, 11, 12, 0)
+        val token = requireNotNull(coordinator.reserve(stamp, 1, previous, previous, true, true))
+        val host = Any(); val output = Any()
+        assertTrue(coordinator.adopt(token, stamp)); assertTrue(coordinator.attachInertHost(token, host))
+        assertTrue(coordinator.hostReady(token, host)); assertTrue(coordinator.attachPreparedOutput(token, output))
+        gate.readCompleted(10); val old = requireNotNull(proof(gate, 10)); assertTrue(gate.consume(old))
+        assertTrue(coordinator.imageReady(token, output))
+        assertTrue(coordinator.grant(token, authority, 10, true, true, true, 13, 14, 15))
+        assertTrue(coordinator.armInput(token, host))
+        val reveal = requireNotNull(coordinator.queueReveal(token, authority, gate.isCurrent(old), true, 13, 14, 15))
+        assertTrue(coordinator.crossSubmitBoundary(reveal)); assertNotNull(coordinator.markNativeApplyReturned(reveal))
+        val event = synchronized(lock) { gate.externalIngress(); coordinator.arbitrateIngress(token, host, output, true) }
+        assertFalse(gate.isCurrent(old)); assertEquals(KeyguardOrbPresentationCoordinator.IngressAction.KEEP_SUBMITTED, event.action)
+        assertTrue(coordinator.revealSubmitted(reveal)); gate.requireRead(11); gate.readCompleted(11)
+        val fresh = requireNotNull(proof(gate, 11)); assertTrue(gate.isCurrent(fresh)); assertFalse(gate.isCurrent(old))
+    }
+
     @Test fun terminalOrFreshnessChangeInvalidatesAndOldTicketCannotReappear() {
         val gate = KeyguardFirstAuthorizedOrb(); val first = requireNotNull(proof(gate))
         gate.invalidate()

@@ -104,10 +104,10 @@ internal class KeyguardOrbSurfacePresenter(
         presenter.bind(host, attachment, generation, done)
     }
 
-    fun revealR18(attachment: Long, generation: Long, crossGrantBoundary: () -> Boolean, done: (Boolean) -> Unit) {
+    fun revealR18(attachment: Long, generation: Long, crossGrantBoundary: () -> Boolean, nativeApplied: () -> Boolean, done: (Boolean) -> Unit) {
         checkMain()
         val presenter = direct ?: run { done(false); return }
-        presenter.reveal(attachment, generation, crossGrantBoundary, done)
+        presenter.reveal(attachment, generation, crossGrantBoundary, nativeApplied, done)
     }
 
     /** This seal is thread-safe and uses the exact currently-owned target. */

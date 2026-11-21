@@ -128,6 +128,7 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
         val activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
         val underlayClicks = AtomicInteger(); val orbClicks = AtomicInteger()
+        val nativeAppliedOwners = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
         val ready = CountDownLatch(1); val buffer = CountDownLatch(1); val bound = CountDownLatch(1)
         val revealed = CountDownLatch(1); val retired = CountDownLatch(1); val drained = CountDownLatch(1)
         val hostWaiters = ConcurrentHashMap<Long, CountDownLatch>().apply { put(1, ready) }
@@ -203,11 +204,12 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
             assertTrue("hidden bind callback missing", bound.await(10, TimeUnit.SECONDS)); assertNull(error.get())
             instrumentation.runOnMainSync {
                 assertTrue("actual input root did not arm", panel.promote(1, content, geometry))
-                producer.revealR18(1, 1, crossGrantBoundary = { true }) { success ->
+                producer.revealR18(1, 1, crossGrantBoundary = { true }, nativeApplied = { nativeAppliedOwners.add(1); true }) { success ->
                     if (!success) error.set("revealFailed"); revealed.countDown()
                 }
             }
             assertTrue("reveal did not complete", revealed.await(10, TimeUnit.SECONDS)); assertNull(error.get())
+            assertTrue("native apply return was not reported", nativeAppliedOwners.contains(1))
             val live = awaitScreenshot(10_000) { bitmap -> colorDistance(background, bitmap.getPixel(cx, cy)) > 45 }
             live.save(File(runDir, "03-live.png"))
             tap(cx, cy)
@@ -276,11 +278,12 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
                 assertTrue(bindDone.await(10, TimeUnit.SECONDS)); assertNull(error.get())
                 instrumentation.runOnMainSync {
                     assertTrue(panel.promote(generation, nextContent, geometry))
-                    producer.revealR18(generation, generation, crossGrantBoundary = { true }) { success ->
+                    producer.revealR18(generation, generation, crossGrantBoundary = { true }, nativeApplied = { nativeAppliedOwners.add(generation); true }) { success ->
                         if (!success) error.set("replacementReveal:$generation"); revealDone.countDown()
                     }
                 }
                 assertTrue(revealDone.await(10, TimeUnit.SECONDS)); assertNull(error.get())
+                assertTrue("replacement native apply return missing", nativeAppliedOwners.contains(generation))
                 val locationB = IntArray(2)
                 instrumentation.runOnMainSync { nextHost.getLocationOnScreen(locationB) }
                 val bx = locationB[0] + size / 2; val by = locationB[1] + size / 2
@@ -318,7 +321,13 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
     /** Real direct child, authorized by the R19 entry point. The reference is
      * the independently rendered hardware View, sampled before revealing the
      * child. This is a panel control, not a keyguard-service privacy pass. */
-    @Test fun r20AuthorizedFullFirstMissDrawsCanonicalPhaseOnExistingChild() {
+    @Test fun r20AuthorizedFullFirstMissDrawsCanonicalPhaseOnExistingChild() = calibratedFirstFrame(false)
+
+    @Test fun r21SubmittedPanelSurvivesBenignRecheckAndSealsBeforeLateAck() = calibratedFirstFrame(true)
+    @Test fun r21PanelCancelsBeforeNativeCross() = calibratedFirstFrame(true, "PRE_CROSS")
+    @Test fun r21PanelRetiresInFlightRevealInNativeLaneOrder() = calibratedFirstFrame(true, "IN_FLIGHT")
+
+    private fun calibratedFirstFrame(r21: Boolean, boundary: String = "APPLIED") {
         assumeTrue(Build.VERSION.SDK_INT == 35)
         val context = instrumentation.targetContext
         val activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
@@ -332,9 +341,14 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
         val controlled = AtomicReference(KeyguardMaterialTime(phaseA, phaseA, phaseA, phaseA))
         val allocated = CountDownLatch(1); val hostReady = CountDownLatch(1); val bound = CountDownLatch(1)
         val firstPosted = CountDownLatch(1); val reveal = CountDownLatch(1); val drained = CountDownLatch(1)
+        val heldAck = AtomicReference<Runnable?>(); val ackQueued = CountDownLatch(1)
+        val gateEntered = CountDownLatch(1); val releaseGate = CountDownLatch(1)
+        val receipts = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val priorDispatcher = KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone
         val hostView = AtomicReference<View?>(); val error = AtomicReference<String?>()
         val cleanup = AtomicReference<(() -> Unit)?>(null)
         val posterCount = AtomicInteger(); val firstDrawCount = AtomicInteger(); val postCount = AtomicInteger()
+        val nativeApplyCount = AtomicInteger()
         val drawMethod = AtomicReference<String?>(); val childId = AtomicInteger(-1)
         val firstEntry = AtomicReference<Long>(); val firstPostAt = AtomicReference<Long>()
         val refs = mutableListOf<Bitmap>()
@@ -445,6 +459,8 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
                     onR18Allocated = { _, _, _ -> allocated.countDown() },
                     onR18Prepared = { _, _, _ -> firstPosted.countDown() },
                     onR18Failure = { _, _, reason, done -> error.set(reason); cleanup.set(done); firstPosted.countDown() },
+                    onR18Receipt = { _, _, receipt -> if (receipt.applyReturnUptimeMs != null)
+                        receipts.add("${receipt.operation}:${receipt.submitStartUptimeMs}:${receipt.applyReturnUptimeMs}") },
                     onR18Drained = { _, _, _ -> drained.countDown() },
                     onR19Observation = { if (it.stage == "R19_PAINT_ENTER") firstEntry.set(it.observedAtUptimeMs) })
                 presenter = producer
@@ -471,11 +487,89 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
             assertTrue("actual first post did not complete", firstPosted.await(20, TimeUnit.SECONDS)); assertNull(error.get())
             assertSame("first post must retain the allocated child", output,
                 instrumentation.runOnMainValue { producer.r18PreparedOutput(21, 34, selected, true, size, size) })
+            // This panel deliberately supplies synthetic scene signals to the
+            // production visibility policy. Its compositor and owner are real;
+            // it is not evidence of a real accessibility-service read.
+            val coordinator = KeyguardOrbPresentationCoordinator()
+            val previousAuthority = KeyguardInspectionAuthority(1, 2, 3, 4, 5)
+            val authority = previousAuthority.copy(wakeGeneration = 4)
+            val stamp = KeyguardOrbPresentationStamp(authority, 201, 11, 12, 13, size, size,
+                context.resources.displayMetrics.densityDpi, true, 21, 34, 0)
+            val token = requireNotNull(coordinator.reserve(stamp, 1, previousAuthority, previousAuthority, true, true))
+            assertTrue(coordinator.adopt(token, stamp)); assertTrue(coordinator.attachInertHost(token, host))
+            assertTrue(coordinator.hostReady(token, host)); assertTrue(coordinator.attachPreparedOutput(token, output))
+            assertTrue(coordinator.imageReady(token, output)); assertTrue(coordinator.grant(token, authority, 201,
+                completeMain = true, finalSystemEligible = true, disclosedFull = true,
+                selectionRevision = 11, materialRevision = 12, dataRevision = 13))
+            assertTrue(coordinator.armInput(token, host))
+            val permit = requireNotNull(coordinator.queueReveal(token, authority, true, true, 11, 12, 13))
+            if (r21 && boundary == "APPLIED") KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = { task ->
+                if (heldAck.compareAndSet(null, task)) ackQueued.countDown()
+                else Handler(Looper.getMainLooper()).post(task)
+            }
+            if (boundary == "PRE_CROSS") KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross = {
+                gateEntered.countDown(); check(releaseGate.await(15, TimeUnit.SECONDS))
+            }
+            if (boundary == "IN_FLIGHT") KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = {
+                gateEntered.countDown(); check(releaseGate.await(15, TimeUnit.SECONDS))
+            }
             instrumentation.runOnMainSync {
                 assertTrue("input panel was not armed", holder.promote(1, content, geometry))
-                producer.revealR18(21, 34, crossGrantBoundary = { true }) { if (!it) error.set("revealFailed"); reveal.countDown() }
+                producer.revealR18(21, 34, crossGrantBoundary = { !r21 || coordinator.crossSubmitBoundary(permit) },
+                    nativeApplied = {
+                        val accepted = !r21 || coordinator.markNativeApplyReturned(permit) != null
+                        if (accepted) nativeApplyCount.incrementAndGet()
+                        accepted
+                    }) {
+                    if (it && r21) assertTrue(coordinator.revealSubmitted(permit)) else if (!it && !r21) error.set("revealFailed")
+                    reveal.countDown()
+                }
             }
-            assertTrue("real reveal did not complete", reveal.await(10, TimeUnit.SECONDS)); assertNull(error.get())
+            if (r21 && boundary != "APPLIED") {
+                assertTrue("requested native boundary was not reached", gateEntered.await(10, TimeUnit.SECONDS))
+                val outcome = coordinator.arbitrateIngress(token, host, output, retainApplied = true)
+                assertEquals(if (boundary == "PRE_CROSS") KeyguardOrbPresentationCoordinator.SubmitPhase.PRE_CROSS
+                    else KeyguardOrbPresentationCoordinator.SubmitPhase.CROSSED, outcome.phase)
+                assertEquals(KeyguardOrbPresentationCoordinator.IngressAction.CANCEL_PENDING, outcome.action)
+                val withdrawal = requireNotNull(coordinator.seal(token, authority, 202, true))
+                assertEquals(boundary == "IN_FLIGHT", withdrawal.crossedSubmitBoundary)
+                // This call must return while the compositor is held; only the
+                // lane itself waits. Its queued retirement follows any in-flight apply.
+                producer.sealR18(21, 34)
+                releaseGate.countDown()
+                assertTrue("retired native output did not drain", drained.await(10, TimeUnit.SECONDS))
+                assertTrue(coordinator.hostRemoved(token, host)); assertTrue(coordinator.retired(token))
+                assertTrue(coordinator.outputDrained(token, output))
+                instrumentation.runOnMainSync { holder.remove(1) }
+                val after = awaitScreenshot(10_000) { screenshot ->
+                    colorDistance(green, screenshot.getPixel(100 + size / 2, 250 + size / 2)) <= 15
+                }
+                after.save(File(runDir, "r21-$boundary-after-drain.png")); after.recycle()
+                val trace = synchronized(receipts) { receipts.toList() }
+                val retireAt = trace.indexOfFirst { it.startsWith("RETIRE:") }
+                val revealAt = trace.indexOfFirst { it.startsWith("REVEAL:") }
+                assertTrue("native retirement apply return missing: $trace", retireAt >= 0)
+                if (boundary == "PRE_CROSS") assertEquals("cancelled pre-cross applied a show", -1, revealAt)
+                else assertTrue("native hide did not follow the crossed show: $trace", revealAt >= 0 && revealAt < retireAt)
+                assertFalse(coordinator.revealSubmitted(permit))
+                fixture.writeText("scene=synthetic-policy boundary=$boundary child=${childId.get()} receipts=$trace physical=UNOBSERVED\n")
+                return
+            }
+            if (r21) {
+                assertTrue("actual native return and queued acknowledgement were not reached", ackQueued.await(10, TimeUnit.SECONDS))
+                assertEquals(KeyguardOrbPresentationCoordinator.Grant.REVEAL_QUEUED, coordinator.snapshot().grant)
+                val positive = KeyguardCardVisibilityPolicy.decide(KeyguardCardSignals(true, true, true, true,
+                    true, true, true, KeyguardSurface.MAIN_KEYGUARD, true))
+                assertEquals(KeyguardCardVisibility.SHOW_FULL, positive)
+                val arbitration = coordinator.arbitrateIngress(token, host, output, retainApplied = true)
+                assertEquals(KeyguardOrbPresentationCoordinator.SubmitPhase.APPLIED, arbitration.phase)
+                assertEquals(KeyguardOrbPresentationCoordinator.IngressAction.KEEP_SUBMITTED, arbitration.action)
+                assertSame("benign recheck changed the native child", output,
+                    instrumentation.runOnMainValue { producer.r18PreparedOutput(21, 34, selected, true, size, size) })
+                assertSame(token, coordinator.snapshot().reservation)
+            } else assertTrue("real reveal did not complete", reveal.await(10, TimeUnit.SECONDS))
+            assertNull(error.get())
+            assertEquals("exact first native apply must be acknowledged once", 1, nativeApplyCount.get())
             var samples = 0
             val liveScreen = awaitScreenshot(10_000) { screenshot ->
                 val sample = crop(host, screenshot)
@@ -495,15 +589,39 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
                 try { r20Compare(refA, sample).meaningful() } finally { sample.recycle() }
             }
             val moving = crop(host, motionScreen); motionScreen.recycle(); moving.save(File(runDir, "first-motion.png")); moving.recycle()
-            fixture.writeText("ticket=201 attachment=21 generation=34 child=${childId.get()} firstEntry=${firstEntry.get()} firstPost=${firstPostAt.get()} posterCreated=${posterCount.get()} firstDraw=${drawMethod.get()} firstDrawCount=${firstDrawCount.get()} posts=${postCount.get()} samples=$samples\n")
+            fixture.writeText("scene=${if (r21) "synthetic-policy-recheck" else "r20-control"} ticket=201 attachment=21 generation=34 child=${childId.get()} firstEntry=${firstEntry.get()} firstPost=${firstPostAt.get()} posterCreated=${posterCount.get()} firstDraw=${drawMethod.get()} firstDrawCount=${firstDrawCount.get()} posts=${postCount.get()} samples=$samples\n")
             assertEquals("ticketed first miss must make no intermediate bitmap", 0, posterCount.get())
             assertEquals("the actual first draw must use direct miss", "DIRECT_MISS", drawMethod.get())
             assertEquals("ticket must draw its first frame exactly once", 1, firstDrawCount.get())
             assertTrue("animated target did not produce later posts", postCount.get() > 1)
             live.recycle()
+            if (r21) {
+                val negative = KeyguardCardVisibilityPolicy.decide(KeyguardCardSignals(true, true, true, true,
+                    true, true, true, KeyguardSurface.SHADE, true))
+                assertEquals(KeyguardCardVisibility.HIDDEN_SHADE, negative)
+                assertNotNull(coordinator.seal(token, authority, 202, true))
+            }
             producer.sealR18(21, 34)
             assertTrue("actual direct child did not drain", drained.await(10, TimeUnit.SECONDS))
+            if (r21) {
+                assertTrue(coordinator.hostRemoved(token, host)); assertTrue(coordinator.retired(token))
+                assertTrue(coordinator.outputDrained(token, output))
+                instrumentation.runOnMainSync { holder.remove(1) }
+                val after = awaitScreenshot(10_000) { screenshot ->
+                    colorDistance(green, screenshot.getPixel(100 + size / 2, 250 + size / 2)) <= 15
+                }
+                after.save(File(runDir, "r21-after-native-drain.png")); after.recycle()
+                instrumentation.runOnMainSync { checkNotNull(heldAck.getAndSet(null)).run() }
+                assertTrue("late acknowledgement did not return", reveal.await(5, TimeUnit.SECONDS))
+                assertFalse("late acknowledgement revived the old permit", coordinator.revealSubmitted(permit))
+                assertEquals(KeyguardOrbPresentationCoordinator.Grant.RETIRED, coordinator.snapshot().grant)
+            }
         } finally {
+            releaseGate.countDown()
+            KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross = null
+            KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = null
+            KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = priorDispatcher
+            heldAck.getAndSet(null)?.let { Handler(Looper.getMainLooper()).post(it) }
             KeyguardOrbSurfaceWorkerTestHooks.afterPosterCreated = null
             KeyguardOrbSurfaceWorkerTestHooks.afterFirstFrameDraw = null
             KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = null
@@ -687,7 +805,7 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
             assertTrue("fresh successor did not post", posted.getValue(82).await(20, TimeUnit.SECONDS)); assertNull(failure.get())
             instrumentation.runOnMainSync {
                 assertTrue(holder.promote(82, content, geometry))
-                producer.revealR18(82, 82, { true }) { if (!it) failure.set("revealB"); revealB.countDown() }
+                producer.revealR18(82, 82, { true }, { true }) { if (!it) failure.set("revealB"); revealB.countDown() }
             }
             assertTrue(revealB.await(10, TimeUnit.SECONDS)); assertNull(failure.get())
             val location = IntArray(2); instrumentation.runOnMainSync { checkNotNull(hosts[82]).getLocationOnScreen(location) }

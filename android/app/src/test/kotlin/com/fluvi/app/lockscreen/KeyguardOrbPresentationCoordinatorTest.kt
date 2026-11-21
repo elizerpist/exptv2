@@ -29,6 +29,60 @@ class KeyguardOrbPresentationCoordinatorTest {
         assertNull(reveal(c, token))
     }
 
+    @Test fun r21AppliedBeforeMainAckSurvivesOrdinaryIngressButExpiresProof() {
+        val lock = Any(); val c = KeyguardOrbPresentationCoordinator(lock); val proof = KeyguardFirstAuthorizedOrb(lock)
+        val token = reserve(c, stamp(full = true)); val host = Any(); val image = Any()
+        assertTrue(c.adopt(token, token.stamp)); assertTrue(c.attachInertHost(token, host)); assertTrue(c.hostReady(token, host))
+        assertTrue(c.attachPreparedOutput(token, image)); assertTrue(c.imageReady(token, image)); assertTrue(grant(c, token))
+        assertTrue(c.armInput(token, host)); val permit = requireNotNull(reveal(c, token))
+        assertTrue(c.crossSubmitBoundary(permit)); val applied = requireNotNull(c.markNativeApplyReturned(permit))
+        assertEquals(KeyguardOrbPresentationCoordinator.Grant.REVEAL_QUEUED, c.snapshot().grant)
+        val decision = synchronized(lock) { proof.externalIngress(); c.arbitrateIngress(token, host, image, true) }
+        assertEquals(KeyguardOrbPresentationCoordinator.IngressAction.KEEP_SUBMITTED, decision.action)
+        assertTrue(decision.ordinal > applied); assertTrue(c.mayAct(token, host))
+        assertNull(c.markNativeApplyReturned(permit)); assertTrue(c.revealSubmitted(permit))
+        assertFalse(c.revealSubmitted(permit)); assertEquals(KeyguardOrbPresentationCoordinator.Grant.PRESENTED, c.snapshot().grant)
+    }
+
+    @Test fun r21PreCrossAndInflightCancellationCannotBeRevived() {
+        for (cross in listOf(false, true)) {
+            val c = KeyguardOrbPresentationCoordinator(); val token = reserve(c, stamp(full = true)); val host = Any(); val image = Any()
+            assertTrue(c.adopt(token, token.stamp)); assertTrue(c.attachInertHost(token, host)); assertTrue(c.hostReady(token, host))
+            assertTrue(c.attachPreparedOutput(token, image)); assertTrue(c.imageReady(token, image)); assertTrue(grant(c, token))
+            assertTrue(c.armInput(token, host)); val permit = requireNotNull(reveal(c, token))
+            if (cross) assertTrue(c.crossSubmitBoundary(permit))
+            val decision = c.arbitrateIngress(token, host, image, true)
+            assertEquals(KeyguardOrbPresentationCoordinator.IngressAction.CANCEL_PENDING, decision.action)
+            assertFalse(c.crossSubmitBoundary(permit)); assertNull(c.markNativeApplyReturned(permit)); assertFalse(c.revealSubmitted(permit))
+            val withdrawal = requireNotNull(c.seal(token, token.stamp.authority, 101, true))
+            assertEquals(cross, withdrawal.crossedSubmitBoundary)
+            assertTrue(c.hostRemoved(token, host)); assertTrue(c.retired(token)); assertTrue(c.outputDrained(token, image))
+        }
+    }
+
+    @Test fun r21ExclusionAndOldOwnerRemainFailClosedAfterApplied() {
+        val c = KeyguardOrbPresentationCoordinator(); val a = reserve(c, stamp(full = true)); val host = Any(); val image = Any()
+        assertTrue(c.adopt(a, a.stamp)); assertTrue(c.attachInertHost(a, host)); assertTrue(c.hostReady(a, host))
+        assertTrue(c.attachPreparedOutput(a, image)); assertTrue(c.imageReady(a, image)); assertTrue(grant(c, a))
+        assertTrue(c.armInput(a, host)); val permit = requireNotNull(reveal(c, a)); assertTrue(c.crossSubmitBoundary(permit))
+        assertNotNull(c.markNativeApplyReturned(permit)); assertNotNull(c.seal(a, a.stamp.authority, 101, true))
+        assertFalse(c.revealSubmitted(permit)); assertTrue(c.hostRemoved(a, host)); assertTrue(c.retired(a)); assertTrue(c.outputDrained(a, image))
+        val previous = a.stamp.authority; val b = reserve(c, stamp(previous.copy(wakeGeneration = 5), full = true, host = 11, output = 21), 2, previous)
+        assertEquals(KeyguardOrbPresentationCoordinator.IngressAction.IGNORE, c.arbitrateIngress(a, host, image, true).action)
+        assertNull(c.markNativeApplyReturned(permit)); assertFalse(c.revealSubmitted(permit)); assertSame(b, c.snapshot().reservation)
+    }
+
+    @Test fun r21InteractionAfterCrossStillAllowsNativeReturnButNotOldAuthoritySeal() {
+        val c = KeyguardOrbPresentationCoordinator(); val token = reserve(c, stamp(full = true)); val host = Any(); val image = Any()
+        assertTrue(c.adopt(token, token.stamp)); assertTrue(c.attachInertHost(token, host)); assertTrue(c.hostReady(token, host))
+        assertTrue(c.attachPreparedOutput(token, image)); assertTrue(c.imageReady(token, image)); assertTrue(grant(c, token))
+        assertTrue(c.armInput(token, host)); val permit = requireNotNull(reveal(c, token)); assertTrue(c.crossSubmitBoundary(permit))
+        val touched = token.stamp.authority.copy(interactionEpoch = token.stamp.authority.interactionEpoch + 1)
+        assertTrue(c.advanceInteraction(token, token.stamp.authority, touched)); assertNotNull(c.markNativeApplyReturned(permit))
+        assertTrue(c.revealSubmitted(permit)); assertNull(c.seal(token, token.stamp.authority, 101, true))
+        assertNotNull(c.seal(token, touched, 101, true))
+    }
+
     @Test fun stagedHostAndFrameCannotActBeforeAdoptionAndFullProof() {
         val c = KeyguardOrbPresentationCoordinator(); val token = reserve(c); val host = Any(); val image = Any()
         assertTrue(c.attachInertHost(token, host)); assertTrue(c.hostReady(token, host))
@@ -50,7 +104,8 @@ class KeyguardOrbPresentationCoordinatorTest {
         assertTrue(c.armInput(token, host)); assertNull(reveal(c, token, eligible = false))
         assertNull(c.queueReveal(token, token.stamp.authority, true, true, 11, 99, 13))
         val permit = requireNotNull(reveal(c, token)); assertTrue(c.crossSubmitBoundary(permit))
-        assertFalse(c.crossSubmitBoundary(permit)); assertTrue(c.revealSubmitted(permit)); assertTrue(c.mayAct(token, host))
+        assertFalse(c.crossSubmitBoundary(permit)); assertFalse(c.revealSubmitted(permit))
+        assertNotNull(c.markNativeApplyReturned(permit)); assertTrue(c.revealSubmitted(permit)); assertTrue(c.mayAct(token, host))
     }
 
     @Test fun staleNegativeAndWrongDisclosureCannotAuthorizeOrRetire() {
@@ -109,7 +164,7 @@ class KeyguardOrbPresentationCoordinatorTest {
         assertTrue(c.bindPresentedAttachment(token, before, after))
         assertNull(c.queueReveal(token, before, true, true, 11, 12, 13))
         val permit = requireNotNull(c.queueReveal(token, after, true, true, 11, 12, 13))
-        assertTrue(c.crossSubmitBoundary(permit)); assertTrue(c.revealSubmitted(permit))
+        assertTrue(c.crossSubmitBoundary(permit)); assertNotNull(c.markNativeApplyReturned(permit)); assertTrue(c.revealSubmitted(permit))
         assertNull(c.seal(token, before, 101, true))
         assertNotNull(c.seal(token, after, 101, true))
     }
