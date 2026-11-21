@@ -1,34 +1,18 @@
-name: R22.3 opening and privacy qualification (orchestration only)
+name: R22.4 exact-source focused qualification
 on:
   workflow_dispatch:
     inputs:
       native_diagnostic:
         type: boolean
         default: true
-      run_nightly:
-        type: boolean
-        default: false
-      run_baseline_profile:
-        type: boolean
-        default: false
 permissions:
   contents: read
-defaults:
-  run:
-    working-directory: app
 jobs:
-  api35:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arm: candidate
-            source: b1eccd845546e5d65d9e69c9ba0a43775a2c216b
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 70
+    timeout-minutes: 35
     env:
-      APP_SHA: ${{ matrix.source }}
-      ARM: ${{ matrix.arm }}
+      APP_SHA: ad1eac09442cb8d78a992874d22157fe6bd5a05f
     steps:
       - uses: actions/checkout@v5
         with:
@@ -40,7 +24,6 @@ jobs:
         with:
           ref: ${{ github.sha }}
           path: harness
-          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-java@v5
         with:
@@ -54,60 +37,149 @@ jobs:
           flutter-version: '3.41.4'
           channel: stable
           cache: true
-      - name: Resolve packages and verify application identity
+      - name: Build the exact candidate app and test APKs
+        working-directory: app
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/r19-api35"
+          mkdir -p "$RUNNER_TEMP/r224-build"
           test "$(git rev-parse HEAD)" = "$APP_SHA"
+          mkdir -p "$HOME/.gradle/init.d"
+          cp "$GITHUB_WORKSPACE/harness/scripts/r22-3-plugin-repos.init.gradle" "$HOME/.gradle/init.d/fluvi-repositories.gradle"
           flutter pub get
           test -z "$(git status --porcelain --untracked-files=no)"
-          printf 'application_sha=%s\nharness_sha=%s\narm=%s\n' "$APP_SHA" "$GITHUB_SHA" "$ARM" > "$RUNNER_TEMP/r19-api35/identity.txt"
-      - name: Configure runner-only plugin repository fallback
-        shell: bash
+          (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r224-build/build.log"
+          cp build/app/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/r224-build/app-debug.apk"
+          cp build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk "$RUNNER_TEMP/r224-build/app-debug-androidTest.apk"
+          (cd "$RUNNER_TEMP/r224-build" && sha256sum app-debug.apk app-debug-androidTest.apk > sha256.txt)
+          printf 'app=%s\nharness=%s\n' "$APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r224-build/identity.txt"
+      - name: Preserve exact app/test pair
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r224-candidate-apks-${{ github.run_id }}
+          path: ${{ runner.temp }}/r224-build/**
+          if-no-files-found: warn
+          retention-days: 30
+  jvm-and-flavors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      APP_SHA: ad1eac09442cb8d78a992874d22157fe6bd5a05f
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.APP_SHA }}
+          path: app
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+      - name: Set up dependencies
+        working-directory: app
         run: |
           set -euo pipefail
-          mkdir -p "$HOME/.gradle/init.d"
-          cp "$GITHUB_WORKSPACE/harness/scripts/r22-3-plugin-repos.init.gradle" "$HOME/.gradle/init.d/fluvi-r22-3-repositories.gradle"
-          sha256sum "$HOME/.gradle/init.d/fluvi-r22-3-repositories.gradle" > "$RUNNER_TEMP/r19-api35/repository-fallback-sha256.txt"
-      - name: Run the complete application and core JVM suites
+          test "$(git rev-parse HEAD)" = "$APP_SHA"
+          mkdir -p "$HOME/.gradle/init.d" "$RUNNER_TEMP/r224-jvm"
+          cp "$GITHUB_WORKSPACE/harness/scripts/r22-3-plugin-repos.init.gradle" "$HOME/.gradle/init.d/fluvi-repositories.gradle"
+          flutter pub get
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - name: Run all app and core JVM tests
+        working-directory: app
         shell: bash
         run: |
           set +e
           set -uo pipefail
-          (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r19-api35/unit.log"
-          printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r19-api35/unit.exit"
-      - name: Compile profile and release Kotlin independently
+          (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r224-jvm/unit.log"
+          printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r224-jvm/unit.exit"
+      - name: Compile profile and release independently
+        working-directory: app
         shell: bash
         run: |
           set +e
           set -uo pipefail
-          (cd android && ./gradlew :app:compileProfileKotlin :app:compileReleaseKotlin --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r19-api35/flavor-compile.log"
-          printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r19-api35/flavor-compile.exit"
-      - name: Record target before fixture-only panel patch
-        shell: bash
+          (cd android && ./gradlew :app:compileProfileKotlin :app:compileReleaseKotlin --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r224-jvm/flavors.log"
+          printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r224-jvm/flavors.exit"
+      - name: Preserve reports regardless of result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r224-candidate-jvm-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r224-jvm/**
+            app/build/app/test-results/**
+            app/build/fluvi-core/test-results/**
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Verify recorded results
+        if: always()
+        run: |
+          test -s "$RUNNER_TEMP/r224-jvm/unit.exit"
+          test "$(cat "$RUNNER_TEMP/r224-jvm/unit.exit")" = 0
+          test -s "$RUNNER_TEMP/r224-jvm/flavors.exit"
+          test "$(cat "$RUNNER_TEMP/r224-jvm/flavors.exit")" = 0
+  api35:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [structural, immediate, legacy, diagnostic]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      APP_SHA: ad1eac09442cb8d78a992874d22157fe6bd5a05f
+      ARM: ${{ matrix.arm }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.APP_SHA }}
+          path: app
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - uses: actions/download-artifact@v4
+        with:
+          name: r224-candidate-apks-${{ github.run_id }}
+          path: app/r224-apks
+      - name: Verify pinned APK pair
+        working-directory: app
         run: |
           set -euo pipefail
-          (cd android && ./gradlew :app:assembleDebug --no-daemon --max-workers=3 --console=plain)
-          sha256sum build/app/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/r19-api35/target-before-fixture.txt"
-      - name: Apply separately recorded calibrated panel fixture
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py"
-          git status --short > "$RUNNER_TEMP/r19-api35/fixture-modified-files.txt"
-          git diff > "$RUNNER_TEMP/r19-api35/fixture.patch"
-          sha256sum "$RUNNER_TEMP/r19-api35/fixture.patch" "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py" > "$RUNNER_TEMP/r19-api35/fixture-sha256.txt"
-          sha256sum android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/Keyguard{FirstAuthorizedOrb,OrbPresentationPipeline,CardDiagnostics}InstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22{FirstInspectionFixture,RecoveryInstrumentationTest,VisualCalibration}.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt > "$RUNNER_TEMP/r19-api35/test-source-sha256.txt"
-          test "$(git diff --name-only | wc -l)" = 1
-          git diff --name-only | grep -Fx android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt
-      - name: Assemble app and instrumentation APKs
-        run: |
-          (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
-          sha256sum -c "$RUNNER_TEMP/r19-api35/target-before-fixture.txt"
+          test "$(git rev-parse HEAD)" = "$APP_SHA"
+          (cd r224-apks && sha256sum -c sha256.txt)
+          mkdir -p build/app/outputs/apk/debug build/app/outputs/apk/androidTest/debug
+          cp r224-apks/app-debug.apk build/app/outputs/apk/debug/app-debug.apk
+          cp r224-apks/app-debug-androidTest.apk build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk
       - name: Enable KVM
         run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
-      - name: Run service, panel and diagnostics on API35
+      - name: Run independent API35 controls
+        timeout-minutes: 15
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -119,23 +191,86 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r19-api35-qualification.sh"
-      - name: Verify independent JVM result
-        if: always()
-        run: if test -s "$RUNNER_TEMP/r19-api35/unit.exit"; then test "$(cat "$RUNNER_TEMP/r19-api35/unit.exit")" = 0; else echo 'JVM suite NOT RUN'; exit 1; fi
-      - name: Verify independent profile and release compilation
-        if: always()
-        run: if test -s "$RUNNER_TEMP/r19-api35/flavor-compile.exit"; then test "$(cat "$RUNNER_TEMP/r19-api35/flavor-compile.exit")" = 0; else echo 'profile/release compile NOT RUN'; exit 1; fi
-      - name: Preserve all raw results
+          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r22-4-candidate-api35.sh"
+      - name: Preserve every result
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-3-candidate-qualification-${{ matrix.arm }}-${{ github.run_id }}
-          path: |
-            ${{ runner.temp }}/r19-api35/**
-            app/build/app/reports/tests/**
-            app/build/fluvi-core/reports/tests/**
-            app/build/app/test-results/**
-            app/build/fluvi-core/test-results/**
+          name: r224-candidate-${{ matrix.arm }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/r224-${{ matrix.arm }}/**
+          if-no-files-found: warn
+          retention-days: 30
+  reader-observer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 38
+    env:
+      APP_SHA: ad1eac09442cb8d78a992874d22157fe6bd5a05f
+      ARM: reader
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.APP_SHA }}
+          path: app
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: harness
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+      - name: Build separately identified debug observer pair
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/r224-reader" "$HOME/.gradle/init.d"
+          test "$(git rev-parse HEAD)" = "$APP_SHA"
+          cp "$GITHUB_WORKSPACE/harness/scripts/r22-3-plugin-repos.init.gradle" "$HOME/.gradle/init.d/fluvi-repositories.gradle"
+          flutter pub get
+          test -z "$(git status --porcelain --untracked-files=no)"
+          python3 "$GITHUB_WORKSPACE/harness/scripts/r22-4-reader-observer.py"
+          git diff --name-only > "$RUNNER_TEMP/r224-reader/observer-files.txt"
+          test "$(wc -l < "$RUNNER_TEMP/r224-reader/observer-files.txt")" = 3
+          grep -Fx 'android/app/src/debug/kotlin/com/fluvi/app/lockscreen/KeyguardR15AcquisitionTestHooks.kt' "$RUNNER_TEMP/r224-reader/observer-files.txt"
+          grep -Fx 'android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt' "$RUNNER_TEMP/r224-reader/observer-files.txt"
+          grep -Fx 'android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt' "$RUNNER_TEMP/r224-reader/observer-files.txt"
+          git diff > "$RUNNER_TEMP/r224-reader/observer.patch"
+          sha256sum "$RUNNER_TEMP/r224-reader/observer.patch" "$GITHUB_WORKSPACE/harness/scripts/r22-4-reader-observer.py" > "$RUNNER_TEMP/r224-reader/observer-sha256.txt"
+          printf 'application_sha=%s\nharness_sha=%s\nsource_overlay=debug_observer_only\n' "$APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r224-reader/identity.txt"
+          (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
+      - name: Enable KVM
+        run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
+      - name: Run each real reader selector once
+        timeout-minutes: 15
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          emulator-build: 15081367
+          target: default
+          arch: x86_64
+          profile: pixel_7
+          cores: 4
+          ram-size: 2048M
+          disable-animations: false
+          emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
+          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r22-4-reader-api35.sh"
+      - name: Preserve reader observations on every outcome
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: r224-reader-observer-${{ github.run_id }}
+          path: ${{ runner.temp }}/r224-reader/**
           if-no-files-found: warn
           retention-days: 30
