@@ -1,4 +1,4 @@
-name: R21 candidate reveal handoff qualification (orchestration only)
+name: R22 stock first inspection observation (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -69,14 +69,15 @@ jobs:
           set -uo pipefail
           (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r19-api35/unit.log"
           printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r19-api35/unit.exit"
-      - name: Record exact candidate tests without source overlay
+      - name: Apply and record the stock observation-only fixture
         shell: bash
         run: |
           set -euo pipefail
+          gunzip -c "$GITHUB_WORKSPACE/harness/fixtures/r22-stock-observer.patch.gz" > "$RUNNER_TEMP/r19-api35/stock-observer.patch"
+          git apply "$RUNNER_TEMP/r19-api35/stock-observer.patch"
           git status --short > "$RUNNER_TEMP/r19-api35/fixture-modified-files.txt"
           git diff > "$RUNNER_TEMP/r19-api35/fixture.patch"
-          sha256sum android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/Keyguard{FirstAuthorizedOrb,OrbPresentationPipeline,CardDiagnostics}InstrumentationTest.kt > "$RUNNER_TEMP/r19-api35/test-source-sha256.txt"
-          test ! -s "$RUNNER_TEMP/r19-api35/fixture.patch"
+          sha256sum "$RUNNER_TEMP/r19-api35/stock-observer.patch" > "$RUNNER_TEMP/r19-api35/fixture-source-sha256.txt"
       - name: Assemble app and instrumentation APKs
         run: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
       - name: Enable KVM
@@ -101,7 +102,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r21-candidate-reveal-${{ matrix.arm }}-${{ github.run_id }}
+          name: r22-stock-inspection-${{ matrix.arm }}-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r19-api35/**
             app/build/app/reports/tests/**
