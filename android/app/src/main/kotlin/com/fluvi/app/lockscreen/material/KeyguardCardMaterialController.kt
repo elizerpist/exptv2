@@ -217,6 +217,13 @@ internal class KeyguardCardMaterialController(
     private val passiveHandler = Handler(Looper.getMainLooper())
     private var restrictiveTransitionActive = false
     private var restrictiveReconcilePending = false
+    private var restrictiveHideFailed = false
+    /** A restriction is owned by one retained root and attachment. A stale
+     * outer finish cannot release a later attachment's guard. */
+    internal class RestrictiveTransition internal constructor(
+        internal val root: View?, internal val attachment: Long, internal val wasAttached: Boolean,
+    )
+    private var restrictiveOwner: RestrictiveTransition? = null
     private var currentFirstPublication: KeyguardOrbFirstPublicationToken? = null
     private var firstHandoffToken: KeyguardOrbFirstPublicationToken? = null
     private var firstHandoffCaptureOwner: Any? = null
@@ -238,6 +245,7 @@ internal class KeyguardCardMaterialController(
             timingOwner = drawEvidenceOwner,
             firstOfferReporter = { firstOfferReporter },
             onLayerHideSubmitted = { submission ->
+                if (restrictiveTransitionActive && !submission.transactionApplied) restrictiveHideFailed = true
                 onIsolatedLayerHideSubmitted?.invoke(submission)
             },
             onDetachedBackendPrepared = { lease, observedAtUptimeMs ->
@@ -377,6 +385,99 @@ internal class KeyguardCardMaterialController(
         }
     }
 
+    /** Capture-only scalar view of the exact currently selected lease. The
+     * first-submit record is not claimed to be the last submitted buffer. */
+    internal data class RestrictionEvidence(
+        val generation: Long?, val child: Int?, val firstSlot: Long?,
+        val firstUse: Long?, val firstSubmitAt: Long?,
+    )
+
+    internal fun restrictionEvidence(): RestrictionEvidence {
+        val lease = activeOrbLease
+        val first = firstHandoff?.takeIf { lease != null && it.attachment == lease.attachment && it.generation == lease.generation }
+        return RestrictionEvidence(lease?.generation, first?.childIdentity, first?.slotId,
+            first?.useGeneration, first?.times?.applyEndAtUptimeMs)
+    }
+
+    /** Main-only: revoke the old exact child before any potentially
+     * reentrant neutral scene, bitmap, route or WindowManager work. */
+    internal fun enterRestrictiveTransition(): RestrictiveTransition? {
+        if (restrictiveTransitionActive) return null
+        val owner = RestrictiveTransition(attachedRoot, activeAttachment, attached)
+        restrictiveOwner = owner
+        restrictiveTransitionActive = true
+        restrictiveReconcilePending = false
+        restrictiveHideFailed = false
+        try {
+            currentFirstPublication = null
+            activeOrbLease = null
+            activeOrbLeaseFull = null
+            submittedVisibleScene = null
+            submittedVisibleArtifact = null
+            submittedVisibleAttachment = 0L
+            submittedVisibleRoot = null
+            latestOrbScene = null
+            latestOrbPreviousScene = null
+            latestOrbPreviousArtifact = null
+            isolatedTransitionStartedNanos = 0L
+            bootstrapGeneration += 1L
+            bootstrapVisualKey = null
+            bootstrapCommitReceived = false
+            passiveClearGate = null
+            disarmPassiveStandby("privacy-tightening")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                isolatedOrbRendererDelegate.isInitialized()) {
+                isolatedOrbRenderer.retire("privacy-tightening")
+                check(!restrictiveHideFailed) { "Unable to hide the previous isolated child" }
+            }
+            // No bitmap allocation or financial supplier is needed to stop
+            // an old View scene being selected by a synchronous callback.
+            orb.setStaticBitmap(null)
+            orb.setScene(null, enabled = false)
+            orb.setBootstrapActive(false)
+            orb.visibility = View.INVISIBLE
+            return owner
+        } catch (error: Throwable) {
+            finishRestrictiveTransition(owner, coherent = false)
+            throw error
+        }
+    }
+
+    internal fun finishRestrictiveTransition(owner: RestrictiveTransition?, coherent: Boolean) {
+        if (owner == null || restrictiveOwner !== owner) return
+        restrictiveOwner = null
+        restrictiveTransitionActive = false
+        restrictiveHideFailed = false
+        val pending = restrictiveReconcilePending
+        restrictiveReconcilePending = false
+        val sameOwner = attached == owner.wasAttached && attachedRoot === owner.root &&
+            activeAttachment == owner.attachment
+        if (coherent && sameOwner) {
+            // Detached/controller-only callers have no visible window; their
+            // newly permitted scene must still be ready for a later attach.
+            if (!attached) orb.visibility = View.VISIBLE
+            if (pending) {
+                reconcileIsolatedOrbTarget()
+                reconcileClock()
+            }
+        } else if (!coherent && sameOwner) {
+            // Fail closed even for direct controller callers. The Window owner
+            // additionally hides/removes its root on an update failure.
+            currentFirstPublication = null
+            activeOrbLease = null
+            activeOrbLeaseFull = null
+            latestOrbScene = null
+            latestOrbPreviousScene = null
+            latestOrbPreviousArtifact = null
+            if (isolatedOrbRendererDelegate.isInitialized()) {
+                runCatching { isolatedOrbRenderer.retire("privacy-transition-failure") }
+            }
+            runCatching { orb.setStaticBitmap(null); orb.setScene(null, enabled = false) }
+            orb.visibility = View.INVISIBLE
+            if (owner.wasAttached) owner.root?.visibility = View.INVISIBLE
+        }
+    }
+
     fun update(
         profile: KeyguardMaterialProfile?,
         animationMode: KeyguardCardAnimationMode,
@@ -384,6 +485,16 @@ internal class KeyguardCardMaterialController(
         isFull: Boolean,
         staticOrb: Bitmap?,
     ) {
+        // Direct controller callers use the same guard as the Window. An
+        // already guarded caller owns the matching finish itself.
+        val ownedRestriction = if (appliedConfiguration?.full == true && !isFull &&
+            !restrictiveTransitionActive) enterRestrictiveTransition() else null
+        var coherentRestrictedView = false
+        try {
+        if (restrictiveTransitionActive && isFull) {
+            restrictiveReconcilePending = true
+            return
+        }
         val configuration = MaterialConfiguration(
             profileVisualKey = profile?.let { if (isFull) it.visualKey else it.neutralized().visualKey },
             animationMode = animationMode,
@@ -396,15 +507,13 @@ internal class KeyguardCardMaterialController(
         this.presentationMode = presentationMode
         if (appliedConfiguration == configuration) {
             noOpUpdateCount += 1
+            coherentRestrictedView = true
             reconcileClock()
             return
         }
         if (passiveClearGate?.configuration != configuration) passiveClearGate = null
         val priorConfiguration = appliedConfiguration
         val restrictiveTransition = priorConfiguration?.full == true && !isFull
-        if (restrictiveTransition) restrictiveTransitionActive = true
-        var coherentRestrictedView = false
-        try {
         appliedConfiguration = configuration
         updateCount += 1
         val sceneAppliedAtNanos = System.nanoTime()
@@ -479,23 +588,13 @@ internal class KeyguardCardMaterialController(
             isolatedScene.profile.colors.all { (it ushr 24) == 0xff } && isolatedPrevious == null
         if (passiveRoot != null && (!isolatedOrbRequested || !nextOpaqueFull)) {
             disarmPassiveStandby("configuration")
-            if (!restrictiveTransition && attached && isolatedOrbRequested && passiveRoot.passiveBackingMayExist()) {
+            if (!restrictiveTransitionActive && attached && isolatedOrbRequested && passiveRoot.passiveBackingMayExist()) {
                 activeOrbLease = null
                 activeOrbLeaseFull = null
                 currentFirstPublication = null
                 if (isolatedOrbRendererDelegate.isInitialized()) isolatedOrbRenderer.retire("passive-ineligible")
                 gatePassiveReplacement(passiveRoot, configuration)
             }
-        }
-        if (isolatedOrbRequested && latestOrbScene?.full == true && scene?.full == false &&
-            isolatedOrbRendererDelegate.isInitialized()
-        ) {
-            // The old full-colour child layer must be retired before any
-            // asynchronous artifact/layout callback can observe the neutral
-            // scene. The View bootstrap is immediately privacy-effective.
-            activeOrbLease = null
-            activeOrbLeaseFull = null
-            isolatedOrbRenderer.retire("privacy-tightening")
         }
         if (!isolatedOrbRequested) {
             detachedIsolatedBackendSelected = false
@@ -556,7 +655,6 @@ internal class KeyguardCardMaterialController(
             orb.visibility = View.VISIBLE
             orb.invalidate()
         }
-        coherentRestrictedView = true
         if (attached && isolatedOrbEffective &&
             (activeOrbLease == null || activeOrbLease?.visualKey != sceneVisualKey)
         ) {
@@ -581,29 +679,9 @@ internal class KeyguardCardMaterialController(
         )
         reconcileIsolatedOrbTarget()
         reconcileClock(canAnimate)
+        coherentRestrictedView = true
         } finally {
-            if (restrictiveTransition) {
-                restrictiveTransitionActive = false
-                val pending = restrictiveReconcilePending
-                restrictiveReconcilePending = false
-                if (coherentRestrictedView && pending) {
-                    reconcileIsolatedOrbTarget()
-                    reconcileClock()
-                } else if (!coherentRestrictedView) {
-                    // An exception must not resurrect the previous full scene.
-                    currentFirstPublication = null
-                    activeOrbLease = null
-                    activeOrbLeaseFull = null
-                    if (isolatedOrbRendererDelegate.isInitialized()) {
-                        runCatching { isolatedOrbRenderer.retire("privacy-transition-failure") }
-                    }
-                    runCatching { orb.setStaticBitmap(null); orb.setScene(null, enabled = false) }
-                    if (attached && presentationMode == KeyguardCardPresentationMode.ORB) {
-                        orb.visibility = View.VISIBLE
-                        orb.invalidate()
-                    }
-                }
-            }
+            finishRestrictiveTransition(ownedRestriction, coherentRestrictedView)
         }
     }
 
@@ -728,6 +806,11 @@ internal class KeyguardCardMaterialController(
 
     fun onDetached(reason: String, onLayerHideCommitted: ((Long) -> Unit)? = null,
                    onRetirementEvent: ((KeyguardOrbRetirementEvent) -> Unit)? = null) {
+        // Invalidate the exact outer guard before an eventual reattachment.
+        restrictiveOwner = null
+        restrictiveTransitionActive = false
+        restrictiveReconcilePending = false
+        restrictiveHideFailed = false
         // The service can deliver an idempotent hidden-state signal while an
         // explicitly requested detached prime is still loading its artifact.
         // No attachment was withdrawn and no new preparation is requested:

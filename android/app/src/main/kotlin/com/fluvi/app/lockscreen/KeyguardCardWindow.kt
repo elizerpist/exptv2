@@ -127,6 +127,34 @@ internal class KeyguardCardWindow(
     private var acceptedBootstrapToken: KeyguardBootstrapFrameToken? = null
     private var firstShaderDrawAttachGeneration: Long? = null
     private var materialController: KeyguardCardMaterialController? = null
+    private class TransitionTrace(
+        val kind: String, val root: Int, val attachment: Long, val ingress: Long,
+        val generation: Long?, var child: Int?, val firstSlot: Long?, val firstUse: Long?, val firstSubmit: Long?,
+    ) {
+        var revoke: Long? = null
+        var hideSubmit: Long? = null
+        var hideReturn: Long? = null
+        var hideApplied: Boolean? = null
+        var localHide: Long? = null
+        var bind = "UNOBSERVED"
+        var layout = "UNOBSERVED"
+        var outcome = "UNOBSERVED"
+    }
+    private var terminalTransitionTrace: TransitionTrace? = null
+    private class WindowRestriction(
+        val root: KeyguardCardInteractionLayout,
+        val attachment: Long,
+        val controller: KeyguardCardMaterialController,
+        val trace: TransitionTrace?,
+    ) {
+        var token: KeyguardCardMaterialController.RestrictiveTransition? = null
+        var pendingMaterial: Pair<KeyguardMaterialProfile?, KeyguardCardSettings>? = null
+        var pendingLayout: KeyguardCardSettings? = null
+    }
+    private var windowRestriction: WindowRestriction? = null
+    /** A failed neutral bind may leave a hidden retained root after WM rejects
+     * removal. Its next authorized presentation must be rebound before show. */
+    private var secureRebindRequired = false
     @Volatile private var surfacePresenter: KeyguardOrbSurfacePresenter? = null
     internal data class R18Preparation(val attachment: Long, val outputGeneration: Long,
         val full: Boolean, val visualKey: String, val width: Int, val height: Int, val densityDpi: Int,
@@ -172,6 +200,31 @@ internal class KeyguardCardWindow(
     val currentAttachGeneration: Long get() = attachGeneration
     fun visibleRootForReadmission(): Boolean = lifecycle.isAttached() && root?.visibility == View.VISIBLE
     fun currentPresentationFull(): Boolean? = appliedPresentation?.full
+
+    private fun newTransitionTrace(kind: String, current: View,
+                                   controller: KeyguardCardMaterialController?): TransitionTrace? {
+        if (controller == null || !KeyguardCardDiagnostics.wantsEvent("R22_4_TRANSITION")) return null
+        return runCatching {
+            val evidence = controller.restrictionEvidence()
+            TransitionTrace(kind, System.identityHashCode(current), attachGeneration, SystemClock.uptimeMillis(),
+                evidence.generation, evidence.child, evidence.firstSlot, evidence.firstUse, evidence.firstSubmitAt)
+        }.getOrNull()
+    }
+
+    private fun reportTransitionTrace(trace: TransitionTrace?) {
+        if (trace == null) return
+        runCatching {
+            reportWindowDiagnostic("R22_4_TRANSITION", trace.kind, trace.attachment, trace.ingress,
+                mapOf("root" to trace.root, "generation" to (trace.generation ?: "UNOBSERVED"),
+                    "child" to (trace.child ?: "UNOBSERVED"), "oldFirstSlot" to (trace.firstSlot ?: "UNOBSERVED"),
+                    "oldFirstUse" to (trace.firstUse ?: "UNOBSERVED"), "oldFirstSubmit" to (trace.firstSubmit ?: "UNOBSERVED"),
+                    "oldLastSubmit" to "UNOBSERVED", "revoke" to (trace.revoke ?: "UNOBSERVED"),
+                    "hideSubmit" to (trace.hideSubmit ?: "UNOBSERVED"), "hideReturn" to (trace.hideReturn ?: "UNOBSERVED"),
+                    "hideApplied" to (trace.hideApplied ?: "UNOBSERVED"), "localHide" to (trace.localHide ?: "UNOBSERVED"),
+                    "bind" to trace.bind, "layout" to trace.layout, "outcome" to trace.outcome))
+        }
+    }
+
     /** Main-owned prepared route only. This is a scalar observation of the
      * already selected owner, never another preference or system-state read. */
     fun preparedInitialLiveOrb(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?): Boolean {
@@ -524,10 +577,33 @@ internal class KeyguardCardWindow(
     fun showOrUpdate(presentation: FluviFinancialCardPresentation, settings: KeyguardCardSettings,
                      directHostGeneration: Long? = null): Result {
         checkMainThread()
-        val modeChanged = appliedPresentationConfiguration?.mode?.let { it != settings.presentationMode } == true
-        materialSettings = settings
+        // A synchronous callback is not a new authorization. The outer
+        // restriction retains authority until its permitted content is bound.
+        if (windowRestriction != null) return Result.PENDING
+        val previousPresentation = appliedPresentation
         val current = root ?: createRoot().also { root = it }
         val pendingAttach = !lifecycle.isAttached()
+        val previousController = materialController
+        val restriction = if (!pendingAttach && current.isAttachedToWindow && previousController != null &&
+            appliedPresentationConfiguration?.mode == KeyguardCardPresentationMode.ORB &&
+            previousPresentation?.full == true && !presentation.full) {
+            WindowRestriction(current, attachGeneration, previousController,
+                newTransitionTrace("DOWNGRADE", current, previousController)).also {
+                // Publish the permitted object before any callback or lazy
+                // bitmap can be reached by a settings-only refresh.
+                appliedPresentation = presentation
+                windowRestriction = it
+            }
+        } else null
+        var coherentRestriction = false
+        try {
+        if (restriction != null) {
+            restriction.trace?.revoke = SystemClock.uptimeMillis()
+            restriction.token = restriction.controller.enterRestrictiveTransition()
+            if (KeyguardR224RestrictionTestHooks.ENABLED) KeyguardR224RestrictionTestHooks.afterRevocation()
+        }
+        val modeChanged = appliedPresentationConfiguration?.mode?.let { it != settings.presentationMode } == true
+        materialSettings = settings
         val directPreparation = r18Preparation
         val useR18 = pendingAttach && directHostGeneration != null && directPreparation != null &&
             isR18Bound(directHostGeneration, directPreparation) && directPreparation.full == presentation.full &&
@@ -656,9 +732,26 @@ internal class KeyguardCardWindow(
         // An exceptional remove failure can leave the retained root attached
         // but locally hidden. Only a new, already-authorized presentation may
         // make that existing window visible again.
+        if (secureRebindRequired) {
+            // A prior neutral-bind failure hid this same root. Bind the new
+            // authorized scene completely before making it visible again.
+            try {
+                apply(current, presentation, force = true, mode = settings.presentationMode)
+                updateMaterialForPresentation(presentation)
+                // Failed removal can leave the real root attached while its
+                // stopped controller is detached. A fresh authorization is
+                // the only point at which it may regain this attachment.
+                materialController?.onAttached(attachGeneration, current)
+                secureRebindRequired = false
+            } catch (_: Throwable) {
+                current.visibility = View.INVISIBLE
+                return Result.FAILED
+            }
+        }
         if (current.visibility != View.VISIBLE) current.visibility = View.VISIBLE
 
-        val contentChanged = appliedPresentation?.visualKey != presentation.visualKey
+        val contentBaseline = if (restriction != null) previousPresentation else appliedPresentation
+        val contentChanged = restriction != null || contentBaseline?.visualKey != presentation.visualKey
         val geometryChanged = appliedGeometry != resolvedGeometry
         if (lifecycle.renderOperation(contentChanged, geometryChanged) == KeyguardCardWindowLifecycle.Operation.NONE) {
             if (routeChanged || presentationConfigurationChanged && surfacePresenter != null) updateMaterialForPresentation(presentation)
@@ -667,19 +760,107 @@ internal class KeyguardCardWindow(
             observeBootstrapBeforeNextDraw()
             return if (presentationConfigurationChanged || routeChanged) Result.LAYOUT_UPDATED else Result.NO_OP
         }
-        if (contentChanged) apply(current, presentation, force = false, mode = settings.presentationMode)
-        if (geometryChanged && !updateLayout(current, resolvedGeometry)) return Result.FAILED
-        val wasFull = appliedPresentation?.full == true
+        if (restriction != null) {
+            // The previous object remains only the diff baseline. Force the
+            // restrictive text, accessibility and bitmap bind once, then
+            // select its neutral material before fallible WM geometry work.
+            apply(current, presentation, force = true, mode = settings.presentationMode)
+            updateMaterialForPresentation(presentation)
+            coherentRestriction = true
+            restriction.trace?.bind = "OK"
+            if (root !== current || attachGeneration != restriction.attachment || !lifecycle.isAttached()) {
+                restriction.trace?.outcome = "OWNER_CHANGED"
+                return Result.FAILED
+            }
+        } else if (contentChanged) {
+            apply(current, presentation, force = false, mode = settings.presentationMode)
+        }
+        if (geometryChanged) {
+            if (!updateLayout(current, resolvedGeometry)) {
+                restriction?.trace?.layout = "FAILED"
+                restriction?.trace?.outcome = "FAILED"
+                if (restriction != null && !current.isAttachedToWindow) {
+                    restriction.controller.stop("privacy-layout-detached")
+                }
+                return Result.FAILED
+            }
+            restriction?.trace?.layout = "APPLIED"
+        } else restriction?.trace?.layout = "UNCHANGED"
+        if (restriction != null && (root !== current || attachGeneration != restriction.attachment ||
+                !lifecycle.isAttached() || !current.isAttachedToWindow)) {
+            restriction.trace?.outcome = "OWNER_CHANGED"
+            return Result.FAILED
+        }
+        val wasFull = contentBaseline?.full == true
         appliedPresentation = presentation
-        updateMaterialForPresentation(presentation)
+        if (restriction == null) updateMaterialForPresentation(presentation)
         observeBootstrapBeforeNextDraw()
-        return when {
+        val outcome = when {
             contentChanged && wasFull && !presentation.full -> Result.REDACTED
             contentChanged -> Result.CONTENT_UPDATED
             else -> Result.LAYOUT_UPDATED
         }
+        restriction?.trace?.outcome = outcome.name
+        return outcome
         } finally {
             if (pendingAttach) materialController?.endAuthorizedShow()
+        }
+        } catch (error: Throwable) {
+            if (restriction == null) throw error
+            if (!coherentRestriction) {
+                restriction.trace?.bind = "FAILED"
+                failRestrictedUpdate(restriction, presentation)
+            }
+            restriction.trace?.outcome = "FAILED"
+            return Result.FAILED
+        } finally {
+            if (restriction != null) {
+                val sameOwner = root === restriction.root && attachGeneration == restriction.attachment && lifecycle.isAttached()
+                try {
+                    restriction.controller.finishRestrictiveTransition(restriction.token, coherentRestriction && sameOwner)
+                } catch (_: Throwable) {
+                    failRestrictedUpdate(restriction, presentation)
+                    if (windowRestriction === restriction) windowRestriction = null
+                    restriction.trace?.outcome = "FINISH_FAILED"
+                    reportTransitionTrace(restriction.trace)
+                    return Result.FAILED
+                }
+                if (windowRestriction === restriction) windowRestriction = null
+                if (coherentRestriction && sameOwner && root === restriction.root &&
+                    attachGeneration == restriction.attachment && lifecycle.isAttached()) {
+                    // Reentrant profile/layout calls are replayed only after
+                    // the old FULL owner has lost authority and the guard is
+                    // finished; they consume the durable permitted object.
+                    try {
+                        restriction.pendingMaterial?.let { (profile, latest) -> updateMaterial(profile, latest) }
+                        restriction.pendingLayout?.let(::updateLayoutSettings)
+                    } catch (_: Throwable) {
+                        failRestrictedUpdate(restriction, presentation)
+                        restriction.trace?.outcome = "REFRESH_FAILED"
+                        reportTransitionTrace(restriction.trace)
+                        return Result.FAILED
+                    }
+                }
+                reportTransitionTrace(restriction.trace)
+            }
+        }
+    }
+
+    private fun failRestrictedUpdate(owner: WindowRestriction, permitted: FluviFinancialCardPresentation) {
+        if (root !== owner.root || attachGeneration != owner.attachment || !lifecycle.isAttached()) return
+        appliedPresentation = permitted
+        secureRebindRequired = true
+        owner.root.visibility = View.INVISIBLE
+        acceptedBootstrapToken = null
+        firstFrameCommitObservation?.cancel()
+        firstFrameCommitObservation = null
+        // Existing stop/hide performs exact-child retirement and removal. If
+        // removal throws, keep both the permitted state and invisible root.
+        runCatching { hide() }
+        if (root === owner.root && owner.root.isAttachedToWindow) {
+            appliedPresentation = permitted
+            owner.root.visibility = View.INVISIBLE
+            secureRebindRequired = true
         }
     }
 
@@ -687,6 +868,7 @@ internal class KeyguardCardWindow(
      * layout update only; no inspection and no financial resolver are touched. */
     fun updateLayoutSettings(settings: KeyguardCardSettings) {
         checkMainThread()
+        windowRestriction?.let { it.pendingLayout = settings; return }
         val current = root ?: return
         val modeChanged = appliedPresentationConfiguration?.mode?.let { it != settings.presentationMode } == true
         materialSettings = settings
@@ -710,6 +892,11 @@ internal class KeyguardCardWindow(
              onSurfaceRevoked: ((Long, Long, KeyguardOrbSurfaceMetrics, KeyguardOrbSurfaceMetrics.HolderOperation) -> Unit)? = null): Boolean {
         checkMainThread()
         val current = root ?: return false
+        val trace = if (lifecycle.isAttached() && appliedPresentationConfiguration?.mode == KeyguardCardPresentationMode.ORB)
+            newTransitionTrace("HIDE", current, materialController) else null
+        val priorTrace = terminalTransitionTrace
+        terminalTransitionTrace = trace
+        try {
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.REVOKE, attachment = attachGeneration)
         // Both routes seal their exact worker/output before root removal.
         surfacePresenter?.sealR18()
@@ -719,6 +906,7 @@ internal class KeyguardCardWindow(
         surfacePresenter?.revokeCurrent(hideChild = false, onRevoked = onSurfaceRevoked)
         if (lifecycle.isAttached()) {
             current.visibility = View.INVISIBLE
+            trace?.localHide = SystemClock.uptimeMillis()
             KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.INVISIBLE, attachment = attachGeneration)
             reportWindowDiagnostic("LOCAL_HIDE_APPLIED", "invisible", attachGeneration)
         }
@@ -733,6 +921,7 @@ internal class KeyguardCardWindow(
         firstShaderDrawAttachGeneration = null
         current.cancelInteraction("detach", restorePosition = false)
         clearDragFrame()
+        trace?.revoke = SystemClock.uptimeMillis()
         materialController?.stop("hide", onIsolatedLayerHideCommitted, onRetirementEvent)
         if (lifecycle.hideOperation() == KeyguardCardWindowLifecycle.Operation.NONE) {
             r18HostGeneration?.let(::removeR18Host)
@@ -748,6 +937,7 @@ internal class KeyguardCardWindow(
         val stillAttached = current.isAttachedToWindow
         if (removed.isSuccess || !stillAttached) {
             lifecycle.onDetached()
+            secureRebindRequired = false
             appliedPresentation = null
             appliedGeometry = null
             accessibilityWindowId = null
@@ -759,7 +949,12 @@ internal class KeyguardCardWindow(
         } else {
             reportWindowDiagnostic("DETACH_FAILED", "${removed.exceptionOrNull()?.javaClass?.simpleName ?: "unknown"}", attachGeneration)
         }
+        trace?.outcome = if (removed.isSuccess) "REMOVED" else if (stillAttached) "REMOVE_FAILED_ATTACHED" else "DETACHED"
         return removed.isSuccess
+        } finally {
+            terminalTransitionTrace = priorTrace
+            reportTransitionTrace(trace)
+        }
     }
 
     fun dispose() {
@@ -784,6 +979,7 @@ internal class KeyguardCardWindow(
         }
         surfaceMotionAllowed = false
         root = null
+        secureRebindRequired = false
         materialController = null
         surfacePresenter = null
         appliedPresentationConfiguration = null
@@ -791,6 +987,7 @@ internal class KeyguardCardWindow(
 
     fun updateMaterial(profile: KeyguardMaterialProfile?, settings: KeyguardCardSettings) {
         checkMainThread()
+        windowRestriction?.let { it.pendingMaterial = profile to settings; return }
         materialProfile = profile
         materialSettings = settings
         root?.let { current ->
@@ -885,6 +1082,14 @@ internal class KeyguardCardWindow(
                 )
             }
             controller.onIsolatedLayerHideSubmitted = { submission ->
+                val trace = terminalTransitionTrace ?: windowRestriction?.trace
+                if (trace != null && trace.attachment == submission.lease.attachment &&
+                    (trace.generation == null || trace.generation == submission.lease.generation)) {
+                    trace.child = submission.childIdentity
+                    trace.hideSubmit = submission.submittedAtUptimeMs
+                    trace.hideReturn = submission.applyReturnedAtUptimeMs
+                    trace.hideApplied = submission.transactionApplied
+                }
                 reportWindowDiagnostic(
                     stage = "ISOLATED_LAYER_HIDE_SUBMITTED",
                     detail = "isolatedSurfaceControl",

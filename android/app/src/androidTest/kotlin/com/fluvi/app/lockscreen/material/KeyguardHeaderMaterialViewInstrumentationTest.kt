@@ -28,6 +28,7 @@ import com.fluvi.app.lockscreen.KeyguardCardContentOverflow
 import com.fluvi.app.lockscreen.KeyguardFrameCommitObservation
 import com.fluvi.app.lockscreen.KeyguardCardWindow
 import com.fluvi.app.lockscreen.KeyguardR15AcquisitionTestHooks
+import com.fluvi.app.lockscreen.KeyguardR224RestrictionTestHooks
 import com.fluvi.app.lockscreen.KeyguardFirstAcquisition
 import com.fluvi.app.lockscreen.KeyguardInspectionAuthority
 import com.fluvi.app.lockscreen.KeyguardInspectionFreshness
@@ -2320,7 +2321,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
 
     /** Independent hardware-View references on the same white panel and
      * dimensions. No candidate crop or callback is used to create them. */
-    private fun passiveReferences(sizeOverride: Int? = null, background: Int = android.graphics.Color.WHITE): PassiveReferences {
+    private fun passiveReferences(sizeOverride: Int? = null, background: Int = android.graphics.Color.WHITE,
+                                  referencePhase: Float = PHASE_A): PassiveReferences {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext,
             KeyguardMaterialTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
@@ -2344,13 +2346,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     }
                 }.apply { layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER); visibility = View.INVISIBLE }
                 material = KeyguardHeaderMaterialView(activity, materialTimeSource =
-                    KeyguardMaterialTimeSource { _, _ -> calibratedMaterialTime(PHASE_A) }).apply {
+                    KeyguardMaterialTimeSource { _, _ -> calibratedMaterialTime(referencePhase) }).apply {
                     shape = KeyguardHeaderMaterialView.Shape.ORB
                     layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
                     visibility = View.INVISIBLE
                 }
                 neutralAnimatedView = KeyguardHeaderMaterialView(activity, materialTimeSource =
-                    KeyguardMaterialTimeSource { _, _ -> calibratedMaterialTime(PHASE_A) }).apply {
+                    KeyguardMaterialTimeSource { _, _ -> calibratedMaterialTime(referencePhase) }).apply {
                     shape = KeyguardHeaderMaterialView.Shape.ORB
                     layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
                     visibility = View.INVISIBLE
@@ -2417,7 +2419,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             assertTrue("independent full reference did not draw", waitForShaderDraw(instrumentation, material, before))
             parentFrame()
             val full = copyMaterialView(instrumentation, material, size)
-            val referenceLabel = "r22-3-reference-$size-${Integer.toHexString(background)}"
+            val referenceLabel = "r22-3-reference-$size-${Integer.toHexString(background)}" +
+                if (referencePhase == PHASE_A) "" else "-phase-$referencePhase"
             persistPanelEvidence(activity, "$referenceLabel-standby", standby)
             persistPanelEvidence(activity, "$referenceLabel-neutral-bootstrap", neutral)
             persistPanelEvidence(activity, "$referenceLabel-neutral-animated", neutralAnimated)
@@ -3082,6 +3085,431 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
 
     /** A real WindowManager resize, separate from the legacy child-only clip
      * stress: both window/root and child must commit the new measured size. */
+    /** The old application binary is unchanged in the parent arm: this is
+     * a real attached panel with a one-shot rejection at the WM boundary. */
+    @Test fun attachedOrbRestrictionPrecedesFailedLayout() {
+        val refs = passiveReferences()
+        val gate = RealReleaseGate().apply { releaseAll() }
+        try {
+            withOrbRetirementFixture("r22-4-attached-layout-failure", gate) { fixture ->
+                val first = fixture.awaitFirstToken(fixture.initialLease.attachment)
+                val before = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                val evidence = File(fixture.activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
+                var after: Bitmap? = null
+                try {
+                    persistPanelEvidence(fixture.activity, "r22-4-failed-layout-before", before)
+                    assertTrue("NOT REACHED: initial isolated FULL pixels differ from independent reference",
+                        compareMaterialPixels(refs.full, before).nearlyEqual())
+                    lateinit var retainedRoot: View
+                    var entryAttached = false
+                    var entryFull: Boolean? = null
+                    var entryRevoke = false
+                    var oldChild = -1
+                    var result = KeyguardCardWindow.Result.NO_OP
+                    var afterFull: Boolean? = null
+                    var replayFull: Boolean? = null
+                    var afterAttached = false
+                    var afterPrimary = ""
+                    var replayPrimary = ""
+                    val discreet = FluviFinancialCardPresenter.discreet()
+                    val next = fixture.settings.copy(showFinancialDetails = false,
+                        orbPosition = KeyguardCardOrbPosition(.72f, .5f))
+                    fixture.instrumentation.runOnMainSync {
+                        retainedRoot = requireNotNull(fixture.manager.currentRoot)
+                        oldChild = System.identityHashCode(first.child)
+                        fixture.manager.rejectNextUpdate = { view ->
+                            entryAttached = view === retainedRoot && view.isAttachedToWindow
+                            entryFull = fixture.window.currentPresentationFull()
+                            entryRevoke = gate.retirementSnapshot().any {
+                                it.lease == first.lease && it.child == oldChild && it.event == "main-hide-attempt-finished"
+                            }
+                        }
+                        result = fixture.window.showOrUpdate(discreet, next)
+                        afterAttached = fixture.window.isAttached && retainedRoot.isAttachedToWindow &&
+                            fixture.manager.currentRoot === retainedRoot
+                        afterFull = fixture.window.currentPresentationFull()
+                        afterPrimary = retainedRoot.findViewById<android.widget.TextView>(
+                            R.id.fluvi_financial_snapshot_primary).text.toString()
+                        fixture.window.updateMaterial(calibratedOrbProfile(), next)
+                        fixture.window.updateLayoutSettings(next)
+                        replayFull = fixture.window.currentPresentationFull()
+                        replayPrimary = retainedRoot.findViewById<android.widget.TextView>(
+                            R.id.fluvi_financial_snapshot_primary).text.toString()
+                    }
+                    after = copyPanelOrb(fixture.instrumentation, fixture.manager)
+                    persistPanelEvidence(fixture.activity, "r22-4-failed-layout-after-replay", checkNotNull(after))
+                    File(evidence, "r22-4-attached-layout-result.txt").writeText(
+                        "attachment=${first.lease.attachment} generation=${first.lease.generation} " +
+                        "child=$oldChild slot=${first.slotId} use=${first.useGeneration} " +
+                        "root=${System.identityHashCode(retainedRoot)} entryAttached=$entryAttached " +
+                        "entryFull=$entryFull entryRevoked=$entryRevoke result=$result " +
+                        "afterAttached=$afterAttached afterFull=$afterFull replayFull=$replayFull " +
+                        "afterPrimary=$afterPrimary replayPrimary=$replayPrimary " +
+                        "rejected=${fixture.manager.rejectedUpdates} " +
+                        "retirements=${gate.retirementSnapshot()}\n")
+                    assertEquals("NOT REACHED: manager did not reject exactly one geometry update", 1,
+                        fixture.manager.rejectedUpdates)
+                    assertTrue("NOT REACHED: original root was not attached at update", entryAttached && afterAttached)
+                    assertEquals("failed WM update must remain truthful", KeyguardCardWindow.Result.FAILED, result)
+                    assertEquals("permitted presentation must be durable at WM entry", false, entryFull)
+                    assertTrue("old exact child was not retired before the fallible WM update", entryRevoke)
+                    assertEquals("failed layout retained FULL", false, afterFull)
+                    assertEquals("settings replay restored FULL", false, replayFull)
+                    assertEquals(discreet.primary, afterPrimary)
+                    assertEquals(discreet.primary, replayPrimary)
+                    fixture.ownership.assertBoundedSingleRenderer()
+                } finally {
+                    fixture.instrumentation.runOnMainSync { fixture.manager.rejectNextUpdate = null }
+                    before.recycle()
+                    after?.recycle()
+                }
+            }
+        } finally { refs.recycle() }
+    }
+
+    @Test fun r22_4RepeatedRestrictionAndFreshFullKeepSameRoot() {
+        val gate = RealReleaseGate().apply { releaseAll(); allowContinuous = true }
+        withOrbRetirementFixture("r22-4-repeat-and-reauthorize", gate) { f ->
+            val old = f.awaitFirstToken(f.initialLease.attachment)
+            lateinit var root: View
+            var nested = KeyguardCardWindow.Result.NO_OP
+            try {
+                f.instrumentation.runOnMainSync {
+                    root = requireNotNull(f.manager.currentRoot)
+                    KeyguardR224RestrictionTestHooks.afterRevocation = {
+                        f.window.updateMaterial(calibratedOrbProfile(), f.settings)
+                        f.window.updateLayoutSettings(f.settings.copy(showFinancialDetails = false))
+                        nested = f.window.showOrUpdate(FluviFinancialCardPresenter.loading(), f.settings)
+                    }
+                    assertEquals(KeyguardCardWindow.Result.REDACTED,
+                        f.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                            f.settings.copy(showFinancialDetails = false)))
+                    KeyguardR224RestrictionTestHooks.afterRevocation = null
+                    assertEquals(KeyguardCardWindow.Result.PENDING, nested)
+                    assertEquals(false, f.window.currentPresentationFull())
+                    assertTrue(root === f.manager.currentRoot && root.isAttachedToWindow)
+                }
+                val neutral = f.awaitReplacementToken(old)
+                assertEquals(old.lease.attachment, neutral.lease.attachment)
+                f.instrumentation.runOnMainSync {
+                    val again = f.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                        f.settings.copy(showFinancialDetails = false))
+                    assertTrue("identical restriction unexpectedly failed: $again", again != KeyguardCardWindow.Result.FAILED)
+                    assertEquals(false, f.window.currentPresentationFull())
+                }
+                assertEquals(1, gate.retirementSnapshot().count { it.lease == old.lease &&
+                    it.child == System.identityHashCode(old.child) && it.event == "main-hide-attempt-finished" })
+                val request = f.prepareFirst(PHASE_B)
+                f.instrumentation.runOnMainSync {
+                    assertEquals(KeyguardCardWindow.Result.CONTENT_UPDATED,
+                        f.window.showOrUpdate(FluviFinancialCardPresenter.loading(), f.settings))
+                    assertEquals(true, f.window.currentPresentationFull())
+                    assertTrue(root === f.manager.currentRoot && root.isAttachedToWindow)
+                }
+                val full = f.submitted(request)
+                assertEquals(old.lease.attachment, full.lease.attachment)
+                assertTrue(full.lease.generation > neutral.lease.generation)
+                f.ownership.assertBoundedSingleRenderer()
+            } finally { KeyguardR224RestrictionTestHooks.afterRevocation = null }
+        }
+    }
+
+    @Test fun r22_4FailedNeutralBindCannotReviveHiddenRoot() {
+        val gate = RealReleaseGate().apply { releaseAll(); allowContinuous = true }
+        withOrbRetirementFixture("r22-4-bind-failure", gate) { f ->
+            val old = f.awaitFirstToken(f.initialLease.attachment)
+            lateinit var root: View
+            var nested = KeyguardCardWindow.Result.NO_OP
+            var failed = KeyguardCardWindow.Result.NO_OP
+            try {
+                f.instrumentation.runOnMainSync {
+                    root = requireNotNull(f.manager.currentRoot)
+                    f.manager.rejectNextRemoval = true
+                    KeyguardR224RestrictionTestHooks.afterRevocation = {
+                        // Neither settings refresh nor nested show is a new
+                        // presentation grant while this update is in flight.
+                        f.window.updateMaterial(calibratedOrbProfile(), f.settings)
+                        f.window.updateLayoutSettings(f.settings)
+                        nested = f.window.showOrUpdate(FluviFinancialCardPresenter.loading(), f.settings)
+                        throw IllegalStateException("r22-4-injected-neutral-bind-failure")
+                    }
+                    failed = f.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                        f.settings.copy(showFinancialDetails = false))
+                    KeyguardR224RestrictionTestHooks.afterRevocation = null
+                    assertEquals(KeyguardCardWindow.Result.FAILED, failed)
+                    assertEquals(KeyguardCardWindow.Result.PENDING, nested)
+                    assertTrue("remove failure must retain actual root", root.isAttachedToWindow && f.window.isAttached)
+                    assertEquals(View.INVISIBLE, root.visibility)
+                    assertEquals(false, f.window.currentPresentationFull())
+                    f.window.updateMaterial(calibratedOrbProfile(), f.settings)
+                    f.window.updateLayoutSettings(f.settings)
+                    assertEquals("settings-only refresh restored the failed root", View.INVISIBLE, root.visibility)
+                    assertEquals("settings-only refresh restored FULL", false, f.window.currentPresentationFull())
+                }
+                val matching = gate.retirementSnapshot().filter { it.lease == old.lease &&
+                    it.child == System.identityHashCode(old.child) && it.event == "main-hide-attempt-finished" }
+                assertEquals("old exact child must retire once before the injected failure", 1, matching.size)
+                val request = f.prepareFirst(PHASE_B)
+                f.instrumentation.runOnMainSync {
+                    val result = f.window.showOrUpdate(FluviFinancialCardPresenter.loading(), f.settings)
+                    assertTrue("fresh authorized FULL did not rebind: $result", result != KeyguardCardWindow.Result.FAILED &&
+                        result != KeyguardCardWindow.Result.PENDING)
+                    assertEquals(View.VISIBLE, root.visibility)
+                    assertEquals(true, f.window.currentPresentationFull())
+                    assertEquals(old.lease.attachment, f.window.currentAttachGeneration)
+                }
+                val fresh = f.submitted(request)
+                assertEquals(old.lease.attachment, fresh.lease.attachment)
+                assertTrue("fresh FULL must use a different generation", fresh.lease.generation > old.lease.generation)
+                f.ownership.assertBoundedSingleRenderer()
+            } finally {
+                KeyguardR224RestrictionTestHooks.afterRevocation = null
+                f.instrumentation.runOnMainSync { f.manager.rejectNextRemoval = false }
+            }
+        }
+    }
+
+    @Test fun r22_4DetachedDuringFailedLayoutAllowsCleanNextAttach() {
+        val gate = RealReleaseGate().apply { releaseAll(); allowContinuous = true }
+        withOrbRetirementFixture("r22-4-detached-layout", gate) { f ->
+            val old = f.awaitFirstToken(f.initialLease.attachment)
+            lateinit var root: View
+            var result = KeyguardCardWindow.Result.NO_OP
+            f.instrumentation.runOnMainSync {
+                root = requireNotNull(f.manager.currentRoot)
+                f.manager.rejectNextUpdate = { view -> f.manager.removeViewImmediate(view) }
+                result = f.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                    f.settings.copy(showFinancialDetails = false, orbPosition = KeyguardCardOrbPosition(.72f, .5f)))
+                assertEquals(KeyguardCardWindow.Result.FAILED, result)
+                assertFalse("remove-then-throw must remove the original root", root.isAttachedToWindow)
+                assertFalse(f.window.isAttached)
+                assertEquals(null, f.window.currentPresentationFull())
+            }
+            val request = f.prepareFirst(PHASE_B)
+            f.instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    f.window.showOrUpdate(FluviFinancialCardPresenter.loading(), f.settings))
+                assertTrue("fresh attach must advance generation", f.window.currentAttachGeneration > old.lease.attachment)
+            }
+            val fresh = f.submitted(request)
+            assertTrue(fresh.lease.attachment > old.lease.attachment)
+            f.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
+    @Test fun r22_4BoundedResizedPrivacyStripWhite() =
+        boundedResizedPrivacyStrip(android.graphics.Color.WHITE)
+
+    @Test fun r22_4BoundedResizedPrivacyStripBlack() =
+        boundedResizedPrivacyStrip(android.graphics.Color.BLACK)
+
+    /** Separate observer: retain the immediate image and acquire all six full
+     * screens before encoding or comparing any of them. */
+    private fun boundedResizedPrivacyStrip(background: Int) {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val base = target.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
+        val size = base + 4
+        val refs = passiveReferences(size, background, PHASE_A)
+        val refsB = passiveReferences(size, background, PHASE_B)
+        val old = passiveReferences(base, background, PHASE_A)
+        val gate = RealReleaseGate().apply { releaseAll(); allowContinuous = true }
+        try {
+            assertTrue("NOT REACHED: independent neutral phases are not distinguishable",
+                compareMaterialPixels(refs.neutralAnimated, refsB.neutralAnimated).meaningful())
+            withOrbRetirementFixture("r22-4-bounded-$background", gate, initialBackground = background) { f ->
+                val initial = f.awaitFirstToken(f.initialLease.attachment)
+                lateinit var root: View
+                lateinit var orb: View
+                f.instrumentation.runOnMainSync {
+                    root = requireNotNull(f.manager.currentRoot)
+                    orb = root.findViewById(R.id.fluvi_financial_snapshot_orb)
+                    val oldParams = root.layoutParams as WindowManager.LayoutParams
+                    val resized = WindowManager.LayoutParams().apply { copyFrom(oldParams); width = size; height = size }
+                    orb.layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
+                    f.manager.updateViewLayout(root, resized)
+                    root.requestLayout()
+                }
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+                var bounds = Rect()
+                var ready = false
+                while (!ready && System.nanoTime() < deadline) {
+                    f.instrumentation.runOnMainSync {
+                        val pos = IntArray(2)
+                        orb.getLocationOnScreen(pos)
+                        bounds = Rect(pos[0], pos[1], pos[0] + orb.width, pos[1] + orb.height)
+                        ready = root.isAttachedToWindow && root.width == size && root.height == size &&
+                            orb.width == size && orb.height == size && bounds.left > 0 && bounds.top > 0
+                    }
+                    if (!ready) Thread.sleep(24)
+                }
+                assertTrue("NOT REACHED: actual resized root and child were not established", ready)
+                val commit = CountDownLatch(1)
+                f.instrumentation.runOnMainSync {
+                    root.viewTreeObserver.registerFrameCommitCallback { commit.countDown() }
+                    root.invalidate()
+                }
+                assertTrue("NOT REACHED: resized parent commit", commit.await(8, TimeUnit.SECONDS))
+                val resized = f.awaitReplacementToken(initial)
+                assertEquals(size, resized.lease.width)
+                assertEquals(size, resized.lease.height)
+                val underlay = requireNotNull(f.underlay)
+                val requiredBytes = 8L * underlay.width * underlay.height * 4L + 32L * 1024 * 1024
+                val runtime = Runtime.getRuntime()
+                val availableHeap = runtime.maxMemory() - (runtime.totalMemory() - runtime.freeMemory())
+                val mem = android.app.ActivityManager.MemoryInfo()
+                f.activity.getSystemService(android.app.ActivityManager::class.java).getMemoryInfo(mem)
+                assertTrue("NOT REACHED: insufficient memory for bounded full-screen strip", availableHeap >= requiredBytes && mem.availMem >= requiredBytes)
+                // The first transaction callback does not prove the resized
+                // compositor image has arrived. Establish a real independent
+                // FULL control before the timed downgrade; retain mismatches.
+                var beforeCandidate: Bitmap? = null
+                var beforeCropCandidate: Bitmap? = null
+                val referenceDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
+                var precheck = 0
+                while (beforeCandidate == null && precheck < 16 && System.nanoTime() < referenceDeadline) {
+                    val screen = requireNotNull(f.instrumentation.uiAutomation.takeScreenshot())
+                    val crop = Bitmap.createBitmap(screen, bounds.left, bounds.top, size, size)
+                    persistPanelEvidence(f.activity, "r22-4-bounded-$background-precheck-$precheck-full", screen)
+                    persistPanelEvidence(f.activity, "r22-4-bounded-$background-precheck-$precheck-crop", crop)
+                    precheck += 1
+                    if (wholeRoiDifference(refs.full, crop).nearlyEqual()) {
+                        beforeCandidate = screen
+                        beforeCropCandidate = crop
+                    } else {
+                        crop.recycle()
+                        screen.recycle()
+                        Thread.sleep(24)
+                    }
+                }
+                assertTrue("NOT REACHED: resized compositor never showed independently calibrated FULL", beforeCandidate != null)
+                val before = requireNotNull(beforeCandidate)
+                val beforeCrop = requireNotNull(beforeCropCandidate)
+                val underlayCrop = Bitmap.createBitmap(underlay, bounds.left, bounds.top, size, size)
+                val oldSize = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                val clipped = requireNotNull(refs.neutralAnimated.copy(Bitmap.Config.ARGB_8888, true))
+                Canvas(oldSize).apply {
+                    drawColor(background)
+                    drawBitmap(old.neutralAnimated, ((size - base) / 2).toFloat(), ((size - base) / 2).toFloat(), null)
+                }
+                Canvas(clipped).apply {
+                    drawRect(base.toFloat(), 0f, size.toFloat(), size.toFloat(), android.graphics.Paint().apply { color = background })
+                    drawRect(0f, base.toFloat(), size.toFloat(), size.toFloat(), android.graphics.Paint().apply { color = background })
+                }
+                val frames = mutableListOf<Bitmap>()
+                val intervals = mutableListOf<Pair<Long, Long>>()
+                val rows = mutableListOf<String>()
+                try {
+                    persistPanelEvidence(f.activity, "r22-4-bounded-$background-underlay", underlay)
+                    persistPanelEvidence(f.activity, "r22-4-bounded-$background-before", before)
+                    assertTrue("NOT REACHED: resized initial crop is not independent FULL",
+                        wholeRoiDifference(refs.full, beforeCrop).nearlyEqual())
+                    var outcome = KeyguardCardWindow.Result.NO_OP
+                    var ingress = 0L
+                    var returned = 0L
+                    f.instrumentation.runOnMainSync {
+                        ingress = SystemClock.uptimeMillis()
+                        outcome = f.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                            f.settings.copy(showFinancialDetails = false))
+                        returned = SystemClock.uptimeMillis()
+                    }
+                    repeat(6) {
+                        val start = SystemClock.uptimeMillis()
+                        val screen = requireNotNull(f.instrumentation.uiAutomation.takeScreenshot())
+                        val end = SystemClock.uptimeMillis()
+                        intervals += start to end
+                        frames += screen
+                    }
+                    fun near(a: Bitmap, b: Bitmap) = wholeRoiDifference(a, b).nearlyEqual()
+                    fun isSafe(b: Bitmap) = listOf(refs.standby, refs.neutral, refs.neutralAnimated, refsB.neutralAnimated)
+                        .any { near(it, b) }
+                    assertFalse("oracle accepted stale FULL", isSafe(refs.full))
+                    assertFalse("oracle accepted underlay", isSafe(underlayCrop))
+                    assertFalse("oracle accepted clipped neutral", isSafe(clipped))
+                    val beforePixels = IntArray(before.width * before.height)
+                    before.getPixels(beforePixels, 0, before.width, 0, 0, before.width, before.height)
+                    val classes = mutableListOf<String>()
+                    frames.forEachIndexed { index, screen ->
+                        val crop = Bitmap.createBitmap(screen, bounds.left, bounds.top, size, size)
+                        try {
+                            val label = when {
+                                near(refs.full, crop) -> "FULL"
+                                near(refs.standby, crop) -> "SAFE_STANDBY"
+                                near(refs.neutral, crop) -> "NEUTRAL_BOOTSTRAP"
+                                near(refs.neutralAnimated, crop) -> "NEUTRAL_ANIMATED_A"
+                                near(refsB.neutralAnimated, crop) -> "NEUTRAL_ANIMATED_B"
+                                near(oldSize, crop) -> "OLD_SIZE"
+                                near(clipped, crop) -> "CLIPPED"
+                                near(underlayCrop, crop) -> "UNDERLAY"
+                                else -> "UNCLASSIFIED"
+                            }
+                            classes += label
+                            val pixels = IntArray(screen.width * screen.height)
+                            screen.getPixels(pixels, 0, screen.width, 0, 0, screen.width, screen.height)
+                            var changed = 0
+                            var l = screen.width; var t = screen.height; var r = -1; var b = -1
+                            for (y in 0 until screen.height) for (x in 0 until screen.width) {
+                                if (!bounds.contains(x, y) && pixels[y * screen.width + x] != beforePixels[y * screen.width + x]) {
+                                    changed++; l = minOf(l, x); t = minOf(t, y); r = maxOf(r, x); b = maxOf(b, y)
+                                }
+                            }
+                            rows += "sample=$index start=${intervals[index].first} end=${intervals[index].second} " +
+                                "class=$label bounds=$bounds outside=$changed outsideBounds=$l,$t,$r,$b " +
+                                "full=${wholeRoiDifference(refs.full, crop)} neutralA=${wholeRoiDifference(refs.neutralAnimated, crop)} " +
+                                "neutralB=${wholeRoiDifference(refsB.neutralAnimated, crop)}"
+                            persistPanelEvidence(f.activity, "r22-4-bounded-$background-$index-full", screen)
+                            persistPanelEvidence(f.activity, "r22-4-bounded-$background-$index-crop", crop)
+                        } finally { crop.recycle() }
+                    }
+                    val dir = File(f.activity.filesDir, "keyguard-material-smoke").apply { mkdirs() }
+                    File(dir, "r22-4-bounded-$background.txt").writeText(
+                        "clock=uptimeMs ingress=$ingress return=$returned outcome=$outcome " +
+                        "root=${System.identityHashCode(root)} attach=${resized.lease.attachment} " +
+                        "generation=${resized.lease.generation} child=${System.identityHashCode(resized.child)} " +
+                        "slot=${resized.slotId}/${resized.useGeneration} retirements=${gate.retirementSnapshot()}\n" +
+                        rows.joinToString("\n", postfix = "\n"))
+                    assertTrue("restriction did not complete: $outcome", outcome == KeyguardCardWindow.Result.REDACTED ||
+                        outcome == KeyguardCardWindow.Result.CONTENT_UPDATED)
+                    assertTrue("unsafe or unclassified immediately acquired images: $classes",
+                        classes.all { it in setOf("SAFE_STANDBY", "NEUTRAL_BOOTSTRAP", "NEUTRAL_ANIMATED_A", "NEUTRAL_ANIMATED_B") })
+                    assertTrue("outside resized ROI changed: $rows", rows.all { it.contains("outside=0 ") })
+                } finally {
+                    frames.forEach(Bitmap::recycle)
+                    before.recycle(); beforeCrop.recycle(); underlayCrop.recycle(); oldSize.recycle(); clipped.recycle()
+                }
+            }
+        } finally { refs.recycle(); refsB.recycle(); old.recycle() }
+    }
+
+    @Test fun r22_4NeutralMotionUsesIndependentPhaseReferences() {
+        val refsA = passiveReferences(referencePhase = PHASE_A)
+        val refsB = passiveReferences(referencePhase = PHASE_B)
+        val gate = RealReleaseGate().apply { releaseAll(); allowContinuous = true }
+        try {
+            assertTrue("NOT REACHED: independently calibrated neutral phases are identical",
+                compareMaterialPixels(refsA.neutralAnimated, refsB.neutralAnimated).meaningful())
+            withOrbRetirementFixture("r22-4-neutral-motion", gate) { f ->
+                f.instrumentation.runOnMainSync {
+                    val result = f.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                        f.settings.copy(showFinancialDetails = false))
+                    assertTrue(result == KeyguardCardWindow.Result.REDACTED || result == KeyguardCardWindow.Result.CONTENT_UPDATED)
+                }
+                val phaseA = f.capture(PHASE_A, "neutral-a") { wholeRoiDifference(refsA.neutralAnimated, it).nearlyEqual() }
+                try {
+                    val phaseB = f.capture(PHASE_B, "neutral-b") { wholeRoiDifference(refsB.neutralAnimated, it).nearlyEqual() }
+                    try {
+                        val againA = f.capture(PHASE_A, "neutral-return-a") { wholeRoiDifference(refsA.neutralAnimated, it).nearlyEqual() }
+                        try {
+                            assertEquals(phaseA.frame.lease, phaseB.frame.lease)
+                            assertEquals(phaseA.frame.lease, againA.frame.lease)
+                            assertTrue("neutral animation failed A/B motion", compareMaterialPixels(phaseA.bitmap, phaseB.bitmap).meaningful())
+                            assertTrue("neutral animation failed B/A return", compareMaterialPixels(phaseA.bitmap, againA.bitmap).nearlyEqual())
+                        } finally { againA.bitmap.recycle() }
+                    } finally { phaseB.bitmap.recycle() }
+                } finally { phaseA.bitmap.recycle() }
+            }
+        } finally { refsA.recycle(); refsB.recycle() }
+    }
+
     @Test fun isolatedNeutralRecoveryAtCommittedResizedBounds() {
         val baseSize = InstrumentationRegistry.getInstrumentation().targetContext.resources
             .getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
@@ -4321,15 +4749,17 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         label: String,
         recoveryHook: KeyguardOrbRecoveryTestHook = NoopKeyguardOrbRecoveryTestHook,
         initialProfile: KeyguardMaterialProfile = calibratedOrbProfile(),
+        initialBackground: Int? = null,
         exercise: (OrbRetirementFixture) -> Unit,
     ) {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-        val fixture = OrbRetirementFixture(label, recoveryHook, initialProfile)
+        val fixture = OrbRetirementFixture(label, recoveryHook, initialProfile, initialBackground)
         try {
             fixture.start()
             exercise(fixture)
         } finally {
             fixture.releaseGates()
+            fixture.underlay?.recycle()
             fixture.resetHooks()
             try {
                 fixture.persistOwnershipEvidence()
@@ -4350,6 +4780,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         private val label: String,
         private val recoveryHook: KeyguardOrbRecoveryTestHook,
         private val initialProfile: KeyguardMaterialProfile,
+        private val initialBackground: Int?,
     ) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val activity = instrumentation.startActivitySync(
@@ -4358,6 +4789,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         ) as KeyguardMaterialTestActivity
         lateinit var window: KeyguardCardWindow
         var createdWindow: KeyguardCardWindow? = null
+        var underlay: Bitmap? = null
         lateinit var manager: TestPanelWindowManager
         lateinit var initialLease: KeyguardOrbBufferLease
         val ownership = OrbOwnershipHistory()
@@ -4425,6 +4857,17 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         private var nextRequest = 0L
 
         fun start() {
+            if (initialBackground != null) {
+                val backgroundCommit = CountDownLatch(1)
+                instrumentation.runOnMainSync {
+                    val content = activity.findViewById<View>(android.R.id.content)
+                    content.viewTreeObserver.registerFrameCommitCallback { backgroundCommit.countDown() }
+                    content.setBackgroundColor(initialBackground)
+                    content.invalidate()
+                }
+                assertTrue("NOT REACHED: pre-panel underlay did not commit", backgroundCommit.await(8, TimeUnit.SECONDS))
+                underlay = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
+            }
             KeyguardOrbBufferRendererTestHooks.recoveryHook = recoveryHook
             KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
             KeyguardOrbBufferRendererTestHooks.publicationObserver = KeyguardOrbBufferPublicationObserver { frame ->
@@ -5263,6 +5706,11 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         var lastWidth = 0
         var lastHeight = 0
         var currentRoot: View? = null
+        // One-shot failure before the real delegate; the root remains attached.
+        // The observer records the production state at the actual WM boundary.
+        var rejectNextUpdate: ((View) -> Unit)? = null
+        var rejectedUpdates = 0
+        var rejectNextRemoval = false
 
         private fun panelParameters(params: ViewGroup.LayoutParams) = WindowManager.LayoutParams().apply {
             copyFrom(params as WindowManager.LayoutParams)
@@ -5278,10 +5726,21 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             currentRoot = view
         }
 
-        override fun updateViewLayout(view: View, params: ViewGroup.LayoutParams) =
+        override fun updateViewLayout(view: View, params: ViewGroup.LayoutParams) {
+            rejectNextUpdate?.let { observe ->
+                rejectNextUpdate = null
+                rejectedUpdates += 1
+                observe(view)
+                throw IllegalStateException("r22-4-injected-update-before-delegate")
+            }
             delegate.updateViewLayout(view, panelParameters(params))
+        }
 
         override fun removeViewImmediate(view: View) {
+            if (rejectNextRemoval) {
+                rejectNextRemoval = false
+                throw IllegalStateException("r22-4-injected-remove-before-delegate")
+            }
             delegate.removeViewImmediate(view)
             removes += 1
             currentRoot = null

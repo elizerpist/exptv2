@@ -1347,7 +1347,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                 // timestamp/owner so it cannot sit in front of that operation.
                 val capturedOperation = activeWindowDiagnosticOperation
                 val capturedFields = fields
-                mainHandler.post {
+                // A restriction record belongs only to the operation/capture
+                // active at the actual Window boundary, never a later wake.
+                if (stage != "R22_4_TRANSITION" || capturedOperation?.context?.captureId != null) mainHandler.post {
                     if (stage.startsWith("MATERIAL_") || stage.startsWith("BOOTSTRAP_") || stage == "ADD_VIEW_RETURN") {
                         KeyguardCardDiagnostics.recordColdPreparation(
                             session.get(),

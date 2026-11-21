@@ -796,6 +796,9 @@ internal object KeyguardCardDiagnostics {
         var r18GenerationOmitted: Int = 0,
         /** One bounded opening-read timeline per capture-owned attempt. */
         val r22Opening: LinkedHashMap<String, String> = linkedMapOf(),
+        /** Bounded decision evidence survives eviction of raw event lines. */
+        val r224Transitions: ArrayDeque<TimingEvent> = ArrayDeque(),
+        var r224TransitionsOmitted: Int = 0,
         val inspections: LinkedHashMap<Long, InspectionTimeline> = linkedMapOf(),
         /** This compact causal spine is independent of the raw event ring.
          * A later hidden-state storm cannot evict an earlier wake/attach/hide
@@ -917,7 +920,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
-        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY", "R18_PIPELINE", "R22_ACQUISITION",
+        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY", "R18_PIPELINE", "R22_ACQUISITION", "R22_4_TRANSITION",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "R15_SURFACE_REVOKED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
@@ -1877,6 +1880,13 @@ internal object KeyguardCardDiagnostics {
                     attempt.staleInspectionCount += 1
                     inspectionTimeline()?.rejectionReason = fields["rejectionReason"] ?: reason
                 }
+                "R22_4_TRANSITION" -> {
+                    if (attempt.r224Transitions.size >= 8) {
+                        attempt.r224Transitions.removeFirst()
+                        attempt.r224TransitionsOmitted += 1
+                    }
+                    attempt.r224Transitions.addLast(event)
+                }
                 "R15_SURFACE_REVOKED" -> hideEpisode()?.let { hide ->
                     if (hide.r15Metrics == null) {
                         hide.r15Generation = fields["r15Generation"]
@@ -2384,6 +2394,24 @@ internal object KeyguardCardDiagnostics {
                 select("a${attempt.id}:r21Core", r21CoreRecord(attempt), attempt.id)
                 select("a${attempt.id}:r22Core", r22CoreRecord(attempt), attempt.id)
             }
+        // Restriction decisions are independent of the rolling raw ring.
+        // The same global export budget and omission accounting still apply.
+        attemptsForCausalEvidence.forEach { attempt ->
+            attempt.r224Transitions.forEachIndexed { index, event ->
+                val f = event.fields
+                fun v(key: String) = f[key] ?: "UNOBSERVED"
+                val row = " R22_4_TRANSITION attempt=${attempt.id} req=${event.requestId ?: "UNOBSERVED"}" +
+                    " showOp=${event.showOperationId ?: "UNOBSERVED"} hideOp=${event.hideOperationId ?: "UNOBSERVED"}" +
+                    " attach=${event.attachGeneration ?: "UNOBSERVED"} kind=${event.reason}" +
+                    " root=${v("root")} generation=${v("generation")} child=${v("child")}" +
+                    " first=${v("oldFirstSlot")}/${v("oldFirstUse")}@${v("oldFirstSubmit")}" +
+                    " lastSubmit=${v("oldLastSubmit")} ingress=${event.uptimeMs} revoke=${v("revoke")}" +
+                    " hide=${v("hideSubmit")}/${v("hideReturn")}/${v("hideApplied")} localHide=${v("localHide")}" +
+                    " bind=${v("bind")} layout=${v("layout")} outcome=${v("outcome")}" +
+                    " omitted=${attempt.r224TransitionsOmitted} clock=uptimeMs physical=UNOBSERVED\n"
+                select("a${attempt.id}:r224:$index", row, attempt.id)
+            }
+        }
         // Reserve a readable, owner-qualified core for every selected show
         // and hide before optional long renderer histories can consume space.
         // Round-robin across attempts keeps a busy wake from starving others.

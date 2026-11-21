@@ -25,6 +25,48 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         KeyguardCardDiagnostics.clearCapture(context)
     }
 
+    @Test fun r224RestrictionEvidenceSurvivesLightPressureAndRestart() = r224RestrictionEvidence("LIGHT")
+    @Test fun r224RestrictionEvidenceSurvivesFullPressureAndRestart() = r224RestrictionEvidence("FULL")
+
+    private fun r224RestrictionEvidence(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r22-4", "profile", mode)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 924, 1, "wake", 100))
+        val show = KeyguardCardDiagnostics.newShowOperation(owner, 11, 22)
+        val hide = KeyguardCardDiagnostics.newHideOperation(owner, 11, 23, 160)
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "show", operation = show, observedUptimeMs = 110)
+        val facts = mapOf("root" to 123, "generation" to 7, "child" to 456,
+            "oldFirstSlot" to 1, "oldFirstUse" to 8, "oldFirstSubmit" to 119,
+            "oldLastSubmit" to "UNOBSERVED", "revoke" to 121, "hideSubmit" to 122,
+            "hideReturn" to 123, "hideApplied" to true, "localHide" to "UNOBSERVED",
+            "bind" to "OK", "layout" to "FAILED", "outcome" to "FAILED")
+        KeyguardCardDiagnostics.captureEvent(context, "R22_4_TRANSITION", "DOWNGRADE", operation = show,
+            observedUptimeMs = 120, fields = facts)
+        KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "hide", operation = hide, observedUptimeMs = 160)
+        KeyguardCardDiagnostics.captureEvent(context, "R22_4_TRANSITION", "HIDE", operation = hide,
+            observedUptimeMs = 161, fields = facts + mapOf("localHide" to 162, "outcome" to "REMOVED"))
+        repeat(600) { n ->
+            KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure", diagnosticContext = owner,
+                requestId = 1000L + n, observedUptimeMs = 200L + n)
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        val rows = report.lineSequence().filter { it.startsWith(" R22_4_TRANSITION ") }.toList()
+        assertEquals("$mode transition records must survive raw-ring pressure", 2, rows.size)
+        assertTrue(rows[0], rows[0].contains("kind=DOWNGRADE") && rows[0].contains("root=123 generation=7 child=456"))
+        assertTrue(rows[0], rows[0].contains("first=1/8@119 lastSubmit=UNOBSERVED ingress=120 revoke=121"))
+        assertTrue(rows[0], rows[0].contains("bind=OK layout=FAILED outcome=FAILED"))
+        assertTrue(rows[1], rows[1].contains("kind=HIDE") && rows[1].contains("localHide=162"))
+        KeyguardCardDiagnostics.captureEvent(context, "R22_4_TRANSITION", "LATE", operation = show,
+            observedUptimeMs = 1000, fields = facts)
+        assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+        KeyguardCardDiagnostics.startCapture(context, "r22-4-new", "profile", mode)
+        KeyguardCardDiagnostics.beginLockAttempt(context, 925, 1, "wake", 2000)
+        KeyguardCardDiagnostics.captureEvent(context, "R22_4_TRANSITION", "OLD_OWNER", operation = show,
+            observedUptimeMs = 2001, fields = facts)
+        val next = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertFalse(next.contains("kind=OLD_OWNER"))
+    }
+
     @Test fun r22PassiveStandbySummarySurvivesLightExport() = passiveStandbyExport("LIGHT")
     @Test fun r22PassiveStandbySummarySurvivesFullExport() = passiveStandbyExport("FULL")
 

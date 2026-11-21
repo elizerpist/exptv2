@@ -120,6 +120,7 @@ internal data class KeyguardOrbLayerHideSubmission(
     val submittedAtUptimeMs: Long,
     val transactionApplied: Boolean,
     val applyReturnedAtUptimeMs: Long?,
+    val childIdentity: Int,
 )
 
 /** Immutable cross-thread input. RuntimeShader, Paint, RenderNode and every
@@ -1118,6 +1119,7 @@ internal class KeyguardOrbBufferRenderer(
                 runCatching {
                     onLayerHideSubmitted(KeyguardOrbLayerHideSubmission(
                         it, submittedAtUptimeMs, transactionApplied, applyReturnedAtUptimeMs,
+                        retirement?.childIdentity ?: System.identityHashCode(child),
                     ))
                 }.onFailure { error -> Log.w("FluviOrbFirstHandoff", "hide submission observation failed", error) }
             }
