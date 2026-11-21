@@ -45,7 +45,7 @@ internal class KeyguardR22FirstInspectionFixture {
     private lateinit var automation: UiAutomation
 
     fun run(scenario: String) {
-        require(scenario in setOf("positive", "negative", "stable", "natural"))
+        require(scenario in setOf("positive", "negative", "stable", "natural", "automation"))
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -138,7 +138,9 @@ internal class KeyguardR22FirstInspectionFixture {
                     KeyguardR12ServiceTimingInstrumentationTest().materialProfile(), epoch))
             }
             if (scenario != "natural") {
-                calibration = KeyguardR22VisualCalibration(instrumentation, dir).also { it.calibrate() }
+                automationEvidence(dir, "before-calibration")
+                calibration = KeyguardR22VisualCalibration(instrumentation, dir, automation).also { it.calibrate() }
+                automationEvidence(dir, "after-calibration")
                 visualCalibration = "REFERENCE_CALIBRATED_SERVICE_NOT_REACHED"
                 KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
                 KeyguardOrbSurfaceWorkerTestHooks.postedMaterialTime = { target, time, at ->
@@ -178,6 +180,8 @@ internal class KeyguardR22FirstInspectionFixture {
             setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
             await("service connected", 10_000) { FluviKeyguardCardServiceRegistry.connected }
             val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
+            automationEvidence(dir, "service-connected")
+            records.add("AUTOMATION_CONNECTED actual=true handle=${System.identityHashCode(automation)} at=${SystemClock.uptimeMillis()}")
             instrumentation.runOnMainSync {
                 service.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
                     override fun openingReserved(request: KeyguardCardInspectionRequest, reservationId: Long, armed: Boolean) {
@@ -324,6 +328,23 @@ internal class KeyguardR22FirstInspectionFixture {
                     image.recycle()
                 }
                 records.add("NATURAL_UNHELD A=${original.id} yieldedTo=${yieldedTo.get()} injected=false physical=UNOBSERVED")
+            } else if (scenario == "automation") {
+                assertTrue("NOT REACHED: no original reserved opening entered its physical read", entryStarted.await(20, TimeUnit.SECONDS))
+                val original = checkNotNull(a.get())
+                records.add("AUTOMATION_ORIGINAL_A id=${original.id} wake=${original.wakeGeneration} reservation=${reservation.get()}")
+                var independent = ""
+                await("NOT REACHED: independent locked SystemUI MAIN window", 8_000) {
+                    independent = independentOpeningScene(service)
+                    independent.startsWith("VALID ")
+                }
+                File(dir, "independent-window-inventory.txt").writeText(independent + "\n")
+                records.add("AUTOMATION_WINDOW $independent")
+                assertFalse("NOT REACHED: original A entry barrier expired", entryTimedOut.get())
+                releaseEntry.countDown()
+                assertTrue("NOT REACHED: original opening returned no real child", entered.await(20, TimeUnit.SECONDS))
+                assertFalse("NOT REACHED: original child barrier expired", childTimedOut.get())
+                release.countDown()
+                records.add("AUTOMATION_CONTROL_REACHED A=${original.id} reservation=${reservation.get()} physical=UNOBSERVED")
             } else {
             assertTrue("NOT REACHED: the exact reserved opening did not enter its physical read", entryStarted.await(20, TimeUnit.SECONDS))
             val original = checkNotNull(a.get())
@@ -605,6 +626,15 @@ internal class KeyguardR22FirstInspectionFixture {
         "com.android.systemui:id/notification_shade_shortcut",
         "com.android.systemui:id/split_shade_status_bar",
     ).firstNotNullOfOrNull(::independentVisibleMarkerWindow)
+
+    /** Platform state is independent evidence; querying it never grants display authority. */
+    private fun automationEvidence(dir: File, stage: String) {
+        val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        val header = "stage=$stage requestedFlags=${UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES} " +
+            "handle=${System.identityHashCode(automation)} connected=${FluviKeyguardCardServiceRegistry.connected} " +
+            "enabled=$enabled at=${SystemClock.uptimeMillis()}\n"
+        File(dir, "automation-$stage.txt").writeText(header + shell("dumpsys accessibility"))
+    }
 
     private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
         automation.executeShellCommand(command)).bufferedReader().use { it.readText() }

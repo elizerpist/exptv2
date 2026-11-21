@@ -1,6 +1,7 @@
 package com.fluvi.app.lockscreen
 
 import android.app.Instrumentation
+import android.app.UiAutomation
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -27,6 +28,7 @@ import org.junit.Assert.assertTrue
 internal class KeyguardR22VisualCalibration(
     private val instrumentation: Instrumentation,
     private val directory: File,
+    private val automation: UiAutomation,
 ) : AutoCloseable {
     data class Delta(val changed: Int, val total: Long, val max: Int) {
         fun nearlyEqual(): Boolean = max <= 2 && total <= 2048L
@@ -68,7 +70,7 @@ internal class KeyguardR22VisualCalibration(
     private fun save(label: String, bitmap: Bitmap) {
         File(directory, "$label.png").outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
     }
-    private fun screenshot(): Bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+    private fun screenshot(): Bitmap = checkNotNull(automation.takeScreenshot())
     private fun crop(screen: Bitmap, bounds: Rect): Bitmap {
         check(bounds.left >= 0 && bounds.top >= 0 && bounds.right <= screen.width && bounds.bottom <= screen.height &&
             bounds.width() > 0 && bounds.height() > 0) { "invalid physical bounds $bounds for ${screen.width}x${screen.height}" }
