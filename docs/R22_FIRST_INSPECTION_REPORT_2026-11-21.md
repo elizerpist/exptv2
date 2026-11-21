@@ -1,4 +1,4 @@
-# Fluvi R22 first-inspection handoff — working evidence
+# Fluvi R22 first-inspection handoff — qualification evidence
 
 Application candidate: `c9eb4c1be0aa780729feb199524b06ef3947f051` (parent and phone-tested R21 baseline `ef310b490cf03713c0c97d3d4aab85e3b536e66d`). Coordination handoff: `15a284ceb8215581f79ed0fc75d7ae92629e8a2e`. This report distinguishes the Android runtime, JVM, emulator fixture and physical phone.
 
@@ -58,3 +58,7 @@ A separate temporary test-only JVM probe against the exact candidate reproduced 
 Dashboard profile job 136755724077 FAIL after 27m47s; its A–K test logged `RangeError (year): ... inclusive range 2027..2051: 2026` in `PreparedBudgetLimitSnapshot._yearOffset` and a separate `Mind heatmap must publish while the pointer is still down` assertion. Dashboard source was outside the R22 scope; do not infer a common cause with the lockscreen change. Artifact 14696330533 preserves the dashboard output and diagnostics. All five declared native scopes plus normal completed and failed; no further attempt was dispatched.
 
 Final outcome by required category: IMPLEMENTATION — PARTIAL, candidate source committed with protected post-claim-C evidence missing and pre-root positive unestablished. AUTOMATED VALIDATION — FAIL/INCOMPLETE with the above independently retained successes and failures. APK DELIVERY — NOT PUBLISHED, because the required safety controls did not pass. PHYSICAL VALIDATION — PENDING, USER ONLY. No end-to-end improvement is established.
+
+## Durable raw evidence
+
+The independent evidence artifact commit is `a3bc0f229714b0e49bb1ab511334ae0e3463f864`: [direct evidence archive](https://media.githubusercontent.com/media/elizerpist/exptv2/a3bc0f229714b0e49bb1ab511334ae0e3463f864/r22-evidence-final-c9eb4c1be0aa.tar.gz), 134,351,286 bytes, SHA-256 `18a170b6f32d81dd7916e3cb2b3f82e433d3de139a69065ed9436be87128d17f`. The public HTTPS bytes were independently re-downloaded and verified. This archive is test evidence, not an installable Human APK.
