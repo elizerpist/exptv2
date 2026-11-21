@@ -1,4 +1,4 @@
-name: R22.3 paired cadence, 15s and natural-time pixel sampling
+name: R22.3 untreated R21 versus candidate ABBA acquisition
 on:
   workflow_dispatch:
     inputs:
@@ -8,11 +8,11 @@ on:
 permissions:
   contents: read
 jobs:
-  paired-cadence:
+  abba:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 55
     env:
-      BASE_SHA: fe8931a69c96e964f78561a3100e3d776dfe5dfc
+      BASE_SHA: ef310b490cf03713c0c97d3d4aab85e3b536e66d
       APP_SHA: b1eccd845546e5d65d9e69c9ba0a43775a2c216b
     steps:
       - uses: actions/checkout@v5
@@ -50,45 +50,32 @@ jobs:
         run: |
           mkdir -p "$HOME/.gradle/init.d"
           cp "$GITHUB_WORKSPACE/harness/scripts/r22-3-plugin-repos.init.gradle" "$HOME/.gradle/init.d/fluvi-r22-3-repositories.gradle"
-      - name: Build unchanged baseline target and test-only cadence fixture
+      - name: Build unchanged R21 app and instrumentation
+        working-directory: baseline
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/r22-3-cadence/baseline"
-          cd baseline
+          mkdir -p "$RUNNER_TEMP/r22-3-abba/build-baseline"
           test "$(git rev-parse HEAD)" = "$BASE_SHA"
           flutter pub get
           test -z "$(git status --porcelain --untracked-files=no)"
-          (cd android && ./gradlew :app:assembleDebug --no-daemon --max-workers=3 --console=plain)
-          sha256sum build/app/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/r22-3-cadence/baseline/target-before.txt"
-          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-3-cadence-parent-only.patch" > "$RUNNER_TEMP/r22-3-cadence/baseline/patch-sha256.txt"
-          git apply "$GITHUB_WORKSPACE/harness/scripts/r22-3-cadence-parent-only.patch"
-          git diff --name-only > "$RUNNER_TEMP/r22-3-cadence/baseline/changed-files.txt"
-          test "$(cat "$RUNNER_TEMP/r22-3-cadence/baseline/changed-files.txt")" = 'android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt'
-          (cd android && ./gradlew :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
-          sha256sum -c "$RUNNER_TEMP/r22-3-cadence/baseline/target-before.txt"
-          sha256sum build/app/outputs/apk/debug/app-debug.apk build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$RUNNER_TEMP/r22-3-cadence/baseline/apks.txt"
-      - name: Build candidate target and the same cadence test
+          (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
+          sha256sum build/app/outputs/apk/debug/app-debug.apk build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$RUNNER_TEMP/r22-3-abba/build-baseline/apks.txt"
+      - name: Build unchanged candidate app and instrumentation
+        working-directory: candidate
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/r22-3-cadence/candidate"
-          cd candidate
+          mkdir -p "$RUNNER_TEMP/r22-3-abba/build-candidate"
           test "$(git rev-parse HEAD)" = "$APP_SHA"
           flutter pub get
           test -z "$(git status --porcelain --untracked-files=no)"
-          (cd android && ./gradlew :app:assembleDebug --no-daemon --max-workers=3 --console=plain)
-          sha256sum build/app/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/r22-3-cadence/candidate/target-before.txt"
-          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-3-cadence-candidate-only.patch" > "$RUNNER_TEMP/r22-3-cadence/candidate/patch-sha256.txt"
-          git apply "$GITHUB_WORKSPACE/harness/scripts/r22-3-cadence-candidate-only.patch"
-          git diff --name-only > "$RUNNER_TEMP/r22-3-cadence/candidate/changed-files.txt"
-          test "$(cat "$RUNNER_TEMP/r22-3-cadence/candidate/changed-files.txt")" = 'android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt'
-          (cd android && ./gradlew :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
-          sha256sum -c "$RUNNER_TEMP/r22-3-cadence/candidate/target-before.txt"
-          sha256sum build/app/outputs/apk/debug/app-debug.apk build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$RUNNER_TEMP/r22-3-cadence/candidate/apks.txt"
+          (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
+          sha256sum build/app/outputs/apk/debug/app-debug.apk build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$RUNNER_TEMP/r22-3-abba/build-candidate/apks.txt"
       - name: Enable KVM
         run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
-      - name: Measure both arms on one API35 emulator
+      - name: Run four untreated processes on the same API35 emulator
+        timeout-minutes: 30
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -100,12 +87,12 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: bash "$GITHUB_WORKSPACE/harness/scripts/r22-3-paired-cadence.sh"
-      - name: Preserve both arms and every failed sample
+          script: bash "$GITHUB_WORKSPACE/harness/scripts/r22-3-unheld-abba.sh"
+      - name: Preserve every planned slot and all raw evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-3-paired-natural-pixels-${{ github.run_id }}
-          path: ${{ runner.temp }}/r22-3-cadence/**
+          name: r22-3-unheld-abba-${{ github.run_id }}
+          path: ${{ runner.temp }}/r22-3-abba/**
           if-no-files-found: warn
           retention-days: 30
