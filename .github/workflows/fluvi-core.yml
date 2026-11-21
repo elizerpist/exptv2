@@ -1,4 +1,4 @@
-name: R20 stock first FULL frame witness (orchestration only)
+name: R20 stock first frame splash correction (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -103,7 +103,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r20-stock-first-frame-${{ matrix.arm }}-${{ github.run_id }}
+          name: r20-stock-splash-fix-${{ matrix.arm }}-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r19-api35/**
             app/build/app/reports/tests/**

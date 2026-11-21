@@ -15,7 +15,7 @@ index 4e11f5af..6b3ce7f6 100644
  import com.fluvi.app.lockscreen.material.KeyguardMaterialTestActivity
  import com.fluvi.app.lockscreen.material.KeyguardOrbDirectOutput
  import com.fluvi.app.lockscreen.material.KeyguardOrbSurfacePresenter
-@@ -308,6 +314,225 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
+@@ -308,6 +314,231 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
          }
      }
  
@@ -85,7 +85,13 @@ index 4e11f5af..6b3ce7f6 100644
 +                }
 +                return crop(reference, screen).also { screen.recycle(); it.save(File(runDir, "reference-$index.png")) }
 +            }
-+            val refA = referenceAt(phaseA, 0) { colorDistance(green, it.getPixel(size / 2, size / 2)) > 45 }
++            // Wait for the real green underlay; the white launch splash is not a reference.
++            val refA = referenceAt(phaseA, 0) {
++                colorDistance(green, it.getPixel(0, 0)) <= 15 &&
++                    colorDistance(green, it.getPixel(size / 2, size / 2)) > 45 &&
++                    colorDistance(Color.WHITE, it.getPixel(size / 2, size / 2)) > 45 &&
++                    colorDistance(Color.BLACK, it.getPixel(size / 2, size / 2)) > 45
++            }
 +            refs += refA
 +            val refC = referenceAt(phaseC, 1) { r20Compare(refA, it).nearlyEqual() }; refs += refC
 +            val refB = referenceAt(phaseB, 2) { r20Compare(refA, it).meaningful() }; refs += refB
