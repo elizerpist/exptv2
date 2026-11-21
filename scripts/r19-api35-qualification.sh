@@ -22,7 +22,7 @@ adb shell pm list instrumentation > "$out/instrumentation-list.txt"
 grep -F 'com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner' "$out/instrumentation-list.txt"
 timeout -k 2s 60s bash scripts/prepare-keyguard-lower-environment.sh "$out/preflight"
 failed=0
-for method in r22SupersededOpeningWalkYieldsToFreshInspection r22YieldedWalkCannotGrantAfterExclusion r22StableOpeningReadIsNotYielded; do
+for method in r22SupersededOpeningWalkYieldsToFreshInspection r22YieldedWalkCannotGrantAfterExclusion r22StableOpeningReadIsNotYielded r22UnstagedOpeningObservation; do
   run=$(python3 -c 'import uuid; print(uuid.uuid4())')
   printf '%s\n' "$run" > "$out/$method-uuid.txt"
   adb shell am force-stop com.fluvi.app || true
@@ -34,17 +34,19 @@ for method in r22SupersededOpeningWalkYieldsToFreshInspection r22YieldedWalkCann
   adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r22/$run" > "$out/$method-evidence.tar" 2> "$out/$method-evidence.stderr" || true
   cat "$out/$method.txt"
   if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then failed=1; fi
-  if [[ "$method" == r22SupersededOpeningWalkYieldsToFreshInspection ]]; then
-    # A submitted service output is not by itself a calibrated FULL, motion,
-    # underlay or true-hide comparison. Preserve the partial result explicitly.
-    member=$(tar -tf "$out/$method-evidence.tar" 2>/dev/null | grep '/result.txt$' | head -1 || true)
-    if [[ -n "$member" ]]; then
-      tar -xOf "$out/$method-evidence.tar" "$member" > "$out/$method-visual-status.txt" || true
-      if grep -q 'visualCalibration=UNESTABLISHED' "$out/$method-visual-status.txt"; then
-        echo 'T3 calibrated service composite: NOT REACHED / UNESTABLISHED'
-        failed=1
-      fi
-    fi
+  member=$(tar -tf "$out/$method-evidence.tar" 2>/dev/null | grep '/result.txt$' | head -1 || true)
+  if [[ -z "$member" ]]; then
+    echo 'T3 result missing: NOT REACHED'
+    failed=1
+  else
+    tar -xOf "$out/$method-evidence.tar" "$member" > "$out/$method-visual-status.txt" || true
+    case "$method" in
+      r22SupersededOpeningWalkYieldsToFreshInspection|r22StableOpeningReadIsNotYielded)
+        grep -q 'visualCalibration=PASS ' "$out/$method-visual-status.txt" || failed=1 ;;
+      r22YieldedWalkCannotGrantAfterExclusion)
+        grep -q 'visualCalibration=PASS_NEGATIVE ' "$out/$method-visual-status.txt" || failed=1 ;;
+      r22UnstagedOpeningObservation) : ;;
+    esac
   fi
 done
 # A frozen report is produced, then recovered after a real process stop.
@@ -83,4 +85,17 @@ timeout -k 5s 180s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e clas
 printf '%s\n' "$rc" > "$out/r20-canonical.exit"
 cat "$out/r20-canonical.txt"
 if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r20-canonical.txt" || ! grep -Eq '^OK \(1 test\)' "$out/r20-canonical.txt"; then failed=1; fi
+# Focused R08 privacy discriminator, with the original six samples and
+# unchanged assertion. This result remains separate from the panel suite.
+adb shell am force-stop com.fluvi.app || true
+adb logcat -c || true
+rc=0
+timeout -k 5s 240s adb shell am instrument -w -r -e sourceSha "$APP_SHA" \
+  -e class 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges' \
+  com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r08-privacy.txt" 2>&1 || rc=$?
+printf '%s\n' "$rc" > "$out/r08-privacy.exit"
+adb logcat -b all -d -v monotonic > "$out/r08-privacy-logcat.txt" 2>&1 || true
+adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-material-smoke > "$out/r08-privacy-evidence.tar" 2> "$out/r08-privacy-evidence.stderr" || true
+cat "$out/r08-privacy.txt"
+if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r08-privacy.txt" || ! grep -Eq '^OK \(1 test\)' "$out/r08-privacy.txt"; then failed=1; fi
 exit "$failed"
