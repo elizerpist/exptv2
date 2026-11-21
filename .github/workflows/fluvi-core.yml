@@ -1,4 +1,4 @@
-name: R22.2 corrected visual tap observer on unchanged candidate
+name: R22.3 unchanged-parent structural and geometry fixtures
 on:
   workflow_dispatch:
     inputs:
@@ -41,33 +41,33 @@ jobs:
           flutter-version: '3.41.4'
           channel: stable
           cache: true
-      - name: Resolve packages and build unchanged target
+      - name: Build and identify unchanged target APK
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/r22-2-fixture"
+          mkdir -p "$RUNNER_TEMP/r22-3-parent"
           test "$(git rev-parse HEAD)" = "$APP_SHA"
           flutter pub get
           test -z "$(git status --porcelain --untracked-files=no)"
           (cd android && ./gradlew :app:assembleDebug --no-daemon --max-workers=3 --console=plain)
-          sha256sum build/app/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/r22-2-fixture/original-target-sha256.txt"
-          printf 'application_sha=%s\nharness_sha=%s\n' "$APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r22-2-fixture/identity.txt"
-      - name: Apply only hashed androidTest patch and build test APK
+          sha256sum build/app/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/r22-3-parent/original-target-sha256.txt"
+          printf 'application_sha=%s\nharness_sha=%s\n' "$APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r22-3-parent/identity.txt"
+      - name: Apply androidTest-only fixture and build test APK
         shell: bash
         run: |
           set -euo pipefail
-          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-2-visual-observer.patch" > "$RUNNER_TEMP/r22-2-fixture/fixture-patch-sha256.txt"
-          git apply "$GITHUB_WORKSPACE/harness/scripts/r22-2-visual-observer.patch"
-          git diff --name-only > "$RUNNER_TEMP/r22-2-fixture/changed-files.txt"
-          test "$(wc -l < "$RUNNER_TEMP/r22-2-fixture/changed-files.txt")" = 1
-          if grep -v '^android/app/src/androidTest/' "$RUNNER_TEMP/r22-2-fixture/changed-files.txt"; then exit 1; fi
-          git diff > "$RUNNER_TEMP/r22-2-fixture/actual-fixture.patch"
+          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-3-parent-fixture.patch" > "$RUNNER_TEMP/r22-3-parent/fixture-patch-sha256.txt"
+          git apply "$GITHUB_WORKSPACE/harness/scripts/r22-3-parent-fixture.patch"
+          git diff --name-only > "$RUNNER_TEMP/r22-3-parent/changed-files.txt"
+          test -s "$RUNNER_TEMP/r22-3-parent/changed-files.txt"
+          if grep -v '^android/app/src/androidTest/' "$RUNNER_TEMP/r22-3-parent/changed-files.txt"; then exit 1; fi
+          git diff > "$RUNNER_TEMP/r22-3-parent/actual-fixture.patch"
           (cd android && ./gradlew :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
-          sha256sum -c "$RUNNER_TEMP/r22-2-fixture/original-target-sha256.txt"
-          sha256sum build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$RUNNER_TEMP/r22-2-fixture/test-apk-sha256.txt"
+          sha256sum -c "$RUNNER_TEMP/r22-3-parent/original-target-sha256.txt"
+          sha256sum build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$RUNNER_TEMP/r22-3-parent/test-apk-sha256.txt"
       - name: Enable KVM
         run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
-      - name: Run the corrected visual observer on API35
+      - name: Run independent controls on API35
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -79,12 +79,12 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r22-2-fixture-control.sh"
-      - name: Preserve every result
+          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r22-3-parent-control.sh"
+      - name: Preserve results on every outcome
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-2-visual-tap-${{ github.run_id }}
-          path: ${{ runner.temp }}/r22-2-fixture/**
+          name: r22-3-parent-control-${{ github.run_id }}
+          path: ${{ runner.temp }}/r22-3-parent/**
           if-no-files-found: warn
           retention-days: 30

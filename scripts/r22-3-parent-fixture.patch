@@ -1,0 +1,505 @@
+diff --git a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt
+index 21006969..81364a07 100644
+--- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt
++++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt
+@@ -96,6 +96,11 @@ internal class KeyguardR22FirstInspectionFixture {
+         var calibration: KeyguardR22VisualCalibration? = null
+         var visualIdentity: KeyguardR22VisualIdentityForTest? = null
+         var visualUnderlay: android.graphics.Bitmap? = null
++        var visualUnderlayFull: android.graphics.Bitmap? = null
++        var underlayBefore = 0L
++        var underlayAfter = 0L
++        var underlayBounds: android.graphics.Rect? = null
++        val inventorySamples = mutableListOf<String>()
+         var visualCalibration = "NOT_REACHED"
+         val b = AtomicLong(0L)
+         val injectedAt = AtomicLong(0L)
+@@ -349,12 +354,12 @@ internal class KeyguardR22FirstInspectionFixture {
+             assertTrue("NOT REACHED: the exact reserved opening did not enter its physical read", entryStarted.await(20, TimeUnit.SECONDS))
+             val original = checkNotNull(a.get())
+             var independent = ""
+-            await("NOT REACHED: independent locked SystemUI MAIN window", 8_000) {
+-                independent = independentOpeningScene(service)
++            await("NOT REACHED: independently complete locked SystemUI tree", 8_000) {
++                independent = independentOpeningScene(service, requireComplete = true)
++                inventorySamples += "at=${SystemClock.uptimeMillis()} $independent"
+                 independent.startsWith("VALID ")
+             }
+             records.add("INDEPENDENT_BEFORE_READ $independent")
+-            File(dir, "independent-window-inventory.txt").writeText(independent + "\n")
+             await("NOT REACHED: original owner host/output geometry", 8_000) {
+                 instrumentation.runOnMainSync { visualIdentity = service.r22VisualIdentityForTest() }
+                 visualIdentity?.let { it.reservationId == reservation.get() &&
+@@ -362,8 +367,17 @@ internal class KeyguardR22FirstInspectionFixture {
+             }
+             assertFalse("NOT REACHED: original A entry barrier expired", entryTimedOut.get())
+             val identity = checkNotNull(visualIdentity)
+-            visualUnderlay = checkNotNull(calibration).captureCrop("service-underlay-before-A", identity.bounds)
+-            records.add("VISUAL_OWNER_BEFORE_READ $identity")
++            // Acquire immutable geometry and pixels before A proceeds, but do
++            // not encode PNGs or write files while its real reader is held.
++            underlayBounds = android.graphics.Rect(identity.bounds)
++            underlayBefore = SystemClock.uptimeMillis()
++            visualUnderlayFull = checkNotNull(automation.takeScreenshot())
++            underlayAfter = SystemClock.uptimeMillis()
++            val screen = checkNotNull(visualUnderlayFull)
++            val bounds = checkNotNull(underlayBounds)
++            check(bounds.left >= 0 && bounds.top >= 0 && bounds.right <= screen.width && bounds.bottom <= screen.height)
++            visualUnderlay = android.graphics.Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
++            records.add("VISUAL_OWNER_BEFORE_READ $identity acquisition=$underlayBefore/$underlayAfter")
+             stableReading.set(scenario == "stable")
+             releaseEntry.countDown()
+             assertTrue("NOT REACHED: original opening did not return a real child", entered.await(20, TimeUnit.SECONDS))
+@@ -528,6 +542,26 @@ internal class KeyguardR22FirstInspectionFixture {
+             releaseEntry.countDown()
+             release.countDown()
+             releaseB.countDown()
++            // The held reader has been released before any PNG encoding or
++            // inventory write. Keep even failed precondition samples.
++            runCatching {
++                if (inventorySamples.isNotEmpty()) File(dir, "independent-window-inventory.txt")
++                    .writeText(inventorySamples.joinToString("\n", postfix = "\n"))
++                visualUnderlayFull?.let { image ->
++                    File(dir, "service-underlay-before-A-full.png").outputStream().use {
++                        image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
++                    }
++                }
++                visualUnderlay?.let { image ->
++                    File(dir, "service-underlay-before-A.png").outputStream().use {
++                        image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
++                    }
++                    File(dir, "service-underlay-before-A-time.txt").writeText(
++                        "before=$underlayBefore after=$underlayAfter bounds=$underlayBounds\n")
++                }
++            }.onFailure { errors += "underlayEvidence:${it.javaClass.simpleName}:${it.message}" }
++            visualUnderlayFull?.recycle()
++            visualUnderlay?.recycle()
+             if (scenario == "negative") runCatching { shell("cmd statusbar collapse") }
+             KeyguardR15AcquisitionTestHooks.afterReturnedChild = null
+             KeyguardR15AcquisitionTestHooks.beforeChildCall = null
+@@ -567,12 +601,14 @@ internal class KeyguardR22FirstInspectionFixture {
+ 
+     /** Independent test observer. Its facts never enter the production reader
+      * or any grant; extra unresolved/foreign windows disqualify the specimen. */
+-    private fun independentOpeningScene(service: FluviKeyguardCardService): String {
++    private fun independentOpeningScene(service: FluviKeyguardCardService, requireComplete: Boolean = false): String {
+         val windows = runCatching { automation.windows }.getOrElse { return "INVALID windows=${it.javaClass.simpleName}" }
+         val own = service.knownOwnOverlayIdentityForTest()
+         var mainId: Int? = null
+         var unresolved = 0
+         var nonOwnDefaultWindows = 0
++        var activeTree = "UNOBSERVED"
++        var activeTreeComplete = false
+         val rows = mutableListOf<String>()
+         windows.forEach { window ->
+             val root = runCatching { window.root }.getOrNull()
+@@ -596,12 +632,56 @@ internal class KeyguardR22FirstInspectionFixture {
+                     matches.forEach { it.recycle() }
+                     count
+                 }
+-                if (window.displayId == Display.DEFAULT_DISPLAY && window.isActive && pkg == "com.android.systemui" && markers > 0) mainId = window.id
++                if (window.displayId == Display.DEFAULT_DISPLAY && window.isActive && pkg == "com.android.systemui" && markers > 0) {
++                    mainId = window.id
++                    if (requireComplete && root != null) {
++                        val result = independentlyWalkActiveTree(root)
++                        activeTreeComplete = result.first
++                        activeTree = result.second
++                    }
++                }
+                 rows += "id=${window.id}/type=${window.type}/display=${window.displayId}/active=${window.isActive}/layer=${window.layer}/category=$category/mainMarkers=$markers"
+             } finally { root?.recycle() }
+         }
+-        val prefix = if (mainId != null && unresolved == 0 && nonOwnDefaultWindows == 1) "VALID" else "INVALID"
+-        return "$prefix activeSystemUi=$mainId unresolved=$unresolved nonOwnDefault=$nonOwnDefaultWindows own=$own windows=${rows.joinToString(";")}"
++        val prefix = if (mainId != null && unresolved == 0 && nonOwnDefaultWindows == 1 &&
++            (!requireComplete || activeTreeComplete)) "VALID" else "INVALID"
++        return "$prefix activeSystemUi=$mainId unresolved=$unresolved nonOwnDefault=$nonOwnDefaultWindows " +
++            "own=$own independentTree=$activeTree windows=${rows.joinToString(";")}"
++    }
++
++    /** Independent bounded walk: its result is a test precondition, never a
++     * production authorization. Null, exception, depth or node limits fail it. */
++    private fun independentlyWalkActiveTree(root: android.view.accessibility.AccessibilityNodeInfo): Pair<Boolean, String> {
++        var visited = 0
++        var nonLeaf = 0
++        var firstChild = "UNOBSERVED"
++        var failure: String? = null
++        fun walk(node: android.view.accessibility.AccessibilityNodeInfo, depth: Int) {
++            if (failure != null) return
++            if (depth > 48 || visited >= 512) { failure = "LIMIT depth=$depth visited=$visited"; return }
++            visited++
++            try {
++                if (!node.isVisibleToUser) return
++                val count = node.childCount
++                if (count > 0) nonLeaf++
++                for (index in 0 until count) {
++                    val child = try { node.getChild(index) } catch (error: Exception) {
++                        if (depth == 0 && index == 0) firstChild = "EXCEPTION:${error.javaClass.simpleName}"
++                        failure = "CHILD_EXCEPTION depth=$depth index=$index class=${error.javaClass.simpleName}"
++                        return
++                    }
++                    if (depth == 0 && index == 0) firstChild = if (child == null) "NULL" else "PRESENT"
++                    if (child == null) { failure = "NULL_CHILD depth=$depth index=$index"; return }
++                    try { walk(child, depth + 1) } finally { child.recycle() }
++                    if (failure != null) return
++                }
++            } catch (error: Exception) {
++                failure = "NODE_EXCEPTION depth=$depth class=${error.javaClass.simpleName}"
++            }
++        }
++        walk(root, 0)
++        val complete = failure == null && firstChild == "PRESENT" && nonLeaf > 0
++        return complete to "strategy=independentWindowRoot/legacyChild,visited=$visited,nonLeaf=$nonLeaf,child0=$firstChild,failure=${failure ?: "none"}"
+     }
+ 
+     private fun independentVisibleMarkerWindow(id: String): Int? {
+diff --git a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
+index 0256d9e2..81390adf 100644
+--- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
++++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
+@@ -2313,17 +2313,19 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+         stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges()
+     }
+ 
+-    private data class PassiveReferences(val standby: Bitmap, val neutral: Bitmap, val empty: Bitmap, val full: Bitmap) {
+-        fun recycle() { standby.recycle(); neutral.recycle(); empty.recycle(); full.recycle() }
++    private data class PassiveReferences(val standby: Bitmap, val neutral: Bitmap, val neutralAnimated: Bitmap,
++        val empty: Bitmap, val full: Bitmap) {
++        fun recycle() { standby.recycle(); neutral.recycle(); neutralAnimated.recycle(); empty.recycle(); full.recycle() }
+     }
+ 
+     /** Independent hardware-View references on the same white panel and
+      * dimensions. No candidate crop or callback is used to create them. */
+-    private fun passiveReferences(): PassiveReferences {
++    private fun passiveReferences(sizeOverride: Int? = null, background: Int = android.graphics.Color.WHITE): PassiveReferences {
+         val instrumentation = InstrumentationRegistry.getInstrumentation()
+         val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext,
+             KeyguardMaterialTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
+-        val size = activity.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
++        val size = sizeOverride ?: activity.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
++        require(size > 0)
+         lateinit var root: FrameLayout
+         lateinit var expected: View
+         lateinit var material: KeyguardHeaderMaterialView
+@@ -2347,7 +2349,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+                     visibility = View.INVISIBLE
+                 }
+                 root = FrameLayout(activity).apply {
+-                    setBackgroundColor(android.graphics.Color.WHITE)
++                    setBackgroundColor(background)
+                     addView(expected); addView(material)
+                 }
+                 activity.setContentView(root)
+@@ -2374,6 +2376,20 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+             assertTrue("neutral reference never drew", waitForBootstrap(instrumentation, material))
+             parentFrame()
+             val neutral = copyMaterialView(instrumentation, material)
++            val neutralProfile = calibratedOrbProfile().neutralized()
++            val neutralArtifact = AndroidKeyguardShaderArtifactReader.load(activity, neutralProfile.effectId, neutralProfile.usesPortal)
++            var neutralDrawBefore = 0
++            instrumentation.runOnMainSync {
++                material.setBootstrapActive(false)
++                assertEquals(KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED,
++                    material.installPreparedShader(neutralArtifact))
++                neutralDrawBefore = material.diagnostics().shaderDrawCount
++                material.frame(System.nanoTime())
++            }
++            assertTrue("independent animated neutral reference did not draw",
++                waitForShaderDraw(instrumentation, material, neutralDrawBefore))
++            parentFrame()
++            val neutralAnimated = copyMaterialView(instrumentation, material)
+             val profile = calibratedOrbProfile()
+             val artifact = AndroidKeyguardShaderArtifactReader.load(activity, profile.effectId, profile.usesPortal)
+             var before = 0
+@@ -2387,13 +2403,15 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+             assertTrue("independent full reference did not draw", waitForShaderDraw(instrumentation, material, before))
+             parentFrame()
+             val full = copyMaterialView(instrumentation, material)
+-            persistPanelEvidence(activity, "r22-2-reference-standby", standby)
+-            persistPanelEvidence(activity, "r22-2-reference-neutral", neutral)
+-            persistPanelEvidence(activity, "r22-2-reference-empty", empty)
+-            persistPanelEvidence(activity, "r22-2-reference-full", full)
++            val referenceLabel = "r22-3-reference-$size-${Integer.toHexString(background)}"
++            persistPanelEvidence(activity, "$referenceLabel-standby", standby)
++            persistPanelEvidence(activity, "$referenceLabel-neutral-bootstrap", neutral)
++            persistPanelEvidence(activity, "$referenceLabel-neutral-animated", neutralAnimated)
++            persistPanelEvidence(activity, "$referenceLabel-empty", empty)
++            persistPanelEvidence(activity, "$referenceLabel-full", full)
+             assertTrue("standby must differ from empty", compareMaterialPixels(standby, empty).meaningful())
+             assertTrue("full must differ from neutral", compareMaterialPixels(full, neutral).meaningful())
+-            return PassiveReferences(standby, neutral, empty, full)
++            return PassiveReferences(standby, neutral, neutralAnimated, empty, full)
+         } finally {
+             instrumentation.runOnMainSync { activity.finish() }
+             instrumentation.waitForIdleSync()
+@@ -2516,6 +2534,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+ 
+     @Test fun isolatedStandbyPreservesAuthorizedComposition() {
+         for (background in listOf(android.graphics.Color.WHITE, android.graphics.Color.BLACK)) {
++            exerciseStandbyComposition(background)
++        }
++    }
++
++    /** Run black and terminal controls even if the separate white case fails. */
++    @Test fun isolatedStandbyBlackReturnAndHide() {
++        exerciseStandbyComposition(android.graphics.Color.BLACK)
++    }
++
++    private fun exerciseStandbyComposition(background: Int) {
+             lateinit var translucentReference: Bitmap
+             val referenceGate = RealReleaseGate().apply { releaseAll() }
+             withOrbRetirementFixture("r22-2-translucent-reference-$background", referenceGate,
+@@ -2584,7 +2612,13 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+                 val with = mutableListOf<OrbRetirementCapture>()
+                 try {
+                     phases.forEachIndexed { index, phase ->
+-                        without += fixture.capture(phase, "without-standby-$index", ::hasVisibleMaterial)
++                        without += fixture.capture(phase, "without-standby-$index") { observed ->
++                            when (index) {
++                                0 -> hasVisibleMaterial(observed)
++                                1, 3 -> compareMaterialPixels(without[0].bitmap, observed).nearlyEqual()
++                                else -> compareMaterialPixels(without[0].bitmap, observed).meaningful()
++                            }
++                        }
+                     }
+                     assertTrue(compareMaterialPixels(without[0].bitmap, without[1].bitmap).nearlyEqual())
+                     assertTrue(compareMaterialPixels(without[0].bitmap, without[2].bitmap).meaningful())
+@@ -2618,7 +2652,12 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+                         root.width / 2f, root.height / 2f, 0)
+                     try { assertTrue(root.dispatchTouchEvent(down)); assertTrue(root.dispatchTouchEvent(up)) }
+                     finally { down.recycle(); up.recycle() }
+-                    assertTrue("standby changed the ORB tap route", fixture.interactionEvents.contains("KG|ORB_TAP"))
++                }
++                // View posts PerformClick; let the actual Main queue process
++                // that callback before observing its existing diagnostic.
++                fixture.instrumentation.waitForIdleSync()
++                assertTrue("standby changed the ORB tap route", fixture.interactionEvents.contains("KG|ORB_TAP"))
++                fixture.instrumentation.runOnMainSync {
+                     fixture.window.updateMaterial(calibratedOrbProfile().copy(opacity = .5f), fixture.settings)
+                     assertEquals("nonopaque blend must disarm standby immediately", null, root.passiveStandbyObservation())
+                 }
+@@ -2682,7 +2721,6 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+                 } finally { terminalScreen.recycle() }
+                 fixture.ownership.assertBoundedSingleRenderer()
+             } } finally { translucentReference.recycle() }
+-        }
+     }
+ 
+     @Test fun stalePressureCannotSwitchReplacement() {
+@@ -2746,6 +2784,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+ 
+     @Test fun stalePressureCannotRestoreFullContentAfterPrivacyAndSizeChanges() {
+         val refs = passiveReferences()
++        val resizedRefs = passiveReferences(refs.standby.width + 4)
+         val gate = RealReleaseGate().apply { delayTickets = true }
+         try { withOrbRetirementFixture("r08-stale-privacy-size", gate) { fixture ->
+             fun show(): KeyguardOrbBufferProducerFrame {
+@@ -2798,11 +2837,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+                 }
+                 val neutralTicket = gate.awaitTicket(c.lease.attachment, fullTicket.lease.generation)
+                 assertEquals(calibratedOrbProfile().neutralized().visualKey, neutralTicket.lease.visualKey)
++                fun matchingReferences(candidate: Bitmap): PassiveReferences = when {
++                    candidate.width == refs.full.width && candidate.height == refs.full.height -> refs
++                    candidate.width == resizedRefs.full.width && candidate.height == resizedRefs.full.height -> resizedRefs
++                    else -> error("no independently calibrated reference for ${candidate.width}x${candidate.height}")
++                }
+                 fun safeNeutral(candidate: Bitmap): Boolean {
+                     if (!hasVisibleMaterial(candidate)) return false
+-                    val reference = Bitmap.createScaledBitmap(fullCrop, candidate.width, candidate.height, true)
+-                    return try { compareMaterialPixels(reference, candidate).meaningful() }
+-                    finally { if (reference !== fullCrop) reference.recycle() }
++                    val references = matchingReferences(candidate)
++                    val reference = if (references === refs) fullCrop else references.full
++                    return compareMaterialPixels(reference, candidate).meaningful()
+                 }
+                 fun recordSafeStrip(label: String) {
+                     val samples = mutableListOf<Bitmap>()
+@@ -2823,9 +2867,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+                                 samples += sample
+                                 persistPanelEvidence(fixture.activity, "$label-full-$index", screen)
+                                 persistPanelEvidence(fixture.activity, "$label-$index", sample)
+-                                val reference = Bitmap.createScaledBitmap(fullCrop, sample.width, sample.height, true)
+-                                val comparison = try { compareMaterialPixels(reference, sample) }
+-                                    finally { if (reference !== fullCrop) reference.recycle() }
++                                val nativeRefs = matchingReferences(sample)
++                                val reference = if (nativeRefs === refs) fullCrop else nativeRefs.full
++                                val comparison = compareMaterialPixels(reference, sample)
+                                 val centerY = (b.top + b.height() / 2).coerceIn(0, screen.height - 1)
+                                 val leftX = (b.left - 4).coerceIn(0, screen.width - 1)
+                                 val rightX = (b.right + 4).coerceIn(0, screen.width - 1)
+@@ -2833,29 +2877,33 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+                                 for (y in 0 until sample.height) for (x in 0 until sample.width) {
+                                     if (sample.getPixel(x, y) and 0x00ffffff == 0x00ffffff) whitePixels += 1
+                                 }
+-                                fun scaled(source: Bitmap): Bitmap =
+-                                    if (source.width == sample.width && source.height == sample.height) source
+-                                    else Bitmap.createScaledBitmap(source, sample.width, sample.height, true)
+-                                val standby = scaled(refs.standby)
+-                                val neutral = scaled(refs.neutral)
+-                                val empty = scaled(refs.empty)
+-                                val standbyDelta = wholeRoiDifference(standby, sample)
+-                                val neutralDelta = wholeRoiDifference(neutral, sample)
+-                                val emptyDelta = wholeRoiDifference(empty, sample)
++                                val standbyDelta = wholeRoiDifference(nativeRefs.standby, sample)
++                                val neutralDelta = wholeRoiDifference(nativeRefs.neutral, sample)
++                                val animatedDelta = wholeRoiDifference(nativeRefs.neutralAnimated, sample)
++                                val emptyDelta = wholeRoiDifference(nativeRefs.empty, sample)
++                                val oldNeutralDelta = if (nativeRefs !== refs) {
++                                    val oldAtOriginalBounds = Bitmap.createBitmap(sample.width, sample.height, Bitmap.Config.ARGB_8888)
++                                    try {
++                                        Canvas(oldAtOriginalBounds).apply {
++                                            drawColor(android.graphics.Color.WHITE)
++                                            drawBitmap(refs.neutral, 0f, 0f, null)
++                                        }
++                                        wholeRoiDifference(oldAtOriginalBounds, sample)
++                                    } finally { oldAtOriginalBounds.recycle() }
++                                } else null
+                                 val category = when {
+                                     comparison.nearlyEqual() -> "OLD_FULL"
+                                     standbyDelta.nearlyEqual() -> "SAFE_STANDBY"
+                                     neutralDelta.nearlyEqual() -> "SAFE_NEUTRAL"
++                                    animatedDelta.nearlyEqual() -> "SAFE_NEUTRAL"
++                                    oldNeutralDelta?.nearlyEqual() == true -> "OLD_SIZE_NEUTRAL"
+                                     emptyDelta.nearlyEqual() -> "BLANK"
+                                     else -> "UNCLASSIFIED"
+                                 }
+-                                if (standby !== refs.standby) standby.recycle()
+-                                if (neutral !== refs.neutral) neutral.recycle()
+-                                if (empty !== refs.empty) empty.recycle()
+                                 categories += category
+                                 times += "sample=$index before=$before after=$after bounds=$b size=${sample.width}x${sample.height} " +
+-                                    "category=$category whitePixels=$whitePixels oldFull=$comparison standby=$standbyDelta neutral=$neutralDelta empty=$emptyDelta " +
+-                                    "reference=r22-2-reference-standby,r22-2-reference-neutral,r22-2-reference-empty fiducials=$leftX,$centerY:${screen.getPixel(leftX, centerY)};" +
++                                    "category=$category whitePixels=$whitePixels oldFull=$comparison standby=$standbyDelta neutral=$neutralDelta animated=$animatedDelta oldSize=$oldNeutralDelta empty=$emptyDelta " +
++                                    "reference=r22-3-native-${sample.width} fiducials=$leftX,$centerY:${screen.getPixel(leftX, centerY)};" +
+                                     "$rightX,$centerY:${screen.getPixel(rightX, centerY)} expected=safe-neutral"
+                             } finally { screen.recycle() }
+                             Thread.sleep(16)
+@@ -2928,6 +2976,104 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+                 fullCrop.recycle()
+             }
+             fixture.ownership.assertBoundedSingleRenderer()
++        } } finally { resizedRefs.recycle(); refs.recycle() }
++    }
++
++    /** A real WindowManager resize, separate from the legacy child-only clip
++     * stress: both window/root and child must commit the new measured size. */
++    @Test fun isolatedNeutralRecoveryAtCommittedResizedBounds() {
++        val baseSize = InstrumentationRegistry.getInstrumentation().targetContext.resources
++            .getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
++        val size = baseSize + 4
++        val refs = passiveReferences(size)
++        val gate = RealReleaseGate().apply { releaseAll() }
++        try { withOrbRetirementFixture("r22-3-committed-resize", gate) { fixture ->
++            val initial = fixture.awaitFirstToken(fixture.initialLease.attachment)
++            lateinit var root: View
++            lateinit var orb: View
++            fixture.instrumentation.runOnMainSync {
++                root = requireNotNull(fixture.manager.currentRoot)
++                orb = root.findViewById(R.id.fluvi_financial_snapshot_orb)
++                assertEquals(baseSize, root.width)
++                assertEquals(baseSize, orb.width)
++                val current = root.layoutParams as WindowManager.LayoutParams
++                val resized = WindowManager.LayoutParams().apply {
++                    copyFrom(current)
++                    width = size
++                    height = size
++                }
++                orb.layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
++                fixture.manager.updateViewLayout(root, resized)
++                root.requestLayout()
++            }
++            val layoutDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)
++            var measured = false
++            var rootBounds = Rect()
++            var childBounds = Rect()
++            while (!measured && System.nanoTime() < layoutDeadline) {
++                fixture.instrumentation.runOnMainSync {
++                    val visibleRoot = root.getGlobalVisibleRect(rootBounds)
++                    val visibleChild = orb.getGlobalVisibleRect(childBounds)
++                    measured = root.isAttachedToWindow && root.width == size && root.height == size &&
++                        orb.width == size && orb.height == size && visibleRoot && visibleChild &&
++                        childBounds.width() == size && childBounds.height() == size && rootBounds.contains(childBounds)
++                }
++                if (!measured) Thread.sleep(24)
++            }
++            assertTrue("NOT REACHED: WM/root/child did not establish unclipped $size geometry root=$rootBounds child=$childBounds", measured)
++            val committed = CountDownLatch(1)
++            fixture.instrumentation.runOnMainSync {
++                root.viewTreeObserver.registerFrameCommitCallback { committed.countDown() }
++                root.invalidate()
++            }
++            assertTrue("NOT REACHED: resized parent frame did not commit", committed.await(8, TimeUnit.SECONDS))
++            val resized = fixture.awaitReplacementToken(initial)
++            assertEquals(size, resized.lease.width)
++            assertEquals(size, resized.lease.height)
++            val before = requireNotNull(fixture.instrumentation.uiAutomation.takeScreenshot())
++            val samples = mutableListOf<Bitmap>()
++            val rows = mutableListOf<String>()
++            try {
++                persistPanelEvidence(fixture.activity, "r22-3-resized-before-full", before)
++                fixture.instrumentation.runOnMainSync {
++                    val outcome = fixture.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
++                        fixture.settings.copy(showFinancialDetails = false))
++                    assertTrue(outcome == KeyguardCardWindow.Result.REDACTED || outcome == KeyguardCardWindow.Result.CONTENT_UPDATED)
++                }
++                repeat(6) { index ->
++                    val at = SystemClock.uptimeMillis()
++                    val screen = requireNotNull(fixture.instrumentation.uiAutomation.takeScreenshot())
++                    try {
++                        val crop = Bitmap.createBitmap(screen, childBounds.left, childBounds.top, size, size)
++                        samples += crop
++                        persistPanelEvidence(fixture.activity, "r22-3-resized-$index-full", screen)
++                        persistPanelEvidence(fixture.activity, "r22-3-resized-$index-crop", crop)
++                        val standby = wholeRoiDifference(refs.standby, crop)
++                        val bootstrap = wholeRoiDifference(refs.neutral, crop)
++                        val animated = wholeRoiDifference(refs.neutralAnimated, crop)
++                        val empty = wholeRoiDifference(refs.empty, crop)
++                        var outsideChanged = 0
++                        for (y in 0 until screen.height) for (x in 0 until screen.width) {
++                            if (!childBounds.contains(x, y) && screen.getPixel(x, y) != before.getPixel(x, y)) outsideChanged++
++                        }
++                        rows += "sample=$index at=$at bounds=$childBounds root=$rootBounds standby=$standby bootstrap=$bootstrap animated=$animated empty=$empty outsideChanged=$outsideChanged"
++                    } finally { screen.recycle() }
++                    Thread.sleep(16)
++                }
++                assertEquals(6, samples.size)
++                assertTrue("resized crops were blank or differed from independently calibrated neutral: $rows",
++                    samples.all { sample -> hasVisibleMaterial(sample) && listOf(refs.standby, refs.neutral, refs.neutralAnimated)
++                        .any { wholeRoiDifference(it, sample).nearlyEqual() } })
++                assertTrue("resized neutral did not produce a distinct animation phase",
++                    samples.drop(1).any { compareMaterialPixels(samples.first(), it).meaningful() })
++                assertTrue("outside resized ROI changed: $rows", rows.all { it.endsWith("outsideChanged=0") })
++                fixture.ownership.assertBoundedSingleRenderer()
++            } finally {
++                File(fixture.activity.filesDir, "keyguard-material-smoke/r22-3-resized-sequence.txt")
++                    .writeText(rows.joinToString("\n", postfix = "\n"))
++                samples.forEach(Bitmap::recycle)
++                before.recycle()
++            }
+         } } finally { refs.recycle() }
+     }
+ 
+@@ -4342,9 +4488,21 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
+             val produced = samples.await(requestId)
+             assertEquals("producer evidence must identify the submitted frame", produced.frame, submitted)
+             persistProducerEvidence(activity, "r06-$label-$suffix-producer", produced)
++            var observation = 0
+             val bitmap = awaitCompositorCrop(
+                 label = "r06-$label-$suffix",
+-                capture = { copyPanelOrb(instrumentation, manager) },
++                capture = {
++                    lateinit var bounds: Rect
++                    instrumentation.runOnMainSync { bounds = manager.currentOrbBounds() }
++                    val screen = requireNotNull(instrumentation.uiAutomation.takeScreenshot())
++                    try {
++                        val evidenceLabel = "r22-2-observer-$label-$suffix-${observation++}"
++                        persistPanelEvidence(activity, "$evidenceLabel-full", screen)
++                        val crop = Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
++                        persistPanelEvidence(activity, "$evidenceLabel-crop", crop)
++                        crop
++                    } finally { screen.recycle() }
++                },
+                 persist = { evidenceLabel, image -> persistPanelEvidence(activity, evidenceLabel, image) },
+                 accepts = accepts,
+                 onTimeout = {
