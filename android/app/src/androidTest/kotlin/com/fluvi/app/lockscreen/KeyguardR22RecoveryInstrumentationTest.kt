@@ -35,6 +35,35 @@ class KeyguardR22RecoveryInstrumentationTest {
             val attempt = index + 1L
             val base = attempt * 10_000L
             val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 91, attempt, "wake", base))
+            val authority = KeyguardInspectionAuthority(91, 2, attempt, 4, 5)
+            val queue = KeyguardCardInspectionQueue()
+            val gate = KeyguardOpeningInspectionHandoff()
+            val token = Any()
+            fun request(id: Long, external: Boolean) = KeyguardCardInspectionRequest(
+                id, if (external) "window" else "wake", 91, 2, 4, 5, attempt, base,
+                diagnosticContext = owner, r14Ingress = if (external) KeyguardR14Ingress(
+                    id, true, 10, 0, 32, base + 3, base + 3, KeyguardR14Origin.SYSTEM_UI) else null)
+            val opening = request(base + 1, false)
+            val claimed = request(base + 4, true)
+            val pending = request(base + 8, true)
+            val safe = KeyguardOpeningInspectionHandoff.Conditions(
+                true, true, true, true, true, true, true, true, true, true)
+            queue.offer(opening)
+            assertTrue(gate.arm(token, base + 2, opening, authority, 7))
+            gate.readStarted(opening, 10, base + 2)
+            gate.externalInvalidation(11, base + 3)
+            queue.offer(claimed)
+            gate.offered(claimed, queue.pendingRequest(), 11, 11, true)
+            assertEquals(claimed, gate.claim(queue, opening, token, 7, 11, safe, "beforeChild", base + 5,
+                observationCaptureId = owner.captureId))
+            gate.readFinished(opening, base + 5)
+            val previous = queue.pendingRequest()
+            queue.offer(pending)
+            val observed = checkNotNull(gate.observePostClaimOffer(
+                pending, previous, queue.activeRequest(), queue.pendingRequest(), true))
+            KeyguardCardDiagnostics.recordR22PostClaim(observed)
+            KeyguardCardDiagnostics.recordR22PostClaim(checkNotNull(gate.successorStarted(claimed, base + 6)))
+            KeyguardCardDiagnostics.recordR22PostClaim(checkNotNull(gate.successorFinished(claimed, base + 9)))
             KeyguardCardDiagnostics.captureEvent(context, "R22_ACQUISITION", "YIELDED",
                 diagnosticContext = owner, requestId = base + 1, observedUptimeMs = base + 5,
                 fields = mapOf("r22Opening" to base + 1, "r22Reservation" to base + 2,
@@ -46,6 +75,11 @@ class KeyguardR22RecoveryInstrumentationTest {
         val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
         val cores = frozen.lineSequence().filter { it.startsWith(" R22_CORE ") || it.startsWith(" R21_CORE ") }.toList()
         assertEquals(8, cores.size)
+        for (attempt in 1..4) {
+            val row = cores.single { it.startsWith(" R22_CORE ") && it.contains("attempt=$attempt ") }
+            assertTrue(row, row.contains("postFirst=${attempt * 10_000L + 8}@"))
+            assertTrue(row, row.contains("coverage=FINISHED"))
+        }
         check(fixture.edit().putString("cores", cores.joinToString("\n")).putString("mode", mode).commit())
         val deadline = SystemClock.uptimeMillis() + 15_000
         while (SystemClock.uptimeMillis() < deadline &&

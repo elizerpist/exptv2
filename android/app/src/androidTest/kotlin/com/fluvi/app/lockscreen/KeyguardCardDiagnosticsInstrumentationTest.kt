@@ -25,6 +25,93 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         KeyguardCardDiagnostics.clearCapture(context)
     }
 
+    @Test fun r22PostClaimQueueEvidenceSurvivesLightPressureAndFreeze() = r22PostClaimQueueEvidence("LIGHT")
+    @Test fun r22PostClaimQueueEvidenceSurvivesFullPressureAndFreeze() = r22PostClaimQueueEvidence("FULL")
+
+    /** This boundary uses real queue offers and the production observer; it
+     * does not synthesize an Android window or a visibility decision. */
+    private fun r22PostClaimQueueEvidence(mode: String) {
+        val settings = context.getSharedPreferences("fluvi_native_keyguard_card", android.content.Context.MODE_PRIVATE)
+        val hadMode = settings.contains("presentationMode")
+        val savedMode = settings.getString("presentationMode", null)
+        check(settings.edit().putString("presentationMode", "orb").commit())
+        try {
+        KeyguardCardDiagnostics.startCapture(context, "r22-1", "profile", mode)
+        val oldSnapshots = mutableListOf<KeyguardOpeningInspectionHandoff.PostClaimSnapshot>()
+        for (wake in 1L..8L) {
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 778, wake, "wake", wake * 1000))
+            val authority = KeyguardInspectionAuthority(778, 2, wake, 4, 5)
+            val queue = KeyguardCardInspectionQueue()
+            val gate = KeyguardOpeningInspectionHandoff()
+            val token = Any()
+            val safe = KeyguardOpeningInspectionHandoff.Conditions(
+                true, true, true, true, true, true, true, true, true, true)
+            fun req(id: Long, external: Boolean) = KeyguardCardInspectionRequest(
+                id, if (external) "window" else "wake", 778, 2, 4, 5, wake, wake * 1000,
+                diagnosticContext = owner, r14Ingress = if (external) KeyguardR14Ingress(
+                    id, true, 10, 0, 32, wake * 1000, wake * 1000, KeyguardR14Origin.SYSTEM_UI) else null)
+            val a = req(wake * 1000 + 1, false)
+            val b = req(wake * 1000 + 2, true)
+            val c = req(wake * 1000 + 3, true)
+            queue.offer(a)
+            assertTrue(gate.arm(token, 700 + wake, a, authority, 7))
+            gate.readStarted(a, 10, wake * 1000 + 1)
+            gate.externalInvalidation(11, wake * 1000 + 2)
+            queue.offer(b)
+            gate.offered(b, queue.pendingRequest(), 11, 11, true)
+            assertEquals(b, gate.claim(queue, a, token, 7, 11, safe, "beforeChild", wake * 1000 + 3,
+                observationCaptureId = owner.captureId))
+            gate.readFinished(a, wake * 1000 + 4)
+            val previous = queue.pendingRequest()
+            queue.offer(c)
+            val first = checkNotNull(gate.observePostClaimOffer(c, previous, queue.activeRequest(), queue.pendingRequest(), true))
+            KeyguardCardDiagnostics.recordR22PostClaim(first)
+            // A later ordinal from a different authority or reservation is
+            // never allowed to evict this capture's actual owner.
+            KeyguardCardDiagnostics.recordR22PostClaim(first.copy(
+                authority = first.authority.copy(visibilityEpoch = 999), ordinal = Long.MAX_VALUE))
+            KeyguardCardDiagnostics.recordR22PostClaim(first.copy(
+                reservationId = first.reservationId + 1000, ordinal = Long.MAX_VALUE))
+            oldSnapshots += first
+            if (wake < 8) {
+                val started = checkNotNull(gate.successorStarted(b, wake * 1000 + 5))
+                KeyguardCardDiagnostics.recordR22PostClaim(started)
+                val closed = checkNotNull(gate.successorFinished(b, wake * 1000 + 6))
+                KeyguardCardDiagnostics.recordR22PostClaim(closed)
+                // A delayed older update must not replace the closed result.
+                KeyguardCardDiagnostics.recordR22PostClaim(first)
+            }
+            repeat(180) { index ->
+                KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure",
+                    diagnosticContext = owner, requestId = wake * 1000 + 100 + index,
+                    observedUptimeMs = wake * 1000 + 100 + index)
+                if (index % 45 == 44) KeyguardCardDiagnostics.captureSnapshot(context)
+            }
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue("$mode export exceeded 32 KiB", report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        for (wake in listOf(1L, 6L, 7L, 8L)) {
+            val row = report.lineSequence().single { it.startsWith(" R22_CORE ") && it.contains("attempt=$wake ") }
+            assertTrue(row, row.contains("opening=${wake * 1000 + 1}/${700 + wake}"))
+            assertTrue(row, row.contains("claimed=${wake * 1000 + 2}@"))
+            assertTrue(row, row.contains("postFirst=${wake * 1000 + 3}@"))
+            assertTrue(row, row.contains("postCount=1/0"))
+            assertTrue(row, row.contains(if (wake < 8) "coverage=FINISHED" else "coverage=INCOMPLETE_OPEN"))
+        }
+        KeyguardCardDiagnostics.recordR22PostClaim(oldSnapshots.first())
+        assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+        KeyguardCardDiagnostics.startCapture(context, "new", "profile", mode)
+        KeyguardCardDiagnostics.beginLockAttempt(context, 779, 1, "wake", 20_000)
+        KeyguardCardDiagnostics.recordR22PostClaim(oldSnapshots.first())
+        val next = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertFalse(next.contains("postFirst=1003@"))
+        } finally {
+            val editor = settings.edit()
+            if (hadMode) editor.putString("presentationMode", savedMode) else editor.remove("presentationMode")
+            check(editor.commit())
+        }
+    }
+
     @Test fun r18PipelineEvidenceRemainsBoundedAndOwnedInLight() = r18PipelineEvidence("LIGHT")
     @Test fun r18PipelineEvidenceRemainsBoundedAndOwnedInFull() = r18PipelineEvidence("FULL")
 

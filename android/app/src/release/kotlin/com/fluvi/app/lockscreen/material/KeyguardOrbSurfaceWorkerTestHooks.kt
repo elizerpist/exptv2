@@ -3,6 +3,8 @@ package com.fluvi.app.lockscreen.material
 /** Release artifacts have no installed instrumentation barrier. */
 internal object KeyguardOrbSurfaceWorkerTestHooks {
     const val ENABLED = false
+    val fixedMaterialTime: KeyguardMaterialTime? = null
+    val postedMaterialTime: ((KeyguardOrbSurfaceTarget, KeyguardMaterialTime, Long) -> Unit)? = null
     val beforeRevealCross: ((KeyguardOrbDirectOutput) -> Unit)? = null
     val afterRevealCross: ((KeyguardOrbDirectOutput) -> Unit)? = null
     val beforeRevealApply: ((KeyguardOrbDirectOutput) -> Unit)? = null

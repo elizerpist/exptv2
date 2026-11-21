@@ -628,6 +628,14 @@ internal class KeyguardOrbSurfaceWorker(
             currentFrameTime.phase = phase.phase
             currentFrameTime.backgroundPhase = phase.backgroundPhase
             currentFrameTime.interiorPhase = phase.interiorPhase
+            if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+                KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime?.let {
+                    currentFrameTime.elapsedSeconds = it.elapsedSeconds
+                    currentFrameTime.phase = it.phase
+                    currentFrameTime.backgroundPhase = it.backgroundPhase
+                    currentFrameTime.interiorPhase = it.interiorPhase
+                }
+            }
             painter.prepare(currentFrameTime)
             if (firstTiming != null) firstTiming.configureEndNs = System.nanoTime()
         } catch (error: Throwable) {
@@ -646,6 +654,14 @@ internal class KeyguardOrbSurfaceWorker(
                 currentFrameTime.phase = lastPostedPhase
                 currentFrameTime.backgroundPhase = lastPostedBackground
                 currentFrameTime.interiorPhase = lastPostedInterior
+            }
+            if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+                KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime?.let {
+                    currentFrameTime.elapsedSeconds = it.elapsedSeconds
+                    currentFrameTime.phase = it.phase
+                    currentFrameTime.backgroundPhase = it.backgroundPhase
+                    currentFrameTime.interiorPhase = it.interiorPhase
+                }
             }
             distinct = currentFrameTime.elapsedSeconds != lastPostedElapsed || currentFrameTime.phase != lastPostedPhase ||
                 currentFrameTime.backgroundPhase != lastPostedBackground || currentFrameTime.interiorPhase != lastPostedInterior
@@ -733,6 +749,12 @@ internal class KeyguardOrbSurfaceWorker(
             posted = true
             if (firstTiming != null) firstTiming.postReturnNs = System.nanoTime()
             if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+                KeyguardOrbSurfaceWorkerTestHooks.postedMaterialTime?.let { observer ->
+                    val actual = if (first && !firstDirect) checkNotNull(currentPoster).phase else
+                        KeyguardMaterialTime(currentFrameTime.elapsedSeconds, currentFrameTime.phase,
+                            currentFrameTime.backgroundPhase, currentFrameTime.interiorPhase)
+                    runCatching { observer(target, actual, SystemClock.uptimeMillis()) }
+                }
                 runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost?.invoke(target) }
             }
             if (measure) { postEnd = System.nanoTime(); cpuPostEnd = Debug.threadCpuTimeNanos(); target.metrics?.holderPostReturned(SystemClock.uptimeMillis()) }

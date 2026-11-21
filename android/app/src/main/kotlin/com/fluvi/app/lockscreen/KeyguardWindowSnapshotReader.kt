@@ -195,6 +195,8 @@ internal class KeyguardWindowSnapshotReader(
          * a useful, fully inspected acquisition boundary. */
         val openingYieldHint: (() -> Boolean)? = null,
         val openingFirstIngressUptime: (() -> Long)? = null,
+        val openingChildBefore: ((Int, Int) -> Unit)? = null,
+        val openingChildReturned: ((Int, Int, Boolean) -> Unit)? = null,
         val claimOpeningYield: ((String, Boolean, Boolean, Int, Int, Int) -> KeyguardCardInspectionRequest?)? = null,
     )
 
@@ -587,7 +589,10 @@ internal class KeyguardWindowSnapshotReader(
                 visibleIds(root, window.id, prefetch.takeIf { timing.activeRootAccepted }, authorityIsCurrent, timing,
                     request.onDecisiveSystemMarker,
                     if (request.openingFirstIngressUptime != null) ::observeIngressCall else null,
-                    if (canBatch && timing.activeRootAccepted && !unavailableRoot && !walkTruncated &&
+                    request.openingChildBefore,
+                    request.openingChildReturned,
+                    if (request.openingYieldHint != null && request.claimOpeningYield != null &&
+                        canBatch && timing.activeRootAccepted && !unavailableRoot && !walkTruncated &&
                         !timing.ownAttributionAmbiguous) { kind, count ->
                         if (request.openingYieldHint?.invoke() == true)
                             maybeYield(kind, cleanOpeningInventory(), visited + count) else null
@@ -625,6 +630,8 @@ internal class KeyguardWindowSnapshotReader(
         timing: Accumulator,
         onDecisiveSystemMarker: (() -> Unit)?,
         observeIngressCall: ((String, Long, Long) -> Unit)?,
+        openingChildBefore: ((Int, Int) -> Unit)?,
+        openingChildReturned: ((Int, Int, Boolean) -> Unit)?,
         tryOpeningYield: ((String, Int) -> KeyguardCardInspectionRequest?)?,
     ): VisibleIds {
         val ids = linkedSetOf<String>()
@@ -663,6 +670,7 @@ internal class KeyguardWindowSnapshotReader(
                         yieldedTo = tryOpeningYield("beforeChild", visited)
                         if (yieldedTo != null) return
                     }
+                    if (openingChildBefore != null) runCatching { openingChildBefore(windowId, index) }
                     val startedAt = SystemClock.uptimeMillis()
                     val acquisition = runCatching {
                         KeyguardWindowAcquisitionCalls.child(prefetchFlags, Build.VERSION.SDK_INT,
@@ -680,6 +688,7 @@ internal class KeyguardWindowSnapshotReader(
                     timing.child(windowId, index, childReturnedAt - startedAt)
                     observeIngressCall?.invoke("child", startedAt, childReturnedAt)
                     if (KeyguardR15AcquisitionTestHooks.ENABLED) KeyguardR15AcquisitionTestHooks.returnedChild(windowId, index, child != null)
+                    if (openingChildReturned != null) runCatching { openingChildReturned(windowId, index, child != null) }
                     if (!authorityIsCurrent()) {
                         child?.recycle()
                         readsAfterInvalidation += 1

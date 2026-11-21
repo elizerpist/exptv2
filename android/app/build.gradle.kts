@@ -242,6 +242,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
     // Flutter's Android embedding pins the debug runtime to runner 1.2.0.
     // Keep the production RuntimeShader smoke on that compatible AndroidX
     // test family rather than relying on Gradle's inconsistent resolution.

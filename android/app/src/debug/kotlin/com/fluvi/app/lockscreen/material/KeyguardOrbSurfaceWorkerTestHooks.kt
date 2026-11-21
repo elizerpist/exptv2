@@ -4,6 +4,8 @@ package com.fluvi.app.lockscreen.material
  * This does not create visibility authority or synthesize a platform event. */
 internal object KeyguardOrbSurfaceWorkerTestHooks {
     const val ENABLED = true
+    @Volatile var fixedMaterialTime: KeyguardMaterialTime? = null
+    @Volatile var postedMaterialTime: ((KeyguardOrbSurfaceTarget, KeyguardMaterialTime, Long) -> Unit)? = null
     @Volatile var beforeRevealCross: ((KeyguardOrbDirectOutput) -> Unit)? = null
     @Volatile var afterRevealCross: ((KeyguardOrbDirectOutput) -> Unit)? = null
     @Volatile var beforeRevealApply: ((KeyguardOrbDirectOutput) -> Unit)? = null

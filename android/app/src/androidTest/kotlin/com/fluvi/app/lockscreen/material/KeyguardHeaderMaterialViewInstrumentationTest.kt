@@ -2394,11 +2394,27 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             val fullTicket = gate.awaitTicket(c.lease.attachment)
             assertTrue(waitForIsolatedBootstrapReplacement(fixture.instrumentation, fixture.manager))
             val fullCrop = copyPanelOrb(fixture.instrumentation, fixture.manager)
+            val parentEvents = java.util.concurrent.CopyOnWriteArrayList<String>()
+            var observedOrb: View? = null
+            var parentListener: ViewTreeObserver.OnDrawListener? = null
             try {
                 persistPanelEvidence(fixture.activity, "r08-full-before-redaction", fullCrop)
                 lateinit var root: View
                 fixture.instrumentation.runOnMainSync {
                     root = requireNotNull(fixture.manager.currentRoot)
+                    val orb = root.findViewById<View>(R.id.fluvi_financial_snapshot_orb)
+                    observedOrb = orb
+                    val listener = ViewTreeObserver.OnDrawListener {
+                        if (parentEvents.size < 16) {
+                            parentEvents += "parentDrawAfterRedactionRequest uptimeMs=${SystemClock.uptimeMillis()} visibility=${orb.visibility} size=${orb.width}x${orb.height}"
+                            runCatching { orb.viewTreeObserver.registerFrameCommitCallback {
+                                parentEvents += "parentFrameCommitReceipt uptimeMs=${SystemClock.uptimeMillis()}"
+                            } }.onFailure { parentEvents += "parentCommitRegistrationFailed ${it.javaClass.simpleName}" }
+                        }
+                    }
+                    parentListener = listener
+                    orb.viewTreeObserver.addOnDrawListener(listener)
+                    parentEvents += "redactionRequest uptimeMs=${SystemClock.uptimeMillis()} root=${System.identityHashCode(root)} attachment=${c.lease.attachment} generation=${c.lease.generation} leaseSize=${c.lease.width}x${c.lease.height}"
                     val result = fixture.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
                         fixture.settings.copy(showFinancialDetails = false))
                     assertTrue(result == KeyguardCardWindow.Result.REDACTED || result == KeyguardCardWindow.Result.CONTENT_UPDATED)
@@ -2416,18 +2432,48 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     val times = mutableListOf<String>()
                     try {
                         repeat(6) { index ->
-                            val before = SystemClock.uptimeMillis()
-                            val sample = copyPanelOrb(fixture.instrumentation, fixture.manager)
-                            val after = SystemClock.uptimeMillis()
-                            samples += sample
-                            persistPanelEvidence(fixture.activity, "$label-$index", sample)
                             var bounds: Rect? = null
                             fixture.instrumentation.runOnMainSync { bounds = fixture.manager.currentOrbBounds() }
-                            times += "sample=$index before=$before after=$after bounds=$bounds size=${sample.width}x${sample.height} expected=safe-neutral"
+                            val b = checkNotNull(bounds)
+                            val before = SystemClock.uptimeMillis()
+                            val screen = requireNotNull(fixture.instrumentation.uiAutomation.takeScreenshot())
+                            val after = SystemClock.uptimeMillis()
+                            try {
+                                assertTrue("orb bounds outside screenshot: $b", b.left >= 0 && b.top >= 0 &&
+                                    b.right <= screen.width && b.bottom <= screen.height && b.width() > 0 && b.height() > 0)
+                                val sample = Bitmap.createBitmap(screen, b.left, b.top, b.width(), b.height())
+                                samples += sample
+                                persistPanelEvidence(fixture.activity, "$label-full-$index", screen)
+                                persistPanelEvidence(fixture.activity, "$label-$index", sample)
+                                val reference = Bitmap.createScaledBitmap(fullCrop, sample.width, sample.height, true)
+                                val comparison = try { compareMaterialPixels(reference, sample) }
+                                    finally { if (reference !== fullCrop) reference.recycle() }
+                                val centerY = (b.top + b.height() / 2).coerceIn(0, screen.height - 1)
+                                val leftX = (b.left - 4).coerceIn(0, screen.width - 1)
+                                val rightX = (b.right + 4).coerceIn(0, screen.width - 1)
+                                var whitePixels = 0
+                                for (y in 0 until sample.height) for (x in 0 until sample.width) {
+                                    if (sample.getPixel(x, y) and 0x00ffffff == 0x00ffffff) whitePixels += 1
+                                }
+                                val category = when {
+                                    whitePixels == sample.width * sample.height -> "BLANK_WHITE"
+                                    !hasVisibleMaterial(sample) -> "UNCLASSIFIED"
+                                    comparison.nearlyEqual() -> "MATCHES_OLD_FULL"
+                                    comparison.meaningful() -> "DISTINCT_FROM_OLD_FULL_NEUTRAL_UNCALIBRATED"
+                                    else -> "UNCLASSIFIED"
+                                }
+                                times += "sample=$index before=$before after=$after bounds=$b size=${sample.width}x${sample.height} " +
+                                    "category=$category whitePixels=$whitePixels pixelDelta=$comparison fiducials=$leftX,$centerY:${screen.getPixel(leftX, centerY)};" +
+                                    "$rightX,$centerY:${screen.getPixel(rightX, centerY)} expected=safe-neutral"
+                            } finally { screen.recycle() }
                             Thread.sleep(16)
                         }
-                        File(fixture.activity.filesDir, "keyguard-material-smoke/$label-times.txt")
-                            .writeText(times.joinToString("\n", postfix = "\n"))
+                        val directory = File(fixture.activity.filesDir, "keyguard-material-smoke")
+                        File(directory, "$label-times.txt").writeText(times.joinToString("\n", postfix = "\n"))
+                        File(directory, "$label-boundaries.txt").writeText(
+                            (parentEvents + gate.retirementSnapshot().map { "retirement $it" } +
+                                fixture.ownership.snapshot().filter { it.lease == c.lease }.map { "ownership $it" })
+                                .joinToString("\n", postfix = "\n"))
                         assertTrue("$label contained a blank or prior full-detail orb", samples.all(::safeNeutral))
                     } finally { samples.forEach(Bitmap::recycle) }
                 }
@@ -2477,7 +2523,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                     after.recycle()
                     assertTrue("old receipts were delivered during privacy test", gate.heldCount() >= 2)
                 } finally { neutralCrop.recycle() }
-            } finally { fullCrop.recycle() }
+            } finally {
+                fixture.instrumentation.runOnMainSync {
+                    val orb = observedOrb
+                    val listener = parentListener
+                    if (orb != null && listener != null && orb.viewTreeObserver.isAlive) {
+                        orb.viewTreeObserver.removeOnDrawListener(listener)
+                    }
+                }
+                fullCrop.recycle()
+            }
             fixture.ownership.assertBoundedSingleRenderer()
         }
     }
@@ -3478,6 +3533,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         override fun onRetirementEvent(lease: KeyguardOrbBufferLease, childIdentity: Int, event: String, uptimeMs: Long) {
             retirements += RetirementBoundary(lease, childIdentity, event, uptimeMs)
         }
+
+        fun retirementSnapshot(): List<RetirementBoundary> = retirements.toList()
 
         fun awaitRetirement(lease: KeyguardOrbBufferLease, event: String): RetirementBoundary {
             val end = System.nanoTime() + TimeUnit.SECONDS.toNanos(8)

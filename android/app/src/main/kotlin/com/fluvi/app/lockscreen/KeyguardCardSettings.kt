@@ -16,6 +16,7 @@ import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReferenceArray
 
 /**
  * The accessibility overlay owns this focus.  It may share the financial
@@ -475,6 +476,9 @@ internal object KeyguardCardDiagnostics {
         val producerMaxNs = AtomicLong()
         val legacyProducerTotalNs = AtomicLong()
         val skippedRecords = AtomicLong()
+        // First attempt plus the bounded recent-attempt ring. Each slot holds
+        // only the latest immutable scalar observation for that exact owner.
+        val r22PostClaim = AtomicReferenceArray<KeyguardOpeningInspectionHandoff.PostClaimSnapshot?>(MAX_ATTEMPTS + 1)
     }
     @Volatile private var ingress: CaptureIngress? = null
     // Retain counters after ingress is closed, so a frozen snapshot includes
@@ -1087,6 +1091,13 @@ internal object KeyguardCardDiagnostics {
         val opening = event.fields["r22Opening"] ?: return
         if (values["r22Opening"] != null && values["r22Opening"] != opening) return
         val reservation = event.fields["r22Reservation"]
+        if (reservation != null && values["r22Reservation"]?.let { it != reservation } == true) return
+        val incomingClaim = event.fields["r22Claimed"]?.takeIf { it != "UNOBSERVED" }
+        if (incomingClaim != null && values["r22Claimed"]?.let { it != incomingClaim } == true) return
+        if (event.reason == "B_START" || event.reason == "B_FINISHED") {
+            val expected = values["r22Claimed"] ?: incomingClaim
+            if (expected == null || incomingClaim != expected || event.requestId?.toString() != expected) return
+        }
         if (reservation != null && values["observationReservation"]?.let { it != reservation } == true) {
             listOf("firstWait", "firstWaitAt", "firstWaitRequest", "lastWait", "lastWaitAt",
                 "positiveAt", "positiveRequest", "positiveRejection", "observationReservation").forEach(values::remove)
@@ -1200,11 +1211,20 @@ internal object KeyguardCardDiagnostics {
     }
 
     fun freezeCapture(context: Context): Map<String, Any?> = reduction.read {
-        ingress = null
+        val token = ingress
+        if (token != null) {
+            // The cut is one volatile assignment ordered against queue.offer.
+            // The service performs no callback or formatting inside queueLock.
+            val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
+            if (service != null) service.cutR22DiagnosticCapture {
+                if (ingress === token) ingress = null
+            } else if (ingress === token) ingress = null
+        }
         val read = synchronized(captureLock) {
             ensureRecoveredLoadedLocked(context)
             val active = capture
             if (active != null && active.state == "REC") {
+                flushR22PostClaim(active, token)
                 active.endedElapsedMs = SystemClock.elapsedRealtime()
                 active.state = "FROZEN"
                 appendLocked(active, "CAPTURE_FROZEN", "user")
@@ -1222,7 +1242,10 @@ internal object KeyguardCardDiagnostics {
         val read = synchronized(captureLock) {
             ensureRecoveredLoadedLocked(context)
             val active = capture
-            if (active?.state == "REC") expireIfNeededLocked(context, active)
+            if (active?.state == "REC") {
+                flushR22PostClaim(active, ingress)
+                expireIfNeededLocked(context, active)
+            }
             val current = capture
             (current?.frozenExport ?: current?.let(::snapshotForExportLocked)) to recovered
         }
@@ -1331,6 +1354,73 @@ internal object KeyguardCardDiagnostics {
 
     /** Capture-qualified scalar for observations already made by the service. */
     fun activeCaptureId(): String? = ingress?.id
+
+    /** Called under queueLock immediately after the actual queue transition.
+     * A bounded atomic slot coalesces offers without enqueueing a producer
+     * stream or formatting on the reader/Main thread. */
+    fun recordR22PostClaim(observation: KeyguardOpeningInspectionHandoff.PostClaimSnapshot) {
+        val token = ingress ?: return
+        val owner = observation.context
+        val attempt = owner.attemptId ?: return
+        if (token.id != owner.captureId || attempt <= 0L) return
+        fun update(index: Int) {
+            while (true) {
+                val old = token.r22PostClaim.get(index)
+                if (old != null) {
+                    val oldAttempt = old.context.attemptId ?: 0L
+                    if (oldAttempt > attempt) return
+                    if (oldAttempt == attempt && (old.context != owner ||
+                        old.authority != observation.authority || old.openingId != observation.openingId ||
+                        old.reservationId != observation.reservationId || old.claimedId != observation.claimedId ||
+                        old.ordinal >= observation.ordinal)) return
+                }
+                if (token.r22PostClaim.compareAndSet(index, old, observation)) return
+            }
+        }
+        if (attempt == 1L) update(0)
+        update(1 + ((attempt - 1L) % MAX_ATTEMPTS).toInt())
+    }
+
+    /** Consumer-only reduction. The first observation and cumulative latest
+     * value survive raw-event overflow and a freeze before B finishes. */
+    private fun flushR22PostClaim(active: TimingCapture, token: CaptureIngress?) {
+        if (token == null || token.id != active.id) return
+        for (index in 0 until token.r22PostClaim.length()) {
+            val observation = token.r22PostClaim.get(index) ?: continue
+            val owner = observation.context
+            if (owner.captureId != active.id) continue
+            val attempt = active.attempts.lastOrNull { it.id == owner.attemptId } ?:
+                active.firstAttempt?.takeIf { it.id == owner.attemptId } ?: continue
+            if (attempt.serviceSession != owner.serviceSession || attempt.wakeEpoch != owner.originWakeEpoch) continue
+            val values = attempt.r22Opening
+            if (values["r22Opening"]?.let { it != observation.openingId.toString() } == true ||
+                values["r22Reservation"]?.let { it != observation.reservationId.toString() } == true ||
+                values["r22Claimed"]?.let { it != observation.claimedId.toString() } == true) continue
+            val previous = values["r22PostOrdinal"]?.toLongOrNull()
+            if (previous != null && previous >= observation.ordinal) continue
+            fun fact(value: KeyguardOpeningInspectionHandoff.PendingObservation?): String = if (value == null) {
+                "UNOBSERVED"
+            } else {
+                "${value.id}@${value.queuedAt}/${value.origin}/${value.ingressId ?: "NA"}/${value.ingressOrigin ?: "NA"}/" +
+                    "${value.eventType ?: "NA"}/${value.display ?: "NA"}/${value.eventAt ?: "NA"}/${value.callbackAt ?: "NA"}/${value.trigger.take(32)}/" +
+                    "${value.freshness.name}/${value.freshnessCopied}/${value.displacedId ?: "NA"}"
+            }
+            values["r22Opening"] = observation.openingId.toString()
+            values["r22Reservation"] = observation.reservationId.toString()
+            values["r22Claimed"] = observation.claimedId.toString()
+            values["r22PostOrdinal"] = observation.ordinal.toString()
+            values["r22PostAuthority"] = with(observation.authority) {
+                "$serviceSession/$visibilityEpoch/$wakeGeneration/$interactionEpoch/$attachGeneration"
+            }
+            values["r22PostCoverage"] = observation.closedReason ?: "INCOMPLETE_OPEN"
+            values["r22PostFirst"] = fact(observation.first)
+            values["r22PostLatest"] = fact(observation.latest)
+            values["r22PostOffers"] = observation.offers.toString()
+            values["r22PostReplacements"] = observation.replacements.toString()
+            values["r22PostBStart"] = observation.bStartedAt?.toString() ?: "UNOBSERVED"
+            values["r22PostBEnd"] = observation.bFinishedAt?.toString() ?: "UNOBSERVED"
+        }
+    }
 
     /** Check before constructing optional verbose fields. LIGHT keeps the
      * complete INSPECTION_FINISHED aggregate instead of three copies. */
@@ -2031,6 +2121,7 @@ internal object KeyguardCardDiagnostics {
 
     private fun expireIfNeededLocked(context: Context, active: TimingCapture): Boolean {
         if (SystemClock.elapsedRealtime() - active.startedElapsedMs <= ACTIVE_CAPTURE_MS) return false
+        flushR22PostClaim(active, ingress)
         active.endedElapsedMs = SystemClock.elapsedRealtime()
         active.state = "EXPIRED"
         if (ingress?.id == active.id) ingress = null
@@ -2047,6 +2138,7 @@ internal object KeyguardCardDiagnostics {
 
     private fun persistLocked(context: Context, active: TimingCapture, force: Boolean) {
         if (!force && active.state != "REC") return
+        flushR22PostClaim(active, ingress ?: lastIngress?.takeIf { it.id == active.id })
         active.checkpointCount += 1L
         active.lastCheckpointElapsedMs = SystemClock.elapsedRealtime()
         val id = active.id
@@ -2636,6 +2728,9 @@ internal object KeyguardCardDiagnostics {
         append(" positive=${v("positiveRequest")}@${v("positiveAt")}/${v("positiveRejection")} consumed=${d("r19ConsumedRequest")} hostReady=${d("HOST_READY")}/${d("HIDDEN_BOUND")}")
         append(" wait=${v("firstWait")}@${v("firstWaitAt")}/${v("lastWait")}@${v("lastWaitAt")}")
         append(" apply=${d("r21NATIVE_APPLYAt")} firstPostNs=${d("r20PostReturnNs")} seal=${d("r21SEALAt")} retire=${d("retire:r18ApplyEnd")}")
+        append(" postv=1 postOrd=${v("r22PostOrdinal")} postAuthority=${v("r22PostAuthority")} coverage=${v("r22PostCoverage")}")
+        append(" postFirst=${values["r22PostFirst"] ?: "UNOBSERVED"} postLatest=${values["r22PostLatest"] ?: "UNOBSERVED"}")
+        append(" postCount=${v("r22PostOffers")}/${v("r22PostReplacements")} postB=${v("r22PostBStart")}/${v("r22PostBEnd")}")
         appendLine(" clock=uptimeMs firstPostClock=System.nanoTime physical=UNOBSERVED")
     }
 

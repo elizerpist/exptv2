@@ -339,6 +339,7 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
         val selected = base.copy(phase = phaseA, elapsedSeconds = phaseA,
             background = base.background.copy(phase = phaseA), interior = base.interior.copy(phase = phaseA))
         val controlled = AtomicReference(KeyguardMaterialTime(phaseA, phaseA, phaseA, phaseA))
+        val referenceSourceReturned = AtomicReference<KeyguardMaterialTime?>()
         val allocated = CountDownLatch(1); val hostReady = CountDownLatch(1); val bound = CountDownLatch(1)
         val firstPosted = CountDownLatch(1); val reveal = CountDownLatch(1); val drained = CountDownLatch(1)
         val heldAck = AtomicReference<Runnable?>(); val ackQueued = CountDownLatch(1)
@@ -363,7 +364,9 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
             instrumentation.runOnMainSync {
                 root = FrameLayout(activity).apply { setBackgroundColor(green) }
                 reference = KeyguardHeaderMaterialView(activity,
-                    materialTimeSource = KeyguardMaterialTimeSource { _, _ -> controlled.get() }).apply {
+                    materialTimeSource = KeyguardMaterialTimeSource { _, _ ->
+                        controlled.get().also { referenceSourceReturned.set(it) }
+                    }).apply {
                     layoutParams = FrameLayout.LayoutParams(size, size).apply { leftMargin = 100; topMargin = 250 }
                     setScene(KeyguardMaterialScene(selected, true, 0L), enabled = true)
                     setBootstrapActive(false)
@@ -389,11 +392,38 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
                 assertTrue("canonical phase $index did not draw", r20Wait(8_000) {
                     instrumentation.runOnMainValue { reference.diagnostics().shaderDrawCount > before }
                 })
-                val screen = awaitScreenshot(8_000) { screenshot ->
-                    val sample = crop(reference, screenshot)
-                    try { accept(sample) } finally { sample.recycle() }
-                }
-                return crop(reference, screen).also { screen.recycle(); it.save(File(runDir, "reference-$index.png")) }
+                var lastRejected: Bitmap? = null
+                try {
+                    val screen = awaitScreenshot(8_000) { screenshot ->
+                        val sample = crop(reference, screenshot)
+                        try {
+                            val accepted = accept(sample)
+                            if (!accepted) {
+                                lastRejected?.recycle()
+                                lastRejected = screenshot.copy(Bitmap.Config.ARGB_8888, false)
+                            }
+                            accepted
+                        } finally { sample.recycle() }
+                    }
+                    return crop(reference, screen).also { screen.recycle(); it.save(File(runDir, "reference-$index.png")) }
+                } catch (failure: AssertionError) {
+                    lastRejected?.let { image ->
+                        image.save(File(runDir, "reference-$index-last-rejected-full.png"))
+                        val sample = crop(reference, image)
+                        try {
+                            sample.save(File(runDir, "reference-$index-last-rejected-crop.png"))
+                            val diagnostics = instrumentation.runOnMainValue { reference.diagnostics() }
+                            val location = IntArray(2)
+                            instrumentation.runOnMainSync { reference.getLocationOnScreen(location) }
+                            val metrics = refs.firstOrNull()?.let { r20Compare(it, sample).toString() } ?: "UNOBSERVED_NO_A"
+                            File(runDir, "reference-$index-timeout.txt").writeText(
+                                "requestedPhase=$phase sourceReturned=${referenceSourceReturned.get() ?: "UNOBSERVED"} " +
+                                    "shaderDrawCount=${diagnostics.shaderDrawCount} bounds=${location[0]},${location[1]},$size,$size " +
+                                    "corner=${sample.getPixel(0, 0)} center=${sample.getPixel(size / 2, size / 2)} metrics=$metrics\n")
+                        } finally { sample.recycle() }
+                    }
+                    throw failure
+                } finally { lastRejected?.recycle() }
             }
             // A hardware View draw can complete before the launch splash is
             // composited away. Accept A only when its transparent corner has

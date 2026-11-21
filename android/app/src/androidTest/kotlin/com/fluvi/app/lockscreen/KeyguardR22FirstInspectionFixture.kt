@@ -17,6 +17,8 @@ import android.view.accessibility.AccessibilityEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
+import com.fluvi.app.lockscreen.material.KeyguardMaterialTime
+import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceWorkerTestHooks
 import java.io.File
 import java.util.Collections
 import java.util.UUID
@@ -32,12 +34,18 @@ import org.junit.runner.RunWith
 /** Real-service fixture. Controlled metadata remains explicitly labelled;
  * only Android's own reader/classifier can produce a visibility decision. */
 internal class KeyguardR22FirstInspectionFixture {
+    private data class PostedFrame(val attachment: Long, val generation: Long, val child: Int?,
+        val width: Int, val height: Int, val densityDpi: Int,
+        val time: KeyguardMaterialTime, val at: Long, val full: Boolean)
+    private data class VisualEdge(val ordinal: Long, val at: Long, val kind: String, val child: Int?, val full: Boolean)
+    private data class IngressEdge(val ordinal: Long, val at: Long, val window: Int)
+
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context get() = instrumentation.targetContext
     private lateinit var automation: UiAutomation
 
     fun run(scenario: String) {
-        require(scenario in setOf("positive", "negative", "stable"))
+        require(scenario in setOf("positive", "negative", "stable", "natural"))
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -63,11 +71,32 @@ internal class KeyguardR22FirstInspectionFixture {
             it.isNotBlank() && ComponentName.unflattenFromString(it) != component
         }.joinToString(":")
         val records = Collections.synchronizedList(mutableListOf<String>())
+        val entryArmed = AtomicBoolean(false)
+        val entryStarted = CountDownLatch(1)
+        val releaseEntry = CountDownLatch(1)
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
+        val firstChildHeld = AtomicBoolean(false)
+        val entryTimedOut = AtomicBoolean(false)
+        val childTimedOut = AtomicBoolean(false)
+        val bEntryTimedOut = AtomicBoolean(false)
+        val stableReading = AtomicBoolean(false)
+        val stableExternal = AtomicBoolean(false)
         val completed = CountDownLatch(1)
         val bStarted = CountDownLatch(1)
         val a = AtomicReference<KeyguardCardInspectionRequest?>()
+        val reservation = AtomicLong(0L)
+        val posted = AtomicReference<PostedFrame?>()
+        val visualOrdinal = AtomicLong(0)
+        val visualEdges = Collections.synchronizedList(mutableListOf<VisualEdge>())
+        val ingressEdges = Collections.synchronizedList(mutableListOf<IngressEdge>())
+        val visualOverflow = AtomicBoolean(false)
+        val savedRevealCross = KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross
+        val observedPostClaim = AtomicReference<KeyguardOpeningInspectionHandoff.PostClaimSnapshot?>()
+        var calibration: KeyguardR22VisualCalibration? = null
+        var visualIdentity: KeyguardR22VisualIdentityForTest? = null
+        var visualUnderlay: android.graphics.Bitmap? = null
+        var visualCalibration = "NOT_REACHED"
         val b = AtomicLong(0L)
         val injectedAt = AtomicLong(0L)
         val afterB = AtomicBoolean(false)
@@ -77,6 +106,8 @@ internal class KeyguardR22FirstInspectionFixture {
         val bEntered = CountDownLatch(1)
         val releaseB = CountDownLatch(1)
         val realNegativeEvent = CountDownLatch(1)
+        val realNegativePending = CountDownLatch(1)
+        val pendingWindows = Collections.synchronizedList(mutableListOf<Pair<Long, Int>>())
         val negativeResult = CountDownLatch(1)
         val negativeArmed = AtomicBoolean(false)
         val resultB = AtomicReference<String?>()
@@ -106,6 +137,28 @@ internal class KeyguardR22FirstInspectionFixture {
                 check(FluviKeyguardMaterialStore.publish(context,
                     KeyguardR12ServiceTimingInstrumentationTest().materialProfile(), epoch))
             }
+            if (scenario != "natural") {
+                calibration = KeyguardR22VisualCalibration(instrumentation, dir).also { it.calibrate() }
+                visualCalibration = "REFERENCE_CALIBRATED_SERVICE_NOT_REACHED"
+                KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
+                KeyguardOrbSurfaceWorkerTestHooks.postedMaterialTime = { target, time, at ->
+                    posted.set(PostedFrame(target.attachment, target.generation, target.directOutput?.childId,
+                        target.width, target.height, target.densityDpi, time, at, target.full))
+                    if (negativeArmed.get()) synchronized(visualEdges) {
+                        if (visualEdges.size < 512) visualEdges += VisualEdge(visualOrdinal.incrementAndGet(),
+                            at, "POST", target.directOutput?.childId, target.full)
+                        else visualOverflow.set(true)
+                    }
+                }
+                KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = { output ->
+                    if (negativeArmed.get()) synchronized(visualEdges) {
+                        if (visualEdges.size < 512) visualEdges += VisualEdge(visualOrdinal.incrementAndGet(),
+                            SystemClock.uptimeMillis(), "CROSS", output.childId, true)
+                        else visualOverflow.set(true)
+                    }
+                    savedRevealCross?.invoke(output)
+                }
+            }
             KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT")
             capture = true
             KeyguardR15AcquisitionTestHooks.stockArm = true
@@ -120,25 +173,6 @@ internal class KeyguardR22FirstInspectionFixture {
                         "stale=${observation.result.abortedStale} children=${observation.result.timing.childAcquisitionCount}")
                 }
             }
-            KeyguardR15AcquisitionTestHooks.beforeChildCall = { request, window, index ->
-                if (afterB.get() && request.id == a.get()?.id) {
-                    nextChild.set(true)
-                    records.add("A_NEXT_CHILD_BEFORE id=${request.id} window=$window index=$index at=${SystemClock.uptimeMillis()} thread=${Thread.currentThread().id}")
-                }
-            }
-            KeyguardR15AcquisitionTestHooks.afterReturnedChild = { request, window, index, present, eligible ->
-                if (present && eligible && a.compareAndSet(null, request)) {
-                    aThread.set(Thread.currentThread().id)
-                    records.add("A_FIRST_CHILD_RETURN id=${request.id} wake=${request.wakeGeneration} " +
-                        "window=$window index=$index at=${SystemClock.uptimeMillis()} thread=${Thread.currentThread().id}")
-                    entered.countDown()
-                    if (!release.await(20, TimeUnit.SECONDS)) records.add("A_BARRIER_TIMEOUT")
-                } else if (scenario == "negative" && present && request.id == yieldedTo.get() && request.id > 0) {
-                    records.add("B_CHILD_RETURN id=${request.id} window=$window index=$index at=${SystemClock.uptimeMillis()}")
-                    bEntered.countDown()
-                    if (!releaseB.await(20, TimeUnit.SECONDS)) records.add("B_BARRIER_TIMEOUT")
-                }
-            }
             setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
                 listOf(other, component.flattenToString()).filter(String::isNotBlank).joinToString(":"))
             setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
@@ -146,12 +180,50 @@ internal class KeyguardR22FirstInspectionFixture {
             val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
             instrumentation.runOnMainSync {
                 service.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
+                    override fun openingReserved(request: KeyguardCardInspectionRequest, reservationId: Long, armed: Boolean) {
+                        records.add("RESERVED id=${request.id} wake=${request.wakeGeneration} reservation=$reservationId armed=$armed at=${SystemClock.uptimeMillis()}")
+                        if (entryArmed.get() && armed && a.compareAndSet(null, request)) reservation.set(reservationId)
+                    }
                     override fun started(request: KeyguardCardInspectionRequest) {
                         records.add("START id=${request.id} wake=${request.wakeGeneration} at=${SystemClock.uptimeMillis()} thread=${Thread.currentThread().id}")
+                        if (request == a.get()) {
+                            aThread.set(Thread.currentThread().id)
+                            entryStarted.countDown()
+                            if (scenario != "natural" && !releaseEntry.await(20, TimeUnit.SECONDS)) {
+                                entryTimedOut.set(true); records.add("A_ENTRY_TIMEOUT")
+                            }
+                        }
                         if (request.id == yieldedTo.get() && request.id != 0L) {
                             bThread.set(Thread.currentThread().id)
                             bStarted.countDown()
+                            if (scenario == "negative") {
+                                bEntered.countDown()
+                                if (!releaseB.await(20, TimeUnit.SECONDS)) {
+                                    bEntryTimedOut.set(true); records.add("B_ENTRY_TIMEOUT")
+                                }
+                            }
                         }
+                    }
+                    override fun openingChildBefore(request: KeyguardCardInspectionRequest, windowId: Int, index: Int) {
+                        if (afterB.get() && request == a.get()) {
+                            nextChild.set(true)
+                            records.add("A_NEXT_CHILD_BEFORE id=${request.id} window=$windowId index=$index at=${SystemClock.uptimeMillis()}")
+                        }
+                    }
+                    override fun openingChildReturned(request: KeyguardCardInspectionRequest, windowId: Int, index: Int, present: Boolean) {
+                        if (present && request == a.get() && firstChildHeld.compareAndSet(false, true)) {
+                            records.add("A_FIRST_CHILD_RETURN id=${request.id} wake=${request.wakeGeneration} window=$windowId index=$index at=${SystemClock.uptimeMillis()}")
+                            entered.countDown()
+                            if (scenario != "natural" && !release.await(20, TimeUnit.SECONDS)) {
+                                childTimedOut.set(true); records.add("A_CHILD_TIMEOUT")
+                            }
+                        }
+                    }
+                    override fun postClaimObserved(snapshot: KeyguardOpeningInspectionHandoff.PostClaimSnapshot) {
+                        observedPostClaim.updateAndGet { previous ->
+                            if (previous == null || snapshot.ordinal > previous.ordinal) snapshot else previous
+                        }
+                        records.add("POST_CLAIM ordinal=${snapshot.ordinal} first=${snapshot.first?.id} latest=${snapshot.latest?.id} offers=${snapshot.offers} replacements=${snapshot.replacements}")
                     }
                     override fun yielded(request: KeyguardCardInspectionRequest, successor: KeyguardCardInspectionRequest,
                         startedAt: Long, finishedAt: Long, visited: Int) {
@@ -165,7 +237,11 @@ internal class KeyguardR22FirstInspectionFixture {
                         reason: KeyguardSurfaceReason, rootUnavailable: Boolean, walkTruncated: Boolean,
                         abortedStale: Boolean, startedAt: Long, finishedAt: Long) {
                         records.add("END id=${request.id} decision=$decision reason=$reason root=$rootUnavailable truncated=$walkTruncated stale=$abortedStale")
-                        if (request.id == a.get()?.id) { resultB.compareAndSet(null, "A:$decision/$reason/$rootUnavailable/$walkTruncated/$abortedStale"); completed.countDown() }
+                        if (request.id == a.get()?.id) {
+                            stableReading.set(false)
+                            resultB.compareAndSet(null, "A:$decision/$reason/$rootUnavailable/$walkTruncated/$abortedStale")
+                            completed.countDown()
+                        }
                         if (request.id == yieldedTo.get() && request.id > 0L) {
                             resultB.set("B:$decision/$reason/$rootUnavailable/$walkTruncated/$abortedStale")
                             bFinished.countDown()
@@ -178,6 +254,7 @@ internal class KeyguardR22FirstInspectionFixture {
                         action: KeyguardEventAction, frameworkEvent: Boolean) {
                         if (negativeArmed.get() && frameworkEvent && action == KeyguardEventAction.INSPECT &&
                             (meta.displayId == Display.DEFAULT_DISPLAY || meta.displayId < 0)) {
+                            ingressEdges.add(IngressEdge(visualOrdinal.incrementAndGet(), receivedAt, meta.windowId))
                             records.add("REAL_NEGATIVE_EVENT type=${meta.eventType} window=${meta.windowId} display=${meta.displayId} at=$receivedAt")
                             realNegativeEvent.countDown()
                         }
@@ -185,6 +262,12 @@ internal class KeyguardR22FirstInspectionFixture {
                     override fun ingressOffered(meta: KeyguardAccessibilityEventMeta, request: KeyguardCardInspectionRequest,
                         previous: KeyguardCardInspectionRequest?, pending: KeyguardCardInspectionRequest?,
                         startsWorker: Boolean, frameworkEvent: Boolean) {
+                        if (scenario == "stable" && stableReading.get() && frameworkEvent) stableExternal.set(true)
+                        if (negativeArmed.get() && frameworkEvent && !startsWorker && pending?.id == request.id) {
+                            pendingWindows.add(request.id to meta.windowId)
+                            records.add("REAL_NEGATIVE_PENDING id=${request.id} window=${meta.windowId} previous=${previous?.id} at=${SystemClock.uptimeMillis()}")
+                            realNegativePending.countDown()
+                        }
                         if (!frameworkEvent && meta.eventTimeUptimeMs == injectedAt.get()) {
                             b.set(request.id)
                             records.add("B_OFFER id=${request.id} pending=${pending?.id} activeWorker=${!startsWorker} " +
@@ -194,21 +277,86 @@ internal class KeyguardR22FirstInspectionFixture {
                     }
                 }
             }
+            fun verifyExclusionPixels(visual: KeyguardR22VisualCalibration,
+                identity: KeyguardR22VisualIdentityForTest, samples: List<android.graphics.Bitmap>,
+                shadeWindow: Int, label: String) {
+                val cause = synchronized(ingressEdges) { ingressEdges.firstOrNull { it.window == shadeWindow } }
+                assertNotNull("NOT REACHED: no real ingress for observed shade window", cause)
+                val beforeDisconnect = visual.captureCrop("$label-before-service-disconnect", identity.bounds)
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, other)
+                await("service disconnected for independent shade underlay", 8_000) { !FluviKeyguardCardServiceRegistry.connected }
+                assertEquals("NOT REACHED: shade disappeared before underlay reference",
+                    shadeWindow, independentShadeWindow())
+                val independentUnderlay = visual.captureCrop("$label-independent-shade-underlay", identity.bounds)
+                assertTrue("NOT REACHED: actual removal did not match independent shade underlay",
+                    KeyguardR22VisualCalibration.compare(beforeDisconnect, independentUnderlay).nearlyEqual())
+                val categories = visual.classifyAfterExclusion(samples, independentUnderlay)
+                File(dir, "$label-visual-categories.txt").writeText(categories.joinToString("\n", postfix = "\n"))
+                assertFalse("old FULL was observed after exclusion", categories.contains("OLD_FULL"))
+                assertFalse("NOT REACHED: exclusion images remained unclassified", categories.contains("UNCLASSIFIED"))
+                assertFalse("NOT REACHED: visual edge history overflowed", visualOverflow.get())
+                val late = synchronized(visualEdges) {
+                    visualEdges.filter { it.ordinal > checkNotNull(cause).ordinal &&
+                        it.child == identity.childIdentity && (it.kind == "CROSS" || (it.kind == "POST" && it.full)) }
+                }
+                assertTrue("stale full paint or reveal after shade ingress: $late", late.isEmpty())
+                records.add("EXCLUSION_VISUAL label=$label shadeWindow=$shadeWindow ingress=$cause categories=$categories compositorRemoval=OBSERVED physical=UNOBSERVED")
+            }
+
             shell("input keyevent KEYCODE_SLEEP")
             await("sleep/locked", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+            entryArmed.set(true)
             shell("input keyevent KEYCODE_WAKEUP")
             await("locked/interactive", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
-            assertTrue("NOT REACHED: eligible opening call did not return a child", entered.await(20, TimeUnit.SECONDS))
+            if (scenario == "natural") {
+                assertTrue("NOT REACHED: no original reserved opening was observed", entryStarted.await(20, TimeUnit.SECONDS))
+                assertTrue("NOT REACHED: natural opening did not finish or yield", completed.await(20, TimeUnit.SECONDS))
+                val original = checkNotNull(a.get())
+                val snapshot = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                File(dir, "before-freeze.txt").writeText(snapshot)
+                assertTrue("NOT REACHED: missing exact natural opening core", snapshot.lineSequence().any {
+                    it.startsWith(" R22_CORE ") && it.contains("opening=${original.id}/")
+                })
+                automation.takeScreenshot()?.let { image ->
+                    File(dir, "natural-unclassified.png").outputStream().use {
+                        image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                    }
+                    image.recycle()
+                }
+                records.add("NATURAL_UNHELD A=${original.id} yieldedTo=${yieldedTo.get()} injected=false physical=UNOBSERVED")
+            } else {
+            assertTrue("NOT REACHED: the exact reserved opening did not enter its physical read", entryStarted.await(20, TimeUnit.SECONDS))
             val original = checkNotNull(a.get())
+            var independent = ""
+            await("NOT REACHED: independent locked SystemUI MAIN window", 8_000) {
+                independent = independentOpeningScene(service)
+                independent.startsWith("VALID ")
+            }
+            records.add("INDEPENDENT_BEFORE_READ $independent")
+            File(dir, "independent-window-inventory.txt").writeText(independent + "\n")
+            await("NOT REACHED: original owner host/output geometry", 8_000) {
+                instrumentation.runOnMainSync { visualIdentity = service.r22VisualIdentityForTest() }
+                visualIdentity?.let { it.reservationId == reservation.get() &&
+                    it.openingRequestId == original.id } == true
+            }
+            assertFalse("NOT REACHED: original A entry barrier expired", entryTimedOut.get())
+            val identity = checkNotNull(visualIdentity)
+            visualUnderlay = checkNotNull(calibration).captureCrop("service-underlay-before-A", identity.bounds)
+            records.add("VISUAL_OWNER_BEFORE_READ $identity")
+            stableReading.set(scenario == "stable")
+            releaseEntry.countDown()
+            assertTrue("NOT REACHED: original opening did not return a real child", entered.await(20, TimeUnit.SECONDS))
+            assertFalse("NOT REACHED: original A child barrier expired", childTimedOut.get())
             if (scenario == "stable") {
                 var pending: KeyguardCardInspectionRequest? = null
                 instrumentation.runOnMainSync { pending = service.inspectionStateForTest().pending }
-                assertNull("NOT REACHED: stable A already has pending work", pending)
+                records.add("STABLE_PREEXISTING_PENDING id=${pending?.id} origin=${pending?.r14Ingress?.origin ?: "SYNTHETIC_OR_NONE"} strictQuiet=${pending == null}")
                 release.countDown()
                 assertTrue("NOT REACHED: stable opening did not complete", completed.await(20, TimeUnit.SECONDS))
                 assertEquals("NOT REACHED: no stable complete MAIN/FULL result",
                     "A:SHOW_FULL/MAIN_CONFIRMED/false/false/false", resultB.get())
                 assertEquals("stable A must not be yielded", 0L, yieldedTo.get())
+                assertFalse("NOT REACHED: external ingress invalidated the stable read", stableExternal.get())
             } else {
                 instrumentation.runOnMainSync {
                     val now = SystemClock.uptimeMillis()
@@ -219,6 +367,7 @@ internal class KeyguardR22FirstInspectionFixture {
                 }
                 assertTrue("NOT REACHED: controlled real-queue B was not offered", afterB.get())
                 assertTrue("NOT REACHED: B id did not advance", b.get() > original.id)
+                assertFalse("NOT REACHED: A child barrier expired before B was offered", childTimedOut.get())
                 release.countDown()
                 assertTrue("NOT REACHED: A reached no useful handoff checkpoint", completed.await(20, TimeUnit.SECONDS))
                 assertEquals("NOT REACHED: controlled B was replaced or A finished normally", b.get(), yieldedTo.get())
@@ -226,15 +375,35 @@ internal class KeyguardR22FirstInspectionFixture {
                 assertEquals("B must run on the same physical reader", aThread.get(), bThread.get())
                 assertFalse("A requested another child after B was claimed", nextChild.get())
                 if (scenario == "negative") {
-                    assertTrue("NOT REACHED: B did not reach its returned-child boundary", bEntered.await(15, TimeUnit.SECONDS))
+                    assertTrue("NOT REACHED: claimed B did not reach the real read-entry boundary", bEntered.await(15, TimeUnit.SECONDS))
                     negativeArmed.set(true)
                     File(dir, "shade-command.txt").writeText(shell("cmd statusbar expand-notifications"))
                     assertTrue("NOT REACHED: no real framework exclusion ingress", realNegativeEvent.await(10, TimeUnit.SECONDS))
-                    releaseB.countDown()
+                    assertTrue("NOT REACHED: no actual pending exclusion successor", realNegativePending.await(10, TimeUnit.SECONDS))
+                    var shadeWindow: Int? = null
+                    await("NOT REACHED: independent shade marker", 8_000) {
+                        shadeWindow = independentShadeWindow()
+                        shadeWindow != null
+                    }
+                    await("NOT REACHED: real pending ingress for observed shade window", 8_000) {
+                        synchronized(pendingWindows) { pendingWindows.any { it.second == shadeWindow } }
+                    }
+                    assertFalse("NOT REACHED: B entry barrier expired before shade was established", bEntryTimedOut.get())
+                    records.add("OBSERVED_SHADE_WINDOW id=$shadeWindow pending=${synchronized(pendingWindows) { pendingWindows.toList() }}")
+                    val visual = checkNotNull(calibration)
+                    val identity = checkNotNull(visualIdentity)
+                    val samples = mutableListOf<android.graphics.Bitmap>()
+                    repeat(12) { index ->
+                        if (index == 4) releaseB.countDown()
+                        samples += visual.captureCrop("negative-after-exclusion-$index", identity.bounds)
+                        SystemClock.sleep(40)
+                    }
                     assertTrue("NOT REACHED: no complete real shade/credential/unlock result", negativeResult.await(15, TimeUnit.SECONDS))
                     var visible = true
                     instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
                     assertFalse("negative scene must not expose the orb", visible)
+                    verifyExclusionPixels(visual, identity, samples, checkNotNull(shadeWindow), "negative")
+                    visualCalibration = "PASS_NEGATIVE"
                 } else {
                     assertTrue("NOT REACHED: B did not complete a fresh physical read", bFinished.await(20, TimeUnit.SECONDS))
                     assertEquals("NOT REACHED: B did not return a complete MAIN/FULL classification",
@@ -244,35 +413,98 @@ internal class KeyguardR22FirstInspectionFixture {
             if (scenario != "negative") {
                 await("NOT REACHED: exact direct reveal was not submitted", 15_000) {
                     val current = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                    val winner = if (scenario == "stable") original.id else b.get()
                     current.lineSequence().any { line ->
                         line.startsWith(" R21_CORE ") && line.contains("/ACCEPTED ingress=") &&
-                            !line.contains(" consumedReq=UNOBSERVED ") &&
-                            (scenario == "stable" || !line.contains(" consumedReq=${original.id} "))
+                            line.contains(" reservation=${reservation.get()} ") && line.contains(" consumedReq=$winner ")
                     }
                 }
             }
             val snapshot = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
             File(dir, "before-freeze.txt").writeText(snapshot)
-            val row = snapshot.lineSequence().firstOrNull { it.startsWith(" R18_PIPELINE ") &&
-                it.contains("reservedReq=${original.id} ") && it.contains("r19Intent=EMPTY") }
-            assertNotNull("NOT REACHED: A was not the exact EMPTY reservation", row)
             val core = snapshot.lineSequence().firstOrNull { it.startsWith(" R22_CORE ") &&
                 it.contains("opening=${original.id}/") }
             assertNotNull("missing protected R22 acquisition core", core)
-            if (scenario == "stable") assertTrue(checkNotNull(core).contains("outcome=A_FINISHED/"))
+            assertTrue("wrong reservation in protected core", checkNotNull(core).contains("opening=${original.id}/${reservation.get()} "))
+            if (scenario == "stable") assertTrue(core.contains("outcome=A_FINISHED/"))
             else {
-                assertTrue(checkNotNull(core).contains("outcome=YIELDED/"))
-                assertTrue(checkNotNull(core).contains("claimed=${yieldedTo.get()}@"))
-                assertFalse("a yielded A must have no completion classification", checkNotNull(core).contains("aResult=SHOW_FULL"))
+                assertTrue(core.contains("outcome=YIELDED/"))
+                assertTrue(core.contains("claimed=${yieldedTo.get()}@"))
+                assertFalse("a yielded A must have no completion classification", core.contains("aResult=SHOW_FULL"))
+                if (scenario == "negative") {
+                    val post = checkNotNull(observedPostClaim.get()) { "NOT REACHED: no observed post-claim pending item" }
+                    assertTrue("protected core lost the actual first post-claim request", core.contains("postFirst=${post.first?.id}@"))
+                    assertTrue("post-claim identity belongs to another reservation", post.reservationId == reservation.get())
+                }
+            }
+            if (scenario != "negative") {
+                val visual = checkNotNull(calibration)
+                val identity = checkNotNull(visualIdentity)
+                val underlay = checkNotNull(visualUnderlay)
+                val winner = if (scenario == "stable") original.id else b.get()
+                val winningCore = snapshot.lineSequence().singleOrNull { it.startsWith(" R21_CORE ") &&
+                    it.contains(" reservation=${reservation.get()} ") && it.contains(" consumedReq=$winner ") }
+                assertNotNull("NOT REACHED: no exact protected winner", winningCore)
+                val applyAt = Regex(" apply=([0-9]+)/").find(checkNotNull(winningCore))
+                    ?.groupValues?.get(1)?.toLongOrNull()
+                assertNotNull("NOT REACHED: no exact native apply return", applyAt)
+                fun waitPosted(time: KeyguardMaterialTime) {
+                    await("NOT REACHED: matching actual worker post $time", 10_000) {
+                        var current: KeyguardR22VisualIdentityForTest? = null
+                        instrumentation.runOnMainSync { current = service.r22VisualIdentityForTest() }
+                        val item = posted.get()
+                        val owner = current
+                        owner != null && owner.reservationId == identity.reservationId &&
+                            owner.openingRequestId == original.id && owner.winningRequestId == winner &&
+                            owner.hostIdentity == identity.hostIdentity && owner.attachment == identity.attachment &&
+                            owner.outputGeneration == identity.outputGeneration &&
+                            owner.childIdentity == identity.childIdentity && owner.bounds == identity.bounds &&
+                            item != null && item.attachment == identity.attachment &&
+                            item.generation == identity.outputGeneration && item.child == identity.childIdentity &&
+                            item.width == identity.bounds.width() && item.height == identity.bounds.height() &&
+                            item.densityDpi == context.resources.displayMetrics.densityDpi &&
+                            item.full && item.time == time && item.at >= checkNotNull(applyAt)
+                    }
+                    records.add("MATCHED_WORKER_POST ${posted.get()}")
+                }
+                waitPosted(KeyguardR22VisualCalibration.timeA)
+                visual.awaitServiceMatch("service-phase-A", identity.bounds, visual.a, underlay)
+                KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeB
+                waitPosted(KeyguardR22VisualCalibration.timeB)
+                visual.awaitServiceMatch("service-phase-B", identity.bounds, visual.b, underlay)
+                KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
+                waitPosted(KeyguardR22VisualCalibration.timeA)
+                visual.awaitServiceMatch("service-phase-A-return", identity.bounds, visual.a, underlay)
+                negativeArmed.set(true)
+                File(dir, "visual-shade-command.txt").writeText(shell("cmd statusbar expand-notifications"))
+                assertTrue("NOT REACHED: no real shade ingress for visual withdrawal", realNegativeEvent.await(10, TimeUnit.SECONDS))
+                var shadeWindow: Int? = null
+                await("NOT REACHED: independent shade for visual withdrawal", 8_000) {
+                    shadeWindow = independentShadeWindow()
+                    shadeWindow != null
+                }
+                val samples = (0 until 12).map { index ->
+                    visual.captureCrop("withdrawal-after-exclusion-$index", identity.bounds).also { SystemClock.sleep(40) }
+                }
+                await("NOT REACHED: actual orb withdrawal", 10_000) {
+                    var visible = true
+                    instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
+                    !visible
+                }
+                verifyExclusionPixels(visual, identity, samples, checkNotNull(shadeWindow), "withdrawal")
+                visualCalibration = "PASS"
             }
             val screenshot = automation.takeScreenshot()
             screenshot?.let { image -> File(dir, "service-unclassified.png").outputStream().use {
                 image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
             }; image.recycle() }
             records.add("SERVICE_CONTROL scenario=$scenario A=${original.id} B=${yieldedTo.get()} physical=UNOBSERVED")
+            }
         } catch (error: Throwable) {
             errors += "${error.javaClass.simpleName}:${error.message}"
+            visualCalibration = "INCOMPLETE_$visualCalibration"
         } finally {
+            releaseEntry.countDown()
             release.countDown()
             releaseB.countDown()
             if (scenario == "negative") runCatching { shell("cmd statusbar collapse") }
@@ -280,6 +512,16 @@ internal class KeyguardR22FirstInspectionFixture {
             KeyguardR15AcquisitionTestHooks.beforeChildCall = null
             KeyguardR15AcquisitionTestHooks.observer = null
             KeyguardR15AcquisitionTestHooks.observeIneligible = false
+            KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = null
+            KeyguardOrbSurfaceWorkerTestHooks.postedMaterialTime = null
+            KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = savedRevealCross
+            File(dir, "visual-edges.txt").writeText(
+                (synchronized(ingressEdges) { ingressEdges.toList() } + synchronized(visualEdges) { visualEdges.toList() })
+                    .joinToString("\n", postfix = "\n") + "overflow=${visualOverflow.get()}\n")
+            runCatching { calibration?.close() }.onFailure { errors += "visualCleanup:${it.javaClass.simpleName}:${it.message}" }
+            runCatching { instrumentation.runOnMainSync {
+                FluviKeyguardCardServiceRegistry.serviceForInstrumentation()?.inspectionProbeForTest = null
+            } }
             runCatching {
                 if (capture) {
                     report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
@@ -296,10 +538,73 @@ internal class KeyguardR22FirstInspectionFixture {
                 setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices)
                 setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
             }.onFailure { errors += "cleanup:${it.javaClass.simpleName}:${it.message}" }
-            File(dir, "result.txt").writeText("source=$source uuid=$uuid scenario=$scenario injectedFrameworkEvent=false visualCalibration=UNESTABLISHED errors=${errors.joinToString(" | ")}\n")
+            if (errors.isNotEmpty() && !visualCalibration.startsWith("INCOMPLETE")) visualCalibration = "INCOMPLETE_$visualCalibration"
+            File(dir, "result.txt").writeText("source=$source uuid=$uuid scenario=$scenario injectedFrameworkEvent=false visualCalibration=$visualCalibration errors=${errors.joinToString(" | ")}\n")
         }
         assertTrue("R22 candidate service: ${errors.joinToString(" | ")}", errors.isEmpty())
     }
+
+    /** Independent test observer. Its facts never enter the production reader
+     * or any grant; extra unresolved/foreign windows disqualify the specimen. */
+    private fun independentOpeningScene(service: FluviKeyguardCardService): String {
+        val windows = runCatching { automation.windows }.getOrElse { return "INVALID windows=${it.javaClass.simpleName}" }
+        val own = service.knownOwnOverlayIdentityForTest()
+        var mainId: Int? = null
+        var unresolved = 0
+        var nonOwnDefaultWindows = 0
+        val rows = mutableListOf<String>()
+        windows.forEach { window ->
+            val root = runCatching { window.root }.getOrNull()
+            try {
+                val pkg = root?.packageName?.toString()
+                val exactOwn = own != null && own.windowId == window.id && own.displayId == window.displayId &&
+                    window.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
+                val category = when { exactOwn -> "OWN"; pkg == "com.android.systemui" -> "SYSTEMUI";
+                    root == null -> "UNRESOLVED"; else -> "FOREIGN" }
+                if (window.displayId == Display.DEFAULT_DISPLAY && !exactOwn) {
+                    nonOwnDefaultWindows += 1
+                    if (root == null || pkg != "com.android.systemui") unresolved += 1
+                }
+                val markers = if (root == null) 0 else listOf(
+                    "com.android.systemui:id/keyguard_status_view",
+                    "com.android.systemui:id/keyguard_clock_switch",
+                    "com.android.systemui:id/keyguard_carrier_text",
+                ).sumOf { id ->
+                    val matches = runCatching { root.findAccessibilityNodeInfosByViewId(id) }.getOrDefault(emptyList())
+                    val count = matches.count { it.isVisibleToUser }
+                    matches.forEach { it.recycle() }
+                    count
+                }
+                if (window.displayId == Display.DEFAULT_DISPLAY && window.isActive && pkg == "com.android.systemui" && markers > 0) mainId = window.id
+                rows += "id=${window.id}/type=${window.type}/display=${window.displayId}/active=${window.isActive}/layer=${window.layer}/category=$category/mainMarkers=$markers"
+            } finally { root?.recycle() }
+        }
+        val prefix = if (mainId != null && unresolved == 0 && nonOwnDefaultWindows == 1) "VALID" else "INVALID"
+        return "$prefix activeSystemUi=$mainId unresolved=$unresolved nonOwnDefault=$nonOwnDefaultWindows own=$own windows=${rows.joinToString(";")}"
+    }
+
+    private fun independentVisibleMarkerWindow(id: String): Int? {
+        for (window in automation.windows) {
+            val root = runCatching { window.root }.getOrNull() ?: continue
+            try {
+                if (window.displayId == Display.DEFAULT_DISPLAY && root.packageName?.toString() == "com.android.systemui") {
+                    val nodes = runCatching { root.findAccessibilityNodeInfosByViewId(id) }.getOrDefault(emptyList())
+                    val visible = try { nodes.any { it.isVisibleToUser } } finally { nodes.forEach { it.recycle() } }
+                    if (visible) return window.id
+                }
+            } finally { root.recycle() }
+        }
+        return null
+    }
+
+    private fun independentShadeWindow(): Int? = listOf(
+        "com.android.systemui:id/quick_settings_panel",
+        "com.android.systemui:id/quick_qs_panel",
+        "com.android.systemui:id/qs_frame",
+        "com.android.systemui:id/settings_button",
+        "com.android.systemui:id/notification_shade_shortcut",
+        "com.android.systemui:id/split_shade_status_bar",
+    ).firstNotNullOfOrNull(::independentVisibleMarkerWindow)
 
     private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
         automation.executeShellCommand(command)).bufferedReader().use { it.readText() }

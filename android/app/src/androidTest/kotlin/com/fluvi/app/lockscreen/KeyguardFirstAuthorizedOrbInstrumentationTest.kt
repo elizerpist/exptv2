@@ -50,6 +50,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r22SupersededOpeningWalkYieldsToFreshInspection() = KeyguardR22FirstInspectionFixture().run("positive")
     @Test fun r22YieldedWalkCannotGrantAfterExclusion() = KeyguardR22FirstInspectionFixture().run("negative")
     @Test fun r22StableOpeningReadIsNotYielded() = KeyguardR22FirstInspectionFixture().run("stable")
+    @Test fun r22UnstagedOpeningObservation() = KeyguardR22FirstInspectionFixture().run("natural")
 
     private fun runService(changeScene: Boolean, r21Negative: Boolean? = null) {
         assertEquals(35, Build.VERSION.SDK_INT)

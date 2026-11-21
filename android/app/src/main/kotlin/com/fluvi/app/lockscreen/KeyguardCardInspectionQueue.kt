@@ -92,6 +92,11 @@ internal data class KeyguardInspectionAuthority(
 internal interface KeyguardInspectionProbeForTest {
     fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> = actual
     fun started(request: KeyguardCardInspectionRequest) {}
+    /** Observation only; callbacks run outside queueLock on the sampler/reader. */
+    fun openingReserved(request: KeyguardCardInspectionRequest, reservationId: Long, armed: Boolean) {}
+    fun openingChildBefore(request: KeyguardCardInspectionRequest, windowId: Int, index: Int) {}
+    fun openingChildReturned(request: KeyguardCardInspectionRequest, windowId: Int, index: Int, present: Boolean) {}
+    fun postClaimObserved(snapshot: KeyguardOpeningInspectionHandoff.PostClaimSnapshot) {}
     fun yielded(request: KeyguardCardInspectionRequest, successor: KeyguardCardInspectionRequest,
         startedAt: Long, finishedAt: Long, visited: Int) {}
     /** The physical read has completed; this callback runs on the reader,
@@ -117,6 +122,17 @@ internal interface KeyguardInspectionProbeForTest {
         outstandingFreshness: KeyguardWindowFreshness?, negativeFreshnessRevision: Long?) {}
     fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
 }
+
+internal data class KeyguardR22VisualIdentityForTest(
+    val reservationId: Long,
+    val openingRequestId: Long,
+    val winningRequestId: Long?,
+    val hostIdentity: Int,
+    val attachment: Long,
+    val outputGeneration: Long,
+    val childIdentity: Int,
+    val bounds: android.graphics.Rect,
+)
 
 internal data class KeyguardInspectionStateForTest(
     val authority: KeyguardInspectionAuthority,

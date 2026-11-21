@@ -5,6 +5,24 @@ package com.fluvi.app.lockscreen
  * volatile hint makes the ordinary node-walk path a single cheap read. It is
  * never authority to display; the promoted request must perform a fresh read. */
 internal class KeyguardOpeningInspectionHandoff {
+    /** Facts about one actual pending queue occupant. These never grant display
+     * authority and are not a replacement for the pre-claim B evidence. */
+    data class PendingObservation(
+        val id: Long, val queuedAt: Long, val trigger: String,
+        val origin: String, val ingressId: Long?, val ingressOrigin: String?,
+        val eventType: Int?, val display: Int?, val eventAt: Long?,
+        val callbackAt: Long?, val freshness: KeyguardWindowFreshness,
+        val freshnessCopied: Boolean, val displacedId: Long?,
+    )
+    data class PostClaimSnapshot(
+        val context: KeyguardDiagnosticContext,
+        val openingId: Long, val reservationId: Long,
+        val authority: KeyguardInspectionAuthority, val claimedId: Long,
+        val ordinal: Long, val first: PendingObservation?, val latest: PendingObservation?,
+        val offers: Int, val replacements: Int,
+        val bStartedAt: Long?, val bFinishedAt: Long?, val closedReason: String?,
+    )
+
     data class Snapshot(
         val openingId: Long,
         val reservationId: Long,
@@ -34,6 +52,8 @@ internal class KeyguardOpeningInspectionHandoff {
         val checkpointChildren: Int?,
         val lastReason: String?,
         val consumed: Boolean,
+        val diagnosticContext: KeyguardDiagnosticContext?,
+        val postClaim: PostClaimSnapshot?,
     )
 
     data class Conditions(
@@ -50,6 +70,19 @@ internal class KeyguardOpeningInspectionHandoff {
     )
 
     private data class Hint(val requestId: Long, val ingressId: Long, val scene: Long)
+    private class PostClaim(
+        val context: KeyguardDiagnosticContext,
+        val claimedId: Long,
+        var ordinal: Long,
+    ) {
+        var first: PendingObservation? = null
+        var latest: PendingObservation? = null
+        var offers = 0
+        var replacements = 0
+        var bStartedAt: Long? = null
+        var bFinishedAt: Long? = null
+        var closedReason: String? = null
+    }
     private class Opportunity(
         val token: Any,
         val reservationId: Long,
@@ -87,9 +120,12 @@ internal class KeyguardOpeningInspectionHandoff {
         var lastReason: String? = null
         var consumed = false
         var invalidated = false
+        var postClaim: PostClaim? = null
     }
 
     private var current: Opportunity? = null
+    // Incremented under queueLock, including ties in SystemClock uptime.
+    private var nextObservationOrdinal = 0L
     @Volatile var hasHint: Boolean = false
         private set
     @Volatile var openingRequestId: Long = 0L
@@ -174,8 +210,12 @@ internal class KeyguardOpeningInspectionHandoff {
     fun claim(queue: KeyguardCardInspectionQueue, opening: KeyguardCardInspectionRequest,
               currentToken: Any?, currentRouteRevision: Long, currentScene: Long,
               conditions: Conditions, checkpoint: String, at: Long,
-              visited: Int = 0, roots: Int = 0, children: Int = 0): KeyguardCardInspectionRequest? {
+              visited: Int = 0, roots: Int = 0, children: Int = 0,
+              observationCaptureId: String? = null): KeyguardCardInspectionRequest? {
         val op = current ?: return null
+        // A late callback must not write a checkpoint into a newer owner,
+        // even if local request IDs happen to match.
+        if (op.opening != opening || currentToken !== op.token) return null
         val hint = op.hint ?: return null
         op.lastCheckpoint = checkpoint
         op.lastCheckpointAt = at
@@ -205,12 +245,82 @@ internal class KeyguardOpeningInspectionHandoff {
         if (successor == null) { op.lastReason = "queueChanged"; return null }
         op.claimedId = successor.id
         claimedRequestId = successor.id
+        val originalContext = op.opening.diagnosticContext
+        if (observationCaptureId != null && originalContext?.captureId == observationCaptureId &&
+            originalContext.attemptId != null) {
+            op.postClaim = PostClaim(originalContext, successor.id, ++nextObservationOrdinal)
+        }
         op.claimedAt = at
         op.lastReason = "YIELDED"
         op.consumed = true
         op.hint = null
         hasHint = false
         return successor
+    }
+
+    /** Observe the actual post-offer queue state. This is independent from
+     * the already-consumed one-shot scheduling opportunity. Call under the
+     * same queueLock immediately after queue.offer; emit its value elsewhere. */
+    fun observePostClaimOffer(
+        request: KeyguardCardInspectionRequest,
+        previous: KeyguardCardInspectionRequest?,
+        active: KeyguardCardInspectionRequest?,
+        pending: KeyguardCardInspectionRequest?,
+        frameworkEvent: Boolean,
+        metadataPresent: Boolean = request.r14Ingress != null,
+    ): PostClaimSnapshot? {
+        val op = current ?: return null
+        val observation = op.postClaim ?: return null
+        if (observation.closedReason != null || active?.id != observation.claimedId ||
+            !op.authority.matches(active) || pending?.id != request.id ||
+            observation.latest?.id == request.id) return null
+        val ingress = request.r14Ingress
+        val fact = PendingObservation(
+            id = pending.id, queuedAt = pending.queuedAtUptimeMs, trigger = pending.trigger,
+            origin = if (!metadataPresent) "SYNTHETIC" else if (frameworkEvent) "FRAMEWORK" else "CONTROLLED",
+            ingressId = ingress?.id, ingressOrigin = ingress?.origin?.name,
+            eventType = ingress?.eventType, display = ingress?.displayId,
+            eventAt = ingress?.eventAt, callbackAt = ingress?.callbackAt,
+            freshness = pending.windowFreshness,
+            freshnessCopied = pending.windowFreshness != request.windowFreshness,
+            displacedId = previous?.id?.takeIf { it != pending.id },
+        )
+        if (observation.first == null) observation.first = fact
+        observation.latest = fact
+        observation.offers += 1
+        if (fact.displacedId != null) observation.replacements += 1
+        observation.ordinal = ++nextObservationOrdinal
+        return postClaimSnapshot(op)
+    }
+
+    fun successorStarted(request: KeyguardCardInspectionRequest, at: Long): PostClaimSnapshot? {
+        val op = current ?: return null
+        val observation = op.postClaim ?: return null
+        if (observation.closedReason != null || observation.claimedId != request.id ||
+            !op.authority.matches(request)) return null
+        if (observation.bStartedAt == null) {
+            observation.bStartedAt = at
+            observation.ordinal = ++nextObservationOrdinal
+        }
+        return postClaimSnapshot(op)
+    }
+
+    fun successorFinished(request: KeyguardCardInspectionRequest, at: Long,
+                          reason: String = "FINISHED"): PostClaimSnapshot? {
+        val op = current ?: return null
+        val observation = op.postClaim ?: return null
+        if (observation.closedReason != null || observation.claimedId != request.id ||
+            !op.authority.matches(request)) return null
+        observation.bFinishedAt = at
+        observation.closedReason = reason
+        observation.ordinal = ++nextObservationOrdinal
+        return postClaimSnapshot(op)
+    }
+
+    private fun postClaimSnapshot(op: Opportunity): PostClaimSnapshot? = op.postClaim?.let {
+        PostClaimSnapshot(it.context, op.opening.id, op.reservationId, op.authority, it.claimedId,
+            it.ordinal, it.first, it.latest, it.offers, it.replacements,
+            it.bStartedAt, it.bFinishedAt, it.closedReason)
     }
 
     fun readFinished(request: KeyguardCardInspectionRequest, at: Long) {
@@ -227,6 +337,24 @@ internal class KeyguardOpeningInspectionHandoff {
         hasHint = false
     }
 
+    /** A lightweight immutable handle for the particular original walk. */
+    class YieldHandle internal constructor(
+        internal val token: Any,
+        internal val opening: KeyguardCardInspectionRequest,
+    )
+
+    fun yieldHandle(request: KeyguardCardInspectionRequest): YieldHandle? =
+        current?.takeIf { it.opening == request && !it.consumed && !it.invalidated &&
+            it.completedAt == null && it.startedAt != null }?.let { YieldHandle(it.token, it.opening) }
+
+    /** Volatile hint only. Claim still validates the exact token under queueLock. */
+    fun hasHint(handle: YieldHandle): Boolean = hasHint && openingRequestId == handle.opening.id
+
+    fun isCurrent(handle: YieldHandle): Boolean = current?.let {
+        it.token === handle.token && it.opening == handle.opening && !it.consumed &&
+            !it.invalidated && it.completedAt == null
+    } == true
+
     /** Captures the original owner; later wakes cannot relabel an old call. */
     fun ingressReader(request: KeyguardCardInspectionRequest): (() -> Long)? =
         current?.takeIf { it.opening == request }?.let { owner -> { owner.firstIngressForReader } }
@@ -242,6 +370,7 @@ internal class KeyguardOpeningInspectionHandoff {
             it.latestOfferedId, it.latestOfferedAt, it.latestFrameworkEvent,
             it.latestIngressId, it.latestEventType, it.latestDisplay, it.latestEventAt,
             it.replacedId, it.replacementId, it.claimedId, it.claimedAt, it.completedAt, it.lastCheckpoint, it.lastCheckpointAt,
-            it.checkpointVisited, it.checkpointRoots, it.checkpointChildren, it.lastReason, it.consumed)
+            it.checkpointVisited, it.checkpointRoots, it.checkpointChildren, it.lastReason, it.consumed,
+            it.opening.diagnosticContext, postClaimSnapshot(it))
     }
 }
