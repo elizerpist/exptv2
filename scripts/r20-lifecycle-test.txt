@@ -1,0 +1,192 @@
+    /** Additional independently calibrated R20 evidence. Test-only overlay. */
+    @Test fun r20RetiredFirstWriteCannotLeakAcrossDistinctSuccessorAndFreezeResume() {
+        assumeTrue(Build.VERSION.SDK_INT == 35)
+        val context = instrumentation.targetContext
+        val activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
+        val directory = File(context.filesDir, "keyguard-service-probe/r20-lifecycle/${SystemClock.elapsedRealtime()}").apply { mkdirs() }
+        val size = context.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
+        val green = Color.rgb(11, 177, 67)
+        val phaseA = 1.196795f; val phaseB = 3.75f
+        val base = r20CalibratedProfile()
+        fun atPhase(phase: Float) = base.copy(phase = phase, elapsedSeconds = phase,
+            background = base.background.copy(phase = phase), interior = base.interior.copy(phase = phase))
+        val a = atPhase(phaseA); val b = atPhase(phaseB)
+        val clock = AtomicReference(KeyguardMaterialTime(phaseA, phaseA, phaseA, phaseA))
+        val refs = mutableListOf<Bitmap>()
+        val hosts = ConcurrentHashMap<Long, View>(); val hostWait = ConcurrentHashMap<Long, CountDownLatch>()
+        val allocated = ConcurrentHashMap<Long, CountDownLatch>(); val posted = ConcurrentHashMap<Long, CountDownLatch>()
+        val drained = ConcurrentHashMap<Long, CountDownLatch>(); val oldReady = AtomicInteger()
+        val oldLock = CountDownLatch(1); val releaseOld = CountDownLatch(1); val oldLatePost = CountDownLatch(1)
+        val once = AtomicBoolean(true); val error = AtomicReference<String?>()
+        val cleanup = AtomicReference<(() -> Unit)?>(null)
+        val bPosts = AtomicInteger()
+        var presenter: KeyguardOrbSurfacePresenter? = null; var panel: KeyguardOrbInertHost? = null
+        try {
+            lateinit var root: FrameLayout; lateinit var reference: KeyguardHeaderMaterialView
+            val artifact = AndroidKeyguardShaderArtifactReader.load(context, a.effectId, a.usesPortal)
+            instrumentation.runOnMainSync {
+                root = FrameLayout(activity).apply { setBackgroundColor(green) }
+                reference = KeyguardHeaderMaterialView(activity,
+                    materialTimeSource = KeyguardMaterialTimeSource { _, _ -> clock.get() }).apply {
+                    layoutParams = FrameLayout.LayoutParams(size, size).apply { leftMargin = 100; topMargin = 250 }
+                    setScene(KeyguardMaterialScene(a, true, 0L), enabled = true)
+                    setBootstrapActive(false)
+                    assertEquals(KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED, installPreparedShader(artifact))
+                }
+                root.addView(reference); activity.setContentView(root); reference.frame(System.nanoTime())
+            }
+            assertTrue("canonical View did not draw", r20Wait(10_000) {
+                instrumentation.runOnMainValue { reference.diagnostics().lastCanvasHardwareAccelerated == true &&
+                    reference.diagnostics().shaderDrawCount > 0 && reference.width == size && reference.height == size }
+            })
+            fun crop(view: View, screen: Bitmap): Bitmap {
+                val location = IntArray(2)
+                instrumentation.runOnMainSync { view.getLocationOnScreen(location) }
+                check(location[0] >= 0 && location[1] >= 0 && location[0] + size <= screen.width && location[1] + size <= screen.height)
+                return Bitmap.createBitmap(screen, location[0], location[1], size, size)
+            }
+            fun sampleReference(phase: Float, name: String, accept: (Bitmap) -> Boolean): Bitmap {
+                val before = instrumentation.runOnMainValue { reference.diagnostics().shaderDrawCount }
+                instrumentation.runOnMainSync { clock.set(KeyguardMaterialTime(phase, phase, phase, phase)); reference.frame(System.nanoTime()) }
+                assertTrue("reference $name did not draw", r20Wait(8_000) {
+                    instrumentation.runOnMainValue { reference.diagnostics().shaderDrawCount > before }
+                })
+                val shot = awaitScreenshot(8_000) { screen ->
+                    val bitmap = crop(reference, screen)
+                    try { accept(bitmap) } finally { bitmap.recycle() }
+                }
+                return crop(reference, shot).also { shot.recycle(); it.save(File(directory, "reference-$name.png")) }
+            }
+            val refA = sampleReference(phaseA, "A") {
+                colorDistance(green, it.getPixel(0, 0)) <= 15 &&
+                    colorDistance(green, it.getPixel(size / 2, size / 2)) > 45 &&
+                    colorDistance(Color.WHITE, it.getPixel(size / 2, size / 2)) > 45
+            }; refs += refA
+            val refB = sampleReference(phaseB, "B") { r20Compare(refA, it).meaningful() }; refs += refB
+            assertTrue("A and B references must be different", r20Compare(refA, refB).meaningful())
+            instrumentation.runOnMainSync { root.removeView(reference) }
+            val bare = awaitScreenshot(8_000) { colorDistance(green, it.getPixel(100 + size / 2, 250 + size / 2)) <= 15 }
+            val geometry = KeyguardOverlayGeometry(size, size, 100, 250,
+                KeyguardUsableBounds(0, 0, bare.width, bare.height), KeyguardCardCardPosition(.5f),
+                KeyguardCardOrbPosition(.5f, .5f))
+            bare.save(File(directory, "bare-screen.png")); bare.recycle()
+            lateinit var producer: KeyguardOrbSurfacePresenter; lateinit var holder: KeyguardOrbInertHost
+            val content = FrameLayout(activity).apply { setBackgroundColor(Color.TRANSPARENT) }
+            instrumentation.runOnMainSync {
+                holder = KeyguardOrbInertHost(activity, PanelWindowManager(activity),
+                    onReady = { generation, view, _ -> hosts[generation] = view; hostWait[generation]?.countDown() },
+                    onFailure = { generation, why -> error.set(why); hostWait[generation]?.countDown() })
+                panel = holder
+                producer = KeyguardOrbSurfacePresenter(activity, content, onFirstPosted = { _, _ -> },
+                    onFailure = { error.set(it) }, isCaptureActive = { true },
+                    onR18Allocated = { _, generation, _ -> allocated[generation]?.countDown() },
+                    onR18Prepared = { _, generation, _ -> if (generation == 81L) oldReady.incrementAndGet(); posted[generation]?.countDown() },
+                    onR18Drained = { _, generation, _ -> drained[generation]?.countDown() },
+                    onR18Failure = { _, _, why, done -> error.set(why); cleanup.set(done) })
+                presenter = producer
+            }
+            for (generation in listOf(81L, 82L)) {
+                hostWait[generation] = CountDownLatch(1); allocated[generation] = CountDownLatch(1)
+                posted[generation] = CountDownLatch(1); drained[generation] = CountDownLatch(1)
+            }
+            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock = { target ->
+                if (target.generation == 81L && once.compareAndSet(true, false)) {
+                    oldLock.countDown(); releaseOld.await(15, TimeUnit.SECONDS)
+                }
+            }
+            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = { target ->
+                if (target.generation == 81L && target.revoked) oldLatePost.countDown()
+                if (target.generation == 82L) bPosts.incrementAndGet()
+            }
+            instrumentation.runOnMainSync {
+                assertTrue(producer.prepareR18(81, 81, a, size, size, full = true, emptyAwaitingDisclosure = true))
+                assertTrue(holder.stage(81, geometry))
+            }
+            assertTrue(allocated.getValue(81).await(20, TimeUnit.SECONDS)); assertTrue(hostWait.getValue(81).await(20, TimeUnit.SECONDS))
+            val oldOutput = instrumentation.runOnMainValue { producer.r18AllocatedOutput(81, 81, true, size, size) as? KeyguardOrbDirectOutput }
+            assertNotNull(oldOutput)
+            val boundOld = CountDownLatch(1)
+            instrumentation.runOnMainSync { producer.bindR18(checkNotNull(hosts[81]), 81, 81) { if (!it) error.set("oldBind"); boundOld.countDown() } }
+            assertTrue(boundOld.await(10, TimeUnit.SECONDS)); assertNull(error.get())
+            instrumentation.runOnMainSync { assertTrue(producer.authorizeR19First(81, 81, a,
+                KeyguardR19FirstPaintTicket(81, 81, 801, 1, 1, a.visualKey))) }
+            assertTrue("real old first write never reached lock", oldLock.await(15, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync {
+                producer.sealR18(81, 81); assertTrue(holder.remove(81))
+                assertTrue(producer.prepareR18(82, 82, b, size, size, full = true, emptyAwaitingDisclosure = true))
+                assertTrue(holder.stage(82, geometry))
+            }
+            releaseOld.countDown()
+            assertTrue("entered old write did not finish", oldLatePost.await(10, TimeUnit.SECONDS))
+            assertTrue("old child did not drain", drained.getValue(81).await(10, TimeUnit.SECONDS))
+            assertEquals("retired write must not become ready", 0, oldReady.get())
+            var badBackground = 0
+            repeat(12) { index ->
+                val shot = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+                val image = Bitmap.createBitmap(shot, 100, 250, size, size); shot.recycle()
+                image.save(File(directory, "after-retire-${index.toString().padStart(2, '0')}.png"))
+                if (colorDistance(green, image.getPixel(size / 2, size / 2)) > 15) badBackground++
+                image.recycle(); SystemClock.sleep(25)
+            }
+            assertEquals("old frame appeared after child withdrawal", 0, badBackground)
+            assertTrue(allocated.getValue(82).await(20, TimeUnit.SECONDS)); assertTrue(hostWait.getValue(82).await(20, TimeUnit.SECONDS))
+            val newOutput = instrumentation.runOnMainValue { producer.r18AllocatedOutput(82, 82, true, size, size) as? KeyguardOrbDirectOutput }
+            assertNotNull(newOutput); assertNotEquals("successor must have a new child", oldOutput!!.childId, newOutput!!.childId)
+            val boundNew = CountDownLatch(1); val revealNew = CountDownLatch(1)
+            instrumentation.runOnMainSync {
+                producer.setMotionAllowed(false)
+                producer.bindR18(checkNotNull(hosts[82]), 82, 82) { if (!it) error.set("newBind"); boundNew.countDown() }
+            }
+            assertTrue(boundNew.await(10, TimeUnit.SECONDS)); assertNull(error.get())
+            instrumentation.runOnMainSync { assertTrue(producer.authorizeR19First(82, 82, b,
+                KeyguardR19FirstPaintTicket(82, 82, 802, 1, 1, b.visualKey))) }
+            assertTrue("new first write did not post", posted.getValue(82).await(20, TimeUnit.SECONDS)); assertNull(error.get())
+            instrumentation.runOnMainSync {
+                assertTrue(holder.promote(82, content, geometry))
+                producer.revealR18(82, 82, { true }) { if (!it) error.set("newReveal"); revealNew.countDown() }
+            }
+            assertTrue(revealNew.await(10, TimeUnit.SECONDS)); assertNull(error.get())
+            val host = checkNotNull(hosts[82])
+            val liveShot = awaitScreenshot(10_000) { shot ->
+                val image = crop(host, shot)
+                try { r20Compare(refB, image).nearlyEqual() } finally { image.recycle() }
+            }
+            val live = crop(host, liveShot); liveShot.recycle(); live.save(File(directory, "B-first.png"))
+            assertTrue("B must differ from stale A", r20Compare(refA, live).meaningful()); live.recycle()
+            producer.sealR18(81, 81)
+            val afterOldSeal = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+            val stillB = crop(host, afterOldSeal); afterOldSeal.recycle(); stillB.save(File(directory, "B-after-stale-seal.png"))
+            assertTrue("stale seal changed B", r20Compare(refB, stillB).nearlyEqual()); stillB.recycle()
+            instrumentation.runOnMainSync { producer.setMotionAllowed(true) }
+            val motionShot = awaitScreenshot(10_000) { shot ->
+                val image = crop(host, shot)
+                try { r20Compare(refB, image).meaningful() } finally { image.recycle() }
+            }
+            val motion = crop(host, motionShot); motionShot.recycle(); motion.save(File(directory, "B-moving.png")); motion.recycle()
+            instrumentation.runOnMainSync { producer.setMotionAllowed(false) }
+            SystemClock.sleep(400)
+            val freezeShot1 = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+            val frozen1 = crop(host, freezeShot1); freezeShot1.recycle(); frozen1.save(File(directory, "B-frozen-1.png"))
+            SystemClock.sleep(400)
+            val freezeShot2 = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+            val frozen2 = crop(host, freezeShot2); freezeShot2.recycle(); frozen2.save(File(directory, "B-frozen-2.png"))
+            assertTrue("frozen B did not remain at its phase", r20Compare(frozen1, frozen2).nearlyEqual())
+            instrumentation.runOnMainSync { producer.setMotionAllowed(true) }
+            val resumedShot = awaitScreenshot(10_000) { shot ->
+                val image = crop(host, shot)
+                try { r20Compare(frozen2, image).meaningful() } finally { image.recycle() }
+            }
+            val resumed = crop(host, resumedShot); resumedShot.recycle(); resumed.save(File(directory, "B-resumed.png"))
+            frozen1.recycle(); frozen2.recycle(); resumed.recycle()
+            File(directory, "fixture.txt").writeText("attachmentA=81 generationA=81 ticketA=801 childA=${oldOutput.childId} attachmentB=82 generationB=82 ticketB=802 childB=${newOutput.childId} badBackground=$badBackground oldReady=${oldReady.get()} bPosts=${bPosts.get()}\n")
+            producer.sealR18(82, 82)
+            assertTrue("new output did not drain", drained.getValue(82).await(10, TimeUnit.SECONDS))
+        } finally {
+            releaseOld.countDown(); KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock = null
+            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = null
+            refs.forEach(Bitmap::recycle)
+            instrumentation.runOnMainSync { panel?.remove(81); panel?.remove(82); cleanup.getAndSet(null)?.invoke(); presenter?.dispose(); activity.finish() }
+        }
+    }
+
