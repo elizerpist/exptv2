@@ -374,3 +374,56 @@ android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnost
 android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt:297:    @Test fun r12PreparedPictureMatchesCanonicalHardwareCanvasAcrossPhases() {
 
 ```
+
+## Exact first-FULL path and test navigation
+
+These are direct source locations in application `5b09e7009ea2303231c8fdbcb0c09e5a74f704ff`, not Kotlin SCIP edges. Inspect the surrounding definitions and their explicit callers for ownership and authorization.
+
+```text
+63:internal data class KeyguardR20FirstFrameObservation(
+115:    private data class FirstSelection(
+122:    private class FirstMeasurement(
+148:    private var firstSelection: FirstSelection? = null
+235:            firstSelection = null
+251:    fun authorizeDirectFirst(target: KeyguardOrbSurfaceTarget, profile: KeyguardMaterialProfile,
+282:            firstSelection = null
+290:    private fun prepareAuthorized(target: KeyguardOrbSurfaceTarget, safe: KeyguardMaterialProfile, request: Long,
+311:            if (firstTicket != null) firstSelection = FirstSelection(target, firstTicket, phase, request, cached == null)
+344:    fun update(target: KeyguardOrbSurfaceTarget, profile: KeyguardMaterialProfile) {
+352:                firstSelection = null
+357:                val selection = firstSelection
+360:                    firstSelection = selection.copy(request = request)
+378:                val replacingFirst = firstSelection?.target === target
+380:                firstSelection = null
+451:    fun revoke(target: KeyguardOrbSurfaceTarget, discardFull: Boolean = false) {
+468:                firstSelection = null
+501:    fun dispose() {
+507:            firstSelection = null
+529:    private fun validatePosterSize(width: Int, height: Int) {
+534:    private fun getOrMakePoster(profile: KeyguardMaterialProfile, full: Boolean, width: Int, height: Int,
+561:    private fun drawIfReady(target: KeyguardOrbSurfaceTarget) {
+564:        if (currentPoster == null && firstSelection?.let { it.target === target && it.direct } != true) return
+609:    private fun draw(target: KeyguardOrbSurfaceTarget, frameNanos: Long) {
+615:        val selection = if (first) firstSelection else null
+623:        val firstTiming = if (first) firstMeasurement?.takeIf { it.target === target &&
+632:            if (firstTiming != null) firstTiming.configureEndNs = System.nanoTime()
+703:            if (firstTiming != null) firstTiming.lockBeginNs = System.nanoTime()
+705:            if (firstTiming != null) firstTiming.lockReturnNs = System.nanoTime()
+721:            if (firstTiming != null) firstTiming.drawEndNs = System.nanoTime()
+734:            if (firstTiming != null) firstTiming.postReturnNs = System.nanoTime()
+779:            firstSelection = null
+801:    private fun finishFirstObservation(target: KeyguardOrbSurfaceTarget, failure: String?) {
+35:internal fun drawKeyguardOrbCircle(canvas: Canvas, paint: Paint, width: Int, height: Int) {
+58:internal class KeyguardOrbSurfacePainter(
+87:    fun prepare(time: KeyguardOrbSurfaceFrameTime, blend: Float = 1f) =
+90:    private fun prepare(elapsed: Float, phase: Float, background: Float, interior: Float, blend: Float) {
+96:    fun drawPrepared(canvas: Canvas) {
+100:    fun makePoster(time: KeyguardMaterialTime): Bitmap {
+android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt:162:    @Test fun r20FirstFrameBreakdownSurvivesFreezeAndReplacement() {
+android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt:321:    @Test fun r20AuthorizedFullFirstMissDrawsCanonicalPhaseOnExistingChild() {
+android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt:518:    @Test fun r20ExactAuthorizedPosterHitAvoidsAnotherBuild() {
+android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt:569:    @Test fun r20FailedFirstLockOrPostNeverPublishesReady() {
+android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt:617:    @Test fun r20HeldFirstWriteCannotReadyRetiredOwnerOrHideSuccessor() {
+android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt:297:    @Test fun r12PreparedPictureMatchesCanonicalHardwareCanvasAcrossPhases() {
+
+```
