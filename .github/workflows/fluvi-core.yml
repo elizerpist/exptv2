@@ -1,4 +1,4 @@
-name: R20 independent calibrated lifecycle control
+name: R20 independent zero-motion export control
 on:
   workflow_dispatch:
     inputs:
@@ -45,25 +45,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/r20-lifecycle"
+          mkdir -p "$RUNNER_TEMP/r20-export-zero"
           test "$(git rev-parse HEAD)" = "$APP_SHA"
           flutter pub get
           test -z "$(git status --porcelain --untracked-files=no)"
-          printf 'application_sha=%s\nharness_sha=%s\n' "$APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r20-lifecycle/identity.txt"
+          printf 'application_sha=%s\nharness_sha=%s\n' "$APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r20-export-zero/identity.txt"
       - name: Apply test-only overlay and save exact diff
         shell: bash
         run: |
           set -euo pipefail
-          python3 "$GITHUB_WORKSPACE/harness/scripts/r20-lifecycle-overlay.py" "$GITHUB_WORKSPACE/harness/scripts/r20-lifecycle-test.txt"
-          test "$(git diff --name-only)" = android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt
+          python3 "$GITHUB_WORKSPACE/harness/scripts/r20-export-overlay.py" "$GITHUB_WORKSPACE/harness/scripts/r20-export-test.txt"
+          test "$(git diff --name-only)" = android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt
           git diff --check
-          git diff > "$RUNNER_TEMP/r20-lifecycle/fixture.patch"
-          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r20-lifecycle-test.txt" "$GITHUB_WORKSPACE/harness/scripts/r20-lifecycle-overlay.py" > "$RUNNER_TEMP/r20-lifecycle/overlay-sha256.txt"
+          git diff > "$RUNNER_TEMP/r20-export-zero/fixture.patch"
+          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r20-export-test.txt" "$GITHUB_WORKSPACE/harness/scripts/r20-export-overlay.py" > "$RUNNER_TEMP/r20-export-zero/overlay-sha256.txt"
       - name: Assemble app and instrumentation APKs
         run: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
       - name: Enable KVM
         run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
-      - name: Capture calibrated old and new child on API35
+      - name: Test zero-motion first-frame export on API35
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -75,12 +75,12 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r20-lifecycle-only.sh"
+          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r20-export-only.sh"
       - name: Preserve raw results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r20-lifecycle-${{ github.run_id }}
-          path: ${{ runner.temp }}/r20-lifecycle/**
+          name: r20-export-zero-${{ github.run_id }}
+          path: ${{ runner.temp }}/r20-export-zero/**
           if-no-files-found: warn
           retention-days: 30

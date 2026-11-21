@@ -1,0 +1,46 @@
+    @Test fun r20IdenticalFirstScalarsAndZeroMotionRemainGenerationBound() {
+        for (mode in listOf("LIGHT", "FULL")) {
+            KeyguardCardDiagnostics.clearCapture(context)
+            assertFalse(KeyguardCardDiagnostics.wantsEvent("R18_PIPELINE"))
+            KeyguardCardDiagnostics.startCapture(context, "r20-zero-$mode", "profile", mode)
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 922, 5, "wake", 30_000))
+            val zeroA = KeyguardOrbSurfaceMetrics().apply { beginDirectPresentation(30_001) }
+            val zeroB = KeyguardOrbSurfaceMetrics().apply { beginDirectPresentation(30_101) }
+            fun edge(phase: String, at: Long, req: Long, attachment: Long, output: Long,
+                     metrics: KeyguardOrbSurfaceMetrics? = null, extra: Map<String, Any> = emptyMap()) {
+                KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", phase,
+                    serviceSession = 922, wakeEpoch = 5, requestId = req, attachGeneration = attachment,
+                    diagnosticContext = owner, observedUptimeMs = at, surfaceMetrics = metrics,
+                    fields = mapOf<String, Any>("r18Host" to 7, "r18Output" to output,
+                        "r18Child" to 500 + output, "r18Privacy" to "full", "r19Intent" to "EMPTY") + extra)
+            }
+            val sameFirstScalars = mapOf<String, Any>("r20Method" to "DIRECT_MISS", "r20EntryNs" to 1001L,
+                "r20PainterStartNs" to 1002L, "r20PainterEndNs" to 1003L, "r20ConfigureEndNs" to 1004L,
+                "r20LockBeginNs" to 1005L, "r20LockReturnNs" to 1006L, "r20DrawEndNs" to 1007L,
+                "r20PostReturnNs" to 1008L)
+            edge("R19_ALLOCATED", 29_000, 201, 8, 30, zeroA)
+            edge("WAKE_ADOPTED", 30_000, 201, 8, 30, zeroA)
+            edge("FALLBACK:first", 30_040, 201, 8, 30, zeroA)
+            edge("R19_PROOF_CONSUMED", 30_025, 209, 8, 30, zeroA, mapOf("r19SceneNow" to 77))
+            edge("R20_FIRST_FRAME", 30_020, 201, 8, 30, zeroA, sameFirstScalars)
+            edge("WAKE_ADOPTED", 30_100, 301, 9, 31, zeroB)
+            edge("R20_FIRST_FRAME", 30_110, 301, 9, 31, zeroB, sameFirstScalars)
+            repeat(80) { index -> KeyguardCardDiagnostics.captureEvent(context, "ACCESSIBILITY_EVENT", "pressure",
+                diagnosticContext = owner, observedUptimeMs = 30_200L + index, fields = mapOf("eventAgeMs" to index)) }
+            val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            assertTrue(frozen.toByteArray(Charsets.UTF_8).size <= 32_768)
+            val rows = frozen.lineSequence().filter { it.startsWith(" R18_PIPELINE ") }.toList()
+            assertEquals(2, rows.size)
+            assertTrue(rows[0].contains("firstMethod=DIRECT_MISS firstTicket=201"))
+            assertTrue(rows[0].contains("consumedReq=209"))
+            assertTrue(rows[1].contains("firstMethod=DIRECT_MISS firstTicket=301"))
+            for (row in rows) {
+                assertTrue(row.contains("firstNs=1001/1002/1003/1004/1005/1006/1007/1008"))
+                assertTrue("zero direct motion was not retained: $row", row.contains("firstMotion=UNOBSERVED activePosts=0"))
+            }
+            edge("R20_FIRST_FRAME", 30_300, 999, 8, 30, zeroA, mapOf("r20Method" to "STALE"))
+            assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+            KeyguardCardDiagnostics.clearCapture(context)
+        }
+    }
+
