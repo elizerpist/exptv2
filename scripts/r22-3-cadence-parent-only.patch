@@ -1,13 +1,13 @@
 --- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
 +++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
-@@ -2514,6 +2514,41 @@
+@@ -2514,6 +2514,49 @@
          } finally { refs.recycle() }
      }
  
 +    /** Independent sustained producer sample. The paired baseline and
 +     * candidate use the same uncontrolled material clock and duration. */
 +    @Test fun r22_3TranslucentSteadyCadence() {
-+        val gate = RealReleaseGate().apply { releaseAll() }
++        val gate = NoopKeyguardOrbRecoveryTestHook
 +        withOrbRetirementFixture("r22-3-translucent-cadence", gate,
 +            initialProfile = calibratedOrbProfile().copy(opacity = .5f)) { fixture ->
 +            val before = copyPanelOrb(fixture.instrumentation, fixture.manager)
@@ -34,7 +34,15 @@
 +                assertTrue("producer timestamps must advance", intervals.all { it > 0.0 })
 +                assertTrue("material phases did not move", samples.map { it.phase }.distinct().size >= 100)
 +                assertTrue("independent compositor crops did not change", compareMaterialPixels(before, checkNotNull(after)).meaningful())
-+                fixture.ownership.assertBoundedSingleRenderer()
++                var state = "UNOBSERVED"
++                var occupied = -1
++                fixture.instrumentation.runOnMainSync {
++                    val observed = requireNotNull(fixture.window.materialDiagnostics())
++                    occupied = observed.isolatedFramesInFlight + observed.isolatedFramesReady + observed.isolatedFramesCompositorOwned
++                    state = "inFlight=${observed.isolatedFramesInFlight} ready=${observed.isolatedFramesReady} owned=${observed.isolatedFramesCompositorOwned} route=${observed.effectiveRoute}"
++                }
++                File(directory, "r22-3-cadence.txt").appendText("terminalSnapshot=$state\n")
++                assertTrue("terminal fixed-pool snapshot exceeds three: $state", occupied in 0..3)
 +            } finally { before.recycle(); after?.recycle() }
 +        }
 +    }
@@ -42,7 +50,7 @@
      @Test fun isolatedStandbyPreservesAuthorizedComposition() {
          for (background in listOf(android.graphics.Color.WHITE, android.graphics.Color.BLACK)) {
              lateinit var translucentReference: Bitmap
-@@ -4075,6 +4110,8 @@
+@@ -4075,6 +4118,8 @@
  
      /** Reuses the existing real-window and calibrated pixel oracles. This
       * fixture never supplies a release callback, fence or visibility grant. */
@@ -51,7 +59,7 @@
      private inner class OrbRetirementFixture(
          private val label: String,
          private val recoveryHook: KeyguardOrbRecoveryTestHook,
-@@ -4102,6 +4139,40 @@
+@@ -4102,6 +4147,40 @@
          )
          private val controlledTime = ControlledOrbTimeSource(calibratedMaterialTime(PHASE_A))
          private val submissions = SubmittedFrameTracker()
@@ -92,7 +100,7 @@
          private val samples = CalibratedProducerSamples()
          private val nextGate = AtomicReference<OrbSteadyGate?>()
          private val gates = mutableListOf<OrbSteadyGate>()
-@@ -4121,7 +4192,10 @@
+@@ -4121,9 +4200,13 @@
          fun start() {
              KeyguardOrbBufferRendererTestHooks.recoveryHook = recoveryHook
              KeyguardOrbBufferRendererTestHooks.materialTimeSource = controlledTime
@@ -102,9 +110,13 @@
 +                recordCadence(frame)
 +            }
              KeyguardOrbBufferRendererTestHooks.frameObserver = samples
-             KeyguardOrbBufferRendererTestHooks.ownershipObserver = ownership
+-            KeyguardOrbBufferRendererTestHooks.ownershipObserver = ownership
++            KeyguardOrbBufferRendererTestHooks.ownershipObserver =
++                if (label == "r22-3-translucent-cadence") NoopKeyguardOrbOwnershipObserver else ownership
              KeyguardOrbBufferRendererTestHooks.firstPublicationHook = object : KeyguardOrbFirstPublicationTestHook {
-@@ -4801,12 +4875,17 @@
+                 override fun dispatchReady(frame: KeyguardOrbBufferProducerFrame, deliver: () -> Unit) {
+                     if (readyAttachment.get() == frame.lease.attachment) {
+@@ -4801,12 +4884,17 @@
  
          private val selected = AtomicReference(Sample(null, initial))
          private val sampled = ThreadLocal<Sample?>()

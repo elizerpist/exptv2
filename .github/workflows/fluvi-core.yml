@@ -1,4 +1,4 @@
-name: R22.3 paired translucent cadence, same API35 emulator
+name: R22.3 paired cadence, same emulator and matched observers
 on:
   workflow_dispatch:
     inputs:
@@ -45,6 +45,11 @@ jobs:
           flutter-version: '3.41.4'
           channel: stable
           cache: true
+      - name: Configure runner-only plugin repository fallback
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cp "$GITHUB_WORKSPACE/harness/scripts/r22-3-plugin-repos.init.gradle" "$HOME/.gradle/init.d/fluvi-r22-3-repositories.gradle"
       - name: Build unchanged baseline target and test-only cadence fixture
         shell: bash
         run: |
@@ -72,7 +77,14 @@ jobs:
           test "$(git rev-parse HEAD)" = "$APP_SHA"
           flutter pub get
           test -z "$(git status --porcelain --untracked-files=no)"
-          (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
+          (cd android && ./gradlew :app:assembleDebug --no-daemon --max-workers=3 --console=plain)
+          sha256sum build/app/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/r22-3-cadence/candidate/target-before.txt"
+          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-3-cadence-candidate-only.patch" > "$RUNNER_TEMP/r22-3-cadence/candidate/patch-sha256.txt"
+          git apply "$GITHUB_WORKSPACE/harness/scripts/r22-3-cadence-candidate-only.patch"
+          git diff --name-only > "$RUNNER_TEMP/r22-3-cadence/candidate/changed-files.txt"
+          test "$(cat "$RUNNER_TEMP/r22-3-cadence/candidate/changed-files.txt")" = 'android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt'
+          (cd android && ./gradlew :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
+          sha256sum -c "$RUNNER_TEMP/r22-3-cadence/candidate/target-before.txt"
           sha256sum build/app/outputs/apk/debug/app-debug.apk build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$RUNNER_TEMP/r22-3-cadence/candidate/apks.txt"
       - name: Enable KVM
         run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
@@ -93,7 +105,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-3-paired-cadence-${{ github.run_id }}
+          name: r22-3-paired-matched-cadence-${{ github.run_id }}
           path: ${{ runner.temp }}/r22-3-cadence/**
           if-no-files-found: warn
           retention-days: 30
