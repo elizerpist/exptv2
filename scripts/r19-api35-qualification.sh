@@ -22,7 +22,7 @@ adb shell pm list instrumentation > "$out/instrumentation-list.txt"
 grep -F 'com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner' "$out/instrumentation-list.txt"
 timeout -k 2s 60s bash scripts/prepare-keyguard-lower-environment.sh "$out/preflight"
 failed=0
-for method in stableInitialFullUsesOneVirginOutputWithoutReadinessRead externalIngressWhileFirstPaintIsHeldCannotUseOldProof; do
+for method in r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck r21ExclusionRetiresSubmittedOrbWithMainAckHeld; do
   run=$(python3 -c 'import uuid; print(uuid.uuid4())')
   printf '%s\n' "$run" > "$out/$method-uuid.txt"
   adb shell am force-stop com.fluvi.app || true
@@ -35,48 +35,27 @@ for method in stableInitialFullUsesOneVirginOutputWithoutReadinessRead externalI
   cat "$out/$method.txt"
   if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then failed=1; fi
 done
-# One controlled actual first-FULL panel block. A stock structural failure
-# counts as RED only if the exact child and composed image were reached.
+# One API35 panel and reducer block; the actual-service specimens above are separate.
 adb shell am force-stop com.fluvi.app || true
 adb logcat -c || true
 run=$(python3 -c 'import uuid; print(uuid.uuid4())')
-printf '%s\n' "$run" > "$out/r20-first-uuid.txt"
+printf '%s\n' "$run" > "$out/r21-panel-diagnostics-uuid.txt"
 rc=0
-timeout -k 5s 240s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" -e class 'com.fluvi.app.lockscreen.KeyguardOrbPresentationPipelineInstrumentationTest#r20AuthorizedFullFirstMissDrawsCanonicalPhaseOnExistingChild' com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r20-first-panel.txt" 2>&1 || rc=$?
-printf '%s\n' "$rc" > "$out/r20-first-panel.exit"
-adb logcat -b all -d -v monotonic > "$out/r20-first-panel-logcat.txt" 2>&1 || true
-adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-service-probe/r20 > "$out/r20-first-panel-evidence.tar" 2> "$out/r20-first-panel-evidence.stderr" || true
-cat "$out/r20-first-panel.txt"
-if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r20-first-panel.txt" || ! grep -Eq '^OK \(1 test\)' "$out/r20-first-panel.txt"; then failed=1; fi
+timeout -k 5s 1000s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" -e class 'com.fluvi.app.lockscreen.KeyguardOrbPresentationPipelineInstrumentationTest,com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest' com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r21-panel-diagnostics.txt" 2>&1 || rc=$?
+printf '%s\n' "$rc" > "$out/r21-panel-diagnostics.exit"
+adb logcat -b all -d -v monotonic > "$out/r21-panel-diagnostics-logcat.txt" 2>&1 || true
+adb shell dumpsys window > "$out/window-after.txt" 2>&1 || true
+for evidence in r18 r20 "r21/$run"; do
+  label=${evidence//\//-}
+  adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/$evidence" > "$out/$label-evidence.tar" 2> "$out/$label-evidence.stderr" || true
+done
+cat "$out/r21-panel-diagnostics.txt"
+if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r21-panel-diagnostics.txt" || ! grep -Eq '^OK \([0-9]+ tests?\)' "$out/r21-panel-diagnostics.txt"; then failed=1; fi
+# Independent calibrated canonical View control.
 adb shell am force-stop com.fluvi.app || true
 rc=0
 timeout -k 5s 180s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e class 'com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r12PreparedPictureMatchesCanonicalHardwareCanvasAcrossPhases' com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r20-canonical.txt" 2>&1 || rc=$?
 printf '%s\n' "$rc" > "$out/r20-canonical.exit"
 cat "$out/r20-canonical.txt"
 if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r20-canonical.txt" || ! grep -Eq '^OK \(1 test\)' "$out/r20-canonical.txt"; then failed=1; fi
-# Independent candidate first-frame lifecycle and failure controls.
-for method in r20ExactAuthorizedPosterHitAvoidsAnotherBuild r20FailedFirstLockOrPostNeverPublishesReady r20HeldFirstWriteCannotReadyRetiredOwnerOrHideSuccessor; do
-  run=$(python3 -c 'import uuid; print(uuid.uuid4())')
-  printf '%s\n' "$run" > "$out/$method-uuid.txt"
-  adb shell am force-stop com.fluvi.app || true
-  adb logcat -c || true
-  rc=0
-  timeout -k 5s 240s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" -e class "com.fluvi.app.lockscreen.KeyguardOrbPresentationPipelineInstrumentationTest#$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/$method.txt" 2>&1 || rc=$?
-  printf '%s\n' "$rc" > "$out/$method.exit"
-  adb logcat -b all -d -v monotonic > "$out/$method-logcat.txt" 2>&1 || true
-  cat "$out/$method.txt"
-  if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then failed=1; fi
-done
-# The calibrated panel and capture-pressure controls are independent of the
-# service-route specimen. Retain their result even if a service case failed.
-adb shell am force-stop com.fluvi.app || true
-adb logcat -c || true
-rc=0
-timeout -k 5s 420s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e class com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/panel-and-diagnostics.txt" 2>&1 || rc=$?
-printf '%s\n' "$rc" > "$out/panel-and-diagnostics.exit"
-adb logcat -b all -d -v monotonic > "$out/panel-logcat.txt" 2>&1 || true
-adb shell dumpsys window > "$out/window-after.txt" 2>&1 || true
-adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-service-probe/r18 > "$out/panel-images.tar" 2> "$out/panel-images.stderr" || true
-cat "$out/panel-and-diagnostics.txt"
-if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/panel-and-diagnostics.txt" || ! grep -Eq '^OK \([0-9]+ tests?\)' "$out/panel-and-diagnostics.txt"; then failed=1; fi
 exit "$failed"
