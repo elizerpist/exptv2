@@ -1,39 +1,30 @@
-name: R22.2 opening and privacy qualification (orchestration only)
+name: R22.3 paired translucent cadence, same API35 emulator
 on:
   workflow_dispatch:
     inputs:
       native_diagnostic:
         type: boolean
         default: true
-      run_nightly:
-        type: boolean
-        default: false
-      run_baseline_profile:
-        type: boolean
-        default: false
 permissions:
   contents: read
-defaults:
-  run:
-    working-directory: app
 jobs:
-  api35:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arm: candidate
-            source: fe8931a69c96e964f78561a3100e3d776dfe5dfc
+  paired-cadence:
     runs-on: ubuntu-latest
-    timeout-minutes: 70
+    timeout-minutes: 60
     env:
-      APP_SHA: ${{ matrix.source }}
-      ARM: ${{ matrix.arm }}
+      BASE_SHA: fe8931a69c96e964f78561a3100e3d776dfe5dfc
+      APP_SHA: b1eccd845546e5d65d9e69c9ba0a43775a2c216b
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: ${{ env.BASE_SHA }}
+          path: baseline
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v5
+        with:
           ref: ${{ env.APP_SHA }}
-          path: app
+          path: candidate
           fetch-depth: 0
           persist-credentials: false
       - uses: actions/checkout@v5
@@ -54,37 +45,38 @@ jobs:
           flutter-version: '3.41.4'
           channel: stable
           cache: true
-      - name: Resolve packages and verify application identity
+      - name: Build unchanged baseline target and test-only cadence fixture
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/r19-api35"
+          mkdir -p "$RUNNER_TEMP/r22-3-cadence/baseline"
+          cd baseline
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          flutter pub get
+          test -z "$(git status --porcelain --untracked-files=no)"
+          (cd android && ./gradlew :app:assembleDebug --no-daemon --max-workers=3 --console=plain)
+          sha256sum build/app/outputs/apk/debug/app-debug.apk > "$RUNNER_TEMP/r22-3-cadence/baseline/target-before.txt"
+          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r22-3-cadence-parent-only.patch" > "$RUNNER_TEMP/r22-3-cadence/baseline/patch-sha256.txt"
+          git apply "$GITHUB_WORKSPACE/harness/scripts/r22-3-cadence-parent-only.patch"
+          git diff --name-only > "$RUNNER_TEMP/r22-3-cadence/baseline/changed-files.txt"
+          test "$(cat "$RUNNER_TEMP/r22-3-cadence/baseline/changed-files.txt")" = 'android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt'
+          (cd android && ./gradlew :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
+          sha256sum -c "$RUNNER_TEMP/r22-3-cadence/baseline/target-before.txt"
+          sha256sum build/app/outputs/apk/debug/app-debug.apk build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$RUNNER_TEMP/r22-3-cadence/baseline/apks.txt"
+      - name: Build candidate target and the same cadence test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/r22-3-cadence/candidate"
+          cd candidate
           test "$(git rev-parse HEAD)" = "$APP_SHA"
           flutter pub get
           test -z "$(git status --porcelain --untracked-files=no)"
-          printf 'application_sha=%s\nharness_sha=%s\narm=%s\n' "$APP_SHA" "$GITHUB_SHA" "$ARM" > "$RUNNER_TEMP/r19-api35/identity.txt"
-      - name: Run the complete application and core JVM suites
-        shell: bash
-        run: |
-          set -uo pipefail
-          (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3 --console=plain) 2>&1 | tee "$RUNNER_TEMP/r19-api35/unit.log"
-          printf '%s\n' "${PIPESTATUS[0]}" > "$RUNNER_TEMP/r19-api35/unit.exit"
-      - name: Apply separately recorded calibrated panel fixture
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py"
-          git status --short > "$RUNNER_TEMP/r19-api35/fixture-modified-files.txt"
-          git diff > "$RUNNER_TEMP/r19-api35/fixture.patch"
-          sha256sum "$RUNNER_TEMP/r19-api35/fixture.patch" "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py" > "$RUNNER_TEMP/r19-api35/fixture-sha256.txt"
-          sha256sum android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/Keyguard{FirstAuthorizedOrb,OrbPresentationPipeline,CardDiagnostics}InstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22{FirstInspectionFixture,RecoveryInstrumentationTest,VisualCalibration}.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt > "$RUNNER_TEMP/r19-api35/test-source-sha256.txt"
-          test "$(git diff --name-only | wc -l)" = 1
-          git diff --name-only | grep -Fx android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationPipelineInstrumentationTest.kt
-      - name: Assemble app and instrumentation APKs
-        run: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
+          (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
+          sha256sum build/app/outputs/apk/debug/app-debug.apk build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$RUNNER_TEMP/r22-3-cadence/candidate/apks.txt"
       - name: Enable KVM
         run: test -e /dev/kvm && sudo chmod 0666 /dev/kvm && test -r /dev/kvm && test -w /dev/kvm
-      - name: Run service, panel and diagnostics on API35
+      - name: Measure both arms on one API35 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -96,20 +88,12 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: cd "$GITHUB_WORKSPACE/app" && bash "$GITHUB_WORKSPACE/harness/scripts/r19-api35-qualification.sh"
-      - name: Verify independent JVM result
-        if: always()
-        run: if test -s "$RUNNER_TEMP/r19-api35/unit.exit"; then test "$(cat "$RUNNER_TEMP/r19-api35/unit.exit")" = 0; else echo 'JVM suite NOT RUN'; exit 1; fi
-      - name: Preserve all raw results
+          script: bash "$GITHUB_WORKSPACE/harness/scripts/r22-3-paired-cadence.sh"
+      - name: Preserve both arms and every failed sample
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-2-candidate-qualification-${{ matrix.arm }}-${{ github.run_id }}
-          path: |
-            ${{ runner.temp }}/r19-api35/**
-            app/build/app/reports/tests/**
-            app/build/fluvi-core/reports/tests/**
-            app/build/app/test-results/**
-            app/build/fluvi-core/test-results/**
+          name: r22-3-paired-cadence-${{ github.run_id }}
+          path: ${{ runner.temp }}/r22-3-cadence/**
           if-no-files-found: warn
           retention-days: 30
