@@ -1,0 +1,114 @@
+diff --git a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
+index 70337611..801874e0 100644
+--- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
++++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
+@@ -47,6 +47,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
+     @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
+     @Test fun r21ExclusionRetiresSubmittedOrbWithMainAckHeld() = runService(false, true)
+ 
++    @Test fun r22CalibrationPreservesNonSuppressingAutomation() = KeyguardR22FirstInspectionFixture().run("automation")
+     @Test fun r22SupersededOpeningWalkYieldsToFreshInspection() = KeyguardR22FirstInspectionFixture().run("positive")
+     @Test fun r22YieldedWalkCannotGrantAfterExclusion() = KeyguardR22FirstInspectionFixture().run("negative")
+     @Test fun r22StableOpeningReadIsNotYielded() = KeyguardR22FirstInspectionFixture().run("stable")
+diff --git a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt
+index 92128be2..21006969 100644
+--- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt
++++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt
+@@ -45,7 +45,7 @@ internal class KeyguardR22FirstInspectionFixture {
+     private lateinit var automation: UiAutomation
+ 
+     fun run(scenario: String) {
+-        require(scenario in setOf("positive", "negative", "stable", "natural"))
++        require(scenario in setOf("positive", "negative", "stable", "natural", "automation"))
+         assertEquals(35, Build.VERSION.SDK_INT)
+         val args = InstrumentationRegistry.getArguments()
+         val source = requireNotNull(args.getString("sourceSha"))
+@@ -138,7 +138,9 @@ internal class KeyguardR22FirstInspectionFixture {
+                     KeyguardR12ServiceTimingInstrumentationTest().materialProfile(), epoch))
+             }
+             if (scenario != "natural") {
+-                calibration = KeyguardR22VisualCalibration(instrumentation, dir).also { it.calibrate() }
++                automationEvidence(dir, "before-calibration")
++                calibration = KeyguardR22VisualCalibration(instrumentation, dir, automation).also { it.calibrate() }
++                automationEvidence(dir, "after-calibration")
+                 visualCalibration = "REFERENCE_CALIBRATED_SERVICE_NOT_REACHED"
+                 KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
+                 KeyguardOrbSurfaceWorkerTestHooks.postedMaterialTime = { target, time, at ->
+@@ -178,6 +180,8 @@ internal class KeyguardR22FirstInspectionFixture {
+             setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
+             await("service connected", 10_000) { FluviKeyguardCardServiceRegistry.connected }
+             val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
++            automationEvidence(dir, "service-connected")
++            records.add("AUTOMATION_CONNECTED actual=true handle=${System.identityHashCode(automation)} at=${SystemClock.uptimeMillis()}")
+             instrumentation.runOnMainSync {
+                 service.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
+                     override fun openingReserved(request: KeyguardCardInspectionRequest, reservationId: Long, armed: Boolean) {
+@@ -324,6 +328,23 @@ internal class KeyguardR22FirstInspectionFixture {
+                     image.recycle()
+                 }
+                 records.add("NATURAL_UNHELD A=${original.id} yieldedTo=${yieldedTo.get()} injected=false physical=UNOBSERVED")
++            } else if (scenario == "automation") {
++                assertTrue("NOT REACHED: no original reserved opening entered its physical read", entryStarted.await(20, TimeUnit.SECONDS))
++                val original = checkNotNull(a.get())
++                records.add("AUTOMATION_ORIGINAL_A id=${original.id} wake=${original.wakeGeneration} reservation=${reservation.get()}")
++                var independent = ""
++                await("NOT REACHED: independent locked SystemUI MAIN window", 8_000) {
++                    independent = independentOpeningScene(service)
++                    independent.startsWith("VALID ")
++                }
++                File(dir, "independent-window-inventory.txt").writeText(independent + "\n")
++                records.add("AUTOMATION_WINDOW $independent")
++                assertFalse("NOT REACHED: original A entry barrier expired", entryTimedOut.get())
++                releaseEntry.countDown()
++                assertTrue("NOT REACHED: original opening returned no real child", entered.await(20, TimeUnit.SECONDS))
++                assertFalse("NOT REACHED: original child barrier expired", childTimedOut.get())
++                release.countDown()
++                records.add("AUTOMATION_CONTROL_REACHED A=${original.id} reservation=${reservation.get()} physical=UNOBSERVED")
+             } else {
+             assertTrue("NOT REACHED: the exact reserved opening did not enter its physical read", entryStarted.await(20, TimeUnit.SECONDS))
+             val original = checkNotNull(a.get())
+@@ -606,6 +627,15 @@ internal class KeyguardR22FirstInspectionFixture {
+         "com.android.systemui:id/split_shade_status_bar",
+     ).firstNotNullOfOrNull(::independentVisibleMarkerWindow)
+ 
++    /** Platform state is independent evidence; querying it never grants display authority. */
++    private fun automationEvidence(dir: File, stage: String) {
++        val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
++        val header = "stage=$stage requestedFlags=${UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES} " +
++            "handle=${System.identityHashCode(automation)} connected=${FluviKeyguardCardServiceRegistry.connected} " +
++            "enabled=$enabled at=${SystemClock.uptimeMillis()}\n"
++        File(dir, "automation-$stage.txt").writeText(header + shell("dumpsys accessibility"))
++    }
++
+     private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
+         automation.executeShellCommand(command)).bufferedReader().use { it.readText() }
+     private fun setSecure(key: String, value: String?) {
+diff --git a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22VisualCalibration.kt b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22VisualCalibration.kt
+index 92a3afcb..0f659a86 100644
+--- a/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22VisualCalibration.kt
++++ b/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22VisualCalibration.kt
+@@ -1,6 +1,7 @@
+ package com.fluvi.app.lockscreen
+ 
+ import android.app.Instrumentation
++import android.app.UiAutomation
+ import android.content.Intent
+ import android.graphics.Bitmap
+ import android.graphics.Color
+@@ -27,6 +28,7 @@ import org.junit.Assert.assertTrue
+ internal class KeyguardR22VisualCalibration(
+     private val instrumentation: Instrumentation,
+     private val directory: File,
++    private val automation: UiAutomation,
+ ) : AutoCloseable {
+     data class Delta(val changed: Int, val total: Long, val max: Int) {
+         fun nearlyEqual(): Boolean = max <= 2 && total <= 2048L
+@@ -68,7 +70,7 @@ internal class KeyguardR22VisualCalibration(
+     private fun save(label: String, bitmap: Bitmap) {
+         File(directory, "$label.png").outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+     }
+-    private fun screenshot(): Bitmap = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
++    private fun screenshot(): Bitmap = checkNotNull(automation.takeScreenshot())
+     private fun crop(screen: Bitmap, bounds: Rect): Bitmap {
+         check(bounds.left >= 0 && bounds.top >= 0 && bounds.right <= screen.width && bounds.bottom <= screen.height &&
+             bounds.width() > 0 && bounds.height() > 0) { "invalid physical bounds $bounds for ${screen.width}x${screen.height}" }
