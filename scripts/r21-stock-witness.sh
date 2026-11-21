@@ -27,7 +27,7 @@ printf '%s\n' "$run" > "$out/r21-stock-service-uuid.txt"
 adb shell am force-stop com.fluvi.app || true
 adb logcat -c || true
 rc=0
-timeout -k 5s 180s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" -e class 'com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest#r21StockSubmittedDirectOrbWithBenignIngressWitness' com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r21-stock-service.txt" 2>&1 || rc=$?
+timeout -k 5s 180s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" -e class 'com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest#r21StockRealExclusionWithHeldAcknowledgement' com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/r21-stock-service.txt" 2>&1 || rc=$?
 printf '%s\n' "$rc" > "$out/r21-stock-service.exit"
 adb logcat -b all -d -v monotonic > "$out/r21-stock-service-logcat.txt" 2>&1 || true
 adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r19/$run" > "$out/r21-stock-service-evidence.tar" 2> "$out/r21-stock-service-evidence.stderr" || true
