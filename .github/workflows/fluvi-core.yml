@@ -1,4 +1,4 @@
-name: R20 stock first FULL frame witness (orchestration only)
+name: R20 candidate first FULL frame qualification (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -22,8 +22,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arm: stock
-            source: bc41ec11b293923f664b50cd79ed36b5f6fad53b
+          - arm: candidate
+            source: 58126456956ae3f5785174254d287937701e5d93
     runs-on: ubuntu-latest
     timeout-minutes: 70
     env:
@@ -73,12 +73,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git apply --check "$GITHUB_WORKSPACE/harness/scripts/r20-stock-probes.patch"
-          git apply "$GITHUB_WORKSPACE/harness/scripts/r20-stock-probes.patch"
           python3 "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py"
           git status --short > "$RUNNER_TEMP/r19-api35/fixture-modified-files.txt"
           git diff > "$RUNNER_TEMP/r19-api35/fixture.patch"
-          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r20-stock-probes.patch" "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py" > "$RUNNER_TEMP/r19-api35/fixture-sha256.txt"
+          sha256sum "$GITHUB_WORKSPACE/harness/scripts/r18-panel-patch-fixture.py" > "$RUNNER_TEMP/r19-api35/fixture-sha256.txt"
       - name: Assemble app and instrumentation APKs
         run: cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain
       - name: Enable KVM
@@ -103,7 +101,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r20-stock-first-frame-${{ matrix.arm }}-${{ github.run_id }}
+          name: r20-candidate-first-frame-${{ matrix.arm }}-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r19-api35/**
             app/build/app/reports/tests/**

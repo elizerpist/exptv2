@@ -54,6 +54,19 @@ timeout -k 5s 180s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e clas
 printf '%s\n' "$rc" > "$out/r20-canonical.exit"
 cat "$out/r20-canonical.txt"
 if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/r20-canonical.txt" || ! grep -Eq '^OK \(1 test\)' "$out/r20-canonical.txt"; then failed=1; fi
+# Independent candidate first-frame lifecycle and failure controls.
+for method in r20ExactAuthorizedPosterHitAvoidsAnotherBuild r20FailedFirstLockOrPostNeverPublishesReady r20HeldFirstWriteCannotReadyRetiredOwnerOrHideSuccessor; do
+  run=$(python3 -c 'import uuid; print(uuid.uuid4())')
+  printf '%s\n' "$run" > "$out/$method-uuid.txt"
+  adb shell am force-stop com.fluvi.app || true
+  adb logcat -c || true
+  rc=0
+  timeout -k 5s 240s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$run" -e class "com.fluvi.app.lockscreen.KeyguardOrbPresentationPipelineInstrumentationTest#$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/$method.txt" 2>&1 || rc=$?
+  printf '%s\n' "$rc" > "$out/$method.exit"
+  adb logcat -b all -d -v monotonic > "$out/$method-logcat.txt" 2>&1 || true
+  cat "$out/$method.txt"
+  if [[ "$rc" != 0 ]] || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then failed=1; fi
+done
 # The calibrated panel and capture-pressure controls are independent of the
 # service-route specimen. Retain their result even if a service case failed.
 adb shell am force-stop com.fluvi.app || true
