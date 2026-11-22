@@ -17223,3 +17223,41 @@ frame, stopped-app behavior, privacy result or 10 ms verdict is claimed.
   This does not excuse the remaining source implementation. The R22.4 privacy
   FAIL and R27 shade/ordering limitations remain open. PHYSICAL VALIDATION —
   PENDING, USER ONLY.
+
+### R29 WIP follow-up — API35 controls and pinned assets
+
+- Private API35 run [45076752427](https://github.com/elizerpist/pushparserv2/actions/runs/45076752427),
+  app source `5bb91aed3ab1a2e7ce4c6114d069a4d13fd21595`, built and verified the
+  installed debug and AndroidTest bytes. Its three new typed Parcel tests
+  passed. Of the 16 unchanged R27 controls, 10 passed and six did not reach
+  their tested boundaries: `direct-pending` and `direct-stable` lacked a
+  complete positive real DIRECT snapshot; `stale-ingress` did not reach the
+  real first FULL paint; `visible-unlock` timed out waiting for locked sleep;
+  `opening-service-positive` timed out waiting for sleep/locked; and
+  `opening-service-negative` did not reach a clean eligible post-marker
+  checkpoint. These are six FAIL/NOT REACHED results, not physical or R29
+  host verdicts. They are the same six control names that failed/not-reached
+  in the earlier R27 run; identical names do not prove identical causes.
+- The exact private native artifact 14776755794 was retained in private commit
+  [`023d8d04ffb9d0bf41f270c56c127a43b259db46`](https://github.com/elizerpist/pushparserv2/tree/023d8d04ffb9d0bf41f270c56c127a43b259db46),
+  ZIP length 12893538 and SHA-256
+  `23bf2a27e48714ad229384fd8b138932649f68781a12ebef0f1542421ad0e08d`.
+  An independent LFS checkout matched the full archive. The first verification
+  checkout had not installed LFS hooks and returned the pointer only; the
+  corrected checkout retrieved and hashed the full bytes.
+- The source staging helper previously accepted an altered generated shader
+  when its metadata hash was changed consistently. A source-only negative test
+  reproduced that real acceptance (**RED**). Tooling-only follow-up commit
+  `4f89734c4f8dae1ae0cdb645e34ee7e5302f6942` pins the 72 generated
+  shader/metadata file hashes and rejects untracked, including ignored, staged
+  platform inputs. The three renderer-stage controls and one isolated
+  ignored-file control passed after the fix. The clean pinned AOSP tree was
+  staged and 86 output file digests verified; resulting provenance SHA-256
+  `77c31612f59d3cbd26cfbc12b9e42165ed1629af2e5d1518ac5e3194859f9eaa`.
+  These tooling changes do not wire the R29 application or SystemUI scene.
+  Their private RED/GREEN logs are in the private evidence branch above.
+- The previously delivered WIP APK and its graph remain tied to exact source
+  `5bb91aed3ab1a2e7ce4c6114d069a4d13fd21595`; do not relabel them as built
+  from `4f89734c4f8dae1ae0cdb645e34ee7e5302f6942`. All R29 integrated host,
+  app-stopped transition, privacy/composition and physical 10 ms gates remain
+  NOT RUN. PHYSICAL VALIDATION — PENDING, USER ONLY.
