@@ -3241,13 +3241,15 @@ class FluviKeyguardCardService : AccessibilityService() {
                             latest.authority == freshness.authority && latest.revision >= freshness.revision &&
                             (latest.revision > freshness.revision ||
                                 inspectionFreshness.isEstablished(freshness.authority, freshness.revision))
-                        val identity = r18Active?.identity
-                        val token = presentation.reservation
-                        val virginDirect = identity != null && token === identity.token && token.stamp.full &&
-                            token.stamp.authority.matches(request) && identity.preparation.full &&
-                            identity.preparation.emptyAwaitingDisclosure &&
-                            token.stamp.outputGeneration == identity.preparation.outputGeneration &&
-                            !presentation.imageReady && presentation.proofRequestId == null
+                        val activeOwner = r18Active
+                        val identity = activeOwner?.identity
+                        val provisional = r18ProvisionalWake
+                        val virginDirect = KeyguardR27VirginDirectPolicy.matches(
+                            request, presentation, r18RouteRevision,
+                            identity?.token, identity?.preparation,
+                            provisional?.token, provisional?.preparation,
+                            r18RouteSnapshot?.preparation,
+                        )
                         val pending = inspectionQueue.pendingRequest()
                         val incompleteFreshnessSafe = freshnessSafe && latest != null && pending != null &&
                             !pending.windowFreshness.requiresCacheClear &&
@@ -3270,7 +3272,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                                 noObservedDisqualifier = safeInventory, // reader consumes returned exclusion evidence before this call
                                 workRemaining = true, // callback precedes an actual root/child call
                                 virginDirect = virginDirect,
-                                noRetainedProof = firstAuthorizedOrb.current() == null && r18Active?.firstProof == null,
+                                noRetainedProof = firstAuthorizedOrb.current() == null && activeOwner?.firstProof == null,
                             ), checkpoint, at, visited, roots, children,
                             observationCaptureId = request.diagnosticContext?.captureId?.takeIf {
                                 it == KeyguardCardDiagnostics.activeCaptureId()

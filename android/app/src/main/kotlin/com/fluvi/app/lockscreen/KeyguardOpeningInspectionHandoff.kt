@@ -405,3 +405,33 @@ internal class KeyguardOpeningInspectionHandoff {
             it.incompleteRejected, it.incompleteYielded, it.firstIncompleteRejection)
     }
 }
+
+/** Under the queue lock, identify the exact virgin DIRECT output even when
+ * the sampler has reserved it but Main has not yet published its owner. This
+ * only permits a newer read; the new read still needs its own complete proof. */
+internal object KeyguardR27VirginDirectPolicy {
+    fun matches(
+        request: KeyguardCardInspectionRequest,
+        presentation: KeyguardOrbPresentationCoordinator.Snapshot,
+        routeRevision: Long,
+        activeToken: KeyguardOrbPresentationCoordinator.Reservation?,
+        activePreparation: KeyguardCardWindow.R18Preparation?,
+        provisionalToken: KeyguardOrbPresentationCoordinator.Reservation?,
+        provisionalPreparation: KeyguardCardWindow.R18Preparation?,
+        retainedRoute: KeyguardCardWindow.R18Preparation?,
+    ): Boolean {
+        val token = presentation.reservation ?: return false
+        val prep = when {
+            activeToken != null -> activePreparation.takeIf { activeToken === token }
+            provisionalToken != null -> provisionalPreparation.takeIf { provisionalToken === token }
+            presentation.adopted -> retainedRoute
+            else -> null
+        } ?: return false
+        val stamp = token.stamp
+        return stamp.firstRequestId == request.id && stamp.authority.matches(request) &&
+            stamp.selectionRevision == routeRevision && stamp.full && prep.full && prep.emptyAwaitingDisclosure &&
+            stamp.outputGeneration == prep.outputGeneration && stamp.width == prep.width &&
+            stamp.height == prep.height && stamp.densityDpi == prep.densityDpi &&
+            !presentation.imageReady && presentation.proofRequestId == null
+    }
+}
