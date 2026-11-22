@@ -309,6 +309,198 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         assertTrue("R19 service specimen failures: ${errors.joinToString(" | ")}", errors.isEmpty())
     }
 
+    /** Controlled fixed-phase compositor test. The full-screen files need
+     * independent offline scanning before this becomes a visual safety PASS. */
+    @Test fun r26VisibleDirectUnlockAndRapidRelock() {
+        assertEquals(35, Build.VERSION.SDK_INT)
+        val args = InstrumentationRegistry.getArguments()
+        val source = requireNotNull(args.getString("sourceSha"))
+        require(source.matches(Regex("[0-9a-f]{40}")))
+        val run = UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
+        val dir = File(context.filesDir, "keyguard-service-probe/r26/$run/visible-unlock")
+        check(dir.mkdirs())
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
+        val power = context.getSystemService(PowerManager::class.java)
+        automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        val resolver = context.contentResolver
+        val savedServices = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        val savedEnabled = Settings.Secure.getString(resolver, Settings.Secure.ACCESSIBILITY_ENABLED)
+        val savedLock = shell("locksettings get-disabled").trim()
+        val savedSettings = preferences("fluvi_native_keyguard_card")
+        val savedMaterial = preferences("fluvi_keyguard_header_material")
+        val savedMode = preferences("fluvi_keyguard_orb_diagnostic_route")
+        val component = ComponentName(context, FluviKeyguardCardService::class.java)
+        val other = savedServices.orEmpty().split(':').filter {
+            it.isNotBlank() && ComponentName.unflattenFromString(it) != component
+        }.joinToString(":")
+        data class Frame(val index:Int, val before:Long, val after:Long, val crop:Bitmap)
+        val frames = Collections.synchronizedList(mutableListOf<Frame>())
+        val errors = Collections.synchronizedList(mutableListOf<String>())
+        val stop = AtomicBoolean(false); val first = CountDownLatch(1)
+        val ack = AtomicReference<Runnable?>(); val ackHeld = CountDownLatch(1)
+        val savedDispatcher = KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone
+        val savedTime = KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime
+        var visual: KeyguardR22VisualCalibration? = null; var collector: Thread? = null
+        var service: FluviKeyguardCardService? = null; var capture = false
+        try {
+            check(!FluviKeyguardCardServiceRegistry.connected && !keyguard.isDeviceSecure)
+            check(savedLock == "true" || savedLock == "false")
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, other)
+            shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard")
+            await("unlocked setup", 8_000) { power.isInteractive && !keyguard.isKeyguardLocked }
+            saveScreenshot(File(dir, "unlocked-before-lock.png"))
+            shell("locksettings set-disabled false")
+            check(context.getSharedPreferences("fluvi_keyguard_orb_diagnostic_route", Context.MODE_PRIVATE)
+                .edit().putString("mode", "SURFACE_LIVE").commit())
+            instrumentation.runOnMainSync {
+                FluviKeyguardCardSettings.update(context, mapOf("requested" to true, "showFinancialDetails" to true,
+                    "presentationMode" to "orb", "animationMode" to "orbOnly"))
+                val epoch = maxOf(SystemClock.elapsedRealtimeNanos(), (savedMaterial.second["publisherEpoch"] as? Long ?: -1L) + 1L)
+                check(FluviKeyguardMaterialStore.publish(context, KeyguardR12ServiceTimingInstrumentationTest().materialProfile(), epoch))
+            }
+            visual = KeyguardR22VisualCalibration(instrumentation, dir, automation).also { it.calibrate() }
+            KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
+            KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = { task ->
+                if (ack.compareAndSet(null, task)) ackHeld.countDown() else Handler(Looper.getMainLooper()).post(task)
+            }
+            KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT"); capture = true
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                listOf(other, component.flattenToString()).filter(String::isNotBlank).joinToString(":"))
+            setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
+            await("service connected", 10_000) { FluviKeyguardCardServiceRegistry.connected }
+            val actual = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation()); service = actual
+            shell("input keyevent KEYCODE_SLEEP"); await("locked sleep", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+            shell("input keyevent KEYCODE_WAKEUP")
+            assertTrue("NOT REACHED: direct reveal acknowledgement", ackHeld.await(20, TimeUnit.SECONDS))
+            var identity:KeyguardR22VisualIdentityForTest? = null
+            await("attached exact direct owner", 15_000) {
+                instrumentation.runOnMainSync { identity=actual.r22VisualIdentityForTest() }
+                identity != null && keyguard.isKeyguardLocked
+            }
+            val old = checkNotNull(identity)
+            var positiveFile:String? = null
+            repeat(24) { index ->
+                if (positiveFile == null) {
+                    val label = "visible-positive-$index"
+                    val crop = checkNotNull(visual).captureCrop(label, old.bounds)
+                    if (KeyguardR22VisualCalibration.compare(checkNotNull(visual).a, crop).nearlyEqual()) positiveFile = "$label-full.png"
+                }
+            }
+            assertNotNull("NOT REACHED: actual composed FULL reference", positiveFile)
+            var row = ""
+            fun exactRow(report:String):String? = report.lineSequence().firstOrNull {
+                it.startsWith(" R26_DIRECT ") && it.contains("owner=${old.reservationId}/") &&
+                    it.contains("/${old.outputGeneration}/${old.attachment} ")
+            }
+            await("actual direct reveal receipt", 15_000) {
+                row = exactRow(KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String) ?: ""
+                row.isNotEmpty() && !row.contains("reveal=UNOBSERVED/") && !row.contains("showing=UNOBSERVED/")
+            }
+            File(dir,"before-unlock-capture.txt").writeText(KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String)
+            val sourceVisual = checkNotNull(visual)
+            collector = Thread({
+                try {
+                    var index=0
+                    while(!stop.get() && index<24) {
+                        val before=SystemClock.uptimeMillis()
+                        val crop=sourceVisual.captureCrop("unlock-sample-$index",old.bounds)
+                        val after=SystemClock.uptimeMillis()
+                        frames.add(Frame(index,before,after,crop)); first.countDown(); index++
+                    }
+                } catch(t:Throwable) { errors.add("collector:${t.javaClass.simpleName}:${t.message}"); first.countDown() }
+            },"r26-unlock-screenshots").apply { isDaemon=true; start() }
+            assertTrue("NOT REACHED: first full-screen sample", first.await(15,TimeUnit.SECONDS))
+            val commandAt=SystemClock.uptimeMillis()
+            shell("wm dismiss-keyguard")
+            await("actual unlocked state", 10_000) { power.isInteractive && !keyguard.isKeyguardLocked }
+            val unlockedObserved=SystemClock.uptimeMillis()
+            var removeAt=0L
+            await("exact owner sealed, retired and removed", 15_000) {
+                row=exactRow(KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String) ?: ""
+                val remove=Regex("localRemove=([0-9]+)/([0-9]+)").find(row)?.groupValues?.get(2)?.toLongOrNull()
+                val ready=remove!=null && !row.contains("seal=UNOBSERVED/") && !row.contains("retire=UNOBSERVED/")
+                if(ready) removeAt=checkNotNull(remove)
+                ready
+            }
+            instrumentation.runOnMainSync { checkNotNull(ack.getAndSet(null)).run() }
+            val ackDelivered=SystemClock.uptimeMillis(); val cutoff=maxOf(removeAt,ackDelivered)
+            KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone=savedDispatcher
+            await("three complete post-removal frames", 15_000) {
+                synchronized(frames) { frames.count { it.before>cutoff }>=3 } || errors.isNotEmpty() || collector?.isAlive==false
+            }
+            stop.set(true); collector?.join(15_000)
+            assertFalse("NOT REACHED: screenshot worker did not stop",collector?.isAlive==true)
+            assertTrue("NOT REACHED: screenshot worker failed: $errors",errors.isEmpty())
+            val savedFrames=synchronized(frames) { frames.toList() }
+            assertTrue("NOT REACHED: no frame preceding unlock command",savedFrames.any { it.after<commandAt })
+            assertTrue("NOT REACHED: fewer than three post-removal frames",savedFrames.count { it.before>cutoff }>=3)
+            File(dir,"after-unlock-capture.txt").writeText(KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String)
+            // Relock on the same service before obtaining a disconnected
+            // underlay, so generation identities remain comparable.
+            assertTrue("NOT REACHED: original service changed before relock",FluviKeyguardCardServiceRegistry.serviceForInstrumentation() === actual)
+            shell("input keyevent KEYCODE_SLEEP"); await("rapid relock sleep", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+            shell("input keyevent KEYCODE_WAKEUP")
+            var fresh:KeyguardR22VisualIdentityForTest?=null
+            await("fresh direct generation after relock",20_000) {
+                instrumentation.runOnMainSync { fresh=actual.r22VisualIdentityForTest() }
+                fresh?.let { it.winningRequestId != null && it.reservationId!=old.reservationId && (it.attachment!=old.attachment || it.outputGeneration!=old.outputGeneration || it.childIdentity!=old.childIdentity) } == true
+            }
+            var freshPositive:String?=null
+            repeat(24) { index ->
+                if(freshPositive==null) {
+                    val label="fresh-relock-$index"
+                    val crop=sourceVisual.captureCrop(label,checkNotNull(fresh).bounds)
+                    if(KeyguardR22VisualCalibration.compare(sourceVisual.a,crop).nearlyEqual()) freshPositive="$label-full.png"
+                }
+            }
+            assertNotNull("NOT REACHED: fresh relock did not compose FULL",freshPositive)
+            shell("wm dismiss-keyguard"); await("unlocked before independent underlay",10_000) { power.isInteractive && !keyguard.isKeyguardLocked }
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,other)
+            await("service disconnected for unlocked underlay", 10_000) { !FluviKeyguardCardServiceRegistry.connected }
+            val underlay=sourceVisual.captureCrop("independent-unlocked-underlay",old.bounds)
+            assertFalse("NOT REACHED: underlay matches old full content",KeyguardR22VisualCalibration.compare(sourceVisual.a,underlay).nearlyEqual())
+            val categories=sourceVisual.classifyAfterExclusion(savedFrames.map { it.crop },underlay)
+            val afterIndices=savedFrames.indices.filter { savedFrames[it].before>cutoff }
+            assertTrue("old FULL or ambiguous output after actual removal: ${afterIndices.map { categories[it] }}",
+                afterIndices.all { categories[it]=="UNDERLAY" })
+            val evidence = org.json.JSONObject()
+            evidence.put("source",source).put("scenario","visible-unlock").put("reservation",old.reservationId)
+                .put("attachment",old.attachment).put("output",old.outputGeneration).put("child",old.childIdentity)
+                .put("target_rect",org.json.JSONArray(listOf(old.bounds.left,old.bounds.top,old.bounds.right,old.bounds.bottom)))
+                .put("positive",positiveFile).put("reference_a","reference-A.png").put("reference_b","reference-B.png")
+                .put("underlay","independent-unlocked-underlay-full.png").put("command_at",commandAt)
+                .put("unlocked_observed",unlockedObserved).put("remove_return",removeAt).put("ack_delivered",ackDelivered)
+                .put("fresh_reservation",checkNotNull(fresh).reservationId).put("fresh_positive",freshPositive)
+                .put("fresh_rect",org.json.JSONArray(listOf(checkNotNull(fresh).bounds.left,checkNotNull(fresh).bounds.top,
+                    checkNotNull(fresh).bounds.right,checkNotNull(fresh).bounds.bottom))).put("fixed_phase",true)
+                .put("samples",org.json.JSONArray(savedFrames.mapIndexed { index,frame -> org.json.JSONObject()
+                    .put("index",frame.index).put("before",frame.before).put("after",frame.after)
+                    .put("file","unlock-sample-${frame.index}-full.png").put("crop_category",categories[index]) }))
+            File(dir,"manifest.json").writeText(evidence.toString(2))
+            File(dir,"result.txt").writeText("source=$source scenario=visible-unlock verdict=PASS_PENDING_OFFLINE physical=UNOBSERVED\n")
+        } catch(t:Throwable) { errors.add("${t.javaClass.simpleName}:${t.message}") }
+        finally {
+            stop.set(true); collector?.join(15_000)
+            ack.getAndSet(null)?.let { task -> Handler(Looper.getMainLooper()).post(task) }
+            KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone=savedDispatcher
+            KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime=savedTime
+            if(capture) runCatching { File(dir,"frozen.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"] as String) }
+            runCatching { visual?.close() }
+            runCatching {
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,other)
+                await("service disconnected",8_000) { !FluviKeyguardCardServiceRegistry.connected }
+                restore(savedSettings); restore(savedMaterial); restore(savedMode)
+                shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard")
+                if(savedLock=="true" || savedLock=="false") shell("locksettings set-disabled $savedLock")
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,savedServices)
+                setSecure(Settings.Secure.ACCESSIBILITY_ENABLED,savedEnabled)
+            }.onFailure { errors.add("cleanup:${it.javaClass.simpleName}:${it.message}") }
+            if(errors.isNotEmpty()) File(dir,"result.txt").writeText("source=$source scenario=visible-unlock verdict=FAIL_OR_NOT_REACHED physical=UNOBSERVED\n")
+            File(dir,"errors.txt").writeText(synchronized(errors) { errors.joinToString("\n",postfix="\n") })
+        }
+        assertTrue("R26 visible unlock specimen: ${errors.joinToString(" | ")}",errors.isEmpty())
+    }
+
     private fun saveScreenshot(file: File) {
         val image = checkNotNull(automation.takeScreenshot())
         file.outputStream().use { check(image.compress(Bitmap.CompressFormat.PNG, 100, it)) }

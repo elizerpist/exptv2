@@ -25,6 +25,87 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         KeyguardCardDiagnostics.clearCapture(context)
     }
 
+    @Test fun r26ExactDirectEvidenceSurvivesLightAndFullPressure() {
+        val settings = context.getSharedPreferences("fluvi_native_keyguard_card", android.content.Context.MODE_PRIVATE)
+        val hadMode = settings.contains("presentationMode")
+        val savedMode = settings.getString("presentationMode", null)
+        check(settings.edit().putString("presentationMode", "orb").commit())
+        try {
+            for (mode in listOf("LIGHT", "FULL")) {
+                KeyguardCardDiagnostics.clearCapture(context)
+                KeyguardCardDiagnostics.startCapture(context, "r26-pressure", "profile", mode)
+                var oldOwner: KeyguardDiagnosticContext? = null
+                repeat(8) { i ->
+                    val wake = i + 1L; val base = wake * 10_000; val attach = wake + 100
+                    val request = base + 7; val reservation = wake + 500
+                    val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 926, wake, "wake", base))
+                    if (i == 0) oldOwner = owner
+                    val identity = mapOf<String, Any>("r18Host" to attach, "r18Output" to wake + 200,
+                        "r18ReservationId" to reservation, "r18Privacy" to "full")
+                    fun edge(phase: String, at: Long, extra: Map<String, Any> = emptyMap()) {
+                        KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", phase,
+                            serviceSession = 926, wakeEpoch = wake, requestId = request,
+                            attachGeneration = attach, diagnosticContext = owner, observedUptimeMs = at,
+                            fields = identity + extra)
+                    }
+                    edge("WAKE_ADOPTED", base + 1)
+                    edge("R19_PROOF_ACCEPTED", base + 2)
+                    edge("R20_FIRST_FRAME", base + 3, mapOf("r20Method" to "DIRECT_MISS", "r20EntryNs" to 1001))
+                    edge("R19_PROOF_CONSUMED", base + 4)
+                    edge("REVEAL_RECEIPT", base + 6, mapOf("r18ApplyBegin" to base + 5,
+                        "r18ApplyEnd" to base + 6, "r18Commit" to base + 7))
+                    val show = KeyguardCardDiagnostics.newShowOperation(owner, attach, request)
+                    KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", operation = show, observedUptimeMs = base + 8)
+                    val hide = KeyguardCardDiagnostics.newHideOperation(owner, attach, base + 9, base + 10)
+                    KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "test", operation = hide, observedUptimeMs = base + 11)
+                    KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_BEGIN", "test", operation = hide,
+                        observedUptimeMs = base + 11, fields = mapOf("attachedBefore" to true))
+                    KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_APPLIED", "test", operation = hide, observedUptimeMs = base + 12)
+                    KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_RETURN", "test", operation = hide, observedUptimeMs = base + 13)
+                    edge("SEALED:systemSample", base + 11)
+                    if (wake != 6L) edge("R26_SYSTEM_SEAL", base + 11, mapOf("r26SystemRequest" to wake + 700,
+                        "r26SystemReason" to "screenOff", "r26SystemReceived" to base + 9,
+                        "r26SystemStart" to base + 10, "r26SystemEnd" to base + 11))
+                    edge("RETIRE_RECEIPT", base + 14, mapOf("r18ApplyBegin" to base + 12,
+                        "r18ApplyEnd" to base + 14, "r18Commit" to base + 15))
+                    // Same host/output but a contradictory reservation cannot
+                    // relabel the old owner's sampler evidence.
+                    edge("R26_SYSTEM_SEAL", base + 20, mapOf("r18ReservationId" to reservation + 1000,
+                        "r26SystemRequest" to 9999, "r26SystemReason" to "wrong"))
+                    repeat(90) { n ->
+                        KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure",
+                            diagnosticContext = owner, observedUptimeMs = base + 100 + n, requestId = base + 1000 + n)
+                        if (n % 30 == 29) KeyguardCardDiagnostics.captureSnapshot(context)
+                    }
+                }
+                val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+                assertTrue(frozen.toByteArray(Charsets.UTF_8).size <= 32_768)
+                val rows = frozen.lineSequence().filter { it.startsWith(" R26_DIRECT ") }.toList()
+                assertEquals("$mode requires first and latest-three records", 4, rows.size)
+                for (wake in listOf(1L, 6L, 7L, 8L)) {
+                    val base = wake * 10_000
+                    val row = rows.single { it.contains("attempt=$wake ") }
+                    assertTrue(row, row.contains("owner=${wake + 500}/${wake + 100}/${wake + 200}/${wake + 100}"))
+                    assertTrue(row, row.contains("accepted=${base + 7}@${base + 2}"))
+                    assertTrue(row, row.contains("consumed=${base + 7}@${base + 4} showing=${base + 7}/"))
+                    assertTrue(row, row.contains("localRemove=${base + 12}/${base + 13}"))
+                    assertTrue(row, row.contains(if (wake == 6L) "sample=UNOBSERVED/UNOBSERVED@" else
+                        "sample=${wake + 700}/screenOff@${base + 9}/${base + 10}/${base + 11}"))
+                    assertFalse(row, row.contains("9999/wrong"))
+                    assertTrue(row, row.contains("physicalFirstPixel=UNOBSERVED physicalLastPixel=UNOBSERVED"))
+                }
+                KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", "R26_SYSTEM_SEAL", diagnosticContext = oldOwner,
+                    fields = mapOf("r18Host" to 101, "r18Output" to 201, "r18ReservationId" to 501, "r26SystemRequest" to 9999))
+                assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+            }
+        } finally {
+            KeyguardCardDiagnostics.clearCapture(context)
+            val edit = settings.edit()
+            if (hadMode) edit.putString("presentationMode", savedMode) else edit.remove("presentationMode")
+            check(edit.commit())
+        }
+    }
+
     @Test fun r25OpeningSummarySurvivesLightPressureAndCaptureRotation() = r25OpeningSummary("LIGHT")
     @Test fun r25OpeningSummarySurvivesFullPressureAndCaptureRotation() = r25OpeningSummary("FULL")
 

@@ -1,5 +1,11 @@
 package com.fluvi.app.lockscreen
 
+/** Route choice for the completed-positive path. The service supplies its
+ * validated, Main-published route snapshot; this is never a visibility grant. */
+internal object KeyguardOpeningRoutePolicy {
+    fun useCompletedHandoff(backend: String): Boolean = backend == "STOCK"
+}
+
 /** A bounded completed-read handoff. The owner serializes every operation
  * with the same lock as [KeyguardCardInspectionQueue]; this class does not
  * post, render, inspect platform objects, or grant visibility. */

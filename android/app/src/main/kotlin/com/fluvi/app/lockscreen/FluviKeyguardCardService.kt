@@ -497,7 +497,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     ): (() -> Unit)? {
         if (state.excluded) {
             synchronized(queueLock) { openingHandoff.invalidate() }
-            sealR18(sample.authority, Long.MAX_VALUE, "systemSample")
+            sealR18(sample.authority, Long.MAX_VALUE, "systemSample", sample, state)
             return null
         }
         if (!state.eligible || !sample.evaluate || sample.wakeSource == null ||
@@ -578,13 +578,17 @@ class FluviKeyguardCardService : AccessibilityService() {
     private fun recordR18(owner: R18Active, phase: String, observedAt: Long = SystemClock.uptimeMillis(),
                           proof: Long? = null, sample: KeyguardSystemState? = null, reservedAt: Long? = null,
                           r19ReadScene: Long? = null, r19Freshness: Long? = null,
-                          r19ReadStart: Long? = null, r19Inspection: Inspection? = null) {
+                          r19ReadStart: Long? = null, r19Inspection: Inspection? = null,
+                          exactIdentity: R18Identity? = null) {
         val context = owner.diagnosticContext ?: return
         if (context.captureId == null || !KeyguardCardDiagnostics.wantsEvent("R18_PIPELINE")) return
-        val identity = owner.identity
+        val identity = exactIdentity ?: owner.identity
         val token = identity.token
         val prep = identity.preparation
-        val child = (owner.output as? com.fluvi.app.lockscreen.material.KeyguardOrbDirectOutput)?.childId
+        // A sealed identity may have been replaced after the transition;
+        // do not attach the then-current output's child to that old owner.
+        val child = if (exactIdentity == null)
+            (owner.output as? com.fluvi.app.lockscreen.material.KeyguardOrbDirectOutput)?.childId else null
         val currentScene = firstAuthorizedOrb.sceneSerial()
         val nsBefore = System.nanoTime()
         val alignedUptime = SystemClock.uptimeMillis()
@@ -594,7 +598,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             requestId = proof ?: token.stamp.firstRequestId, attachGeneration = prep.attachment,
             observedUptimeMs = observedAt, diagnosticContext = context,
             deferredFields = { mapOf("r18Host" to token.stamp.hostGeneration, "r18Output" to prep.outputGeneration,
-                "r18Child" to (child ?: "UNOBSERVED"), "r18Privacy" to if (prep.full) "full" else "discreet",
+                "r18ReservationId" to token.id, "r18Child" to (child ?: "UNOBSERVED"), "r18Privacy" to if (prep.full) "full" else "discreet",
                 "r18Phase" to phase, "r18Proof" to (proof ?: "UNOBSERVED"),
                 "r18SampleStart" to (sample?.startedAt ?: "UNOBSERVED"),
                 "r18SampleEnd" to (sample?.finishedAt ?: "UNOBSERVED"),
@@ -702,7 +706,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             requestId = stamp.firstRequestId, attachGeneration = binding.attachment,
             observedUptimeMs = at, diagnosticContext = context, deferredFields = { mapOf(
                 "r18Host" to stamp.hostGeneration, "r18Output" to binding.outputGeneration,
-                "r18Child" to (binding.childId ?: "UNOBSERVED"), "r18Privacy" to if (stamp.full) "full" else "discreet",
+                "r18ReservationId" to binding.token.id, "r18Child" to (binding.childId ?: "UNOBSERVED"), "r18Privacy" to if (stamp.full) "full" else "discreet",
                 "r21Reservation" to binding.token.id, "r21Reveal" to reveal.sequence, "r21Proof" to reveal.proofRequestId,
                 "r21Ordinal" to (ordinal ?: "UNOBSERVED"), "r21SubmitPhase" to submitPhase,
                 "r21Result" to result, "r21Source" to source,
@@ -945,7 +949,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             wakeEpoch = binding.token.stamp.authority.wakeGeneration,
             requestId = binding.token.stamp.firstRequestId, attachGeneration = attachment,
             diagnosticContext = context, deferredFields = { mapOf("r18Host" to binding.token.stamp.hostGeneration,
-                "r18Output" to generation, "r18Phase" to "OUTPUT_DRAINED") })
+                "r18Output" to generation, "r18ReservationId" to binding.token.id, "r18Phase" to "OUTPUT_DRAINED") })
     }
 
     /** Worker-only scalar observation; capture association belongs to the
@@ -968,7 +972,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             surfaceMetrics = observation.metrics, deferredFields = {
                 fun ns(value: Long?) = value?.takeIf { it > 0 } ?: "UNOBSERVED"
                 mapOf("r18Host" to binding.token.stamp.hostGeneration, "r18Output" to observation.generation,
-                    "r19Poster" to if (observation.stage == "POSTER") observation.detail else "UNOBSERVED",
+                    "r18ReservationId" to binding.token.id, "r19Poster" to if (observation.stage == "POSTER") observation.detail else "UNOBSERVED",
                     "r20Method" to (first?.method ?: "UNOBSERVED"), "r20EntryNs" to ns(first?.entryNs),
                     "r20PainterStartNs" to ns(first?.painterStartNs), "r20PainterEndNs" to ns(first?.painterEndNs),
                     "r20ConfigureEndNs" to ns(first?.configureEndNs), "r20LockBeginNs" to ns(first?.lockBeginNs),
@@ -991,7 +995,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             observedUptimeMs = receipt.committedUptimeMs ?: receipt.applyReturnUptimeMs ?: receipt.submitStartUptimeMs,
             diagnosticContext = context, deferredFields = { mapOf(
                 "r18Host" to binding.token.stamp.hostGeneration, "r18Output" to generation,
-                "r18Phase" to receipt.operation, "r18ApplyBegin" to receipt.submitStartUptimeMs,
+                "r18ReservationId" to binding.token.id, "r18Phase" to receipt.operation, "r18ApplyBegin" to receipt.submitStartUptimeMs,
                 "r18ApplyEnd" to (receipt.applyReturnUptimeMs ?: "UNOBSERVED"),
                 "r18Commit" to (receipt.committedUptimeMs ?: "UNOBSERVED"),
                 "r18LatchNs" to (receipt.latchNanos ?: "UNOBSERVED"),
@@ -1128,7 +1132,9 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     /** Pure authority transition first; native hide is queued immediately and
      * never waits for the Main reconciliation or a borrower. */
-    private fun sealR18(authority: KeyguardInspectionAuthority, requestId: Long, reason: String): R18Active? {
+    private fun sealR18(authority: KeyguardInspectionAuthority, requestId: Long, reason: String,
+                        systemRequest: KeyguardSystemGateRequest? = null,
+                        systemState: KeyguardSystemState? = null): R18Active? {
         val owner = r18Active ?: return null
         val identity = owner.identity
         val token = identity.token
@@ -1146,7 +1152,25 @@ class FluviKeyguardCardService : AccessibilityService() {
         owner.r21Binding?.takeIf { it.token === token }?.let { binding -> runCatching {
             recordR21(binding, "SEAL", sealedAt, r18Coordinator.revealOrdinal(binding.reveal), "CANCELLED", reason, offered = requestId.takeUnless { it == Long.MAX_VALUE })
         } }
-        recordR18(owner, "SEALED:$reason", observedAt = sealedAt)
+        recordR18(owner, "SEALED:$reason", observedAt = sealedAt, exactIdentity = identity)
+        // The original sampler request and successful sealed generation are
+        // captured here, not recovered later from a newer service operation.
+        val context = owner.diagnosticContext
+        if (reason == "systemSample" && systemRequest != null && systemState != null &&
+            context?.captureId != null && context.captureId == systemRequest.diagnosticCaptureId &&
+            context.captureId == KeyguardCardDiagnostics.activeCaptureId() &&
+            KeyguardCardDiagnostics.wantsEvent("R18_PIPELINE")) {
+            val prep = identity.preparation
+            runCatching { KeyguardCardDiagnostics.captureEvent(this, "R18_PIPELINE", "R26_SYSTEM_SEAL",
+                serviceSession = token.stamp.authority.serviceSession, wakeEpoch = token.stamp.authority.wakeGeneration,
+                requestId = token.stamp.firstRequestId, attachGeneration = prep.attachment,
+                observedUptimeMs = sealedAt, diagnosticContext = context,
+                deferredFields = { mapOf("r18Host" to token.stamp.hostGeneration,
+                    "r18Output" to prep.outputGeneration, "r18ReservationId" to token.id,
+                    "r26SystemRequest" to systemRequest.id, "r26SystemReason" to systemRequest.reason,
+                    "r26SystemReceived" to systemRequest.receivedAt,
+                    "r26SystemStart" to systemState.startedAt, "r26SystemEnd" to systemState.finishedAt) }) }
+        }
         return owner
     }
 
@@ -2444,7 +2468,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             "window", "display", "wake", "accessibility" -> true
             else -> false
         }
-        return route == ticket.route && genuine && next.id > ticket.read.request.id &&
+        return route.backend == "STOCK" && ticket.route.backend == "STOCK" &&
+            route == ticket.route && genuine && next.id > ticket.read.request.id &&
             route.authority.matches(next) && !next.windowFreshness.requiresCacheClear &&
             inspectionFreshness.isEstablished(route.authority, route.freshnessRevision)
     }
@@ -2466,6 +2491,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             return bypass("SYSTEM_INELIGIBLE")
         if (result.freshnessRevision != route.freshnessRevision || result.r19ReadSceneSerial == null ||
             !inspectionFreshness.isEstablished(route.authority, route.freshnessRevision)) return bypass("FRESHNESS_OR_SCENE")
+        if (!KeyguardOpeningRoutePolicy.useCompletedHandoff(route.backend)) return bypass("DIRECT_ORDERED")
         val ticket = R25Completed(read, handoff, route)
         if (pending != null) {
             if (!r25CompatibleLocked(ticket, pending)) return bypass("PENDING_INCOMPATIBLE")

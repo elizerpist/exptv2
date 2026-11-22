@@ -986,7 +986,14 @@ internal object KeyguardCardDiagnostics {
     private fun reduceR18(attempt: TimingAttempt, event: TimingEvent) {
         val host = event.fields["r18Host"] ?: return
         val output = event.fields["r18Output"] ?: return
-        val key = "$host/$output/${event.attachGeneration ?: "UNOBSERVED"}"
+        val baseKey = "$host/$output/${event.attachGeneration ?: "UNOBSERVED"}"
+        val reservation = event.fields["r18ReservationId"]?.takeIf { it != "UNOBSERVED" }
+            ?: event.fields["r21Reservation"]?.takeIf { it != "UNOBSERVED" }
+        // A replacement reservation can reuse a host/output. Keep it in a
+        // distinct bounded timeline rather than relabelling either owner.
+        val baseReservation = attempt.r18Generations[baseKey]?.values?.get("r26ReservationId")
+        val key = if (reservation != null && baseReservation != null && reservation != baseReservation)
+            "$baseKey/reservation=$reservation" else baseKey
         val timeline = attempt.r18Generations[key] ?: run {
             if (attempt.r18Generations.size >= 4) {
                 val discard = attempt.r18Generations.keys.drop(1).firstOrNull() ?: attempt.r18Generations.keys.first()
@@ -996,6 +1003,11 @@ internal object KeyguardCardDiagnostics {
             R18Timeline(host, output, event.attachGeneration, event.fields["r18Privacy"] ?: "UNOBSERVED")
                 .also { attempt.r18Generations[key] = it }
         }
+        // All new records carry the exact reservation. A contradictory late
+        // observation cannot overwrite a newer owner sharing other scalars.
+        val existingReservation = timeline.values["r26ReservationId"]
+        if (reservation != null && existingReservation != null && reservation != existingReservation) return
+        if (reservation != null) timeline.values.putIfAbsent("r26ReservationId", reservation)
         event.fields["r18Privacy"]?.takeIf { it != "UNOBSERVED" }?.let { timeline.privacy = it }
         event.fields["r18Child"]?.takeIf { it != "UNOBSERVED" }?.let { timeline.child = it }
         val phase = when {
@@ -1022,6 +1034,13 @@ internal object KeyguardCardDiagnostics {
             event.requestId?.let { timeline.values.putIfAbsent("r19ReservedRequest", it.toString()) }
         }
         if (event.reason == "GRANT") retainField("r18Proof")
+        if (event.reason == "R19_PROOF_ACCEPTED") {
+            event.requestId?.let { timeline.values.putIfAbsent("r26AcceptedRequest", it.toString()) }
+        }
+        if (event.reason == "R26_SYSTEM_SEAL") {
+            listOf("r26SystemRequest", "r26SystemReason", "r26SystemReceived", "r26SystemStart", "r26SystemEnd")
+                .forEach { retainField(it) }
+        }
         if (event.reason == "R19_FIRST_POSITIVE") {
             timeline.values.putIfAbsent("r19PositiveRequest", event.requestId?.toString() ?: "UNOBSERVED")
             listOf("r19SceneRead", "r19Freshness", "r19ReadStart", "r19RootMs", "r19RootFlags", "r19ChildFlags")
@@ -2471,6 +2490,10 @@ internal object KeyguardCardDiagnostics {
                 select("a${attempt.id}:r22Core", r22CoreRecord(attempt), attempt.id)
                 select("a${attempt.id}:r25Core", r25CoreRecord(attempt), attempt.id)
             }
+        // Existing critical records retain priority; this short row uses the
+        // same bounded attempt/generation state and the same export budget.
+        attemptsForCausalEvidence.filter { it.presentationMode == "ORB" || it.r18Generations.isNotEmpty() }
+            .forEach { attempt -> select("a${attempt.id}:r26Core", r26CoreRecord(attempt), attempt.id) }
         // Restriction decisions are independent of the rolling raw ring.
         // The same global export budget and omission accounting still apply.
         attemptsForCausalEvidence.forEach { attempt ->
@@ -2794,6 +2817,42 @@ internal object KeyguardCardDiagnostics {
         append(" showingRequest=${n(attempt.showingInspectionRequestId)} grant=${n(direct?.values?.get("r18Proof"))}@${n(direct?.values?.get("GRANT"))}")
         append(" revealReturn=${n(direct?.values?.get("reveal:r18ApplyEnd"))} hide=${n(hide?.operationId)}/${n(hide?.localHideAppliedAtUptimeMs)}/${n(hide?.removeReturnAtUptimeMs)}")
         appendLine(" readerHighSession=${v("readerHigh")} mainTicketHigh=${v("ticketHigh")} overflow=diagnosticQueueOverflow clock=uptimeMs physical=UNOBSERVED")
+    }
+
+    /** DIRECT evidence is joined only through the recorded showing request,
+     * consumed proof, reservation and attachment. Missing identity remains
+     * UNOBSERVED; no screen-pixel time is inferred from native receipts. */
+    private fun r26CoreRecord(attempt: TimingAttempt): String = buildString {
+        fun v(value: Any?): String = value?.toString()?.take(48) ?: "UNOBSERVED"
+        val matching = attempt.r18Generations.values.mapNotNull { row ->
+            val request = row.values["r19ConsumedRequest"]?.toLongOrNull()
+            val attachment = row.attachment
+            if (request == null || attachment == null || row.values["r26ReservationId"] == null) null
+            else attempt.shows.firstOrNull { it.attachGeneration == attachment && it.requestId == request }
+                ?.let { row to it }
+        }.minByOrNull { it.second.decisionAtUptimeMs }
+        // If no matching show was recorded, retain the owned producer evidence
+        // with the show and withdrawal explicitly missing.
+        val direct = matching?.first ?: attempt.r18Generations.values.firstOrNull {
+            it.attachment != null && it.values["r26ReservationId"] != null
+        }
+        val show = matching?.second
+        val showing = show?.requestId
+        fun d(key: String): String = v(direct?.values?.get(key))
+        val hide = show?.let { actualWithdrawal(attempt, it) }
+        val cause = hide?.cause
+        append(" R26_DIRECT v=1 attempt=${attempt.id} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
+        append(" wakeCallback=${attempt.startedUptimeMs} screenOnCallback=${v(attempt.screenOnReceivedAtUptimeMs)}")
+        append(" owner=${d("r26ReservationId")}/${v(direct?.host)}/${v(direct?.output)}/${v(direct?.attachment)}")
+        append(" accepted=${d("r26AcceptedRequest")}@${d("R19_PROOF_ACCEPTED")} paintTicket=${d("r20Ticket")}/${d("r20Method")}")
+        append(" firstNs=${d("r20EntryNs")}/${d("r20PainterStartNs")}/${d("r20PainterEndNs")}/${d("r20ConfigureEndNs")}/${d("r20LockBeginNs")}/${d("r20LockReturnNs")}/${d("r20DrawEndNs")}/${d("r20PostReturnNs")}")
+        append(" consumed=${d("r19ConsumedRequest")}@${d("R19_PROOF_CONSUMED")} showing=${v(showing)}/${v(show?.operationId)}")
+        append(" reveal=${d("reveal:r18ApplyBegin")}/${d("reveal:r18ApplyEnd")}/${d("reveal:r18Commit")}/${d("reveal:r18LatchNs")}/${d("reveal:r18PresentNs")}/${d("reveal:r18PresentState")}")
+        append(" seal=${d("SEALED")}/${d("SEALED_REASON")} sample=${d("r26SystemRequest")}/${d("r26SystemReason")}@${d("r26SystemReceived")}/${d("r26SystemStart")}/${d("r26SystemEnd")}")
+        append(" hide=${v(hide?.operationId)}/${v(hide?.requestId)}/${v(hide?.attachGeneration)} eventCallback=${v(cause?.eventTimeUptimeMs)}/${v(hide?.triggerReceivedAtUptimeMs)}")
+        append(" localRemove=${v(hide?.localHideAppliedAtUptimeMs)}/${v(hide?.removeReturnAtUptimeMs)}")
+        append(" retire=${d("retire:r18ApplyBegin")}/${d("retire:r18ApplyEnd")}/${d("retire:r18Commit")}/${d("retire:r18LatchNs")}/${d("retire:r18PresentNs")}/${d("retire:r18PresentState")}")
+        appendLine(" clock=uptimeMs firstNsClock=System.nanoTime receiptNsClock=platform physicalFirstPixel=UNOBSERVED physicalLastPixel=UNOBSERVED")
     }
 
     /** One bounded row per selected ORB wake; no relation is inferred from
