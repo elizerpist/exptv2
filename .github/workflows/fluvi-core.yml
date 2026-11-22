@@ -1,4 +1,4 @@
-name: R22.4 Exact-Source Code Graph (orchestration only)
+name: R25 Exact-Source Code Graph (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -17,12 +17,12 @@ on:
 permissions:
   contents: write
 jobs:
-  r22-4-exact-source-graph:
+  r25-exact-source-graph:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      APP_SHA: ad1eac09442cb8d78a992874d22157fe6bd5a05f
-      TOOLING_BASE: 8b323f530e2654131c6acd790ed1bf5ff3f01e7d
+      APP_SHA: 9c1647573f3b0da6506d6e36dd98efdb11fb64ac
+      TOOLING_BASE: f28fadc75e399868b8541a7d5617977b2a7de877
     steps:
       - uses: actions/checkout@v5
         with:
@@ -86,10 +86,10 @@ jobs:
                   count+=1
           print('verified_shards=',count,'documents=',m['document_count'],'repo_symbols=',m['repository_defined_symbol_count'])
           PY
-          report="$tooling_dir/docs/codegraph-r22-4-orb-privacy.md"
-          printf '# R22.4 opening and isolated ORB source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
+          report="$tooling_dir/docs/codegraph-r25-orb-inventory.md"
+          printf '# R25 opening and ORB source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
           printf 'The Dart SCIP manifest is `docs/codegraph/manifest.json`; Kotlin has no SCIP coverage and the following is source navigation, not a generated call graph. The output/host lifecycle is Main-owned and visual presentation remains an independently measured outcome.\n\n' >> "$report"
-          printf 'Source navigation: FluviKeyguardCardService.reserveR18WakeBeforeMain arms the original opportunity; external scene ingress and the ordinary queue offer qualify a successor. inspectSurface/readSystemWindows supply the physical reader checkpoint; KeyguardOpeningInspectionHandoff.claim validates the current token and freshness and KeyguardCardInspectionQueue.handoffOpening transfers the exact pending request. processInspectionQueue resumes the single physical reader; completed fresh inspection still reaches the existing first-authorized proof and presentation path. KeyguardCardDiagnostics reduces R22_ACQUISITION into each retained R22_CORE beside R21_CORE. The grep inventory below gives exact source locations, not proof of runtime execution.\n\n' >> "$report"
+          printf 'R25 source navigation: Main publishes route and freshness state. Both offer sites and the single reader transfer exact completed-request ownership through KeyguardOpeningPublication under the inspection queue lock; a current Main claim enters the original admission, and obsolete positives request an exclusion-only system check. KeyguardCardDiagnostics reduces bounded R25_OPENING observations into R25_CORE. The following line inventory gives source locations, not runtime or physical-pixel proof.\n\n' >> "$report"
           printf '```text\n' >> "$report"
           if command -v rg >/dev/null 2>&1; then search=(rg -n); else search=(grep -nE); fi
           (cd "$source_dir" && "${search[@]}" 'KeyguardOpeningInspectionHandoff|PostClaimSnapshot|observePostClaimOffer|recordR22PostClaim|flushR22PostClaim|cutR22DiagnosticCapture|openingHandoff|claimOpeningYield|openingYieldHint|handoffOpening|abandonOpeningTransferIfActive|abandonSessionIfActive|R22_ACQUISITION|R22_CORE|recordOpeningAcquisition|offerRejection|processInspectionQueue|inspectSurface|visibleIds|markNativeApplyReturned|arbitrateIngress|revealSubmitted|recordR21|r21CoreRecord|R21_|nativeApplied|reserveBeforeMain|startR18|applyInspection|readSystemWindows|R18_PIPELINE|R19_|R20_|firstPhysical|allocatedAt|r20AllocatedAt|reservedReq|firstAuthorizedOrb|advanceR20First|invalidateR20Scene|requireRead|sceneSerial|FirstPaintTicket|authorizeDirectFirst|prepareHiddenDirect|beginDirectPresentation|queueReveal|crossSubmitBoundary|sealR18|class KeyguardFirstAuthorizedOrb|class KeyguardOrbPresentationCoordinator|class KeyguardOrbInertHost|class KeyguardOrbDirectOutput|class KeyguardOrbR18Presenter|fun (stage|reveal|retire|seal|dispose|borrow|releaseBorrow)|addTransactionCompletedListener|presentFence|draw|surfaceReady' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardWindow,KeyguardCardSettings,KeyguardSystemState,KeyguardWindowSnapshotReader,KeyguardCardInspectionQueue,KeyguardOpeningInspectionHandoff,KeyguardInspectionFreshness,KeyguardFirstAuthorizedOrb,KeyguardOrbInertHost,KeyguardOrbPresentationCoordinator}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardOrbDirectOutput,KeyguardOrbR18Presenter,KeyguardOrbSurfacePresenter,KeyguardOrbSurfaceWorker,KeyguardOrbSurfaceMaterial,KeyguardOrbSurfaceMetrics}.kt) >> "$report"
@@ -101,8 +101,11 @@ jobs:
           printf '\n# R22.4 source-derived restriction, evidence and safety controls\n' >> "$report"
           (cd "$source_dir" && "${search[@]}" 'WindowRestriction|TransitionTrace|newTransitionTrace|reportTransitionTrace|showOrUpdate|failRestrictedUpdate|secureRebindRequired|updateLayoutSettings|enterRestrictiveTransition|finishRestrictiveTransition|restrictiveHideFailed|restrictionEvidence|onIsolatedOrbFirstCommitted|onIsolatedOrbPressure|onDetached|onLayerHideSubmitted|hideLayer|worker.retire|R22_4_TRANSITION|r224Transitions' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{KeyguardCardWindow,KeyguardCardSettings,FluviKeyguardCardService}.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/{KeyguardCardMaterialController,KeyguardOrbBufferRenderer}.kt) >> "$report"
           (cd "$source_dir" && "${search[@]}" 'attachedOrbRestrictionPrecedesFailedLayout|r22_4RepeatedRestrictionAndFreshFullKeepSameRoot|r22_4FailedNeutralBindCannotReviveHiddenRoot|r22_4DetachedDuringFailedLayoutAllowsCleanNextAttach|r22_4BoundedResizedPrivacyStrip|r22_4NeutralMotionUsesIndependentPhaseReferences|r224RestrictionEvidence|isolatedNeutralRecoveryAtCommittedResizedBounds' android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt) >> "$report"
+          printf '\n# R25 exact-source ownership, tests and bounded export\n' >> "$report"
+          (cd "$source_dir" && "${search[@]}" 'KeyguardOpeningPublication|handoffCompleted|canPublishCompleted|r25BuildSnapshotLocked|r25CompleteLocked|r25PromoteWaitingLocked|r25PostDrain|r25DrainOnMain|r25FallbackDrain|r25RequestExclusionCheck|recordR25|R25_OPENING|R25_CORE|reduceR25|isUnclaimedReadCurrent|processInspectionQueue|scheduleEvaluationCommon|reserveR18WakeBeforeMain|applyCompletedInspection|applyInspection|hideImmediately|inspectionFreshness|firstAuthorizedOrb' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardInspectionQueue,KeyguardOpeningPublication,KeyguardFirstAuthorizedOrb,KeyguardCardSettings}.kt) >> "$report"
+          (cd "$source_dir" && "${search[@]}" 'class KeyguardOpeningPublicationTest|successorStartsWhileFirstMainNoticeIsHeld|pendingBeforeCompletion|mainClaimMakesLaterOffer|oldWakeNotice|failedPost|class KeyguardR25ServiceInstrumentationTest|heldCompletePositive|heldPositiveCannot|r25OpeningSummary' android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardOpeningPublicationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/{KeyguardR25ServiceInstrumentationTest,KeyguardCardDiagnosticsInstrumentationTest}.kt) >> "$report"
           printf '\n```\n' >> "$report"
-          cp "$RUNNER_TEMP/r22-graph-query.txt" "$tooling_dir/docs/codegraph-r22-4-orb-query.txt"
+          cp "$RUNNER_TEMP/r22-graph-query.txt" "$tooling_dir/docs/codegraph-r25-orb-query.txt"
           sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$RUNNER_TEMP/r22-manifest-sha256.txt"
       - name: Publish graph to independent immutable tooling branch
         shell: bash
@@ -111,21 +114,21 @@ jobs:
           cd tooling
           git config user.name 'Fluvi Graph Bot'
           git config user.email 'fluvi-graph@users.noreply.github.com'
-          git add docs/codegraph docs/codegraph-r22-4-orb-privacy.md docs/codegraph-r22-4-orb-query.txt
+          git add docs/codegraph docs/codegraph-r25-orb-inventory.md docs/codegraph-r25-orb-query.txt
           git diff --cached --check
-          git commit -m 'graph: index R22.4 opening and ORB qualification application source [skip ci]'
+          git commit -m 'graph: index R25 exact-source ORB qualification application source [skip ci]'
           git rev-parse HEAD | tee "$RUNNER_TEMP/r22-graph-commit.txt"
-          test -z "$(git ls-remote origin refs/heads/tooling/r22-4-orb-ad1eac09442c)"
-          git push origin HEAD:refs/heads/tooling/r22-4-orb-ad1eac09442c
+          test -z "$(git ls-remote origin refs/heads/tooling/r25-orb-9c1647573f3b)"
+          git push origin HEAD:refs/heads/tooling/r25-orb-9c1647573f3b
       - name: Preserve graph and receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r22-4-graph-ad1eac09442c-run-${{ github.run_id }}
+          name: r25-graph-9c1647573f3b-run-${{ github.run_id }}
           path: |
             tooling/docs/codegraph/**
-            tooling/docs/codegraph-r22-*.md
-            tooling/docs/codegraph-r22-*.txt
+            tooling/docs/codegraph-r25-*.md
+            tooling/docs/codegraph-r25-*.txt
             ${{ runner.temp }}/r22-*.txt
           if-no-files-found: warn
           retention-days: 30
