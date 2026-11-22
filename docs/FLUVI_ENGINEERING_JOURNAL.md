@@ -16028,3 +16028,54 @@ Report implementation SHA/parent, graph/tooling SHA and manifest hash; every com
 An implemented and tested ownership change, an APK successfully handed to the owner, and a physically qualified performance result are separate outcomes. For performance acceptance on a named configuration, all eligible measured samples must meet the 100 ms maximum for the named endpoint within measurement uncertainty; combined qualification requires both endpoints, correct visuals and preserved withdrawal. A later tighter target reuses the raw evidence and scorer. A clear overrun fails the corresponding target; do not relabel a relative improvement as compliance. Report whether an opening is still blocked by platform data despite the proven removal of the application wait. No universal-device guarantee. PHYSICAL VALIDATION — PENDING, USER ONLY.
 
 FLUVI_R25_STOCK_ORB_100MS_END
+
+### R25 implementation and qualification checkpoint — 2026-11-22
+
+This is a coding-agent checkpoint, not physical acceptance or a new reviewer
+hypothesis. The R25 handoff is `1b9937fb280e71bd285e8465e217632a3a8d9e12`;
+the phone-tested application parent is `ad1eac09442cb8d78a992874d22157fe6bd5a05f`.
+The separately pushed application candidate is
+`9c1647573f3b0da6506d6e36dd98efdb11fb64ac` on `implement/r25-stock-orb`.
+It adds the bounded completed-positive handoff, exact-owner Main claim,
+exclusion-only recheck, and capture-owned R25 summary, with queue and Android
+fixture controls. It does not change the renderer, panel privacy policy, or
+unlock behavior by design. Actual behavior still requires the focused gates.
+
+The exact-parent JVM scheduling model showed the expected held-A/B ordering;
+it is a model rather than Android-service proof. The private API35 parent
+run [45019469059](https://github.com/elizerpist/pushparserv2/actions/runs/45019469059)
+then reached a complete FULL/MAIN_CONFIRMED A=31, observed B=32 pending,
+and acknowledged the reader lane with A still active before release. A entered
+Main before B started; the protected R22 row reported `SCENE_CHANGED` for A.
+Its separate natural control completed but its image was UNCLASSIFIED, so it
+is not a correct-pixel or latency PASS. Raw logs and imagery remain in the
+private run, not in this journal.
+
+Local `git diff --check`, Fluvi boundary verification, debug Kotlin and
+androidTest Kotlin compilation, seven focused JVM classes (67 tests),
+`flutter analyze --no-fatal-infos` (20 informational findings), the Flutter
+fast suite (1039 + 3 + 4 tests), and the independent optical scorer's ten
+unit cases passed. The requested full local Gradle command FAILED at debug
+native-library merge/profile Kotlin output with `No space left on device` on
+`/dev/shm`; the log is retained separately. Its exact-source alternative is
+private run [45020627688](https://github.com/elizerpist/pushparserv2/actions/runs/45020627688),
+in progress at this checkpoint. Focused candidate run
+[45020289680](https://github.com/elizerpist/pushparserv2/actions/runs/45020289680)
+and unheld ABBA observations
+[45020982560](https://github.com/elizerpist/pushparserv2/actions/runs/45020982560)
+are also in progress. The natural fixture recreates the service for each
+sample, so these unheld observations alone do not meet the warm-cycle or
+calibrated correct-pixel requirement.
+
+Exact-source graph run [45020328569](https://github.com/elizerpist/exptv2/actions/runs/45020328569)
+passed and published tooling commit `2cf5169ead04b18e9745f1210f36182b3cc09617`;
+manifest SHA-256 is `686f2746b249880fa4bc76dd178d43086df99862e095a51c8fdd49fcd68e2e0d`,
+with source head/ref equal to `9c1647573f3b0da6506d6e36dd98efdb11fb64ac`.
+Dart SCIP does not cover Kotlin; the tooling branch includes a Kotlin source
+inventory, not a Kotlin generated graph. The external-clock scorer is on
+`tooling/r25-optical-score`; no physical endpoint samples exist yet.
+
+The historical R22.4 isolated-panel visual privacy FAIL remains open. The
+section 19 owner-test safety conditions are not yet established, no new Human
+APK has been delivered, and no 100 ms claim is made. PHYSICAL VALIDATION —
+PENDING, USER ONLY.
