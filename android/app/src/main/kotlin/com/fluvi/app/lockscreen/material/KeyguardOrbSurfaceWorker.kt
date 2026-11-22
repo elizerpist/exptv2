@@ -15,6 +15,7 @@ import android.view.Choreographer
 import android.view.Surface
 import android.view.SurfaceHolder
 import com.fluvi.app.R
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -54,6 +55,14 @@ internal class KeyguardOrbSurfaceTarget(
     @Volatile var firstPostedVisualKey: String? = null
     @Volatile var firstPostedWasFull = false
     val firstDirectAuthorization = AtomicReference<KeyguardR19FirstPaintTicket?>()
+    // Boundary-only public-program diagnostics; never carries profile data.
+    val blankBindPending = AtomicBoolean(false)
+    @Volatile var r27WarmStatus = "NOT_REQUESTED"
+    @Volatile var r27WarmSelector: String? = null
+    @Volatile var r27LoadNs = 0L
+    @Volatile var r27WorkerQueueNs = 0L
+    @Volatile var r27ConstructorNs = 0L
+    @Volatile var r27Overlap = false
     // Worker-owned: transparent host submission happens only on create/redraw.
     var shellNeedsClear = true
 }
@@ -65,6 +74,9 @@ internal data class KeyguardR20FirstFrameObservation(
     val painterStartNs: Long, val painterEndNs: Long, val configureEndNs: Long,
     val lockBeginNs: Long, val lockReturnNs: Long, val drawEndNs: Long,
     val postReturnNs: Long, val failure: String?,
+    val warmStatus: String = "UNOBSERVED", val warmSelector: String? = null,
+    val warmLoadNs: Long = 0L, val warmQueueNs: Long = 0L, val warmConstructorNs: Long = 0L,
+    val warmOverlap: Boolean = false,
 )
 
 /** Immutable, once-per-boundary observations. A post is not a physical
@@ -147,6 +159,10 @@ internal class KeyguardOrbSurfaceWorker(
     private var currentPoster: Poster? = null
     private var firstSelection: FirstSelection? = null
     private var firstMeasurement: FirstMeasurement? = null
+    private data class WarmProgram(val target: KeyguardOrbSurfaceTarget,
+        val selector: KeyguardOrbProgramSelector, val shader: KeyguardHeaderShader)
+    // Only touched by the render worker. A mutable shader never crosses owners.
+    private var warmProgram: WarmProgram? = null
     private var firstPosted = false
     private var framePending = false
     private var pendingRedraw: KeyguardOrbSurfaceRedrawCompletion? = null
@@ -246,6 +262,41 @@ internal class KeyguardOrbSurfaceWorker(
         }
     }
 
+    /** This work is speculative only while the exact virgin owner remains
+     * idle. It never configures uniforms or touches a canvas or output. */
+    fun prewarmDirect(target: KeyguardOrbSurfaceTarget, selector: KeyguardOrbProgramSelector,
+                      artifact: KeyguardShaderArtifact, ownerCurrent: () -> Boolean) {
+        val queuedAt = System.nanoTime()
+        handler.post {
+            target.r27WorkerQueueNs = System.nanoTime() - queuedAt
+            if (disposed || target.revoked || currentTarget !== target || authorizedTarget.get() !== target ||
+                !ownerCurrent() || target.firstDirectAuthorization.get() != null || target.blankBindPending.get()) {
+                target.r27WarmStatus = "STALE_OR_BUSY"
+                return@post
+            }
+            if (!selector.accepts(artifact)) { target.r27WarmStatus = "BAD_ARTIFACT"; return@post }
+            if (target.firstDirectAuthorization.get() != null || target.blankBindPending.get()) {
+                target.r27WarmStatus = "STALE_OR_BUSY"; return@post
+            }
+            val start = System.nanoTime()
+            val shader = runCatching {
+                if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED)
+                    KeyguardOrbSurfaceWorkerTestHooks.onDirectProgramConstructor?.invoke(target, "WARM")
+                KeyguardHeaderShader(artifact)
+            }.getOrNull()
+            target.r27ConstructorNs = System.nanoTime() - start
+            target.r27Overlap = target.firstDirectAuthorization.get() != null
+            if (shader == null) { target.r27WarmStatus = "CONSTRUCTOR_FAILED"; return@post }
+            if (disposed || target.revoked || currentTarget !== target || authorizedTarget.get() !== target || !ownerCurrent()) {
+                target.r27WarmStatus = "STALE"; return@post
+            }
+            warmProgram = WarmProgram(target, selector, shader)
+            target.r27WarmStatus = "READY"
+            if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED)
+                KeyguardOrbSurfaceWorkerTestHooks.afterDirectProgramWarm?.invoke(target)
+        }
+    }
+
     /** One initial paint on the already allocated virgin target. The caller
      * holds a current complete disclosure proof; this method grants no show. */
     fun authorizeDirectFirst(target: KeyguardOrbSurfaceTarget, profile: KeyguardMaterialProfile,
@@ -314,7 +365,19 @@ internal class KeyguardOrbSurfaceWorker(
                 if (measurement != null) measurement.painterStartNs = System.nanoTime()
                 val now = System.nanoTime()
                 val scene = KeyguardMaterialScene(safe, target.full, now).anchoredAt(phase, now)
-                val painter = KeyguardOrbSurfacePainter(context, safe, target.width, target.height)
+                val selector = KeyguardOrbProgramSelector.forProfile(safe)
+                val ready = warmProgram?.takeIf { it.target === target && it.selector == selector }
+                if (ready != null) {
+                    warmProgram = null
+                    target.r27WarmStatus = "HIT"
+                } else if (selector != null) {
+                    if (target.r27WarmStatus == "READY") target.r27WarmStatus = "STALE"
+                    else if (target.r27WarmStatus == "LOADING" || target.r27WarmStatus == "NOT_REQUESTED")
+                        target.r27WarmStatus = "NO_READY"
+                    if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED)
+                        KeyguardOrbSurfaceWorkerTestHooks.onDirectProgramConstructor?.invoke(target, "COLD")
+                }
+                val painter = KeyguardOrbSurfacePainter(context, safe, target.width, target.height, ready?.shader)
                 if (measurement != null) measurement.painterEndNs = System.nanoTime()
                 if (!valid()) throw StalePreparation()
                 currentPoster = null
@@ -458,6 +521,7 @@ internal class KeyguardOrbSurfaceWorker(
         if (measuredRevoke) target.metrics?.revokeReturned(SystemClock.uptimeMillis())
         if (authorizedTarget.compareAndSet(target, null)) preparationGeneration.incrementAndGet()
         handler.postAtFrontOfQueue {
+            if (warmProgram?.target === target) warmProgram = null
             val retiredScene = currentScene.takeIf { currentTarget === target }
             if (target.discardFullOnRetire) {
                 posters.entries.removeAll { it.key.full }
@@ -511,6 +575,7 @@ internal class KeyguardOrbSurfaceWorker(
             currentPoster = null
             currentPainter = null
             previousPainter = null
+            warmProgram = null
             posters.clear()
             thread.quitSafely()
         }
@@ -827,7 +892,8 @@ internal class KeyguardOrbSurfaceWorker(
             if (isCaptureActive()) {
                 val snapshot = KeyguardR20FirstFrameObservation(item.ticket.requestId, item.method, item.entryNs,
                     item.painterStartNs, item.painterEndNs, item.configureEndNs, item.lockBeginNs, item.lockReturnNs,
-                    item.drawEndNs, item.postReturnNs, failure)
+                    item.drawEndNs, item.postReturnNs, failure, target.r27WarmStatus, target.r27WarmSelector,
+                    target.r27LoadNs, target.r27WorkerQueueNs, target.r27ConstructorNs, target.r27Overlap)
                 target.reporter?.invoke(KeyguardOrbSurfaceObservation(target.attachment, target.generation,
                     "R20_FIRST_FRAME", SystemClock.uptimeMillis(), "first", target.full, target.metrics, snapshot))
             }

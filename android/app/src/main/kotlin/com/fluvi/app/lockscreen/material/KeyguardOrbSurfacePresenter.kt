@@ -65,7 +65,7 @@ internal class KeyguardOrbSurfacePresenter(
      * The caller remains responsible for fresh privacy/input authority. */
     private fun directOnMain(): KeyguardOrbR18Presenter {
         checkMain()
-        return direct ?: KeyguardOrbR18Presenter(worker, isCaptureActive, onR18Prepared,
+        return direct ?: KeyguardOrbR18Presenter(context.applicationContext, worker, isCaptureActive, onR18Prepared,
             onR18Failure, onR18Receipt, onR18Drained, onR18Allocated, onR19Observation).also { direct = it }
     }
 

@@ -322,12 +322,17 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
      * the independently rendered hardware View, sampled before revealing the
      * child. This is a panel control, not a keyguard-service privacy pass. */
     @Test fun r20AuthorizedFullFirstMissDrawsCanonicalPhaseOnExistingChild() = calibratedFirstFrame(false)
+    @Test fun r27WarmDirectMissUsesPreparedProgramAndCanonicalPixels() =
+        calibratedFirstFrame(false, expectWarm = true)
+    @Test fun r27NoReadyDirectMissFallsBackColdWithCanonicalPixels() =
+        calibratedFirstFrame(false, forceCold = true)
 
     @Test fun r21SubmittedPanelSurvivesBenignRecheckAndSealsBeforeLateAck() = calibratedFirstFrame(true)
     @Test fun r21PanelCancelsBeforeNativeCross() = calibratedFirstFrame(true, "PRE_CROSS")
     @Test fun r21PanelRetiresInFlightRevealInNativeLaneOrder() = calibratedFirstFrame(true, "IN_FLIGHT")
 
-    private fun calibratedFirstFrame(r21: Boolean, boundary: String = "APPLIED") {
+    private fun calibratedFirstFrame(r21: Boolean, boundary: String = "APPLIED",
+                                     expectWarm: Boolean = false, forceCold: Boolean = false) {
         assumeTrue(Build.VERSION.SDK_INT == 35)
         val context = instrumentation.targetContext
         val activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
@@ -350,6 +355,10 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
         val cleanup = AtomicReference<(() -> Unit)?>(null)
         val posterCount = AtomicInteger(); val firstDrawCount = AtomicInteger(); val postCount = AtomicInteger()
         val nativeApplyCount = AtomicInteger()
+        val warmReady = CountDownLatch(1)
+        val warmLoadEntered = CountDownLatch(1); val releaseWarmLoad = CountDownLatch(1)
+        val programConstructors = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val r27First = AtomicReference<KeyguardR20FirstFrameObservation?>()
         val drawMethod = AtomicReference<String?>(); val childId = AtomicInteger(-1)
         val firstEntry = AtomicReference<Long>(); val firstPostAt = AtomicReference<Long>()
         val refs = mutableListOf<Bitmap>()
@@ -468,6 +477,19 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
             lateinit var producer: KeyguardOrbSurfacePresenter
             lateinit var holder: KeyguardOrbInertHost
             val content = FrameLayout(activity).apply { setBackgroundColor(Color.TRANSPARENT) }
+            if (expectWarm || forceCold) {
+                if (expectWarm) KeyguardOrbSurfaceWorkerTestHooks.afterDirectProgramWarm = { target ->
+                    if (target.attachment == 21L && target.generation == 34L) warmReady.countDown()
+                }
+                if (forceCold) KeyguardOrbSurfaceWorkerTestHooks.beforeDirectArtifactLoad = { target ->
+                    if (target.attachment == 21L && target.generation == 34L) {
+                        warmLoadEntered.countDown(); check(releaseWarmLoad.await(30, TimeUnit.SECONDS))
+                    }
+                }
+                KeyguardOrbSurfaceWorkerTestHooks.onDirectProgramConstructor = { target, phase ->
+                    if (target.attachment == 21L && target.generation == 34L) programConstructors.add(phase)
+                }
+            }
             KeyguardOrbSurfaceWorkerTestHooks.afterPosterCreated = { target ->
                 if (target.firstDirectAuthorization.get()?.requestId == 201L) posterCount.incrementAndGet()
             }
@@ -492,12 +514,17 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
                     onR18Receipt = { _, _, receipt -> if (receipt.applyReturnUptimeMs != null)
                         receipts.add("${receipt.operation}:${receipt.submitStartUptimeMs}:${receipt.applyReturnUptimeMs}") },
                     onR18Drained = { _, _, _ -> drained.countDown() },
-                    onR19Observation = { if (it.stage == "R19_PAINT_ENTER") firstEntry.set(it.observedAtUptimeMs) })
+                    onR19Observation = {
+                        if (it.stage == "R19_PAINT_ENTER") firstEntry.set(it.observedAtUptimeMs)
+                        if (it.stage == "R20_FIRST_FRAME") r27First.set(it.firstFrame)
+                    })
                 presenter = producer
                 assertTrue(producer.prepareR18(21, 34, selected, size, size, full = true, emptyAwaitingDisclosure = true))
                 assertTrue(holder.stage(1, geometry))
             }
             assertTrue("actual virgin output was not allocated", allocated.await(20, TimeUnit.SECONDS))
+            if (expectWarm) assertTrue("exact virgin DIRECT program was not prepared", warmReady.await(20, TimeUnit.SECONDS))
+            if (forceCold) assertTrue("actual virgin asset load was not reached", warmLoadEntered.await(20, TimeUnit.SECONDS))
             assertTrue("measured host was not attached", hostReady.await(20, TimeUnit.SECONDS)); assertNull(error.get())
             val host = checkNotNull(hostView.get())
             val output = instrumentation.runOnMainValue { producer.r18AllocatedOutput(21, 34, true, size, size) as? KeyguardOrbDirectOutput }
@@ -515,6 +542,10 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
             val ticket = KeyguardR19FirstPaintTicket(21, 34, 201, 1, 1, selected.visualKey)
             instrumentation.runOnMainSync { assertTrue("normal R19 authorization rejected", producer.authorizeR19First(21, 34, selected, ticket)) }
             assertTrue("actual first post did not complete", firstPosted.await(20, TimeUnit.SECONDS)); assertNull(error.get())
+            if (forceCold) {
+                assertTrue("cold first-frame timing was not observed", r20Wait(5_000) { r27First.get() != null })
+                releaseWarmLoad.countDown()
+            }
             assertSame("first post must retain the allocated child", output,
                 instrumentation.runOnMainValue { producer.r18PreparedOutput(21, 34, selected, true, size, size) })
             // This panel deliberately supplies synthetic scene signals to the
@@ -620,6 +651,18 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
             }
             val moving = crop(host, motionScreen); motionScreen.recycle(); moving.save(File(runDir, "first-motion.png")); moving.recycle()
             fixture.writeText("scene=${if (r21) "synthetic-policy-recheck" else "r20-control"} ticket=201 attachment=21 generation=34 child=${childId.get()} firstEntry=${firstEntry.get()} firstPost=${firstPostAt.get()} posterCreated=${posterCount.get()} firstDraw=${drawMethod.get()} firstDrawCount=${firstDrawCount.get()} posts=${postCount.get()} samples=$samples\n")
+            if (expectWarm || forceCold) {
+                assertTrue("first-frame timing was not observed", r20Wait(5_000) { r27First.get() != null })
+                val first = checkNotNull(r27First.get())
+                if (expectWarm) {
+                    assertEquals("HIT", first.warmStatus)
+                    assertTrue("program constructor was not timed", first.warmConstructorNs > 0)
+                    assertEquals(listOf("WARM"), synchronized(programConstructors) { programConstructors.toList() })
+                } else {
+                    assertEquals("NO_READY", first.warmStatus)
+                    assertEquals(listOf("COLD"), synchronized(programConstructors) { programConstructors.toList() })
+                }
+            }
             assertEquals("ticketed first miss must make no intermediate bitmap", 0, posterCount.get())
             assertEquals("the actual first draw must use direct miss", "DIRECT_MISS", drawMethod.get())
             assertEquals("ticket must draw its first frame exactly once", 1, firstDrawCount.get())
@@ -648,10 +691,14 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
             }
         } finally {
             releaseGate.countDown()
+            releaseWarmLoad.countDown()
+            KeyguardOrbSurfaceWorkerTestHooks.beforeDirectArtifactLoad = null
             KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross = null
             KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = null
             KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = priorDispatcher
             heldAck.getAndSet(null)?.let { Handler(Looper.getMainLooper()).post(it) }
+            KeyguardOrbSurfaceWorkerTestHooks.afterDirectProgramWarm = null
+            KeyguardOrbSurfaceWorkerTestHooks.onDirectProgramConstructor = null
             KeyguardOrbSurfaceWorkerTestHooks.afterPosterCreated = null
             KeyguardOrbSurfaceWorkerTestHooks.afterFirstFrameDraw = null
             KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = null

@@ -22,12 +22,12 @@ class KeyguardOpeningInspectionHandoffTest {
         val gate = KeyguardOpeningInspectionHandoff()
         val token = Any()
         init { queue.offer(a); assertTrue(gate.arm(token, 5, a, authority, 7)); gate.readStarted(a, 10, 100) }
-        fun external(id: Long, scene: Long): KeyguardCardInspectionRequest {
+        fun external(id: Long, scene: Long, frameworkEvent: Boolean = false): KeyguardCardInspectionRequest {
             val r = KeyguardCardInspectionRequest(id, "window", 1, 2, 4, 5, 3, id,
                 r14Ingress = KeyguardR14Ingress(id, true, 10, 0, 32, id, id, KeyguardR14Origin.SYSTEM_UI))
             gate.externalInvalidation(scene, 110 + id)
             queue.offer(r)
-            gate.offered(r, queue.pendingRequest(), scene, scene)
+            gate.offered(r, queue.pendingRequest(), scene, scene, frameworkEvent)
             return r
         }
         fun claim(conditions: KeyguardOpeningInspectionHandoff.Conditions) =
@@ -87,6 +87,41 @@ class KeyguardOpeningInspectionHandoffTest {
             assertEquals(f.a, f.queue.activeRequest())
             assertEquals(b, f.queue.pendingRequest())
         }
+    }
+
+    @Test fun `incomplete transfer requires virgin owner and no retained proof`() {
+        val eligible = safe.copy(virginDirect = true, noRetainedProof = true)
+        val cases = listOf(eligible.copy(virginDirect = false), eligible.copy(noRetainedProof = false),
+            eligible.copy(noPaint = false), eligible.copy(grantNone = false),
+            eligible.copy(noVisibleOrShowing = false), eligible.copy(freshnessEstablished = false),
+            eligible.copy(noObservedDisqualifier = false), eligible.copy(workRemaining = false))
+        for (condition in cases) {
+            val f = Fixture(); val b = f.external(2, 11, frameworkEvent = true)
+            assertNull(f.gate.claim(f.queue, f.a, f.token, 7, 11, condition, "child", 120,
+                yieldReason = KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD))
+            assertEquals(f.a, f.queue.activeRequest()); assertEquals(b, f.queue.pendingRequest())
+        }
+    }
+
+    @Test fun `incomplete transfer requires genuine latest framework ingress and consumes shared allowance`() {
+        val eligible = safe.copy(virginDirect = true, noRetainedProof = true)
+        val synthetic = Fixture(); val pending = synthetic.external(2, 11, frameworkEvent = false)
+        assertNull(synthetic.gate.claim(synthetic.queue, synthetic.a, synthetic.token, 7, 11, eligible,
+            "child", 120, yieldReason = KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD))
+        assertEquals(pending, synthetic.queue.pendingRequest())
+        val rejected = checkNotNull(synthetic.gate.snapshot(synthetic.a.id))
+        assertEquals(1, rejected.incompleteChecks); assertEquals(0, rejected.incompleteEligible)
+        assertEquals(1, rejected.incompleteRejected); assertEquals("incompleteNotFramework", rejected.firstIncompleteRejection)
+        val f = Fixture(); val b = f.external(2, 11, frameworkEvent = true)
+        assertEquals(b, f.gate.claim(f.queue, f.a, f.token, 7, 11, eligible, "child", 120,
+            yieldReason = KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD))
+        val accepted = checkNotNull(f.gate.snapshot(f.a.id))
+        assertEquals(1, accepted.incompleteChecks); assertEquals(1, accepted.incompleteEligible)
+        assertEquals(1, accepted.incompleteYielded)
+        val c = f.external(3, 12, frameworkEvent = true)
+        assertNull(f.gate.claim(f.queue, b, f.token, 7, 12, eligible, "child", 121,
+            yieldReason = KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD))
+        assertEquals(c, f.queue.pendingRequest())
     }
 
     @Test fun `stale reservation route scene and completed A cannot transfer`() {

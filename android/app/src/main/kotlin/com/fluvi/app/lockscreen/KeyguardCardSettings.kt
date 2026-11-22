@@ -1049,7 +1049,9 @@ internal object KeyguardCardDiagnostics {
         if (event.reason == "R20_FIRST_FRAME") {
             event.requestId?.let { timeline.values.putIfAbsent("r20Ticket", it.toString()) }
             listOf("r20Method", "r20EntryNs", "r20PainterStartNs", "r20PainterEndNs", "r20ConfigureEndNs",
-                "r20LockBeginNs", "r20LockReturnNs", "r20DrawEndNs", "r20PostReturnNs", "r20Failure")
+                "r20LockBeginNs", "r20LockReturnNs", "r20DrawEndNs", "r20PostReturnNs", "r20Failure",
+                "r27WarmStatus", "r27WarmSelector", "r27WarmLoadNs", "r27WarmQueueNs",
+                "r27WarmConstructorNs", "r27WarmOverlap")
                 .forEach { retainField(it) }
         }
         if (event.reason.startsWith("R21_")) {
@@ -1200,7 +1202,8 @@ internal object KeyguardCardDiagnostics {
         listOf("r22Reservation", "r22AStart", "r22Scene", "r22IngressAt", "r22IngressScene",
             "r22FirstOffer", "r22FirstOfferAt", "r22LatestOffer", "r22LatestOfferAt", "r22Framework",
             "r22IngressId", "r22EventType", "r22Display", "r22EventAt", "r22Replaced", "r22Replacement", "r22Claimed", "r22ClaimAt", "r22AEnd", "r22Checkpoint", "r22CheckpointAt", "r22Visited",
-            "r22Roots", "r22Children", "r22Why", "r22Call", "r22CallBegin", "r22CallEnd").forEach { key ->
+            "r22Roots", "r22Children", "r22Why", "r22Call", "r22CallBegin", "r22CallEnd", "r27FirstIncomplete", "r27YieldReason",
+            "r27Checks", "r27Eligible", "r27Rejected", "r27Yielded", "r27FirstReject").forEach { key ->
             event.fields[key]?.takeIf { it != "UNOBSERVED" }?.let { values[key] = it }
         }
         when (event.reason) {
@@ -2457,6 +2460,17 @@ internal object KeyguardCardDiagnostics {
             appendLine("legacyWriteCount=${active.legacyWriteCount}")
             appendLine("checkpointCount=${active.checkpointCount}")
             appendLine("diagnosticDroppedRecords=${active.diagnosticDroppedRecords}")
+            val retainedAttempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
+            val openingRows = retainedAttempts.map { it.r22Opening }
+            val warmRows = retainedAttempts.flatMap { it.r18Generations.values }
+                .mapNotNull { it.values["r27WarmStatus"]?.takeUnless { value -> value == "UNOBSERVED" } }
+            fun sumOpening(key: String): Int = openingRows.sumOf { it[key]?.toIntOrNull() ?: 0 }
+            appendLine("R27_COUNTS scope=retained_attempts_only attempts=${retainedAttempts.size} " +
+                "observedOpenings=${openingRows.count { it["r27Checks"] != null }} checks=${sumOpening("r27Checks")} " +
+                "eligible=${sumOpening("r27Eligible")} rejected=${sumOpening("r27Rejected")} yielded=${sumOpening("r27Yielded")} " +
+                "observedWarm=${warmRows.size} warmHit=${warmRows.count { it == "HIT" }} " +
+                "noReady=${warmRows.count { it == "NO_READY" }} stale=${warmRows.count { it == "STALE" || it == "STALE_OR_BUSY" }} " +
+                "overlap=${retainedAttempts.flatMap { it.r18Generations.values }.count { it.values["r27WarmOverlap"] == "true" }}")
             appendLine("diagnosticQueueOverflow=${active.diagnosticQueueOverflow}")
             appendLine("diagnosticConsumerFailures=${active.diagnosticConsumerFailures}")
             appendLine("nativeDrawObservations=callbackAndCanvas flutterBuildRasterTiming=N/A")
@@ -2846,6 +2860,7 @@ internal object KeyguardCardDiagnostics {
         append(" owner=${d("r26ReservationId")}/${v(direct?.host)}/${v(direct?.output)}/${v(direct?.attachment)}")
         append(" accepted=${d("r26AcceptedRequest")}@${d("R19_PROOF_ACCEPTED")} paintTicket=${d("r20Ticket")}/${d("r20Method")}")
         append(" firstNs=${d("r20EntryNs")}/${d("r20PainterStartNs")}/${d("r20PainterEndNs")}/${d("r20ConfigureEndNs")}/${d("r20LockBeginNs")}/${d("r20LockReturnNs")}/${d("r20DrawEndNs")}/${d("r20PostReturnNs")}")
+        append(" warm=${d("r27WarmStatus")}/${d("r27WarmSelector")} warmNs=${d("r27WarmLoadNs")}/${d("r27WarmQueueNs")}/${d("r27WarmConstructorNs")} overlap=${d("r27WarmOverlap")}")
         append(" consumed=${d("r19ConsumedRequest")}@${d("R19_PROOF_CONSUMED")} showing=${v(showing)}/${v(show?.operationId)}")
         append(" reveal=${d("reveal:r18ApplyBegin")}/${d("reveal:r18ApplyEnd")}/${d("reveal:r18Commit")}/${d("reveal:r18LatchNs")}/${d("reveal:r18PresentNs")}/${d("reveal:r18PresentState")}")
         append(" seal=${d("SEALED")}/${d("SEALED_REASON")} sample=${d("r26SystemRequest")}/${d("r26SystemReason")}@${d("r26SystemReceived")}/${d("r26SystemStart")}/${d("r26SystemEnd")}")
@@ -2920,6 +2935,8 @@ internal object KeyguardCardDiagnostics {
         append(" replaced=${v("r22Replaced")}/${v("r22Replacement")}")
         append(" checkpoint=${v("r22Checkpoint")}@${v("r22CheckpointAt")} counts=${v("r22Visited")}/${v("r22Roots")}/${v("r22Children")}")
         append(" outcome=${v("aOutcome")}/${v("r22Why")} aEnd=${v("r22AEnd")} aResult=${v("a:r22Decision")}/${v("a:r22Reason")}/${v("a:r22Incomplete")}")
+        append(" r27v=1 incomplete=${v("r27FirstIncomplete")} yield=${v("r27YieldReason")}")
+        append(" checks=${v("r27Checks")}/${v("r27Eligible")}/${v("r27Rejected")}/${v("r27Yielded")} firstReject=${v("r27FirstReject")}")
         append(" aRoot=${e("a:r22AFirstRoot")} aFirst=${e("a:r22AFirstChild")} aInvalid=${e("a:r22AInvalid")}")
         append(" aCheckpoint=${e("a:r22ACheckpoint")} aDecisive=${e("a:r22ADecisive")}")
         append(" claimed=${v("r22Claimed")}@${v("r22ClaimAt")} b=${v("b:r22BStart")}/${v("b:r22BEnd")}/${v("b:r22Decision")}/${v("b:r22Reason")}/${v("b:r22Incomplete")}")

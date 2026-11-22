@@ -54,6 +54,8 @@ internal class KeyguardOpeningInspectionHandoff {
         val consumed: Boolean,
         val diagnosticContext: KeyguardDiagnosticContext?,
         val postClaim: PostClaimSnapshot?,
+        val incompleteChecks: Int, val incompleteEligible: Int, val incompleteRejected: Int,
+        val incompleteYielded: Int, val firstIncompleteRejection: String?,
     )
 
     data class Conditions(
@@ -67,6 +69,8 @@ internal class KeyguardOpeningInspectionHandoff {
         val freshnessEstablished: Boolean,
         val noObservedDisqualifier: Boolean,
         val workRemaining: Boolean,
+        val virginDirect: Boolean = false,
+        val noRetainedProof: Boolean = false,
     )
 
     private data class Hint(val requestId: Long, val ingressId: Long, val scene: Long)
@@ -121,6 +125,11 @@ internal class KeyguardOpeningInspectionHandoff {
         var consumed = false
         var invalidated = false
         var postClaim: PostClaim? = null
+        var incompleteChecks = 0
+        var incompleteEligible = 0
+        var incompleteRejected = 0
+        var incompleteYielded = 0
+        var firstIncompleteRejection: String? = null
     }
 
     private var current: Opportunity? = null
@@ -211,7 +220,8 @@ internal class KeyguardOpeningInspectionHandoff {
               currentToken: Any?, currentRouteRevision: Long, currentScene: Long,
               conditions: Conditions, checkpoint: String, at: Long,
               visited: Int = 0, roots: Int = 0, children: Int = 0,
-              observationCaptureId: String? = null): KeyguardCardInspectionRequest? {
+              observationCaptureId: String? = null,
+              yieldReason: KeyguardOpeningYieldReason = KeyguardOpeningYieldReason.CLEAN_OPENING): KeyguardCardInspectionRequest? {
         val op = current ?: return null
         // A late callback must not write a checkpoint into a newer owner,
         // even if local request IDs happen to match.
@@ -236,13 +246,32 @@ internal class KeyguardOpeningInspectionHandoff {
             !conditions.noObservedDisqualifier -> if (checkpoint == "beforeActiveRoot")
                 "rootIdentityUnverified" else "observedDisqualifier"
             !conditions.workRemaining -> "noRemainingWork"
+            yieldReason == KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD &&
+                (!conditions.virginDirect || !conditions.noRetainedProof) -> "incompleteNotVirgin"
+            yieldReason == KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD && op.latestFrameworkEvent != true -> "incompleteNotFramework"
             hint.scene <= requireNotNull(op.sceneAtRead) || hint.scene != currentScene -> "scene"
             next.id != hint.requestId || next.r14Ingress?.id != hint.ingressId -> "replaced"
             else -> null
         }
-        if (reason != null) { op.lastReason = reason; return null }
+        val incomplete = yieldReason == KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD
+        if (incomplete) op.incompleteChecks += 1
+        if (reason != null) {
+            if (incomplete) {
+                op.incompleteRejected += 1
+                if (op.firstIncompleteRejection == null) op.firstIncompleteRejection = reason
+            }
+            op.lastReason = reason; return null
+        }
+        if (incomplete) op.incompleteEligible += 1
         val successor = queue.handoffOpening(opening, requireNotNull(next))
-        if (successor == null) { op.lastReason = "queueChanged"; return null }
+        if (successor == null) {
+            if (incomplete) {
+                op.incompleteRejected += 1
+                if (op.firstIncompleteRejection == null) op.firstIncompleteRejection = "queueChanged"
+            }
+            op.lastReason = "queueChanged"; return null
+        }
+        if (incomplete) op.incompleteYielded += 1
         op.claimedId = successor.id
         claimedRequestId = successor.id
         val originalContext = op.opening.diagnosticContext
@@ -251,7 +280,8 @@ internal class KeyguardOpeningInspectionHandoff {
             op.postClaim = PostClaim(originalContext, successor.id, ++nextObservationOrdinal)
         }
         op.claimedAt = at
-        op.lastReason = "YIELDED"
+        op.lastReason = if (yieldReason == KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD)
+            "YIELDED_INCOMPLETE_NULL_CHILD" else "YIELDED"
         op.consumed = true
         op.hint = null
         hasHint = false
@@ -371,6 +401,7 @@ internal class KeyguardOpeningInspectionHandoff {
             it.latestIngressId, it.latestEventType, it.latestDisplay, it.latestEventAt,
             it.replacedId, it.replacementId, it.claimedId, it.claimedAt, it.completedAt, it.lastCheckpoint, it.lastCheckpointAt,
             it.checkpointVisited, it.checkpointRoots, it.checkpointChildren, it.lastReason, it.consumed,
-            it.opening.diagnosticContext, postClaimSnapshot(it))
+            it.opening.diagnosticContext, postClaimSnapshot(it), it.incompleteChecks, it.incompleteEligible,
+            it.incompleteRejected, it.incompleteYielded, it.firstIncompleteRejection)
     }
 }

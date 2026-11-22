@@ -42,9 +42,12 @@ class KeyguardR22ReaderHandoffTest {
         var childCalls = mutableListOf<Int>()
         var afterChild: ((Int) -> Unit)? = null
         var missingChild = false
+        var nullIndices = emptySet<Int>()
+        var exceptionIndices = emptySet<Int>()
         fun reset() {
             nodes.clear(); windows.clear(); inventory = emptyList(); activeRoot = null
             childCalls = mutableListOf(); afterChild = null; missingChild = false
+            nullIndices = emptySet(); exceptionIndices = emptySet()
         }
         fun node(id: String?, window: Int = 10, pkg: String = "com.android.systemui"): AccessibilityNodeInfo =
             Shadow.newInstanceOf(AccessibilityNodeInfo::class.java).also { nodes[it] = Node(id, window, pkg) }
@@ -83,8 +86,10 @@ class KeyguardR22ReaderHandoffTest {
         @Implementation fun getChild(index: Int, flags: Int): AccessibilityNodeInfo? = child(index)
         private fun child(index: Int): AccessibilityNodeInfo? {
             Platform.childCalls += index
-            val child = if (Platform.missingChild) null else checkNotNull(Platform.nodes[real]).children[index]
+            val child = if (Platform.missingChild || index in Platform.nullIndices) null
+                else checkNotNull(Platform.nodes[real]).children[index]
             Platform.afterChild?.invoke(index)
+            if (index in Platform.exceptionIndices) throw IllegalStateException("injected child acquisition failure")
             return child
         }
         @Implementation fun recycle() { checkNotNull(Platform.nodes[real]).recycled += 1 }
@@ -138,10 +143,11 @@ class KeyguardR22ReaderHandoffTest {
         fun request(wrongToken: Boolean = false): KeyguardWindowSnapshotReader.Request =
             KeyguardWindowSnapshotReader.Request(null, 5,
                 openingYieldHint = { gate.hasHint },
-                claimOpeningYield = { checkpoint, boundary, inventory, visited, roots, children ->
+                claimOpeningYield = { checkpoint, reason, boundary, inventory, visited, roots, children ->
                     gate.claim(queue, a, if (wrongToken) Any() else token, 9, scene,
-                        safe.copy(freshnessEstablished = boundary, noObservedDisqualifier = inventory),
-                        checkpoint, 21, visited, roots, children)?.also { claims += 1 }
+                        safe.copy(freshnessEstablished = boundary, noObservedDisqualifier = inventory,
+                            virginDirect = true, noRetainedProof = true),
+                        checkpoint, 21, visited, roots, children, yieldReason = reason)?.also { claims += 1 }
                 })
     }
 
@@ -229,7 +235,7 @@ class KeyguardR22ReaderHandoffTest {
         assertEquals(0, second.claims)
     }
 
-    @Test fun incompleteOriginalChildCannotYieldOrAuthorizeDespitePendingNewerRequest() {
+    @Test fun incompleteOriginalWithoutClaimCapabilityCannotYieldOrAuthorizeDespitePendingNewerRequest() {
         tree()
         val h = Handoff()
         Platform.missingChild = true
@@ -240,7 +246,7 @@ class KeyguardR22ReaderHandoffTest {
         }
         var eligible = 0
         val request = h.request().copy(captureOriginalOpeningEvidence = true,
-            openingEligibleCheckpoint = { _, _ -> eligible++ })
+            claimOpeningYield = null, openingEligibleCheckpoint = { _, _ -> eligible++ })
         val result = reader.read(request, { true })
         assertEquals("incomplete walk cannot expose an eligible checkpoint", 0, eligible)
         val evidence = requireNotNull(result.timing.originalOpening)
@@ -248,7 +254,7 @@ class KeyguardR22ReaderHandoffTest {
         assertEquals("NULL_CHILD", evidence.invalidKind)
         assertEquals(1, evidence.invalidOrdinal)
         assertEquals(0, evidence.invalidIndex)
-        assertEquals("SKIPPED_TRUNCATED", evidence.checkpointState)
+        assertEquals("NOT_INSTALLED", evidence.checkpointState)
         assertTrue("a missing advertised edge must remain incomplete", result.walkTruncated)
         assertTrue(result.timing.walkTruncationReasons.contains("NULL_CHILD"))
         assertNull("an incomplete original walk cannot claim B", result.yieldedTo)
@@ -259,6 +265,115 @@ class KeyguardR22ReaderHandoffTest {
             KeyguardSurfaceClassifier.classifyDetailed(result.snapshots,
                 unavailableRoot = result.rootUnavailable, walkTruncated = result.walkTruncated).surface)
         assertEquals(listOf(0, 1), Platform.childCalls)
+    }
+
+    @Test fun incompleteOriginalWithoutCapabilityStillReadsRemainingChild() {
+        val nodes = tree(); val h = Handoff()
+        Platform.missingChild = true
+        Platform.afterChild = { if (it == 0) { Platform.afterChild = null; h.offerB() } }
+        val result = reader.read(h.request().copy(openingYieldHint = null, claimOpeningYield = null,
+            captureOriginalOpeningEvidence = false), { true })
+        assertNull(result.yieldedTo)
+        assertTrue(result.walkTruncated)
+        assertEquals(listOf(0, 1), Platform.childCalls)
+        assertEquals(1, checkNotNull(Platform.nodes[nodes.first]).recycled)
+        assertEquals(h.a, h.queue.activeRequest()); assertEquals(h.b, h.queue.pendingRequest())
+        assertEquals(KeyguardSurface.UNKNOWN, KeyguardSurfaceClassifier.classifyDetailed(result.snapshots,
+            unavailableRoot = result.rootUnavailable, walkTruncated = result.walkTruncated).surface)
+    }
+
+    @Test fun throwingClaimCannotPromoteOrLoseIncompleteObservation() {
+        val nodes = tree(); val h = Handoff()
+        Platform.missingChild = true
+        Platform.afterChild = { if (it == 0) { Platform.afterChild = null; h.offerB() } }
+        val request = h.request().copy(claimOpeningYield = { _, _, _, _, _, _, _ ->
+            throw IllegalStateException("injected callback failure")
+        })
+        val result = reader.read(request, { true })
+        assertNull(result.yieldedTo)
+        assertTrue(result.walkTruncated)
+        assertEquals(listOf(0, 1), Platform.childCalls)
+        assertEquals(1, checkNotNull(Platform.nodes[nodes.first]).recycled)
+        assertEquals(h.a, h.queue.activeRequest())
+        assertEquals(h.b, h.queue.pendingRequest())
+        assertEquals(KeyguardSurface.UNKNOWN, KeyguardSurfaceClassifier.classifyDetailed(result.snapshots,
+            unavailableRoot = result.rootUnavailable, walkTruncated = result.walkTruncated).surface)
+    }
+
+    @Test fun incompleteWithoutNewerRequestOrRemainingWorkCannotYield() {
+        tree(); val h = Handoff(); Platform.missingChild = true
+        val noSuccessor = reader.read(h.request(), { true })
+        assertNull(noSuccessor.yieldedTo)
+        assertTrue(noSuccessor.walkTruncated)
+        assertEquals(listOf(0, 1), Platform.childCalls)
+        Platform.reset(); val nodes = tree(); checkNotNull(Platform.nodes[nodes.first]).children.removeAt(1)
+        val single = Handoff(); Platform.missingChild = true
+        Platform.afterChild = { if (it == 0) { Platform.afterChild = null; single.offerB() } }
+        val noWork = reader.read(single.request(), { true })
+        assertNull(noWork.yieldedTo)
+        assertTrue(noWork.walkTruncated)
+        assertEquals(listOf(0), Platform.childCalls)
+        assertEquals(single.b, single.queue.pendingRequest())
+    }
+
+    @Test fun incompleteWrongSystemRootAndChangedAuthorityCannotYield() {
+        val nodes = tree(); val original = checkNotNull(Platform.nodes[nodes.first])
+        Platform.nodes[nodes.first] = original.copy(pkg = "com.android.keyguard")
+        val wrongRoot = Handoff(); Platform.missingChild = true
+        Platform.afterChild = { if (it == 0) { Platform.afterChild = null; wrongRoot.offerB() } }
+        val wrong = reader.read(wrongRoot.request(), { true })
+        assertNull(wrong.yieldedTo); assertTrue(wrong.walkTruncated)
+        assertEquals(wrongRoot.a, wrongRoot.queue.activeRequest())
+        Platform.reset(); val nextNodes = tree(); val stale = Handoff(); var current = true
+        Platform.missingChild = true
+        Platform.afterChild = { if (it == 0) { Platform.afterChild = null; stale.offerB(); current = false } }
+        val aborted = reader.read(stale.request(), { current })
+        assertNull(aborted.yieldedTo); assertTrue(aborted.abortedStale)
+        assertEquals(1, checkNotNull(Platform.nodes[nextNodes.first]).recycled)
+        assertEquals(stale.a, stale.queue.activeRequest())
+    }
+
+    @Test fun incompleteExceptionOrMixedTruncationCannotBecomeNullChildTransfer() {
+        val nodes = tree(); checkNotNull(Platform.nodes[nodes.first]).children.add(Platform.node(mainMarker))
+        val h = Handoff(); Platform.missingChild = true; Platform.exceptionIndices = setOf(0)
+        Platform.afterChild = { if (it == 0) { Platform.afterChild = null; h.offerB() } }
+        val result = reader.read(h.request(), { true })
+        assertNull(result.yieldedTo); assertTrue(result.walkTruncated)
+        assertEquals(KeyguardWalkIncompleteReason.CHILD_ACQUISITION_EXCEPTION, result.firstIncompleteReason)
+        assertEquals(listOf(0, 1, 2), Platform.childCalls)
+        assertEquals(h.b, h.queue.pendingRequest())
+        assertEquals(KeyguardSurface.UNKNOWN, KeyguardSurfaceClassifier.classifyDetailed(result.snapshots,
+            unavailableRoot = result.rootUnavailable, walkTruncated = result.walkTruncated).surface)
+    }
+
+    @Test fun decisiveMarkerBeforeMissingChildAlwaysPreventsIncompleteTransfer() {
+        val nodes = tree(first = shadeMarker); checkNotNull(Platform.nodes[nodes.first]).children.add(Platform.node(mainMarker))
+        val h = Handoff(); Platform.nullIndices = setOf(1)
+        Platform.afterChild = { if (it == 1) { Platform.afterChild = null; h.offerB() } }
+        var decisive = 0
+        val result = reader.read(h.request().copy(onDecisiveSystemMarker = { decisive++ }), { true })
+        assertEquals(1, decisive); assertNull(result.yieldedTo); assertTrue(result.walkTruncated)
+        assertEquals(h.b, h.queue.pendingRequest()); assertEquals(listOf(0, 1, 2), Platform.childCalls)
+    }
+
+    @Test fun incompleteOriginalCanYieldOnlyToGenuineSuccessorBeforeNextChildWithoutCapture() {
+        val nodes = tree(); val h = Handoff()
+        Platform.missingChild = true
+        Platform.afterChild = { if (it == 0) { Platform.afterChild = null; h.offerB() } }
+        val result = reader.read(h.request().copy(captureOriginalOpeningEvidence = false), { true })
+        assertEquals("the pending real B must take over the one physical reader", h.b, result.yieldedTo)
+        assertTrue("the original partial walk remains incomplete", result.walkTruncated)
+        assertEquals(KeyguardWalkIncompleteReason.NULL_ADVERTISED_CHILD, result.firstIncompleteReason)
+        assertEquals(KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD, result.yieldReason)
+        assertTrue("partial A is never classified", result.snapshots.isEmpty())
+        assertEquals(listOf(0), Platform.childCalls)
+        assertEquals(1, checkNotNull(Platform.nodes[nodes.first]).recycled)
+        assertEquals(h.b, h.queue.activeRequest())
+        Platform.missingChild = false; Platform.childCalls.clear(); tree()
+        val fresh = reader.read(KeyguardWindowSnapshotReader.Request(null, 5), { true })
+        assertNull(fresh.yieldedTo); assertFalse(fresh.rootUnavailable); assertFalse(fresh.walkTruncated)
+        assertEquals(listOf(0, 1), Platform.childCalls)
+        assertEquals(KeyguardSurface.MAIN_KEYGUARD, KeyguardSurfaceClassifier.classify(fresh.snapshots))
     }
 
     @Test fun missingChildCannotProduceACompletePositive() {

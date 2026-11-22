@@ -175,6 +175,9 @@ internal object KeyguardWindowAcquisitionCalls {
  * checked against the window metadata captured for this inspection and falls
  * back to the established per-window path when that proof is unavailable.
  */
+internal enum class KeyguardOpeningYieldReason { CLEAN_OPENING, INCOMPLETE_NULL_CHILD }
+internal enum class KeyguardWalkIncompleteReason { NULL_ADVERTISED_CHILD, CHILD_ACQUISITION_EXCEPTION, NODE_LIMIT, NODE_ACCESS_EXCEPTION }
+
 internal class KeyguardWindowSnapshotReader(
     private val service: AccessibilityService,
     private val ownPackageName: String,
@@ -200,7 +203,7 @@ internal class KeyguardWindowSnapshotReader(
         /** Debug-only fixture notification at the existing safe checkpoint. */
         val openingEligibleCheckpoint: ((Int, Int) -> Unit)? = null,
         val captureOriginalOpeningEvidence: Boolean = false,
-        val claimOpeningYield: ((String, Boolean, Boolean, Int, Int, Int) -> KeyguardCardInspectionRequest?)? = null,
+        val claimOpeningYield: ((String, KeyguardOpeningYieldReason, Boolean, Boolean, Int, Int, Int) -> KeyguardCardInspectionRequest?)? = null,
     )
 
     /** One immutable, bounded original-A observation; never owns a node. */
@@ -250,6 +253,8 @@ internal class KeyguardWindowSnapshotReader(
         val ingressCallBegin: Long? = null,
         val ingressCallEnd: Long? = null,
         val originalOpening: OpeningEvidence? = null,
+        val firstIncompleteReason: KeyguardWalkIncompleteReason? = null,
+        val openingYieldReason: KeyguardOpeningYieldReason? = null,
     )
 
     data class Result(
@@ -263,6 +268,8 @@ internal class KeyguardWindowSnapshotReader(
         val abortedStale: Boolean = false,
         val nodeReadsAfterInvalidation: Int = 0,
         val yieldedTo: KeyguardCardInspectionRequest? = null,
+        val yieldReason: KeyguardOpeningYieldReason? = null,
+        val firstIncompleteReason: KeyguardWalkIncompleteReason? = null,
     )
 
     private data class VisibleIds(
@@ -272,9 +279,13 @@ internal class KeyguardWindowSnapshotReader(
         val aborted: Boolean,
         val readsAfterInvalidation: Int,
         val yieldedTo: KeyguardCardInspectionRequest?,
+        val yieldReason: KeyguardOpeningYieldReason?,
+        val firstIncompleteReason: KeyguardWalkIncompleteReason?,
     )
 
     private class Accumulator(private val getWindowsMs: Long, val captureOpening: Boolean) {
+        var firstIncompleteReason: KeyguardWalkIncompleteReason? = null
+        var openingYieldReason: KeyguardOpeningYieldReason? = null
         var openingRootWindow: Int? = null
         var openingRootStrategy: String? = null
         var openingRootFlags: Int? = null
@@ -407,6 +418,8 @@ internal class KeyguardWindowSnapshotReader(
                 invalidOrdinal, invalidDepth, invalidParent, invalidIndex, invalidKind, invalidException,
                 decisiveMarker, checkpointInstalled, checkpointState ?: if (openingRootWindow == null)
                     "NO_SYSTEM_ROOT" else "NO_POST_OFFER_BOUNDARY_OBSERVED", checkpointWindow, checkpointIndex) else null,
+            firstIncompleteReason = firstIncompleteReason,
+            openingYieldReason = openingYieldReason,
         )
     }
 
@@ -503,19 +516,22 @@ internal class KeyguardWindowSnapshotReader(
                 canBatch, metadata, observedOwn, request.attachGeneration, activeCandidate,
             ).also { openingInventory = it }
         }
-        fun maybeYield(checkpoint: String, safe: Boolean, visited: Int): KeyguardCardInspectionRequest? {
+        fun maybeYield(checkpoint: String, reason: KeyguardOpeningYieldReason, safe: Boolean, visited: Int): KeyguardCardInspectionRequest? {
             if (request.openingYieldHint?.invoke() != true) return null
-            return request.claimOpeningYield?.invoke(checkpoint, freshnessBoundaryEstablished, safe, visited,
-                timing.rootCount + timing.activeRootCount, timing.childCount)
+            return runCatching {
+                request.claimOpeningYield?.invoke(checkpoint, reason, freshnessBoundaryEstablished, safe, visited,
+                    timing.rootCount + timing.activeRootCount, timing.childCount)
+            }.getOrNull()
         }
         // A TYPE_SYSTEM inventory entry does not identify its package. Before
         // the root is returned, a foreign system window is still unresolved;
         // report the checkpoint but keep the ordinary read in that case.
         val beforeRoot = if (request.openingYieldHint?.invoke() == true)
-            maybeYield("beforeActiveRoot", false, 0) else null
+            maybeYield("beforeActiveRoot", KeyguardOpeningYieldReason.CLEAN_OPENING, false, 0) else null
         if (beforeRoot != null) return Result(emptyList(), false, false, windowsReadMs,
             SystemClock.uptimeMillis() - treeStartedAt, 0,
-            timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), yieldedTo = beforeRoot)
+            timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), yieldedTo = beforeRoot,
+            yieldReason = KeyguardOpeningYieldReason.CLEAN_OPENING)
 
         if (canBatch && authorityIsCurrent()) {
             val candidate = requireNotNull(activeCandidate)
@@ -632,7 +648,7 @@ internal class KeyguardWindowSnapshotReader(
             }
             val own = !request.strictOwnAttribution && rootPackage == ownPackageName &&
                 window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
-            val visible = if (rootPackage in SYSTEM_PACKAGES && root != null) {
+            val visible = try { if (rootPackage in SYSTEM_PACKAGES && root != null) {
                 val installed = request.openingYieldHint != null && request.claimOpeningYield != null &&
                     canBatch && timing.activeRootAccepted && !unavailableRoot && !walkTruncated &&
                     !timing.ownAttributionAmbiguous
@@ -655,21 +671,29 @@ internal class KeyguardWindowSnapshotReader(
                     if (request.openingFirstIngressUptime != null) ::observeIngressCall else null,
                     request.openingChildBefore, request.openingChildReturned,
                     request.openingEligibleCheckpoint, request.openingYieldHint,
-                    if (installed) { kind, count ->
-                        if (request.openingYieldHint?.invoke() == true)
-                            maybeYield(kind, cleanOpeningInventory(), visited + count) else null
+                    if (installed) { kind, reason, count ->
+                        if (request.openingYieldHint?.invoke() == true) {
+                            val exactSystemRoot = reason != KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD ||
+                                (rootPackage == "com.android.systemui" && window.id == activeWindowId &&
+                                    (!request.strictOwnAttribution || request.knownOwnAtInventory?.invoke() == observedOwn))
+                            maybeYield(kind, reason, exactSystemRoot && cleanOpeningInventory(), visited + count)
+                        } else null
                     } else null).also {
+                    if (timing.firstIncompleteReason == null) timing.firstIncompleteReason = it.firstIncompleteReason
+                    if (it.yieldReason != null) timing.openingYieldReason = it.yieldReason
                     walkTruncated = walkTruncated || it.truncated
                     visited += it.visited
                     readsAfterInvalidation += it.readsAfterInvalidation
                 }
-            } else null
-            root?.recycle()
+            } else null } finally {
+                root?.recycle()
+            }
             if (visible?.yieldedTo != null) {
                 activeRoot?.recycle()
                 return Result(emptyList(), unavailableRoot, walkTruncated, windowsReadMs,
                     SystemClock.uptimeMillis() - treeStartedAt, visited,
-                    timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), yieldedTo = visible.yieldedTo)
+                    timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), yieldedTo = visible.yieldedTo,
+                    yieldReason = visible.yieldReason, firstIncompleteReason = timing.firstIncompleteReason)
             }
             if (visible?.aborted == true) return Result(snapshots, unavailableRoot, walkTruncated, windowsReadMs,
                 SystemClock.uptimeMillis() - treeStartedAt, visited,
@@ -681,7 +705,8 @@ internal class KeyguardWindowSnapshotReader(
         }
         activeRoot?.recycle()
         val treeElapsed = SystemClock.uptimeMillis() - treeStartedAt
-        return Result(snapshots, unavailableRoot, walkTruncated, windowsReadMs, treeElapsed, visited, timing.snapshot(treeElapsed), false, readsAfterInvalidation)
+        return Result(snapshots, unavailableRoot, walkTruncated, windowsReadMs, treeElapsed, visited,
+            timing.snapshot(treeElapsed), false, readsAfterInvalidation, firstIncompleteReason = timing.firstIncompleteReason)
     }
 
     private fun visibleIds(
@@ -696,7 +721,7 @@ internal class KeyguardWindowSnapshotReader(
         openingChildReturned: ((Int, Int, Boolean) -> Unit)?,
         openingEligibleCheckpoint: ((Int, Int) -> Unit)?,
         openingYieldHint: (() -> Boolean)?,
-        tryOpeningYield: ((String, Int) -> KeyguardCardInspectionRequest?)?,
+        tryOpeningYield: ((String, KeyguardOpeningYieldReason, Int) -> KeyguardCardInspectionRequest?)?,
     ): VisibleIds {
         val ids = linkedSetOf<String>()
         var decisiveReported = false
@@ -712,12 +737,20 @@ internal class KeyguardWindowSnapshotReader(
         var truncated = false
         var aborted = false
         var yieldedTo: KeyguardCardInspectionRequest? = null
+        var yieldReason: KeyguardOpeningYieldReason? = null
+        var firstIncompleteReason: KeyguardWalkIncompleteReason? = null
+        var mixedIncomplete = false
+        fun incomplete(reason: KeyguardWalkIncompleteReason) {
+            if (firstIncompleteReason == null) firstIncompleteReason = reason
+            else if (firstIncompleteReason != reason) mixedIncomplete = true
+        }
         var readsAfterInvalidation = 0
         fun visit(node: AccessibilityNodeInfo?, depth: Int, parentOrdinal: Int) {
             if (node == null || aborted || yieldedTo != null) return
             if (!authorityIsCurrent()) { aborted = true; return }
             if (visited >= MAX_VISITED_NODES) {
                 truncated = true
+                incomplete(KeyguardWalkIncompleteReason.NODE_LIMIT)
                 timing.truncationReasons += "NODE_LIMIT"
                 timing.invalid("NODE_LIMIT", timing.childCount, depth, parentOrdinal, null)
                 return
@@ -733,7 +766,13 @@ internal class KeyguardWindowSnapshotReader(
                     // The returned node and its exclusion markers were
                     // consumed above. No callback runs while holding a node
                     // owner lock; unwinding below recycles each owned child.
-                    if (!truncated && !decisiveReported && tryOpeningYield != null) {
+                    val eligibleReason = when {
+                        !truncated -> KeyguardOpeningYieldReason.CLEAN_OPENING
+                        !mixedIncomplete && firstIncompleteReason == KeyguardWalkIncompleteReason.NULL_ADVERTISED_CHILD ->
+                            KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD
+                        else -> null
+                    }
+                    if (eligibleReason != null && !decisiveReported && tryOpeningYield != null) {
                         // The previously returned node's own marker was read
                         // before this test-only boundary; no queue lock is held.
                         if (visited > 1 && openingEligibleCheckpoint != null)
@@ -743,8 +782,8 @@ internal class KeyguardWindowSnapshotReader(
                             timing.checkpointWindow = windowId
                             timing.checkpointIndex = index
                         }
-                        yieldedTo = tryOpeningYield("beforeChild", visited)
-                        if (yieldedTo != null) return
+                        yieldedTo = tryOpeningYield("beforeChild", eligibleReason, visited)
+                        if (yieldedTo != null) { yieldReason = eligibleReason; return }
                     } else if (timing.captureOpening && timing.checkpointState == null && openingYieldHint?.invoke() == true) {
                         timing.checkpointState = if (truncated) "SKIPPED_TRUNCATED" else if (decisiveReported)
                             "SKIPPED_DECISIVE" else "NOT_INSTALLED"
@@ -789,17 +828,23 @@ internal class KeyguardWindowSnapshotReader(
                     if (child == null) {
                         truncated = true
                         val kind = if (acquisition.isFailure) "CHILD_ACQUISITION_EXCEPTION" else "NULL_CHILD"
+                        incomplete(if (acquisition.isFailure) KeyguardWalkIncompleteReason.CHILD_ACQUISITION_EXCEPTION
+                            else KeyguardWalkIncompleteReason.NULL_ADVERTISED_CHILD)
                         timing.truncationReasons += kind
                         timing.invalid(kind, timing.childCount, depth + 1, nodeOrdinal, index, acquisition.exceptionOrNull())
                     }
-                    visit(child, depth + 1, nodeOrdinal)
-                    child?.recycle()
+                    try {
+                        visit(child, depth + 1, nodeOrdinal)
+                    } finally {
+                        child?.recycle()
+                    }
                     if (aborted || yieldedTo != null) return
                 }
             } catch (error: Exception) {
                 // An incomplete SystemUI tree must remain UNKNOWN, never a
                 // partial positive proof of the keyguard.
                 truncated = true
+                incomplete(KeyguardWalkIncompleteReason.NODE_ACCESS_EXCEPTION)
                 timing.truncationReasons += "NODE_ACCESS_EXCEPTION"
                 timing.invalid("NODE_ACCESS_EXCEPTION", timing.childCount, depth, parentOrdinal, null, error)
             }
@@ -810,7 +855,7 @@ internal class KeyguardWindowSnapshotReader(
                 "END_DECISIVE" else "END_NO_CHECKPOINT"
             timing.checkpointWindow = windowId
         }
-        return VisibleIds(ids, truncated, visited, aborted, readsAfterInvalidation, yieldedTo)
+        return VisibleIds(ids, truncated, visited, aborted, readsAfterInvalidation, yieldedTo, yieldReason, firstIncompleteReason)
     }
 
     private fun isExactKnownOwn(window: AccessibilityWindowInfo, request: Request): Boolean {

@@ -53,6 +53,9 @@ internal fun configureKeyguardStaticOrbPaint(paint: Paint, profile: KeyguardMate
     }
 }
 
+internal fun KeyguardMaterialProfile.usesStaticOrbGradient(): Boolean =
+    effectId == "staticEffect" && !background.enabled && !interior.enabled
+
 /** Worker-owned mutable shader/paint state. The same configured painter is
  * used to record the first picture and to draw subsequent hardware frames. */
 internal class KeyguardOrbSurfacePainter(
@@ -60,10 +63,11 @@ internal class KeyguardOrbSurfacePainter(
     val profile: KeyguardMaterialProfile,
     private val width: Int,
     private val height: Int,
+    preparedShader: KeyguardHeaderShader? = null,
 ) {
-    private val staticGradient = profile.effectId == "staticEffect" &&
-        !profile.background.enabled && !profile.interior.enabled
-    private val shader = if (staticGradient) null else KeyguardHeaderShader(context, profile.effectId, profile.usesPortal)
+    private val staticGradient = profile.usesStaticOrbGradient()
+    private val shader = if (staticGradient) null else preparedShader ?:
+        KeyguardHeaderShader(context, profile.effectId, profile.usesPortal)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     init {

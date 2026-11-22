@@ -60,6 +60,8 @@ internal class KeyguardShaderArtifactStore(
     @Volatile private var closed = false
     private var loadCount = 0
     private var metadataParseCount = 0
+    private var inFlightLoads = 0
+    private var retiredSettled: (() -> Unit)? = null
 
     fun prepare(effectId: String, usesPortal: Boolean, callback: (Result<KeyguardShaderArtifact>) -> Unit) {
         val key = "$effectId|$usesPortal"
@@ -68,20 +70,36 @@ internal class KeyguardShaderArtifactStore(
             artifacts[key]?.also { return@synchronized Result.success(it) }
             callbacks.getOrPut(key) { mutableListOf() }.add(callback)
             if (callbacks[key]?.size == 1) {
-                executor.execute {
-                    val result = runCatching {
-                        val artifact = reader.load(context, effectId, usesPortal)
-                        synchronized(lock) {
-                            loadCount += 1
-                            metadataParseCount += 1
-                            artifacts[key] = artifact
+                inFlightLoads += 1
+                try {
+                    executor.execute {
+                        val result = runCatching {
+                            check(!closed) { "store disposed" }
+                            val artifact = reader.load(context, effectId, usesPortal)
+                            synchronized(lock) {
+                                loadCount += 1
+                                metadataParseCount += 1
+                                if (!closed) artifacts[key] = artifact
+                            }
+                            artifact
                         }
-                        artifact
+                        val (pending, settled) = synchronized(lock) {
+                            val pending = callbacks.remove(key).orEmpty()
+                            inFlightLoads -= 1
+                            val settled = if (closed && inFlightLoads == 0) retiredSettled.also {
+                                retiredSettled = null
+                            } else null
+                            pending to settled
+                        }
+                        mainHandler.post {
+                            if (!closed) pending.forEach { it(result) }
+                            settled?.invoke()
+                        }
                     }
-                    val pending = synchronized(lock) { callbacks.remove(key).orEmpty() }
-                    mainHandler.post {
-                        if (!closed) pending.forEach { it(result) }
-                    }
+                } catch (failure: Throwable) {
+                    inFlightLoads -= 1
+                    callbacks.remove(key)
+                    throw failure
                 }
             }
             null
@@ -91,6 +109,24 @@ internal class KeyguardShaderArtifactStore(
 
     fun diagnostics(): KeyguardShaderArtifactStoreDiagnostics = synchronized(lock) {
         KeyguardShaderArtifactStoreDiagnostics(loadCount, metadataParseCount, artifacts.size, callbacks.size)
+    }
+
+    /** Revoke immediately, while retaining one completion notification until
+     * the running read exits. The next owner must not start a second read
+     * while an uncancellable asset call is still in flight. */
+    fun retireWhenSettled(onSettled: () -> Unit) {
+        val settledNow = synchronized(lock) {
+            closed = true
+            callbacks.clear()
+            artifacts.clear()
+            if (inFlightLoads == 0) true else {
+                retiredSettled = onSettled
+                false
+            }
+        }
+        // A queued task must run far enough to observe closed and signal drain.
+        executor.shutdown()
+        if (settledNow) mainHandler.post(onSettled)
     }
 
     fun dispose() {

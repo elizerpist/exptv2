@@ -50,7 +50,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                     }
                     edge("WAKE_ADOPTED", base + 1)
                     edge("R19_PROOF_ACCEPTED", base + 2)
-                    edge("R20_FIRST_FRAME", base + 3, mapOf("r20Method" to "DIRECT_MISS", "r20EntryNs" to 1001))
+                    edge("R20_FIRST_FRAME", base + 3, mapOf("r20Method" to "DIRECT_MISS", "r20EntryNs" to 1001,
+                        "r27WarmStatus" to "HIT", "r27WarmSelector" to "dualTide_plain", "r27WarmLoadNs" to 100,
+                        "r27WarmQueueNs" to 200, "r27WarmConstructorNs" to 300, "r27WarmOverlap" to false))
                     edge("R19_PROOF_CONSUMED", base + 4)
                     edge("REVEAL_RECEIPT", base + 6, mapOf("r18ApplyBegin" to base + 5,
                         "r18ApplyEnd" to base + 6, "r18Commit" to base + 7))
@@ -87,6 +89,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                     val row = rows.single { it.contains("attempt=$wake ") }
                     assertTrue(row, row.contains("owner=${wake + 500}/${wake + 100}/${wake + 200}/${wake + 100}"))
                     assertTrue(row, row.contains("accepted=${base + 7}@${base + 2}"))
+                    assertTrue(row, row.contains("warm=HIT/dualTide_plain warmNs=100/200/300 overlap=false"))
                     assertTrue(row, row.contains("consumed=${base + 7}@${base + 4} showing=${base + 7}/"))
                     assertTrue(row, row.contains("localRemove=${base + 12}/${base + 13}"))
                     assertTrue(row, row.contains(if (wake == 6L) "sample=UNOBSERVED/UNOBSERVED@" else
@@ -473,13 +476,15 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             KeyguardCardDiagnostics.captureEvent(context, "R22_ACQUISITION", "YIELDED",
                 diagnosticContext = owner, requestId = 301, observedUptimeMs = 1451,
                 fields = mapOf("r22Opening" to 301, "r22Reservation" to 23,
-                    "r22Claimed" to 333, "r22Why" to "YIELDED"))
+                    "r22Claimed" to 333, "r22Why" to "YIELDED",
+                    "r27FirstIncomplete" to "NULL_ADVERTISED_CHILD", "r27YieldReason" to "INCOMPLETE_NULL_CHILD"))
             KeyguardCardDiagnostics.captureEvent(context, "R22_ACQUISITION", "PROOF_ACCEPTED",
                 diagnosticContext = owner, observedUptimeMs = 1452,
                 fields = mapOf("r22Reservation" to 23, "r22Positive" to 333, "r22Reject" to "ACCEPTED"))
             val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
             val row = report.lineSequence().single { it.startsWith(" R22_CORE ") }
             assertTrue(row, row.contains("opening=301/23"))
+            assertTrue(row, row.contains("r27v=1 incomplete=NULL_ADVERTISED_CHILD yield=INCOMPLETE_NULL_CHILD"))
             assertTrue(row, row.contains("positive=333@1452/ACCEPTED"))
             assertTrue(row, row.contains("consumed=333"))
             assertTrue(row, row.contains("apply=1401"))

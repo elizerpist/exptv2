@@ -1,6 +1,7 @@
 package com.fluvi.app.lockscreen.material
 
 import android.annotation.TargetApi
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -15,6 +16,7 @@ import java.util.concurrent.atomic.AtomicReference
  * allowed: its caller must supply the exact current grant at submission. */
 @TargetApi(35)
 internal class KeyguardOrbR18Presenter(
+    private val context: Context,
     private val worker: KeyguardOrbSurfaceWorker,
     private val captureActive: () -> Boolean,
     private val onPrepared: (Long, Long, Long) -> Unit,
@@ -39,6 +41,8 @@ internal class KeyguardOrbR18Presenter(
     private val serial = AtomicLong()
     private val owner = AtomicReference<Owner?>()
     private val requestedOwner = AtomicReference<Pair<Long, Long>?>()
+    // Main-owned; only created for virgin animated DIRECT outputs.
+    @Volatile private var warmup: KeyguardOrbDirectProgramWarmup? = null
     private val lane: KeyguardOrbPresentationLane = KeyguardOrbPresentationLane(
         captureActive = captureActive,
         onFailure = { output, reason ->
@@ -92,6 +96,7 @@ internal class KeyguardOrbR18Presenter(
         seal()
         val ticket = serial.incrementAndGet()
         requestedOwner.set(attachment to generation)
+        val warmSelector = if (emptyAwaitingDisclosure) KeyguardOrbProgramSelector.forProfile(profile) else null
         worker.prepareHiddenDirect(attachment, generation, width, height, densityDpi,
             if (emptyAwaitingDisclosure) null else profile, full, lane,
             stillCurrent = { serial.get() == ticket },
@@ -102,8 +107,15 @@ internal class KeyguardOrbR18Presenter(
                     target.directOutput?.let(lane::retire)
                 } else {
                     main.post {
-                        if (owner.get() === next && !target.revoked)
+                        if (owner.get() === next && !target.revoked) {
                             onAllocated(attachment, generation, next.preparedAt)
+                            if (warmSelector != null && owner.get() === next && !target.revoked) {
+                                val preparation = warmup ?: KeyguardOrbDirectProgramWarmup(context, worker::prewarmDirect).also { warmup = it }
+                                preparation.request(target, warmSelector) {
+                                    owner.get() === next && serial.get() == ticket && !target.revoked
+                                }
+                            }
+                        }
                     }
                 }
             },
@@ -190,10 +202,12 @@ internal class KeyguardOrbR18Presenter(
         host.getLocationInSurface(location)
         val transaction = runCatching { parent.buildReparentTransaction(output.child) }.getOrNull()
         if (transaction == null) { done(false); return }
+        current.target.blankBindPending.set(true)
         lane.bind(output, transaction, location[0].toFloat(), location[1].toFloat(),
             current.target.width, current.target.height,
             stillCurrent = { owner.get() === current && !current.target.revoked },
             completed = { success ->
+                current.target.blankBindPending.set(false)
                 if (success && owner.get() === current && !current.target.revoked) current.bound.set(true)
                 main.post { done(success && owner.get() === current && !current.target.revoked) }
             },
@@ -255,6 +269,7 @@ internal class KeyguardOrbR18Presenter(
             if (requested?.first == current.attachment && requested.second == current.generation)
                 requestedOwner.compareAndSet(requested, null)
             serial.incrementAndGet()
+            warmup?.retire(current.target)
             worker.revoke(current.target, discardFull = true)
             current.target.directOutput?.let(lane::retire)
             return
@@ -264,6 +279,8 @@ internal class KeyguardOrbR18Presenter(
     fun dispose() {
         checkMain()
         seal()
+        warmup?.dispose()
+        warmup = null
         lane.closeWhenDrained()
     }
 
