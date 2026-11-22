@@ -1,18 +1,17 @@
 {
   "schema_version": 1,
-  "source_head": "ad1eac09442cb8d78a992874d22157fe6bd5a05f",
-  "base_head": "f09da8647c78964e46bce604e5889355e86eef49",
+  "source_head": "9c1647573f3b0da6506d6e36dd98efdb11fb64ac",
+  "base_head": "ad1eac09442cb8d78a992874d22157fe6bd5a05f",
   "changed_files": [
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
-    "android/app/src/debug/kotlin/com/fluvi/app/lockscreen/KeyguardR224RestrictionTestHooks.kt",
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR25ServiceInstrumentationTest.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardInspectionQueue.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
-    "android/app/src/profile/kotlin/com/fluvi/app/lockscreen/KeyguardR224RestrictionTestHooks.kt",
-    "android/app/src/release/kotlin/com/fluvi/app/lockscreen/KeyguardR224RestrictionTestHooks.kt"
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrb.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardOpeningPublication.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbTest.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardOpeningPublicationTest.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
