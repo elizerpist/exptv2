@@ -17136,3 +17136,90 @@ First line: independently verified public R29 producer APK download. Next identi
 Source delivery requires working publisher implementation, reproducible actual AOSP SystemUI patch, focused tests, updated graph and verified public owner APK. System integration success additionally requires compiling and booting the patched system, current ORB in the first eligible clock composition and absence on the first restrictive composition, tested with the app process absent. The 10 ms physical verdict requires optical evidence with uncertainty for each endpoint on physical hardware. These are three independently graded outcomes. Existing normal-APK support across manufacturers provides no universal same-frame or physical deadline guarantee. PHYSICAL VALIDATION — PENDING, USER ONLY.
 
 FLUVI_R29_RESIDENT_SYSTEMUI_ORB_END
+
+## 2026-11-22 — R29 incomplete implementation checkpoint and review-only APK
+
+This is a **partial implementation**, not completion of the R29 handoff. The
+phone-tested R27 `ebe3568f8cca34c0d3ac0942b989f8a117daaf90` remains physically
+rejected for slower appearance and withdrawal. No R29 same-frame or optical
+result exists. The app-side publisher is not connected to real profile, data,
+settings or layout events; exclusive old-owner suppression/drain and the
+final DIRECT gate are not integrated. The Android 16 SystemUI scene, restrictive
+transition latch, empty-frame acknowledgement and real cross-process lifecycle
+are also not integrated. Therefore no first eligible frame, first restricted
+frame, stopped-app behavior, privacy result or 10 ms verdict is claimed.
+
+- Application WIP branch `implement/r29-resident-systemui`, commit
+  `5bb91aed3ab1a2e7ce4c6114d069a4d13fd21595`, parent `ebe3568f8cca34c0d3ac0942b989f8a117daaf90`.
+  It contains a bounded typed descriptor, validation/reducer/ownership tests,
+  visual-only material mapper and freshness-evidence builder, unaffiliated
+  Binder client, SystemUI service/store/renderer source, and deterministic
+  canonical renderer staging. The default stock display path is unchanged.
+- The **incomplete** host bootstrap patch
+  `platform/aosp16/patches/0001-r29-host-bootstrap-WIP.patch` SHA-256
+  `d11979969378a3dee98666fd3237b623ee3bf5acd2757db70212f0c7c7766a15`
+  passed `git apply --check` and the WIP staging script applied to a clean
+  sparse checkout of exact AOSP `frameworks/base`
+  `99b01a65cc4c104933788b3143285ab6bae65827`. It adds service/asset bootstrap
+  only, not the required lockscreen composition. Extracted renderer and host
+  source compiled against Android API 35; that is not a Soong/SystemUI build.
+  Renderer source staging verified 18 effects × 2 variants; two staging
+  controls and two offline host policy tests passed. Renderer manifest SHA-256
+  `cc6ff3193ea868b30853bee64d759622dd54f6860251b90ff35ef4d77cd41336`.
+- The review-only signed HUMAN_DIAGNOSTIC profile APK from that exact WIP source
+  is [directly downloadable](https://media.githubusercontent.com/media/elizerpist/exptv2/df182f34cc453c8828375a73398e523860265a5e/fluvi_R29_WIP_REVIEW_5bb91aed3ab1.apk).
+  The independently anonymous full GET returned HTTP 200, 120789303 bytes,
+  SHA-256 `256d31d1fb07691e6696966d688082c44b2cd262075589b0fb7cda7f3770eb3a`;
+  ZIP, alignment, source/purpose markers in three AOT ABIs and native WIP
+  markers passed. Package `com.fluvi.app`, versionCode 1, v2/v3 signing
+  certificate SHA-256 `faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`.
+  All 471 non-signature payload entries matched the runner APK. Builder
+  [45076399107](https://github.com/elizerpist/exptv2/actions/runs/45076399107)
+  passed. This binary is **not** an integrated or phone-acceptance candidate.
+- The private API35 update check
+  [45077510333](https://github.com/elizerpist/pushparserv2/actions/runs/45077510333),
+  job 137377940024, artifact 14776002022, installed R27 then this exact WIP APK
+  without uninstall and preserved a demo-data sentinel. This proves the tested
+  update path only, not phone pixels or R29 functionality.
+- Local JVM: first full run **FAIL 35/326**, with all 35 failures due to
+  `No space left on device` while extracting Robolectric/Conscrypt native
+  libraries into `/dev/shm`. Its XML was retained. One retry using a separate
+  temporary directory **PASS 326/326**. Targeted R29/protected Kotlin tests and
+  `compileDebugAndroidTestKotlin` passed after correction of the Android JUnit
+  `assertThrows` mismatch; a separate test compile failed when a source file
+  was modified during compilation, then passed on a stable source state. Host
+  source compile first failed on an Android-SDK-hidden `ACTION_USER_SWITCHED`
+  constant; its value was checked against the pinned AOSP Intent.java and the
+  SDK compile retry passed. These are retained failures, not behavioral REDs.
+- Full Flutter **FAIL: 2777 passed, 115 failed, 3 skipped**. All 115 failing
+  test names match the saved R27 full run; there are no tracked Dart, Flutter
+  test or pubspec changes from R27 to this checkpoint. This match does not
+  establish the root cause of each failure. The isolated first attempt was
+  interrupted for disk pressure and a first retry failed because its sandbox
+  temp directory did not exist; the corrected separate-temp run produced the
+  stated result. Three delivery/dashboard boundary files passed 12/12; the
+  lower-environment offline wrapper passed.
+- Private raw logs and 128 golden failure images are in private evidence commit
+  [`5ef126811458a978c5f4c97d88236dbae006f6c4`](https://github.com/elizerpist/pushparserv2/tree/5ef126811458a978c5f4c97d88236dbae006f6c4),
+  archive SHA-256 `9f489066179763d950e437d967d94d438b4a64c156277b3622beed004133010e`,
+  independently retrieved and checked. Raw screenshots are not in the public
+  artifact branch. Private API35 changed-path run
+  [45076752427](https://github.com/elizerpist/pushparserv2/actions/runs/45076752427)
+  was in progress when this entry was made; it includes the three R29 Parcel
+  tests and original R27 controls and cannot test patched Android 16 SystemUI.
+- WIP exact-source graph commit `f0834d6abe278298a05d8a8720ca1501316156ba`,
+  [manifest](https://github.com/elizerpist/exptv2/blob/f0834d6abe278298a05d8a8720ca1501316156ba/docs/codegraph/manifest.json)
+  SHA-256 `284a6909d45cbe05813a63d197b26135912457c301e56fa1ff3704ed7a6152c3`,
+  source `5bb91aed3ab1a2e7ce4c6114d069a4d13fd21595`; SCIP-Dart 1.6.2,
+  808 documents, 20269 repository symbols. Graph run
+  [45076570895](https://github.com/elizerpist/exptv2/actions/runs/45076570895)
+  passed. Kotlin/AOSP edges are manual source inventory, not SCIP coverage.
+- Full AOSP SystemUI build/boot, real composed-image controls, app-stopped
+  transitions, all three optical endpoints and formal ordinary/five native
+  scopes for a **completed** candidate remain NOT RUN. The local machine has
+  no KVM or Android device and lacks the approximately 400 GB free disk and
+  64 GB RAM specified for a full AOSP tree; the Actions runner inventory query
+  returned HTTP 403, so no authorized full-platform builder was established.
+  This does not excuse the remaining source implementation. The R22.4 privacy
+  FAIL and R27 shade/ordering limitations remain open. PHYSICAL VALIDATION —
+  PENDING, USER ONLY.
