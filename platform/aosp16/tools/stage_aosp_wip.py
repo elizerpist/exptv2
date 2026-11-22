@@ -72,13 +72,13 @@ def run(base, assets, apply, allow_incomplete):
             for src, dest in entries:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 with src.open("rb") as input_file, dest.open("xb") as output_file:
+                    created.append(dest)
                     shutil.copyfileobj(input_file, output_file)
-                created.append(dest)
             receipt_path = base / "packages/SystemUI/fluvi_r29/provenance.json"
             with receipt_path.open("x") as file:
+                created.append(receipt_path)
                 json.dump(receipt, file, indent=2, sort_keys=True)
                 file.write("\n")
-            created.append(receipt_path)
             print("hostBootstrapApplied=true; scene integration and safety gates remain missing")
         except Exception:
             for path in reversed(created):
