@@ -15404,3 +15404,124 @@ Application candidate `ad1eac09442cb8d78a992874d22157fe6bd5a05f` (parent observe
 - **Physical validation:** PENDING, USER ONLY. Last phone-tested application remains R21 `ef310b490cf03713c0c97d3d4aab85e3b536e66d`.
 
 An APK-free raw evidence archive was created locally (43,221,613 bytes, SHA-256 `ba71b771478ce95229162530e5ac6faec8cae0701def02186680a88888f16a1b`). Automatic approval review rejected its requested public GitHub/LFS upload because raw emulator logs, screenshots and diagnostics may be sensitive. Existing access-controlled workflow artifacts remain linked in the detailed report; no public archive URL or independent public-byte verification is claimed.
+
+## 2026-11-22 — Reviewer decision after R22.4 on API 35
+
+The owner reports no new phone APK or physical result. The current report at 1cd205abb6bd9a6644c25ae03c857de07127a422 covers application ad1eac09442cb8d78a992874d22157fe6bd5a05f. I reviewed the report, source, tests, graph and run outcomes and independently checked the controlled structural and immediate-image artifacts from Actions run 44959946085. The earlier revoke is structurally effective on the tested layout failure. Both first post-request samples still match FULL. Both second samples remain unclassified; their measurable changes against the next sample are confined to the circumference. All later samples in both strips match neutral A. The first acquisitions overlap the worker-clear commit receipt. No capture identifies which state of the child or parent was composed in that first image. APK delivery remains withheld. The approval review rejected public release of the complete raw archive. Existing restricted originals suffice for this review. Keep raw material access-controlled; store only aggregates and evidence IDs in the journal.
+
+Reviewer decision: preserve the structural repair. Authorize the bounded, debug-only same-image attribution experiment below. Current unmarked visual gate FAIL, phone speed unestablished, physical acceptance pending. Formal release gates remain outstanding. There is no new runtime candidate in this journal change.
+
+FLUVI_R22_5_VISUAL_EVIDENCE_BEGIN
+
+# Fluvi R22.5 — identify which privacy transition a composed ORB image contains
+
+## 1. TITLE / TASK INTENT
+
+EVIDENCE_COLLECTION. The reviewer accepts the R22.4 attached-layout failure repair at its tested structural boundary. A FULL first composite survived the repair on both backgrounds. Determine whether a screenshot showing FULL belongs to a composition before the old-child hide, or can coexist with evidence that the hide or new parent drawing has reached that same composition. The coding agent implements the fixed experiment. This handoff authorizes access-controlled evidence retention. Public upload of the raw archive is unnecessary. Keep the R22.4 Human APK withheld.
+
+## 2. AUTHORITATIVE APPLICATION STATE
+
+Repository elizerpist/exptv2, coordination fix/orb-v4-latency-lockscreen. Report at 1cd205abb6bd9a6644c25ae03c857de07127a422 in docs/R22_4_ORB_QUALIFICATION_REPORT_2026-11-21.md. Exact target ad1eac09442cb8d78a992874d22157fe6bd5a05f, parent f09da8647c78964e46bce604e5889355e86eef49, earlier production b1eccd845546e5d65d9e69c9ba0a43775a2c216b. Last phone-tested source ef310b490cf03713c0c97d3d4aab85e3b536e66d. The R22.4 signed local profile is 120736195 bytes, sha256 c94e496f933d663f4bc9567d66efc56c31da081fb3d2910aa873aaa28cfb9ef3. No phone delivery or new physical result.
+
+## 3. HARD PREFLIGHT
+
+Read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM, DEBUGGING_LOOP_VERY_IMPORTANT.txt, docs/FLUVI_ENGINEERING_JOURNAL.md, root MILESTONE_COMMITS.md and the R22.3/22.4 prompt and report entries. Exact project files are project_sources/02-FLUVI_PROMPT_WRITER_RULES-1-.md, project_sources/01-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md, project_sources/03-DEBUGGING_LOOP_VERY_IMPORTANT.txt. Hashes in that order: ebf3629b7f723113ea9f13a89fc37c52ec2f9a4db2fc4e64b901dc1a622b61f2, c777abadfdfd6c778a37b7448cc8b7943a1ca3a086676e7b47360be008f62f4b, 5d85bad2c00e4a6ab680b843fe68cb9265dccb7d2af3e6acbe5d9e9528d4c674. Portable copies are identified in the R22.4 handoff at fd03b49456c8b5c88047bbed48c06871a2ebc229. Resolve missing input there. The reviewer owns diagnosis, repair selection and interpretation. Return contradictions with exact evidence and continue independent specified work.
+
+    git fetch origin refs/heads/fix/orb-v4-latency-lockscreen refs/heads/implement/r22-4-orb-ad1eac09442c refs/heads/tooling/r22-4-orb-ad1eac09442c
+    git status --short --branch
+    git worktree list
+    git show -s --format='%H %P %s' ad1eac09442cb8d78a992874d22157fe6bd5a05f
+    git worktree add --detach ../fluvi-r225-measure ad1eac09442cb8d78a992874d22157fe6bd5a05f
+
+Keep the reference target and the instrumented debug variant separately identified. Capture the debug overlay diff; no application branch promotion.
+
+## 4. PHYSICAL USER EVIDENCE
+
+W-SHOW: R21 wake callback to accepted native apply return on Nothing A142 was 506/436/292/348 ms. W-HIDE: perceived lag, actual last physical pixel unobserved. W-LOCK-ANIM: owner previously reported flicker; no R22.x phone evidence. W-HOME-ANIM: protected and outside this experiment. The resized application-panel material test exercises an isolated child and its retained parent. It cannot measure the direct phone backend's optical result.
+
+## 5. DRIVE / RAW LOG AUDIT
+
+No new physical capture supplied; the last phone capture is 6d22c614-a221-4741-969e-a33164589384. The report lists the original restricted artifacts. Under run 44959946085 use artifact 14729397974 for the unmarked real screenshots and 14729920527 for the failed-layout control. IDs 14729143676 and 14729153616 are separate legacy and reader controls. Access via authenticated Actions or the GitHub connector; use an access-controlled successor if retention expires. The aggregate local archive's reported length/digest are 43221613 bytes and ba71b771478ce95229162530e5ac6faec8cae0701def02186680a88888f16a1b. No independent claim about the bytes of that aggregate. Associate files by UUID/method/background and use only numbered post-request images 0–5; the precheck images are a different series.
+
+## 6. COMMIT / AGENT-EVIDENCE AUDIT
+
+ad1eac09 modifies the retained-window order, controller guard and bounded transition evidence. Parent RED 44956008060 had FULL at failure and replay. Candidate was already revoked at failed layout entry, remained attached and replayed only permitted content; four structural tests passed. Focused 44959946085 failed overall; 420 JVM tests, 59 diagnostic tests and profile/release compilation passed. Original/white/black restrictive and terminal images, clipped-pressure, old steady release and fourth requested buffer gates failed. Positive A1 yielded to B31, later disappearance timed out. Stable lacked a quiet pending queue; negative did not reach its checkpoint. Parent companion runs 44958245542 and 44959420080 remain failures. 44961060062 isolated the optional third-slot scheduling change and improved the sampled median from 83.33 to 66.67 ms; both natural motion image checks failed. 44961788763 failed actual-wake-field export prerequisites for LIGHT/FULL, 44961513423 cancelled before measurement. No OFF/LIGHT or formal matrix. Human builder 44959983036 and graph 44960115769 succeeded. Keep their different identities/statuses.
+
+## 7. GRAPH PROVENANCE AND IMPACT
+
+Tooling f28fadc75e399868b8541a7d5617977b2a7de877 indexes ad1eac09. Manifest digest 63772aeb51033d51b8c2278137bd2286b7086d46b3e4b8b9324ff24e669f7b71. Dart SCIP covers the capture bridge/console, 808 documents; docs/codegraph-r22-4-orb-privacy.md gives native source navigation. Verify Kotlin against source. No new product graph implied by this experiment.
+
+| ID and owner | Caller / consumer | Old observation → experimental observation | Regression risk, guard and check |
+| --- | --- | --- | --- |
+| R1 KeyguardHeaderMaterialViewInstrumentationTest.boundedResizedPrivacyStrip | API35 instrumentation → same-screen crop | Screenshot interval compared with callback → simultaneous image and two visible states | UI accidentally hides a defective pixel. Keep original artifact/tests unchanged; read both markers separately and retain all full images. |
+| R2 KeyguardOrbBufferRenderer.Api34.hideLayer | controller enterRestrictiveTransition → Main transaction on exact child | Clear/invisible transaction → same transaction also moves an independent test marker | A second transaction, wrong child, or diagnostic exception fakes order. Check root/child/lease/generation; no new apply, no wait; calibrate both states. |
+| R3 KeyguardCardInteractionLayout.dispatchDraw | parent traversal → retained window buffer | Parent draw time → frame-local stamp of the first parent draw with the neutral configuration installed | Stamping on request entry mislabels an old parent. Select stamp only after the guarded neutral bind and render it into the parent canvas itself. Test stale generation and actual measured geometry. |
+| R4 reset / detach / destroy | Activity, test-owned surface, debug hook | expired owners → hooks and surfaces released exactly once | Missed callback, setup failure or repeated attach must leave production release paths and original fences alone. Assert bounded marker resources, unchanged pool counts and teardown. |
+
+## 8. CURRENT SOURCE FACTS
+
+KeyguardCardWindow.showOrUpdate publishes the permitted presentation before fallible layout work on this path. KeyguardCardMaterialController.enterRestrictiveTransition revokes the old child. In material/KeyguardOrbBufferRenderer.kt hideLayer sets null buffer and invisible on Main; enqueueFinalClear later submits a second null-buffer transaction on the Worker. Existing tests can observe the old lease, actual releases and commits. A commit receipt and a screenshot acquisition interval are recorded independently. Neither tags the content of the screenshot. KeyguardHeaderMaterialViewInstrumentationTest.boundedResizedPrivacyStrip already establishes 172×172 committed geometry, full reference, underlay, phases, memory bound, six samples and acquisition times. Reuse these components.
+
+## 9. PROVEN / UNPROVEN / MISSING
+
+PROVEN: at the measured 172×172 ROI the first white crop agrees with FULL, max channel delta 1; black agrees exactly. On both backgrounds the first acquisition spans receipt of the subsequent worker clear commit. Sample 1 remains UNCLASSIFIED. Independent offline sample-1 vs sample-2 comparison found respectively 488 and 492 pixels at max-channel difference ≥7; they all lie at radial distance 85.56–86.44 px from the crop center (85.5,85.5). Samples 2–5 match the calibrated neutral A. White and black first acquisition windows are 255 and 244 ms wide. UNPROVEN: surviving old child, old parent/bootstrap, or an already composed frame at acquisition start. The contour observation does not identify a layer or grant privacy acceptance. MISSING: hide/parent state in the first image itself, exact scanout and handset acceptance.
+
+## 10. FORENSIC GATE
+
+For each marked sample, independently classify its ORB interior, contour, old-child hide marker H and panel-parent stamp P. Require all classifiers to decode each retained bitmap independently of acquisition times and expected sequence; exercise reversed and missing-marker controls. A FULL image with H-before is compatible with a frame from before visibility removal. A FULL image with H-after is evidence that the old child's hide transaction is represented in the same marked capture; inspect the retained parent stamp, exact grant and subsequent publications. H-after/P-old and H-after/P-neutral lead to different follow-up decisions. P-neutral indicates the neutral-bound parent traversal was composed, not that every parent pixel is safe. If calibration cannot distinguish the markers, report UNKNOWN. Even if an early pre-hide composition explains the marked specimen, the original unmarked safety failure stays on record.
+
+## 11. SCOPE LOCK
+
+Only test code, an ephemeral debug measurement overlay, the private harness and aggregate report/journal. Use the measured R22.4 source. No change to production privacy policy, request order, target admission, pool, renderer, timeouts, classifier, sampling thresholds, dashboard, launcher or build signing. No public upload of raw evidence, links containing access tokens, or Human APK. Summaries may reference existing access-controlled artifact IDs, hashes and aggregate outcomes.
+
+## 12. LAYERS / BOUNDS / OWNERSHIP
+
+Use a small, pre-painted opaque test surface attached to the fixture Activity's root using the existing API35 AttachedSurfaceControl reparent mechanism, in two calibrated visible positions entirely outside the panel, away from system bars. The two positions must be visible together in the full-screen screenshot, with a sentinel that distinguishes missing/cropped from the actual before state. The panel parent stamp uses a reserved transparent corner inside the measured square, separated from the 86 px ORB circumference. Keep the underlying real ORB, bounds, opacity, parent and H marker independent. The marked sample is a different test, with its own independently stamped references. For the marked arm, construct the reference variants independently for both legal stamp states, retaining the same ORB thresholds and checking every pixel. A missing or undecodable stamp has its own UNKNOWN outcome. Account for the two calibrated H positions and sentinel in the marked outside-panel comparison and report every other outside change. The unmarked gate still compares every ROI and outside pixel; masking it is forbidden.
+
+## 13. REQUIRED DISCRIMINATING CONTROLS
+
+First replay the protected white/black original images offline, including the failed first and unclassified second. Then calibrate H-before/H-after and P-old/P-neutral on the real emulator using independently known colors and actual screen coordinates. An absent marker or one-frame mismatch between expected calibration and observed image cannot certify a state. Include deliberately wrong/missing stamps in the parser test; require UNKNOWN. Verify identical baseline/candidate ORB content away from the small test-only parent stamp before using the instrumented variant. Sample the same privacy operation once per background with both markers. Retain all six samples in order and keep the original images/results available. Failure to reach correct size, full reference or marker states is NOT REACHED; preserve evidence, stop the affected arm.
+
+## 14. INSTRUMENTATION CONTRACT
+
+Preallocate marker surface/content/layout before the timed transition. In the debug-only overlay insert a narrow test observation immediately before the existing Main hide transaction's apply, after null-buffer/invisible have been set. Pass the transaction and old child/lease identity to a hook bound to the exact case. Append only setPosition on the independently parented H surface from before to after. Both mutations must use that exact same SurfaceControl.Transaction, which groups changes atomically. Do not append this operation to worker clear, reparent, a posted callback or a new transaction. If marker preparation fails, record unavailable, ensure the original hide/clear proceeds, and return NOT REACHED. Android API reference: https://developer.android.com/reference/android/view/SurfaceControl.Transaction .
+
+Draw P into the same parent canvas in KeyguardCardInteractionLayout.dispatchDraw after normal children/parent content. The test-only owner initializes OLD at the confirmed full root/attachment. Arm NEUTRAL only on verified successful installation/binding of the discreet material/content for the same root/generation. In the in-place restriction branch of showOrUpdate, arm the stamp after apply(force = true), updateMaterialForPresentation, and the root/attachment/lifecycle identity check, immediately before geometry work. Require the root to be attached and the exact old FULL owner to match. Leave OLD if binding throws or the owner changed. No invalidation, forced redraw, sleep or wait to reveal the new stamp; if no such traversal occurs, OLD remains diagnostic. No production source edits are promoted. One diagnostic overlay and independent hashes; no hooks installed in a Human build. If a probe changes visibility, ordering of existing submissions, pool ownership or exceeds its bounds, its results are inconclusive. Unregister hooks in finally and remove/release only fixture-owned marker/storage after capture. No raw amounts, node texts or financial data in diagnostics.
+
+## 15. PERFORMANCE / CLOCKS
+
+Capture uptime for request, old submit, hide apply begin/end, worker clear apply/commit, parent draw and acquisition begin/end. Take exactly six pictures from immediate return under the same budget and sampling method, with encoding and processing afterwards. Preserve color channel maxima, sum, count ≥7 and radial-band counts for each reference. Retain all times and per-image paired H/P outcomes. Never infer an optical endpoint from screenshot return or use this marked arm as a speed benchmark. W-SHOW/W-LOCK-ANIM/W-HOME-ANIM unchanged; no repeated ABBA, cadence, reader or overhead run in this measurement.
+
+## 16. EXECUTION ORDER
+
+Replay originals → preflight target and harness → offline oracle negatives → compile debug probe/instrumentation → one calibrated emulator observation per background → offline classification → aggregate report. The original unchanged R22.4 unmarked arms are the baseline; no blind rerun. A single affected retry is permitted only after a documented mechanical defect in collection invalidated an arm. Keep the original failure and both patch identities. A contradictory observation goes to the reviewer, independent prescribed analysis may finish.
+
+## 17. VALIDATION
+
+Use verified dispatch-only orchestration/r22-4-candidate-ad1eac09442c at 8ed545af1f97cc86317948486d35c65439bdeb46. On a separate diagnostic harness ref retain its runner/KVM emulator configuration, scripts/r22-3-plugin-repos.init.gradle, version pins, installed package hash checks and failure upload. Use only an analysis job and a marked-panel job calling the two new selectors. Build/hash the unmodified target separately; apply/hash the explicit debug overlay plus androidTest fixtures for the marked target. Do not run the old matrix from the template. Retain the existing controlled artifact references. Before writing any new raw evidence, verify the destination’s read audience is limited to authorized project participants. Use a private harness/artifact store if the coordination repository cannot provide that audience. Keep raw logs out of public job output. If no such destination is available, preserve evidence locally with access controls and report the storage limitation.
+
+    git diff --check
+    bash scripts/verify-fluvi-boundaries.sh
+    flutter pub get
+    (cd android && ./gradlew :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3)
+    gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$PROBE_REF" -f native_diagnostic=true
+
+Set PROBE_REF to the verified pushed dispatch-only harness, never the production ref. API35 x86_64 Pixel 7, density 420, 1080×2400, swangle, JDK17, Flutter 3.41.4. Use the existing verified instrumentation wrapper with fresh UUIDs for KeyguardHeaderMaterialViewInstrumentationTest#r22_5StampedPrivacyWhite and #r22_5StampedPrivacyBlack in package com.fluvi.app.lockscreen.material. Examine terminal JUnit result as well as adb exit code. Report PASS/FAIL/NOT REACHED/NOT RUN per input/fixture/oracle/stamp/teardown. Formal CI and phone delivery are N/A for evidence collection. Local KVM is not a prerequisite.
+
+## 18. COMMIT DISCIPLINE
+
+Separate harness/fixture patch from unchanged application SHA. Record Why, Evidence, Changed, Validation, Known limitations, and physical validation. Journal append only, using references to controlled artifacts and aggregates. Review every failure together. Do not publish archive contents via Git, LFS, Releases, public job output, or another transfer route.
+
+## 19. BUILD / GRAPH / DELIVERY
+
+Produce only hashed debug test artifacts needed for the measurement. Cite the existing exact application graph and label diagnostic-only touched symbols as an overlay. The complete combined raw archive may remain in its existing restricted location; its public dissemination or anonymous download is not a prerequisite. Return access-controlled run/job/artifact IDs, availability/expiry, package and evidence hashes. Respect existing APK restrictions.
+
+## 20. COMPLETION REPORT
+
+Present the results for each background and sample index, ORB/contour class, H, P, acquisition interval, calibration/control status and limitations. Include stable source/harness identities and integrity verification. Keep the full images and traces restricted; only aggregate findings enter the coordination journal. Distinguish the established structural repair, failed unmarked visual tests, measurement outcome and downstream blockers. The reviewer chooses the next production action.
+
+## 21. DEFINITION OF DONE
+
+The experiment is answered for each arm only when the same screenshot independently identifies the ORB class and both witness states, or a precise technical reason for UNKNOWN is recorded with restricted evidence. No favorable interpretation can turn an unmarked FULL image into a passing privacy sample. No production fix, verified phone APK, formal CI success, or physical latency acceptance is claimed by this evidence milestone. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+FLUVI_R22_5_VISUAL_EVIDENCE_END
