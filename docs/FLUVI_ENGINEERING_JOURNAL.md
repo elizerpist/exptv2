@@ -15868,3 +15868,11 @@ Platform references
 - https://github.com/aosp-mirror/platform_frameworks_base/blob/android-16.0.0_r1/packages/SystemUI/compose/features/src/com/android/systemui/keyguard/ui/composable/LockscreenContent.kt
 - https://developer.android.com/reference/android/service/wallpaper/WallpaperService.Engine#getWallpaperFlags()
 - https://source.android.com/docs/core/graphics/implement-vsync
+
+## 2026-11-22 — R24 coding-agent handback reviewed
+
+The agent reports reading the pinned 21-section R24 handoff and its design review at `1a352031c7578cc2f90a779de0b15e5f43944f9e`. The reviewer verified the coordination ref, its 46-line journal-only addition relative to `09a33d0933178ffde5e0d4300a70dd80c574797d`, and zero Actions runs and check runs for that coordination SHA. The implementation ref still points to phone-tested R22.4 source `ad1eac09442cb8d78a992874d22157fe6bd5a05f`. There were no remote branch names matching r23/r24/r25 at this check. The handback contains no new source change, measurement or phone feedback.
+
+Reviewer accepts completion of the handoff. The universal stock-APK requirement remains BLOCKED BY PLATFORM CONTRACT. R23 remains superseded. Historical callback-to-read and callback-to-reveal intervals give no new optical timing evidence. Preserve the observed fast unlock withdrawal and the existing R22.4 isolated-panel privacy FAIL. R24 implementation: not started. Automated tests and build: NOT RUN. New Human APK: none. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+A stock-APK implementation round can be reconsidered if the owner keeps 10 ms as a measured acceptance limit on the evaluated configurations and accepts that untested configurations cannot be certified. A platform-integration round requires a named distributable keyguard host. Neither change has been authorized by this handback.
