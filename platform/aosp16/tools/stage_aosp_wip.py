@@ -34,8 +34,9 @@ def run(base, assets, apply, allow_incomplete):
     subprocess.run(["git", "-C", str(base), "apply", "--check", str(PATCH)], check=True)
     source_head = git(ROOT, "rev-parse", "HEAD")
     source_dirty = bool(git(ROOT, "status", "--porcelain", "--untracked-files=no"))
-    if apply and (source_dirty or not allow_incomplete):
-        raise ValueError("apply needs committed Fluvi source and --allow-incomplete")
+    source_untracked = bool(git(ROOT, "ls-files", "--others", "--", "platform/aosp16"))
+    if apply and (source_dirty or source_untracked or not allow_incomplete):
+        raise ValueError("apply needs committed Fluvi source, no untracked platform files and --allow-incomplete")
 
     with tempfile.TemporaryDirectory(prefix="r29-verify-") as tmp:
         stage = Path(tmp) / "renderer"
@@ -57,7 +58,7 @@ def run(base, assets, apply, allow_incomplete):
                 raise ValueError("refusing to overwrite " + str(dest))
         receipt = {"status": "INCOMPLETE_HOST_BOOTSTRAP", "frameworksBase": UPSTREAM,
                    "fluviHead": source_head, "fluviTrackedDirty": source_dirty,
-                   "patchSha256": digest(PATCH), "rendererManifestSha256": digest(stage / "renderer-manifest.json"),
+                   "fluviPlatformUntracked": source_untracked, "patchSha256": digest(PATCH), "rendererManifestSha256": digest(stage / "renderer-manifest.json"),
                    "staged": {str(d.relative_to(base)): digest(s) for s, d in sorted(entries, key=lambda x: str(x[1]))}}
         print(json.dumps({k: v for k, v in receipt.items() if k != "staged"}, sort_keys=True))
         print("stagedFiles=" + str(len(entries)))

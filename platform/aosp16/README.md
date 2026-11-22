@@ -27,10 +27,10 @@ python3 platform/aosp16/tools/stage_aosp_wip.py \
 ```
 
 The verifier checks the exact AOSP parent, a clean tree, patch applicability,
-canonical Fluvi source/generator digests, and all 36 generated shader variants.
+canonical Fluvi source/generator digests, and the committed SHA-256 list for all 36 generated shader variants and their metadata.
 It makes no changes to the AOSP tree. `--apply --allow-incomplete` stages this
 **incomplete** bootstrap only after the Fluvi tracked source is committed and
-AOSP has been checked clean; the output includes source and asset digests. This
+AOSP has been checked clean and no untracked platform files exist; the output includes source and asset digests. This
 is for further source review, not a bootable or tested image. The script refuses
 to overwrite existing files. No AOSP tree, platform image or private evidence
 is included in this repository.

@@ -78,12 +78,26 @@ def stage(source, assets, output):
     }
     # Validate everything before creating the destination, including all variants.
     asset_data = {}
+    pin_bytes = (source / "platform/aosp16/contract/generated-assets.sha256").read_bytes()
+    pins = {}
+    for line in pin_bytes.decode().splitlines():
+        digest_value, separator, name = line.partition("  ")
+        if not separator or len(digest_value) != 64 or name in pins or "/" in name:
+            raise ValueError("invalid pinned asset manifest")
+        pins[name] = digest_value
+    expected_names = {f"fluvi_keyguard_header_material_{effect}_{variant}{extension}"
+                      for effect in EFFECTS for variant in ("plain", "portal")
+                      for extension in (".agsl", ".meta")}
+    if set(pins) != expected_names:
+        raise ValueError("pinned asset list mismatch")
     for shader_id, effect in enumerate(EFFECTS):
         for variant in ("plain", "portal"):
             stem = f"fluvi_keyguard_header_material_{effect}_{variant}"
             meta_bytes = (assets / (stem + ".meta")).read_bytes()
             metadata = dict(line.split("=", 1) for line in meta_bytes.decode().splitlines())
             agsl = (assets / (stem + ".agsl")).read_bytes()
+            if sha(meta_bytes) != pins[stem + ".meta"] or sha(agsl) != pins[stem + ".agsl"]:
+                raise ValueError("pinned asset digest mismatch: " + stem)
             header_lines = [f"// generated-from=shaders/dashboard_header_field.frag",
                             f"// source-sha256={SHADER_SOURCE}", f"// effect-id={effect}", f"// variant={variant}"]
             prefix_bytes = ("\n".join(header_lines) + "\n").encode()
@@ -111,7 +125,7 @@ def stage(source, assets, output):
             (assetdir / name).write_bytes(contents)
         files = {str(path.relative_to(temp)): sha(path.read_bytes()) for path in sorted(temp.rglob("*")) if path.is_file()}
         manifest = {"schema": 1, "sourceFiles": SOURCE_DIGESTS, "generatorBlockSha256": GENERATOR_SHA256,
-                    "shaderAbi": 6, "adapterVersion": 9, "effects": len(EFFECTS), "variants": 2, "files": files}
+                    "pinnedAssetManifestSha256": sha(pin_bytes), "shaderAbi": 6, "adapterVersion": 9, "effects": len(EFFECTS), "variants": 2, "files": files}
         (temp / "renderer-manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
         temp.rename(output)
     finally:

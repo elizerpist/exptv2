@@ -30,6 +30,30 @@ class RendererStagingTest(unittest.TestCase):
                 self.assertEqual(expected, hashlib.sha256((first / name).read_bytes()).hexdigest())
             self.assertNotEqual(0, self.run_stage(ASSETS, first).returncode)
 
+    def test_coherently_modified_shader_and_metadata_are_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "assets"
+            source.mkdir()
+            for path in ASSETS.iterdir():
+                if path.is_file():
+                    (source / path.name).symlink_to(path.resolve())
+            stem = "fluvi_keyguard_header_material_dualTide_plain"
+            shader = source / (stem + ".agsl")
+            contents = shader.read_bytes() + b"\n// altered but internally consistent\n"
+            shader.unlink()
+            shader.write_bytes(contents)
+            metadata = source / (stem + ".meta")
+            rows = metadata.read_text().splitlines()
+            calculated = hashlib.sha256(contents.split(b"\n", 4)[4]).hexdigest()
+            rows = [("generated-agsl-sha256=" + calculated) if row.startswith("generated-agsl-sha256=")
+                    else row for row in rows]
+            metadata.unlink()
+            metadata.write_text("\n".join(rows) + "\n")
+            output = Path(tmp) / "stage"
+            proc = self.run_stage(source, output)
+            self.assertNotEqual(0, proc.returncode)
+            self.assertFalse(output.exists())
+
     def test_modified_shader_is_rejected_without_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "assets"
@@ -44,7 +68,7 @@ class RendererStagingTest(unittest.TestCase):
             output = Path(tmp) / "stage"
             proc = self.run_stage(source, output)
             self.assertNotEqual(0, proc.returncode)
-            self.assertIn("shader digest mismatch", proc.stderr)
+            self.assertIn("pinned asset digest mismatch", proc.stderr)
             self.assertFalse(output.exists())
 
 if __name__ == "__main__":
