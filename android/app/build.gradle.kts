@@ -231,6 +231,7 @@ android {
 }
 
 android.sourceSets.getByName("main").assets.srcDir(keyguardHeaderGeneratedAssets)
+android.sourceSets.getByName("main").java.srcDir(rootProject.projectDir.resolve("../platform/aosp16/contract/src"))
 tasks.named("preBuild").configure { dependsOn(generateKeyguardHeaderMaterial) }
 
 flutter {
