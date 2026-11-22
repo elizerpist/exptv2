@@ -17268,3 +17268,28 @@ frame, stopped-app behavior, privacy result or 10 ms verdict is claimed.
   `de102a41fd9af62da7e4dd8c0cb97bc12669758948978d2832a4c1dc73a14789`;
   [run 45078996197](https://github.com/elizerpist/exptv2/actions/runs/45078996197)
   passed. It is not the APK's source identity and is not a completed R29 graph.
+
+### R29 WIP staging rollback and report
+
+A forced file-copy failure reproduced a staging rollback defect: one new empty
+file remained in the clean AOSP worktree (**RED**), and a second test in the
+same run then saw that contaminated fixture. Tooling-only commit
+`9d9444795ea34e64525e990f5c08d1b655a6fdaf` records destinations before copying,
+so both the rollback and ignored-untracked-input tests now pass, as do the
+three pinned-renderer staging tests. The test-created empty file was removed;
+no pre-existing work was touched. A new clean exact-parent AOSP worktree was
+staged from `9d944479…`; all 86 file digests matched, provenance SHA-256
+`2e55b1228275b32eb21b2465d67b01342051e313b5bfd32244686dd227280e69`.
+The RED/GREEN logs are in private evidence commit
+[`0d054c6f28899c4ef63049707f8a0a51c07c3f62`](https://github.com/elizerpist/pushparserv2/tree/0d054c6f28899c4ef63049707f8a0a51c07c3f62).
+
+The exact WIP tooling-tip graph is commit
+`66baadf21ae6c7dfa39e4422841863acf435897c`, source
+`9d9444795ea34e64525e990f5c08d1b655a6fdaf`, manifest SHA-256
+`115f3fc67b827d92e550ff5da129640fc384a78aff62117988cfcbb2efbdd266`;
+[run 45079503592](https://github.com/elizerpist/exptv2/actions/runs/45079503592)
+passed. The APK still identifies source `5bb91aed…`, with its own separately
+verified graph `f0834d6a…`; the difference is tooling only. See the separate
+[R29 incomplete implementation report](R29_RESIDENT_SYSTEMUI_REPORT_2026-11-22.md)
+for the preserved failures and NOT RUN gates. The real R29 publisher and host
+scene are still unfinished. PHYSICAL VALIDATION — PENDING, USER ONLY.
