@@ -16566,3 +16566,139 @@ Lead with the verified APK link or the exact remaining packaging/authorization b
 Owner delivery requires an independently downloaded and verified update-compatible APK plus its direct link under §19. Qualification requires its own panel/ORB evidence and honest verdict. Keep R22.4 privacy FAIL, held DIRECT NOT REACHED, formal execution statuses and both phone endpoints visible. Delivering demo bytes settles artifact availability only. PHYSICAL VALIDATION — PENDING, USER ONLY.
 
 FLUVI_R25_3_OWNER_PHONE_TEST_END
+
+## 2026-11-22 — R26 owner rejects R25 on the phone; restore ordered DIRECT publication
+
+FLUVI_R26_DIRECT_REGRESSION_BEGIN
+
+## 1. TITLE / TASK INTENT
+
+IMPLEMENTATION. Protect the last owner-preferred unlock behavior by restoring the phone-tested publication order on the R18 DIRECT route. Retain the R25 reader transfer on STOCK. Ship the route-isolated candidate with compact reveal and withdrawal evidence. Compare the time of the final authorized reveal and the disappearance of an already-visible ORB. The owner reports no perceptible wake speedup and a slower disappearance on unlock. R25 fails this physical comparison. Treat restoration and a faster wake as two separate outcomes.
+
+## 2. AUTHORITATIVE STATE
+
+elizerpist/exptv2, coordination fix/orb-v4-latency-lockscreen. Parent for implementation and most recently phone-tested app: 9c1647573f3b0da6506d6e36dd98efdb11fb64ac, implement/r25-stock-orb. Previous phone-tested app with preferred withdrawal: ad1eac09442cb8d78a992874d22157fe6bd5a05f. Previous coordination-only HEAD ddd0ebb379971c38ec0e0179da3b0f43ccc22656. Create or resume implement/r26-direct-ordered-withdrawal from the R25 **app**. Scope is route-based across supported phones. R18 direct currently has an API 35 gate. Do not add a manufacturer/model check.
+
+## 3. HARD PREFLIGHT
+
+Before execution, read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md, docs/FLUVI_ENGINEERING_JOURNAL.md, and relevant MILESTONE_COMMITS.md entries using the versions and access paths supplied in this handoff. Explicitly report missing material. The prompt writer owns diagnosis, causal interpretation, the repair concept and any refactor decision. Implement only the specified technical contract or execute only the specified evidence-collection experiment; do not select a new root cause or repair strategy. If source, logs or tests contradict the plan, preserve and report exact evidence and return the affected decision to the reviewer. Continue independent authorized work. Follow the supplied risk-to-test matrix and the verified focused-validation route. Record every relevant failure and every diagnostic repetition. Start full delivery only after the specified entry conditions; diagnostic selection does not satisfy full required gates. Do not repeat a rejected repair without new evidence and a reviewer decision. Resolve the exact physically tested application source separately from documentation-only HEAD commits. Preserve the dashboard contracts and verify the specified native lockscreen and launcher-widget boundaries.
+
+Read project_sources/02-FLUVI_PROMPT_WRITER_RULES-1-.md, project_sources/01-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md and project_sources/03-DEBUGGING_LOOP_VERY_IMPORTANT.txt. Their full portable versions are in the journal at 161f63675121302432be2026898bed07b23d7ded. Read R23 §4, R24, R25–R25.3 including the handbacks, both docs/R22_4_ORB_QUALIFICATION_REPORT_2026-11-21.md and docs/R22_5_VISUAL_EVIDENCE_REPORT_2026-11-22.md, and private elizerpist/pushparserv2@09ec18042414c65cc1904d371b7dd19417c2f54d:docs/r25_2/R252_REPORT.md (SHA-256 ce4fecbce0b5614e7264f826e8f70ea1113cb7c5651ad571a1f76e8a67bba500).
+
+## 4. PHYSICAL USER EVIDENCE
+
+Nothing A142, API 35, profile, LIGHT, ORB/orbOnly/FULL, SURFACE_LIVE configured, connected beforehand. Owner-pasted capture 8703ccf9-bae0-4cdf-86a5-0d023afdfc66. The owner directly observed both symptoms. Detailed times below are uptime ms relative to their named anchors. They describe four retained attempts of one 37.247 s capture, selected by export policy, not four independent launches.
+
+| Attempt / showing request | Wake → first accepted proof | Wake → final showing read finish | Wake → native reveal apply return | Event → withdrawal callback | Callback → local hide / remove return | Seal → direct retire apply return |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 / 13 | 945 | 941 | 1082 | 114 | 50 / 64 | 2 |
+| 7 / 148 | 328 | 382 | 393 | unknown | 7 / 23 | 3 |
+| 8 / 159 | 174 | 171 | 223 | 38 | 14 / 35 | 0 |
+| 9 / 172 | 207 | 260 | 275 | 1 | 22 / 34 | 1 |
+
+The R22.4 LIGHT baseline (97908f95-517d-41d1-b71f-6c3ebc81d98c, attempts 1/4/5/6) gives wake → reveal return 652/387/374/375 and seal → retire 1/1/1/2. Medians 381 → 334 ms and means 447 → 493.25 ms describe different, unpaired retained wakes. Preserve the 1082 ms wake and the two shorter ones. In #7 and #8 the worker seal originated from a system sample. #1 and #9 sealed on NO_MAIN_MARKER. #7 has no actual withdrawal inspection request. The later detached operations 4 and 25 do not remove a visible ORB. Neither the framework event nor removeReturn marks the physical beginning or end of unlock. Both 100 ms optical verdicts remain indeterminate.
+
+## 5. RAW LOG AND COVERAGE AUDIT
+
+1597 events recorded, 245 retained, 1086 evicted, 266 diagnostic records dropped, 31473-byte truncated export. All four detailed R18 records omitted, MAIN summaries incomplete, zero draw-gap records. R18 worker submissions are observed despite NO_DRAW_OBSERVED in the View fields. The 2.56 s cumulative lock-hold belongs to the dedicated diagnostic consumer. Max producer time 11.5 ms does not locate a stall in these wakes. Use the aggregate here as the index to the owner-pasted export. Keep private screenshots and raw traces private. There is no new matched unlock video.
+
+## 6. COMMIT / AGENT / DELIVERY AUDIT
+
+9c164757 “release obsolete first-admission reads” added completed-read parking/supersession and its tests/diagnostics. Nine files, +1170/−18 relative to ad1eac. Hardware renderer, native host/compositor and terminal hide bodies have no diff. Some common lifecycle callees do change. Stock reader transfer, scoped cancellation, 433 JVM and 1046 Flutter checks previously passed. Held DIRECT A/B and STOCK shade safety were NOT REACHED in the last verified report (runs 45040072100 and 45040579587). R25-specific corrected scorer has 24 offline passes; R22.4 isolated-panel visual FAIL remains open. No completed R25.3 shade result located at review. Ordinary R25 verification and five formal native scopes were NOT RUN. Preserve API34 launcher ANR, storage failures and unclassified ABBA images as separate facts.
+
+New artifact-only commit 1d1b88445b897edeb7474b5a9e7bbcbe085b67f8, “prepare R25 owner test profile”, publishes README and the APK LFS pointer. Review verified the actual file, 120768963 bytes, SHA-256 97dd4647a2ac48ac4d3fc444f40d5357a50c82ea4431eb38412f4d8e65ba0f48, established signer faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. Zero Actions runs on the artifact, coordination and R25 app heads in the head-SHA queries; prior named diagnostic/build runs used separate refs. The owner has now tested the R25 source. Supersede the earlier WITHHELD / not-yet-tested summary for this artifact.
+
+## 7. GRAPH / IMPACT
+
+Read docs/codegraph/manifest.json at tooling 2cf5169ead04b18e9745f1210f36182b3cc09617, SHA-256 686f2746b249880fa4bc76dd178d43086df99862e095a51c8fdd49fcd68e2e0d, plus docs/codegraph-r25-orb-query.txt and docs/codegraph-r25-orb-inventory.md. Its graph indexes exact R25. Dart SCIP excludes native Kotlin. Follow the Kotlin symbols below directly under android/app/src/{main,test,androidTest}/kotlin/com/fluvi/app/lockscreen and the material subdirectory. Build an exact-source manifest and refreshed native navigation on a separate tooling ref after implementation.
+
+## 8. CURRENT SOURCE FACTS
+
+FluviKeyguardCardService.r25BuildSnapshotLocked admits detached STOCK and a real R18_DIRECT reservation with grant NONE. r25CompleteLocked suppresses a complete positive if B is already pending or parks it for a separate Main notice. Both offer sites can promote a waiting ticket. In every retained phone wake, supersession occurred on R18_DIRECT with PENDING_AT_COMPLETION, exactly once, not while a ticket was waiting for Main. Original/successor IDs were 11→13, 144→147, 156→159 and 168→171. Parked winners reached their Main claim in 0/0/0/1 ms. Grants came from 13/148/159/172. Starting B earlier cannot turn an obsolete A into permission to show. KeyguardFirstAuthorizedOrb.requireRead, externalIngress and the final native submit gate enforce that contract independently.
+
+The hidden host had already bound before the first accepted proof in all four wakes. All four first paints were DIRECT_MISS. The two HIDDEN_BIND_NOT_READY examples occurred after a real bind and can also mean the posted image is pending. The first A in #1 returned WALK_TRUNCATED after a null first child; the later winning read was #13. In #7 A yielded; in #8/#9 an aggregate disqualifier prevented yield. Do not assign it a specific physical surface from that aggregate. R18_DIRECT uses an independent native output and a staged input host. sealR18 already queues hide/unparent on the exact generation before Main host removal. Unlock, shade and credential checks remain active even with a positive held.
+
+## 9. PROVEN / UNPROVEN / MISSING
+
+PROVEN: R25 changed ordering on the actual phone backend. It did not deliver a perceptible improvement, and the owner found a withdrawal regression. The measured main-notice waiting time at the captured winning claims cannot explain the long wake. Each first accepted proof already exceeded 100 ms from the app callback. UNPROVEN: changed ordering or an extra sampler request caused the slower physical withdrawal; the renderer alone caused the opening lag; any new disclosure. MISSING: matched optical onset, correct first pixel and last visible pixel, exact cutoff for #1's long series of pre-proof reads and direct transaction completion coverage. Historical R22.4 was already slow to appear.
+
+## 10. CAUSAL DECISION / FALSIFICATION
+
+Select a reversible isolation of the unqualified DIRECT publication change. Re-enter the same ordered Main application used on ad1eac on that backend. This removes an identified scheduling difference from the owner-preferred comparator, while preserving the demonstrated STOCK benefit. This is a regression-containment candidate. The observed successor durations, 44/30/33/25 ms, are not predicted savings. The chosen change might leave wake unchanged or make it slower. If R26 follows the specified path and matched withdrawal still regresses, reject the route-ordering explanation for those trials. If time still accrues before the first current proof, record that boundary and return it to the reviewer for a distinct opening redesign. Do not tune the painter, remove authorizations or reissue a STOCK handoff as a handset wake fix.
+
+## 11. SCOPE LOCK
+
+One application scheduling decision on an identified DIRECT route, plus diagnostics that separate pre-proof, render and withdrawal intervals in the same APK. Preserve STOCK positive transfer, R12 ordered negative read-ahead, R22 in-walk yield, genuine latest-read obligations and current proofs. Protect subscription, privacy, focus, attachment, layer and generation identity. No timing constants, package/permission changes, timeout extensions, new poller, detached animation, cached FULL proof, shade policy exception, or global rollback. Launcher widget, dashboard and motion cadence have no new requirement in this repair.
+
+## 12. PRE-IMPLEMENTATION IMPACT MATRIX
+
+| Source / consumer | Old → new | Regression risk | Guard / check |
+| --- | --- | --- | --- |
+| Service.r25CompleteLocked → processInspectionQueue | Matching DIRECT positive could promote or park → ordered Main then queue.complete(active) | Stale positive displayed or newer B starved | Baseline application gates and genuine newest-read obligation, direct pending and stable RED/GREEN |
+| r25CompatibleLocked, r25PromoteWaitingLocked, r25DrainOnMain → both offer sites | Eligible STOCK tickets continue to transfer | Old STOCK ticket reclassified as DIRECT on route/authority turnover | Strict ticket route/snapshot equality and current-claim checks; stale notice/teardown tests |
+| applyCompletedInspection → prepareR18Decision → advanceR19First | Restored DIRECT Main order with original proof/fresh system checks | Suppressed unlock check or obsolete fallback | Exercise actual lock exclusion while A waits, visible unlock, replacement service, rapid relock |
+| KeyguardCardSettings compact export → user LIGHT report | Already collected direct receipts/paint details usually lost → bounded identity-linked fields | Wrong generation or consumed proof, missing evidence rendered zero | First + latest-three capture-pressure, original/next host, late callback, missing record, old export |
+| material/KeyguardOrbDirectOutput.retire and window.hide → compositor/WindowManager | Protected, separately timed | Detached cleanup incorrectly counted as last visible pixel | Require attached original with positive image; preserve native and optical endpoints individually |
+
+## 13. RED TESTS AND CONTROLS
+
+Exercise the actual production decision with genuine stamped route snapshots. On R25, a complete detached qualifying DIRECT A with B already pending selects Promote, and stable A selects Park. On R26 both must choose ordered dispatch. On STOCK both old outcomes survive with their exact owner. Use an extracted internal pure routing predicate only if it is called by the real route decision; a predicate-only green does not establish the queue order. Test the no-pending case and B arriving after Main dispatch as well. A queued A may enter Main and still legitimately fail its stale-proof check. Assert B eventually starts with the one reader. Invalid original A must never paint/disclose due to this change. Preserve earlier STOCK held tests on a real STOCK fixture and add a stable DIRECT → STOCK/fallback transition; no fabricated route classifications to claim device coverage.
+
+A held-positive-unlock test starts with no visible FULL. Add a separate test in KeyguardFirstAuthorizedOrbInstrumentationTest based on its existing stable DIRECT actual service path. Require real exact-generation accepted reveal, attached host, correct composited FULL before actual dismiss/unlock. Then capture the entire screen across the unlocked transition, actual terminal signal, seal, retire, host removal and stable absence. Correlate old/late acknowledgements and one rapid relock with a fresh generation. Distinguish slower removal, orphan layer, reappearance, and legitimate new lock. Cross-check later absent images against an unlocked underlay and a known-present positive. Platform/emulator screenshot acquisition gaps or ambiguous frames stay UNKNOWN. The presence of qs_frame or a NotificationShade window is insufficient proof of a physically expanded panel.
+
+## 14. EXACT IMPLEMENTATION AND DIAGNOSTICS
+
+Preserve the immutable route snapshot and its full owner checks. In r25CompleteLocked, before constructing R25Completed, invoking handoffCompleted or calling park, return the existing ordinary-dispatch result for a matched backend R18_DIRECT, with an explicit DIRECT_ORDERED reason for a complete positive. Unsupported/null snapshots already take the ordinary branch. Keep r25CompatibleLocked confined to equal STOCK ticket and current snapshot. Use the existing withContext(Dispatchers.Main.immediate) → applyCompletedInspection → complete(active) → scheduleR19Join path. Use actual reservation identity for route attribution. Do not infer DIRECT from API level or configured SURFACE_LIVE. If recording a new bypass marker, capture scalar identity/time and emit outside locks, without putting expensive formatting before Main. Preserve baseline stale checks, exception/cancellation cleanup, immediate terminal/seal checks and fallback. Only an actual R25 suppression requests r25SuppressedPositive; ordinary DIRECT continues through its original system/inspection admission. A crossover from an old waiting STOCK notice must use its existing current claim/discard semantics.
+
+For diagnostics extend the bounded compact DIRECT record. Join first accepted proof, actual paint ticket, consumed proof, showing request, initial show, actual attached withdrawal and direct retire using capture/session/wake, reservation, output/host and attachment identities. Existing R20 values record paint entry/lock/draw/post; R18 reveal/retire receipts already hold apply begin/end, callback receipt, latch, present time and validity; R21/R22 retain the first proof and seal. Preserve compact wake and app callback times separately. Include the cause of the winning seal, and a separately attributed callback-to-remove path; if a systemSample wins, do not silently use a later inspection event as its origin. Where its own causative timing is missing, record the scalar request ID, reason, receivedAt and sample times from the original KeyguardSystemGateRequest/state in reserveR18WakeBeforeMain's existing exclusion branch, conditional on actual successful current-owner seal. Store diagnostics only with the exact old binding. Delayed or missing callbacks cannot attach to a later wake. Do not synthesize times, subtract unaligned clocks, sample an extra platform service, or add per-node/per-frame logging. Keep the 32 KiB budget and older captures readable; use an explicitly versioned optional compact record, preserve priority core fields and test first-plus-three pressure.
+
+## 15. PERFORMANCE / OWNER TEST
+
+Unheld API35 comparator: identical setup, same demo profile, same capture mode, same artifact flavor and same DIRECT backend. Use R25 and R26 in ABBA order, two ordinary wakes per block as in R25 §15. Preserve startup and all failed/slow/ambiguous wakes. Compare the preferred R22.4 independently where available, without pooling FULL and LIGHT. For each wake report first current proof, final read, correct first-frame evidence, final reveal, and first distinct motion separately. For disappearance record unlock-start → last visible ORB / first confirmed absent, plus the app callback → seal → native retire and local window removal chains. Compare with optical uncertainty or leave that endpoint open. Separately score physical wake stimulus → first correct FULL and first visible eligible keyguard frame → that pixel against inclusive 100 ms. Tests on a single handset qualify that configuration only. Do not equate a return/receipt with an observed pixel or ROOT_DRAW with the animated DIRECT output.
+
+## 16. IMPLEMENTATION ORDER
+
+Pin app/graph, carry the original physical result, reproduce wrong route ordering before edit, make the surgical route change, pressure-test compact diagnostics, run the real STOCK and DIRECT controls, then unheld comparison and the applicable delivery checks. Separate setup/control failures from application failures on first occurrence. The existing private qualification of R25.3 can continue without occupying the R26 critical path for implementation and package preparation. Use new source hashes for R26 safety evidence. A failing fixture replay can be fixed within this contract; a changed route, real visual regression, uncertain grant or adverse disclosure goes to the reviewer with the exact evidence.
+
+## 17. VALIDATION / CI
+
+Use the existing provisioned Temurin 17/Flutter 3.41.4 remote target and private Pixel 7 API35 KVM runner. Use elizerpist/pushparserv2 at 7661b048033602007b4f0a51b696152d957c529c for the existing android-build.yml, separate target/test installation and scripts/r251-shade-api35.sh emulator setup. Adapt its pinned app checkout and exact method selectors on a separate private R26 diagnostic ref, using the unheld R25 API35 job 45020289680 as a runner reference. Pin the new app SHA and verify it before and after injection. The graph orchestration reference 699b33587811d097cd017f79d1269112f82eebd4 is for graph generation only. Do not dispatch old pinned app hashes or assume KVM locally. Set APP_REF to the exact candidate branch and APP_SHA to its full commit. First run:
+
+    git diff --check
+    bash scripts/verify-fluvi-boundaries.sh
+    (cd android && ./gradlew :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin :app:testDebugUnitTest --tests '*KeyguardOpeningPublicationTest' --tests '*KeyguardFirstAuthorizedOrbTest' --tests '*KeyguardR22ReaderHandoffTest' --no-daemon --max-workers=3)
+
+Include new unit tests explicitly if outside the listed classes. Then run full JVM, profile compilation and Flutter tests; retain per-method outcomes. On remote run exact instrumentation selectors via the existing installed APK pair (instrumentation package from adb shell pm list instrumentation). Require AndroidJUnitRunner terminal per-case PASS/FAIL and correct UUID, route and artifacts. Existing KeyguardFirstAuthorizedOrbInstrumentationTest#stableInitialFullUsesOneVirginOutputWithoutReadinessRead and #externalIngressWhileFirstPaintIsHeldCannotUseOldProof provide the starting entry points. Audit any snapshot overrides, fixed scene/phase or injected events, and label such results as controlled. Only natural unheld comparable frames can support an actual speed claim. If a test expects an R25 DIRECT transfer, preserve its R25 RED artifact and replace the DIRECT expectation with R26 ordered behavior; use genuine STOCK for the retained transfer expectation.
+
+When exact-source changed-path/visual controls have qualified for formal execution:
+
+    gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$APP_REF" -f native_diagnostic=false
+    for scope in r12_live r12_static r12_legacy r12_contract full; do
+      gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$APP_REF" -f native_diagnostic=true -f native_scope="$scope"
+    done
+
+Track all runs through terminal status. No repeated full CI on a known fixture failure. Grade privacy, ordering, observed unlock, visible opening, build, formal verification and physical results independently.
+
+## 18. COMMIT DISCIPLINE
+
+Use separate app, graph/tooling, qualification evidence and artifact commits. Include Why, Evidence, Changed, Validation, Known limitations and Physical validation in the app commit. Verify that app and tool refs contain their actual expected files. Append every app commit, real run and outcome to the live coordination journal without replacing concurrent entries. Private archives may contain demo pictures or device details; keep them in the existing private evidence channel.
+
+## 19. PUSH / BUILD / HUMAN APK DELIVERY
+
+R25 remains a rejected test build. Keep the existing downloadable R22.4 comparison APK available, exact artifact commit 1cc8f5ca5847f9c9b405a0f930acf4cd8a367966, fluvi_R22_4_HUMAN_DIAGNOSTIC_ad1eac09442c.apk, 120736195 bytes, SHA-256 c94e496f933d663f4bc9567d66efc56c31da081fb3d2910aa873aaa28cfb9ef3. Its independent download matched. It is an optional demo-only reference with the inherited isolated-panel privacy FAIL. Preserve the owner's installed data.
+
+For the new Human build use orchestration/r18-phone-builder at 200aaebd1eaa79382feb977ba57996b0c72e2d28:
+
+    gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref orchestration/r18-phone-builder -f app_sha="$APP_SHA"
+
+Verify exact app source, all three AOT ABI source/purpose markers, profile HUMAN_DIAGNOSTIC, package com.fluvi.app, current update-compatible version, payload and established v2/v3 signer faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. Stage in parallel with qualification. Respect R25.3's distinction between formal release and a named owner's express demo-only early test. The owner's instruction accompanying this handoff may expressly authorize the R26 demo-only lane with inherited shade qualification still open. Do not transfer the R25-specific consent silently. An early owner handoff requires exact build/signature/payload identity, changed-path ordering checks, stale-grant/exclusion and visible-withdrawal controls and no observed new disclosure or worsened withdrawal on the candidate controls. Otherwise use the qualified owner lane. A pending optical result on the user's handset is never a prerequisite to receive its test APK. Deliver a real immutable direct APK URL verified by independent download, size, SHA-256 and signer. State which formal checks remain open and preserve the previous two files.
+
+## 20. COMPLETION REPORT
+
+Lead with the new verified APK link or precise remaining blocker. Include R26 source and graph hashes, matched route per wake, actual grant, per-attempt intervals, R25 RED vs R26 vs STOCK controls, current shade result, visual gaps, native/ordinary CI outcomes, excluded vs retained attempts and installation instructions in Hungarian. Record implementation, automatic validation, APK delivery and physical acceptance separately. For the next owner LIGHT capture ask for a same-settings wake and a quick unlock/relock to decide whether the previously preferred withdrawal returned; a short optical comparison can quantify the change. No phone-side acceptance may be inferred from an emulator.
+
+## 21. DEFINITION OF DONE
+
+R26 restores the specified DIRECT sequencing, retains the tested STOCK behavior, and produces the verified owner-test package under §19. Say “wake still slow” when the measured evidence says so. R25 was physically tested and rejected. R26 restoration, both optical targets and any future tighter limit require the owner's physical evaluation. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+FLUVI_R26_DIRECT_REGRESSION_END
