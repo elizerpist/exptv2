@@ -16454,3 +16454,115 @@ Private full report commit `1b831a0a7f9319aaff2081275e276b81127352ea`, path `doc
 Section 19 requires withholding the existing Human profile while the shade witness is unevaluable. Its local package `com.fluvi.app`, versionCode 1, 120768963 bytes, SHA-256 `97dd4647a2ac48ac4d3fc444f40d5357a50c82ea4431eb38412f4d8e65ba0f48`, v2/v3 owner certificate SHA-256 `faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb` was reverified. The pinned builder artifact 14754464450 runner APK SHA-256 `8f2e59757d556a5edb1ec74b3eac9a296e08b625d84ee58d9092464a0d3a2b6f` matches all 470 non-signature payload entries, and all three AOT ABIs contain the exact source and HUMAN_DIAGNOSTIC markers. No download URL was published or independently downloaded. Both physical 100 ms endpoints — wake to first correct FULL pixel and first eligible visible lockscreen frame to that pixel — remain PHYSICAL VALIDATION — PENDING, USER ONLY.
 
 R25.2 report clarification: private report ref advanced to `09ec18042414c65cc1904d371b7dd19417c2f54d`, report SHA-256 `ce4fecbce0b5614e7264f826e8f70ea1113cb7c5651ad571a1f76e8a67bba500`. The DIRECT runner printed `INCOMPLETE_TERMINAL_RECORD` because it required a PASS record; the retained result file exists and says `FAIL_OR_NOT_REACHED`. The original NOT REACHED verdict and evidence are unchanged.
+
+## 2026-11-22 — R25.3 reviewer decision for the owner's phone test
+
+FLUVI_R25_3_OWNER_PHONE_TEST_BEGIN
+
+## 1. TITLE / TASK INTENT
+
+R25.3 — deliver the existing R25 Human APK to the owner under §19 and finish the bounded STOCK shade privacy witness independently. The owner reports that repeated pre-command fixture failures have prevented a first phone test. Application scheduling already changed in R25. This handoff implements a test-fixture correction and defines how the owner can expressly authorize a demo-data-only test of the existing bytes before privacy qualification finishes.
+
+## 2. AUTHORITATIVE APPLICATION STATE
+
+Repository elizerpist/exptv2. Coordination fix/orb-v4-latency-lockscreen, previously 9f1d0916f6fda5f52abbd80c7f59d93e9225f614. Phone-tested source ad1eac09442cb8d78a992874d22157fe6bd5a05f. Candidate implement/r25-stock-orb at 9c1647573f3b0da6506d6e36dd98efdb11fb64ac. R25.2 plan 72ce6ace69b0a2850eab058a0c68823b0ccc8280. Keep the original profile and the separately instrumented debug pairs identifiable.
+
+## 3. HARD PREFLIGHT
+
+Before execution, read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md, docs/FLUVI_ENGINEERING_JOURNAL.md, and relevant MILESTONE_COMMITS.md entries using the versions and access paths supplied in this handoff. Explicitly report missing material. The prompt writer owns diagnosis, causal interpretation, the repair concept and any refactor decision. Implement only the specified technical contract or execute only the specified evidence-collection experiment; do not select a new root cause or repair strategy. If source, logs or tests contradict the plan, preserve and report exact evidence and return the affected decision to the reviewer. Continue independent authorized work. Follow the supplied risk-to-test matrix and the verified focused-validation route. Record every relevant failure and every diagnostic repetition. Start full delivery only after the specified entry conditions; diagnostic selection does not satisfy full required gates. Do not repeat a rejected repair without new evidence and a reviewer decision. Resolve the exact physically tested application source separately from documentation-only HEAD commits. Preserve the dashboard contracts and verify the specified native lockscreen and launcher-widget boundaries.
+
+Read project_sources/02-FLUVI_PROMPT_WRITER_RULES-1-.md, project_sources/01-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md and project_sources/03-DEBUGGING_LOOP_VERY_IMPORTANT.txt, or the complete portable transcriptions in the journal at 161f63675121302432be2026898bed07b23d7ded. Read the R22.4 and R22.5 visual reports in docs, the R25 through R25.2 handoffs, and elizerpist/pushparserv2 at 09ec18042414c65cc1904d371b7dd19417c2f54d, docs/r25_2/R252_REPORT.md and docs/r25_2/R251_REPORT.original.md. The latter was recovered. Their respective SHA-256 values are ce4fecbce0b5614e7264f826e8f70ea1113cb7c5651ad571a1f76e8a67bba500 and 4e5843bf936f9a90654b2fc24ae0642d467b7371d4a60dbe2f75f259fd036758.
+
+## 4. PHYSICAL USER EVIDENCE
+
+The owner has not received this candidate. Preserve rapid withdrawal on unlock. The prior isolated-panel R22.4 visual privacy FAIL is open. For an early test a financial ORB could remain visible under the shade. Use only synthetic/demo records in the Android user/profile running Fluvi. An in-place update ordinarily exposes existing app data to the updated app. Use a clean secondary Android user or a separate demo device if the primary profile has real records. Preserve the owner's data.
+
+## 5. DRIVE / RAW LOG AUDIT
+
+Private STOCK run 45040579587, artifact 14761913303, archive SHA-256 fb2a005784ea162d8b02b5c6c623af712e11b5958ec50cf1991845be4e7f1baa. Measured FULL at [456,1905,624,2073] with independent underlay, actual STOCK/SURFACE_LIVE. Target service held exact current A=26, session 1/wake 2. Cleanup released A. Zero shade commands and zero post-shade frames. Private DIRECT run 45040072100, artifact 14761617002, archive SHA-256 a2e06c40d6f4e6b70dbbf1c9ae60b98392e31b4772a8e038a3bf17473bd392a2. Of 223 observations, 222 contained qs_frame and large lockscreen clock markers. The endpoint PNG shows 03:59 on the main lockscreen, wallpaper and lock icon. Its window dump lists a full-height NotificationShade. The screenshot qualifies that instant only. The preserved DIRECT terminal result is FAIL_OR_NOT_REACHED.
+
+## 6. COMMIT / AGENT-EVIDENCE AUDIT
+
+b139dea6dd3269f988413acf152cb280de5a3e6a records the R25.2 handback and 9f1d0916f6fda5f52abbd80c7f59d93e9225f614 clarifies the terminal record. Both append to the journal only, with zero Actions runs found on either head at review. Private executed shade 5f642124626fc16793e85e6549db609abf74184d, scorer 6b3db2d93195a21749cf4129215205c53d853af8, corrected retirement guard 7661b048033602007b4f0a51b696152d957c529c. The scorer passes 24 offline cases including partial vs full old ORB. The exact Kotlin guard passes five null/identity cases. The target/test pairs built remotely. Corrected DIRECT observer 85d94057c411d18859ad58d7dd4867095fe54346 restores BouncerContent coverage after a7928365c9cf6605fb3e7c14cdec0beaef0afb70. Neither post-run harness fix has a new device verdict.
+
+## 7. GRAPH PROVENANCE AND IMPACT
+
+Read docs/codegraph/manifest.json, docs/codegraph-r25-orb-query.txt and docs/codegraph-r25-orb-inventory.md at elizerpist/exptv2 tooling 2cf5169ead04b18e9745f1210f36182b3cc09617. Manifest SHA-256 686f2746b249880fa4bc76dd178d43086df99862e095a51c8fdd49fcd68e2e0d. Dart SCIP covers Dart. Native inventory and source establish the Kotlin queue, publication, window and renderer links. Private fixture and Python grader are checked directly. No application graph regeneration or version bump is needed.
+
+## 8. CURRENT SOURCE FACTS
+
+In private scripts/KeyguardR251ShadeWitnessInstrumentationTest.kt, heldStockOpeningCannotRevealFullAfterRealShade now guards against two null ticket IDs. Immediately afterwards visibleShade() returns a SystemUI window on any one configured marker, including qs_frame. All six uses share this error: pre-command absence, post-command presence, three open-state checks around disconnect/underlay, and final collapse. Missing roots can throw. In production, KeyguardSurfaceClassifier.classifyDetailed and FluviKeyguardCardService.acceptAccessibilityMetadata own policy, while KeyguardOpeningPublication holds ticket identity. A visual test needs an observation independent of that policy. Keep the production evidence, ticket guard, real ingress and actual current HIDDEN_SHADE decision.
+
+## 9. PROVEN / UNPROVEN / MISSING
+
+PROVEN: null/null incorrectly retired the held trial before the command. The structural-only open predicate is ambiguous on the pinned image. The archive contains a real warm FULL, a real held A and no post-command witness. Prior 433 JVM and 1,046 Flutter checks, STOCK transfer and scoped withdrawal controls stand at their recorded scope. UNPROVEN: a new R25 disclosure, a new withdrawal regression, which instant the first correct handset pixel appears, and whether the structural marker would have stopped the prior STOCK run. MISSING: a scored held STOCK shade trial, DIRECT held A/B, formal ordinary and five native results, an independently downloaded owner APK, and calibrated phone measurements.
+
+## 10. ROOT-CAUSE / FORENSIC GATE
+
+The observed blocker for phone delivery was §19 applied to a fixture failure. For the qualification experiment, fix the known second observation error together with the verified retirement guard. Select one actual notification-shade input using disconnected controls on the same emulator and then exercise that input once against held A. The first command must not be consumed merely to discover that a permanent node exists. If proven panel opening still produces stale FULL, the runner retains the adverse evidence and returns the production decision to the reviewer.
+
+## 11. SCOPE LOCK
+
+Private shade fixture, its existing host scorer/tests and private runner evidence only. Protect stock reveal admission, teardown and unlock timing, dashboard, launcher widget and animations. Keep DIRECT at its recorded status. Restoring a bouncer marker does not distinguish the persistent qs_frame. A DIRECT rerun, fresh application build and optical scores have no place on the early owner delivery path.
+
+## 12. LAYERS / BOUNDS / OWNERSHIP AND IMPACT
+
+| File / symbol | Caller or consumer | Old → new transition | Risk | Guard | Verification |
+| --- | --- | --- | --- | --- | --- |
+| Shade fixture, retirement listener | Queue hook → held test | Nullable equality → exact non-null identity | Unrelated event aborts A | Preserve real supersession and trigger-time ticket reread | Five Kotlin cases and real held A |
+| Shade fixture, visibleShade and all call sites | Command, post, disconnect, collapse | Marker/absence → CLOSED, OPEN or UNKNOWN paired with a window ID and capture interval | Overlapping markers, old window, blank/cropped image | Calibrated full-screen evidence, one default display, locked/interactive, current identity | §13 controls and change on same setup |
+| Screenshot collector and fourth-frame release | Instrumentation / worker → Main | Separate structural observation → confirmed photographed OPEN plus matching real ingress | Late publication, five frames, screenshot contention | Single screenshot owner during collection, bounded queue, uptime and order, cleanup distinct | Four eligible held frames, ≥12 total post-ingress, independent underlay |
+| Existing Python scorer | Evidence → verdict | Existing ORB grading plus panel evidence | Incomplete or mixed window silently passes | Preserve adverse frames, explicit UNKNOWN, strict identity/chronology | Original 24 fixtures plus replacement-witness controls |
+| Existing signed profile | Signing host → owner | Local file → independently verified owner download | Runner cert, stale link, real records | Signer, payload, source and demo scope | §19 direct download verification |
+
+## 13. REQUIRED RED AND REGRESSION TESTS
+
+Offline, replay the archived structural observations and endpoint PNG. Demonstrate that the old function accepts qs_frame as OPEN and the new observer cannot certify OPEN from it. Do not claim the endpoint image is paired with every observation. Test CLOSED/OPEN/UNKNOWN including identical references, unsynchronized acquisition, dim/blank, wrong display/rotation, partial transition, credential/foreign surface, reused window ID, missing root and disagreement between the clock/wallpaper and expanded-content regions. A permanent matching node alone yields no positive. Preserve all 24 scorer verdicts and five exact Kotlin identity controls. A FULL after exclusion remains FAIL even if a later frame or control is missing. A partial remnant remains INCONCLUSIVE.
+
+## 14. IMPLEMENTATION AND DIAGNOSTIC CONTRACT
+
+Replace visibleShade() with a tri-state test observation and keep structural IDs only for window attribution and diagnostics. In the existing disconnected, interactive, locked setup before the target hold, capture the ordinary screen, issue cmd statusbar expand-notifications, capture the expanded notification panel, then collapse and capture ordinary again. Use the pinned API35 portrait geometry. If the command leaves the ordinary screen visually intact, restore it and calibrate exactly one alternative notification-panel input: a downward swipe from (0.25w,0.02h) to (0.25w,0.78h) over 400 ms, outside the ORB. Use this alternative only after its positive and return controls. Do not use expand-settings. Store labels for input, before/after/return acquisitions and unchanged/unknown outcomes. These are disconnected controls, never held-A trials. Restore the starting state and use the one calibrated input for the actual trial.
+
+Use full-screen pixels independent of the ORB to compare panel states. On each controlled plateau retain two disjoint reference acquisitions and one held-out acquisition. Use the upper and middle thirds as separate comparison regions, excluding the ORB rect, system bars, clock digits and dynamic notification text in every image. Compute per-region mean absolute RGB differences on a fixed grid of block means. Admit a region only if reference classes separate by more than four times the larger within-state distance, with a one RGB level floor. In both regions a new frame must be within that state's calibration radius (twice the larger within-state distance with the same floor), with a unique nearer state. Missing separation, ambiguous/mixed matches or unknown surfaces produce UNKNOWN. Retain original full images, masks, distances and holdout labels. Verify visually from originals that the ordinary controls show the normal keyguard and the expanded controls visibly show the notification panel; include the return control. An input echo, a darkened screen, QS-only page or a flipped flag cannot certify expansion. No retuning thresholds against the scored run. Any unverified visual label blocks a PASS. These checks establish a witness on this emulator only.
+
+Replace all six call sites. Preserve complete SystemUI identity/flags, absence of an obscuring foreign window or bouncer, display, rotation and power/keyguard brackets. For OPEN bind the actual shade SystemUI window to the acquired frame using current window observations bracketing it and the subsequent real matching framework ingress. Drop stamps on window/scene change. Before command, use confirmed CLOSED from the actual target while A still waits. During collection the existing single screenshot worker derives small panel features from each bitmap before transferring it to the writer. Publish the first confirmed OPEN with its acquisition-end uptime and sequence. Match real ingress and let the fourth eligible held sample trigger release exactly once. Keep the worker/Main nonblocking contract, timestamp coverage for transitions, existing storage caps and private originals, all stale/post-exclusion checks, same-open underlay at disconnect, fresh route-matched STOCK post-control and capture cleanup from R25.2 §§13–14. The producer owns each bitmap until transfer. Recycle once and restore flags, hooks, secure settings and lock state on every exit. The terminal manifest must distinguish setup control, actual input, cleanup, UNKNOWN and adverse output.
+
+## 15. PERFORMANCE AND PHYSICAL MEASUREMENT
+
+Per tested configuration, preserve two inclusive 100 ms targets: physical wake stimulus → first correct FULL ORB pixel, and first visible eligible keyguard frame → that same pixel. For either valid optical pair record frame brackets, uncertainty and actual lag. Use R25 §15 for the calibrated ABBA comparison. A normal owner trial can immediately report appearance, visible flash under shade and unlock clearance even without a camera rig. Track first motion independently. Callback clocks and the emulator cannot close either optical target.
+
+## 16. IMPLEMENTATION ORDER
+
+Start §19 package recovery, verification and any authorized demo delivery immediately. Run the qualification lane independently. After cheap regressions, compile the private fixture, run disconnected controls and one held STOCK episode on the established private emulator job. No rerun after a real target shade input solely because the result is adverse or inconclusive. A pre-input mechanical fixture failure may be repaired and started once more within this same handoff when the original evidence, a failing replay and a passing correction demonstrate the changed condition. Preserve both outcomes. A violated app contract or new design decision goes straight to the reviewer. Package work continues.
+
+## 17. VALIDATION COMMANDS AND CI
+
+Use the existing private elizerpist/pushparserv2 android-build.yml at the corrected harness lineage, scripts/r251-shade-api35.sh and established remote KVM API35 Pixel 7, 1080×2400, 420 dpi, Temurin 17 and Flutter 3.41.4. Pin the app SHA in the runner. Record head of the new private SHADE_REF and target/test identities. First run within their respective checkouts:
+
+    python3 -m unittest discover -s "$HARNESS/scripts" -p 'test_r251_shade_witness.py' -v
+    git diff --check
+    bash scripts/verify-fluvi-boundaries.sh
+    (cd android && ./gradlew :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin --no-daemon --max-workers=3)
+    gh workflow run android-build.yml -R elizerpist/pushparserv2 --ref "$SHADE_REF" -f native_diagnostic=true
+
+Compile after injecting the fixture via the existing private script. Verify the exact debug target before/after test injection within this build. Confirm job head/UUID, test method/terminal state, grade.json and privately retained raw files. Keep the older ENOSPC, API34 Launcher ANR, initial ABBA failure and unclassified corrected ABBA separate. Normal fluvi-core.yml and five native runs (r12_live, r12_static, r12_legacy, r12_contract, full) enter only under original R25 §17 conditions and run at exact application SHA. Mark each PASS/FAIL/NOT RUN. No extra dispatch to test an APK link.
+
+## 18. COMMIT DISCIPLINE
+
+Commit the private tooling corrections with why, source/evidence, scope, verification, known limitations and physical status. Append refs and an aggregate ledger to the live shared journal, preserving parallel additions. Keep raw screenshots, reports and per-frame traces in their private evidence location. Link immutable run/artifact identifiers. A tooling SHA never identifies the owner APK.
+
+## 19. PUSH / BUILD / HUMAN APK DELIVERY
+
+There are two ways to deliver to the named owner. (1) If the owner's instruction explicitly accepts a demo-data-only R25 phone test before shade qualification and the known potential visibility of the ORB under the shade, this authorizes immediate delivery of the existing candidate for that test. The owner may give that instruction by sending the copyable handoff command. The historical R22.4 exception and the complaint about delay alone do not establish that choice. Honor an acceptance already supplied without asking again. If fresh evidence establishes a new or worse disclosure or unlock regression, flag it before installation under the original R25 safety condition. (2) If there is no explicit early-test acceptance, apply R25.2 §19, deliver automatically when the corrected shade witness passes and the other applicable owner gates are met. Do not wait for phone optical results to give the owner the qualifying APK. An early handoff leaves the shade gate open and the full release unqualified.
+
+Use the original signing workspace first. Expected com.fluvi.app, versionCode 1, profile HUMAN_DIAGNOSTIC, 120768963 bytes, SHA-256 97dd4647a2ac48ac4d3fc444f40d5357a50c82ea4431eb38412f4d8e65ba0f48, v2/v3 signer SHA-256 faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. The original signed file was verified there. Review did not locate the owner-signed bytes for download. If recovery is necessary use the independently matched builder run 45023202908 artifact 14754464450, inner SHA-256 8f2e59757d556a5edb1ec74b3eac9a296e08b625d84ee58d9092464a0d3a2b6f. Use the authorized original signing route, compare all 470 payload entries, and report the actual resulting hash and length. Check unzip -t, zipalign -c, apksigner verify --verbose --print-certs, package/version and all three ABI source/purpose markers. Publish via the established immutable owner-test transport under the applicable authorization. Independently download the actual APK, compare length, SHA-256, signer and package, then give the owner the working direct APK link with the demo-only conditions. Send the link as soon as verified even if the qualification job is still running. Preserve the prior APK. Signing keys and raw evidence stay private.
+
+## 20. COMPLETION REPORT
+
+Lead with the verified APK link or the exact remaining packaging/authorization blocker. Include a short Hungarian phone checklist: use demo records, check the expected ORB on ordinary wake, pull the shade immediately during one wake, unlock and quickly relock, note any stale image, flash or slow withdrawal. Record application SHA and device/OS; request a LIGHT capture ID only to align the observed wake and withdrawal with a service episode. Keep physical acceptance with the owner. Report implementation, automatic validation, delivery and physical acceptance separately, with the private report ref, archived controls, gate table and first unmet predicate. Never post personal financial screenshots in the public journal.
+
+## 21. DEFINITION OF DONE
+
+Owner delivery requires an independently downloaded and verified update-compatible APK plus its direct link under §19. Qualification requires its own panel/ORB evidence and honest verdict. Keep R22.4 privacy FAIL, held DIRECT NOT REACHED, formal execution statuses and both phone endpoints visible. Delivering demo bytes settles artifact availability only. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+FLUVI_R25_3_OWNER_PHONE_TEST_END
