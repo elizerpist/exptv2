@@ -16079,3 +16079,82 @@ The historical R22.4 isolated-panel visual privacy FAIL remains open. The
 section 19 owner-test safety conditions are not yet established, no new Human
 APK has been delivered, and no 100 ms claim is made. PHYSICAL VALIDATION —
 PENDING, USER ONLY.
+
+### R25 qualification handback — 2026-11-22
+
+Implementation is the separately pushed `implement/r25-stock-orb` application
+commit `9c1647573f3b0da6506d6e36dd98efdb11fb64ac`, based on phone-tested
+`ad1eac09442cb8d78a992874d22157fe6bd5a05f`. This entry reports observations;
+it does not select a new optimization or change the phone acceptance decision.
+
+- The exact-parent API35 held-A control and candidate STOCK control reached the
+  real service boundary. On the parent B remained pending until the A Main
+  continuation was released; on the candidate B physically started while A was
+  held. Both observed one reader. Private runs
+  [45019469059](https://github.com/elizerpist/pushparserv2/actions/runs/45019469059)
+  and [45020289680](https://github.com/elizerpist/pushparserv2/actions/runs/45020289680)
+  retain the identities, clocks and original results. The initial candidate
+  pending-before-completion test FAILED without reaching R25 route eligibility.
+  With a separate read-only observer fixture (overlay SHA-256
+  `65ee852e5ececc33a9c526d8d11bdcac239a7b78f90bfc7aaaaf9d3948a8cc2a`),
+  [45022727111](https://github.com/elizerpist/pushparserv2/actions/runs/45022727111)
+  reached compatible STOCK A/B and passed that ordering. The overlay produces
+  an instrumented test binary, not an unmodified production binary.
+- Actual unlock/relock, privacy tightening, service replacement and two existing
+  panel controls passed. The new held-positive shade/composited-pixel control
+  FAILED/NOT REACHED twice: the first fixture assumed an R18 staged host on a
+  STOCK path; its one corrected fixture calibrated a real stock image, but the
+  independently measured root and its expected coordinates differed by 136 px
+  and it stopped before sampling shade. This is not proof of a new leak, nor
+  a visual safety PASS. The inherited R22.4 isolated-panel privacy FAIL remains
+  open. Raw screenshots/logs are retained only in the linked private runs.
+- A separate held R18_DIRECT control, overlay SHA-256
+  `015e1b74d2239a016a9a64a40470a61417062406ccc9cc9d6d37e480bb1287a2`,
+  [45023619073](https://github.com/elizerpist/pushparserv2/actions/runs/45023619073)
+  FAILED/NOT REACHED: its qualifying posted result used STOCK. An unheld API35
+  ABBA capture did observe R18_DIRECT transfers, but does not replace that held
+  regression or establish a correct-pixel measurement.
+- Local diff/boundary checks, debug Kotlin and androidTest compilation, seven
+  targeted JVM classes (67 cases), Flutter analyze (20 informational findings),
+  Flutter fast suites (1039 + 3 + 4 cases), and 10 host optical-scorer cases
+  passed. The requested full local Gradle command FAILED from `/dev/shm` ENOSPC;
+  the exact-source remote command passed 433 JVM cases and all requested
+  debug/test/profile/release build targets in private run
+  [45020627688](https://github.com/elizerpist/pushparserv2/actions/runs/45020627688).
+  LIGHT/FULL bounded R25 export and capture rotation passed; same-interleaving
+  OFF/LIGHT/FULL equivalence was not established.
+- The API34 AVD booted but screenshot preflight failed with
+  `known_launcher_anr_persisted`; its service control was NOT RUN, see private
+  run [45021451407](https://github.com/elizerpist/pushparserv2/actions/runs/45021451407).
+  The initial ABBA build FAILED on runner ENOSPC, retaining its logs in
+  [45020982560](https://github.com/elizerpist/pushparserv2/actions/runs/45020982560).
+  One capacity-corrected private retry
+  [45022840352](https://github.com/elizerpist/pushparserv2/actions/runs/45022840352)
+  completed eight unheld observations. Three of four candidate captures
+  recorded at least one handoff; two included native reveal returns. Each
+  invocation recreated the service, and all images remained unclassified: this
+  is not a warm-cycle, correct-pixel or optical performance pass.
+- The exact-source graph is tooling commit
+  `2cf5169ead04b18e9745f1210f36182b3cc09617`; manifest SHA-256
+  `686f2746b249880fa4bc76dd178d43086df99862e095a51c8fdd49fcd68e2e0d`.
+  Its source head/ref is the application SHA above. Kotlin is documented by
+  source inventory, not Dart SCIP coverage. The independent optical scorer is
+  at tooling tip `95da37a8ff1de59267244d1a43a2cf2105b2928b`; raw endpoints
+  can be rescored without rebuilding the app.
+- The prescribed builder at `200aaebd1eaa79382feb977ba57996b0c72e2d28`
+  built the exact source in [45023202908](https://github.com/elizerpist/exptv2/actions/runs/45023202908).
+  The locally owner-signed `com.fluvi.app` HUMAN_DIAGNOSTIC profile is 120768963
+  bytes, SHA-256 `97dd4647a2ac48ac4d3fc444f40d5357a50c82ea4431eb38412f4d8e65ba0f48`,
+  with the established signer SHA-256
+  `faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`.
+  Package/version, all three AOT source/purpose markers, native R25 markers,
+  v2/v3 signature, alignment and all 470 payload entries were checked.
+  This is a prepared artifact only: no public direct URL or independent URL
+  download exists. The section 19 visual safety condition is unestablished, so
+  the APK is WITHHELD. Ordinary CI and all five formal native scopes were NOT
+  RUN because the specified safety/control prerequisites remain incomplete.
+
+Physical wake→first correct FULL pixel and first eligible lockscreen frame→first
+correct FULL pixel each have no calibrated physical samples; both are
+INCONCLUSIVE against the 100 ms limit. No physical display acceleration or
+last-visible-pixel result is asserted. PHYSICAL VALIDATION — PENDING, USER ONLY.
