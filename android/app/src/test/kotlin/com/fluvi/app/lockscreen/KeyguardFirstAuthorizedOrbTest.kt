@@ -12,6 +12,19 @@ class KeyguardFirstAuthorizedOrbTest {
         gate.offer(request, authority, scene, 7, 11, 12, 13, 14, 15, full,
             completeMain = true, freshSystemEligible = true)
 
+    @Test fun `read-only Main check rejects newer requirement and changed scene`() {
+        val owner = KeyguardFirstAuthorizedOrb()
+        owner.requireRead(1)
+        owner.readCompleted(1)
+        assertTrue(owner.isUnclaimedReadCurrent(1, 0))
+        owner.requireRead(2)
+        assertFalse(owner.isUnclaimedReadCurrent(1, 0))
+        assertTrue(owner.isUnclaimedReadCurrent(2, 0))
+        owner.externalIngress()
+        assertFalse(owner.isUnclaimedReadCurrent(2, 0))
+        assertFalse(owner.isUnclaimedReadCurrent(2, null))
+    }
+
     @Test fun preferenceIsIntentAndDoesNotAuthorizePaint() {
         assertEquals(KeyguardFirstAuthorizedOrb.Intent.EMPTY_AWAITING_DISCLOSURE,
             KeyguardFirstAuthorizedOrb.intent(true))

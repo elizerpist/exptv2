@@ -796,6 +796,8 @@ internal object KeyguardCardDiagnostics {
         var r18GenerationOmitted: Int = 0,
         /** One bounded opening-read timeline per capture-owned attempt. */
         val r22Opening: LinkedHashMap<String, String> = linkedMapOf(),
+        /** Fixed keys only: the diagnostic consumer owns this once per wake. */
+        val r25Opening: LinkedHashMap<String, String> = linkedMapOf(),
         /** Bounded decision evidence survives eviction of raw event lines. */
         val r224Transitions: ArrayDeque<TimingEvent> = ArrayDeque(),
         var r224TransitionsOmitted: Int = 0,
@@ -920,7 +922,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
-        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY", "R18_PIPELINE", "R22_ACQUISITION", "R22_4_TRANSITION",
+        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY", "R18_PIPELINE", "R22_ACQUISITION", "R22_4_TRANSITION", "R25_OPENING",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "R15_SURFACE_REVOKED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
@@ -1062,6 +1064,76 @@ internal object KeyguardCardDiagnostics {
             val prefix = if (event.reason == "REVEAL_RECEIPT") "reveal" else "retire"
             listOf("r18ApplyBegin", "r18ApplyEnd", "r18Commit", "r18LatchNs", "r18PresentNs", "r18PresentState")
                 .forEach { field -> retainField(field, "$prefix:$field") }
+        }
+    }
+
+    private fun reduceR25(attempt: TimingAttempt, event: TimingEvent) {
+        val values = attempt.r25Opening
+        val original = event.fields["r25Original"] ?: return
+        val successor = event.fields["r25Successor"]?.takeIf { it != "UNOBSERVED" }
+        fun field(name: String) = event.fields[name]?.takeIf { it != "UNOBSERVED" }
+        values.putIfAbsent("firstOriginal", original)
+        field("r25Backend")?.let { values.putIfAbsent("backend", it) }
+        field("r25ReadEnd")?.let { values.putIfAbsent("firstReadEnd", it) }
+        field("r25ReaderHigh")?.let { values["readerHigh"] = it }
+        field("r25TicketHigh")?.let { values["ticketHigh"] = it }
+        when (event.reason) {
+            "BYPASS" -> {
+                values.putIfAbsent("bypass", field("r25Reason") ?: "UNOBSERVED")
+                successor?.let { values.putIfAbsent("bypassPending", it) }
+            }
+            "PARKED" -> {
+                values.putIfAbsent("parkedOriginal", original)
+                values.putIfAbsent("parkedAt", event.uptimeMs.toString())
+            }
+            "POST_REQUESTED" -> values.putIfAbsent("postAt", event.uptimeMs.toString())
+            "MAIN_CLAIM" -> {
+                values["claimOriginal"] = original
+                values["claimAt"] = event.uptimeMs.toString()
+                values["claimResult"] = field("r25Reason") ?: "UNOBSERVED"
+            }
+            "DISCARDED" -> {
+                values["discardOriginal"] = original
+                values["discardAt"] = event.uptimeMs.toString()
+                values["discardReason"] = field("r25Reason") ?: "UNOBSERVED"
+            }
+            "SUPERSEDED" -> if (successor != null) {
+                val count = (values["supersessions"]?.toIntOrNull() ?: 0) + 1
+                values["supersessions"] = count.toString()
+                if (count == 1) {
+                    values["firstSuperseded"] = original
+                    values["firstSuccessor"] = successor
+                    field("r25Backend")?.let { values["firstBackend"] = it }
+                    values["firstSupersededAt"] = event.uptimeMs.toString()
+                    field("r25SuccessorQueued")?.let { values["firstOfferedAt"] = it }
+                    field("r25ReadEnd")?.let { values["firstSupersededReadEnd"] = it }
+                    field("r25Reason")?.let { values["firstSupersededReason"] = it }
+                }
+                values["lastSuperseded"] = original
+                values["lastSuccessor"] = successor
+                field("r25Backend")?.let { values["lastBackend"] = it }
+                values["lastSupersededAt"] = event.uptimeMs.toString()
+                field("r25SuccessorQueued")?.let { values["lastOfferedAt"] = it }
+                field("r25ReadEnd")?.let { values["lastSupersededReadEnd"] = it }
+                field("r25Reason")?.let { values["lastSupersededReason"] = it }
+                values.remove("lastSuccessorStart")
+                values.remove("lastSuccessorEnd")
+            }
+        }
+    }
+
+    /** Preserve the first and last successor even if the raw ring rolls over. */
+    private fun reduceR25PhysicalRead(attempt: TimingAttempt, event: TimingEvent) {
+        val id = event.requestId?.toString() ?: return
+        val values = attempt.r25Opening
+        val endpoint = when (event.stage) {
+            "INSPECTION_STARTED" -> "Start"
+            "INSPECTION_FINISHED" -> "End"
+            else -> return
+        }
+        listOf("first", "last").forEach { position ->
+            if (values["${position}Successor"] == id)
+                values.putIfAbsent("${position}Successor$endpoint", event.uptimeMs.toString())
         }
     }
 
@@ -1709,6 +1781,8 @@ internal object KeyguardCardDiagnostics {
                 }
                 show.r12Evidence = values
             }
+            if (stage == "INSPECTION_STARTED" || stage == "INSPECTION_FINISHED")
+                reduceR25PhysicalRead(attempt, event)
             when (stage) {
                 "R13_FINANCIAL" -> {
                     val totals = attempt.r13Work ?: FinancialWorkSummary().also { attempt.r13Work = it }
@@ -1990,6 +2064,7 @@ internal object KeyguardCardDiagnostics {
                 }
                 "R18_PIPELINE" -> reduceR18(attempt, event)
                 "R22_ACQUISITION" -> reduceR22(attempt, event)
+                "R25_OPENING" -> reduceR25(attempt, event)
                 "R12_SURFACE" -> {
                     val show = showEpisode()
                     if (show != null) reduceSurface(show, event)
@@ -2213,6 +2288,7 @@ internal object KeyguardCardDiagnostics {
                 r19MetricSnapshot = timeline.r19Metrics?.snapshot() ?: timeline.r19MetricSnapshot, r19Metrics = null)
         }),
         r22Opening = LinkedHashMap(attempt.r22Opening),
+        r25Opening = LinkedHashMap(attempt.r25Opening),
         pendingHideCommits = ArrayDeque(attempt.pendingHideCommits),
         pendingR11 = ArrayDeque(attempt.pendingR11.map { it.copy(fields = it.fields.toMap()) }),
         pendingR12 = ArrayDeque(attempt.pendingR12.map { it.copy(fields = it.fields.toMap()) }),
@@ -2389,10 +2465,11 @@ internal object KeyguardCardDiagnostics {
         }
         // A short direct/withdrawal core for every selected ORB wake is
         // admitted before potentially lengthy episode and financial records.
-        attemptsForCausalEvidence.filter { it.presentationMode == "ORB" || it.r18Generations.isNotEmpty() }
+        attemptsForCausalEvidence.filter { it.presentationMode == "ORB" || it.r18Generations.isNotEmpty() || it.r25Opening.isNotEmpty() }
             .forEach { attempt ->
                 select("a${attempt.id}:r21Core", r21CoreRecord(attempt), attempt.id)
                 select("a${attempt.id}:r22Core", r22CoreRecord(attempt), attempt.id)
+                select("a${attempt.id}:r25Core", r25CoreRecord(attempt), attempt.id)
             }
         // Restriction decisions are independent of the rolling raw ring.
         // The same global export budget and omission accounting still apply.
@@ -2691,6 +2768,32 @@ internal object KeyguardCardDiagnostics {
         val sized = withExportBytes(report)
         check(sized.toByteArray(Charsets.UTF_8).size <= exportLimitBytes)
         return sized
+    }
+
+    private fun r25CoreRecord(attempt: TimingAttempt): String = buildString {
+        val values = attempt.r25Opening
+        if (values.isEmpty()) {
+            appendLine(" R25_CORE v=1 attempt=${attempt.id} session=${attempt.serviceSession} wake=${attempt.wakeEpoch} outcome=UNOBSERVED physical=UNOBSERVED")
+            return@buildString
+        }
+        fun v(key: String) = values[key]?.take(48) ?: "UNOBSERVED"
+        fun n(value: Any?) = value?.toString()?.take(48) ?: "UNOBSERVED"
+        val show = attempt.shows.firstOrNull { it.requestId == attempt.showingInspectionRequestId }
+        val direct = attempt.r18Generations.values.firstOrNull {
+            attempt.showingInspectionRequestId != null &&
+                it.values["r19ConsumedRequest"] == attempt.showingInspectionRequestId.toString()
+        }
+        val hide = show?.let { actualWithdrawal(attempt, it) }
+        append(" R25_CORE v=1 attempt=${attempt.id} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
+        append(" implementation=candidate backend=${v("backend")} bypass=${v("bypass")}/${v("bypassPending")}")
+        append(" original=${v("firstOriginal")}@${v("firstReadEnd")} parked=${v("parkedOriginal")}@${v("parkedAt")}")
+        append(" post=${v("postAt")} claim=${v("claimOriginal")}@${v("claimAt")}/${v("claimResult")}")
+        append(" first=${v("firstSuperseded")}@${v("firstSupersededReadEnd")}->${v("firstSuccessor")}@${v("firstOfferedAt")}/${v("firstSupersededAt")}/${v("firstSuccessorStart")}/${v("firstSuccessorEnd")}/${v("firstSupersededReason")} firstBackend=${v("firstBackend")}")
+        append(" last=${v("lastSuperseded")}@${v("lastSupersededReadEnd")}->${v("lastSuccessor")}@${v("lastOfferedAt")}/${v("lastSupersededAt")}/${v("lastSuccessorStart")}/${v("lastSuccessorEnd")}/${v("lastSupersededReason")} lastBackend=${v("lastBackend")}")
+        append(" supersessions=${v("supersessions")} discard=${v("discardOriginal")}@${v("discardAt")}/${v("discardReason")}")
+        append(" showingRequest=${n(attempt.showingInspectionRequestId)} grant=${n(direct?.values?.get("r18Proof"))}@${n(direct?.values?.get("GRANT"))}")
+        append(" revealReturn=${n(direct?.values?.get("reveal:r18ApplyEnd"))} hide=${n(hide?.operationId)}/${n(hide?.localHideAppliedAtUptimeMs)}/${n(hide?.removeReturnAtUptimeMs)}")
+        appendLine(" readerHighSession=${v("readerHigh")} mainTicketHigh=${v("ticketHigh")} overflow=diagnosticQueueOverflow clock=uptimeMs physical=UNOBSERVED")
     }
 
     /** One bounded row per selected ORB wake; no relation is inferred from

@@ -143,6 +143,14 @@ class FluviKeyguardCardService : AccessibilityService() {
     private val financialScope = CoroutineScope(serviceJob + financialDispatcher)
     private val queueLock = Any()
     private val inspectionQueue = KeyguardCardInspectionQueue()
+    private val r25Publication = KeyguardOpeningPublication<R25Completed>()
+    private val r25ExclusionPosted = AtomicBoolean(false)
+    /** Test dispatch may hold a single Main continuation without blocking Main. */
+    @Volatile internal var r25MainDispatchForTest: ((KeyguardCardInspectionRequest, Runnable) -> Boolean)? = null
+    internal fun r25ReaderBarrierForTest(acknowledge: () -> Unit) {
+        inspectionScope.launch { acknowledge() }
+    }
+    private var r25MainSnapshot: R25RouteSnapshot? = null // queueLock; published by Main
     private val openingHandoff = KeyguardOpeningInspectionHandoff()
     private val firstAcquisition = KeyguardFirstAcquisition()
     // Main publishes eligibility; the sampler can reserve only a successor
@@ -170,6 +178,21 @@ class FluviKeyguardCardService : AccessibilityService() {
         val settingsRevision: Long, val materialRevision: Long, val dataRevision: Long, val layoutRevision: Long)
     private data class R18Identity(val token: KeyguardOrbPresentationCoordinator.Reservation,
         val preparation: KeyguardCardWindow.R18Preparation)
+    /** Main-published scalar route and revision identity; never a View or grant. */
+    private data class R25RouteSnapshot(
+        val authority: KeyguardInspectionAuthority,
+        val stateRevision: Long,
+        val freshnessRevision: Long,
+        val routeRevision: Long,
+        val settingsGeneration: Long,
+        val dataGeneration: Long,
+        val layoutRevision: Long,
+        val materialRevision: Long,
+        val backend: String,
+        val reservationId: Long?,
+        val hostGeneration: Long?,
+        val outputGeneration: Long?,
+    )
     private class R18Active(token: KeyguardOrbPresentationCoordinator.Reservation,
                             preparation: KeyguardCardWindow.R18Preparation,
                             val diagnosticContext: KeyguardDiagnosticContext?) {
@@ -220,7 +243,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     private var nextR14IngressId = 0L
     private var nextR14RecoveryId = 0L
     /** Main owns the one-use, authority-qualified token; it never owns a View. */
-    private var r14Recovery: KeyguardR14Recovery? = null
+    @Volatile private var r14Recovery: KeyguardR14Recovery? = null
     private var contentJob: Job? = null
     private var coreObservation: Job? = null
     private var observedFocusGeneration: Long? = null
@@ -300,8 +323,12 @@ class FluviKeyguardCardService : AccessibilityService() {
             interactionEpoch = interactionEpoch.get(),
             attachGeneration = overlayAttachGeneration,
         )
+        var r25Retired: KeyguardOpeningPublication.Discarded<R25Completed>? = null
         synchronized(queueLock) {
             if (inspectionAuthority != current) {
+                r25Publication.waitingRequest()?.takeIf { !current.matches(it) }?.let {
+                    r25Retired = r25Publication.discard(inspectionQueue, it)
+                }
                 readAheadStateRevision += 1L
                 val early = r18ProvisionalWake
                 val adopting = early != null && early.previousAuthority == inspectionAuthority &&
@@ -319,6 +346,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (renewSystemWork) systemSampler.renewPending { old ->
             old.copy(id = ++nextSystemGateId, authority = current, queuedAt = SystemClock.uptimeMillis())
         }
+        r25Retired?.let { old ->
+            recordR25("DISCARDED", old.ticket.request, old.successor, old.ticket.value.route,
+                readEnd = old.ticket.value.read.finishedAt, reason = "AUTHORITY_CHANGED")
+            old.successor?.takeIf { serviceJob.isActive }?.let { actual ->
+                inspectionScope.launch { processInspectionQueue(actual) }
+            }
+        }
     }
 
     /** Main owns the sampled fields. Lock ordering is queue then freshness;
@@ -335,18 +369,28 @@ class FluviKeyguardCardService : AccessibilityService() {
                 surfaceState = surfacePresentationState,
             )
         }
+        r25MainSnapshot = r25BuildSnapshotLocked()
     }
 
     private fun publishReadAheadState(invalidate: Boolean = false) {
-        synchronized(queueLock) {
-            if (invalidate) {
+        val retired = synchronized(queueLock) {
+            val discarded = if (invalidate) {
                 openingHandoff.invalidate()
                 readAheadStateRevision += 1L
                 r18RouteRevision += 1L
                 cancelR18ReservationLocked()
                 firstAcquisition.invalidate()
-            }
+                r25Publication.waitingRequest()?.let { r25Publication.discard(inspectionQueue, it) }
+            } else null
             publishReadAheadSnapshotLocked()
+            discarded
+        }
+        retired?.let { old ->
+            recordR25("DISCARDED", old.ticket.request, old.successor, old.ticket.value.route,
+                readEnd = old.ticket.value.read.finishedAt, reason = "STATE_INVALIDATED")
+            old.successor?.takeIf { serviceJob.isActive }?.let { actual ->
+                inspectionScope.launch { processInspectionQueue(actual) }
+            }
         }
     }
 
@@ -356,6 +400,45 @@ class FluviKeyguardCardService : AccessibilityService() {
             readAheadShowInProgress = value
             publishReadAheadSnapshotLocked()
         }
+    }
+
+    /** Called under queueLock; reads only immutable/scalar state already
+     * published by Main. It never consults a View or Android platform API. */
+    private fun r25BuildSnapshotLocked(): R25RouteSnapshot? {
+        val ahead = readAheadSnapshot ?: return null
+        val settings = lastSettings ?: return null
+        val profile = lastMaterialProfile ?: return null
+        if (ahead.authority != inspectionAuthority || !ahead.detached || ahead.showInProgress ||
+            (ahead.surfaceState != KeyguardSurfacePresentationState.AWAITING_MAIN_SURFACE &&
+                ahead.surfaceState != KeyguardSurfacePresentationState.WITHDRAWN_AWAITING_SURFACE) ||
+            !settings.requested || !settings.showFinancialDetails || !settings.focus.isValid ||
+            settings.presentationMode != KeyguardCardPresentationMode.ORB ||
+            settings.animationMode == KeyguardCardAnimationMode.OFF || !profile.animated ||
+            r14Recovery != null || firstAuthorizedOrb.current() != null) return null
+        val coordinator = r18Coordinator.snapshot()
+        val owner = r18Active
+        if (owner == null) {
+            if (r18ProvisionalWake != null || (coordinator.reservation != null &&
+                coordinator.grant != KeyguardOrbPresentationCoordinator.Grant.RETIRED)) return null
+        } else {
+            val token = owner.token
+            if (coordinator.reservation !== token || token.stamp.authority != ahead.authority ||
+                !owner.preparation.full || !owner.preparation.emptyAwaitingDisclosure || owner.paintRequested ||
+                coordinator.grant != KeyguardOrbPresentationCoordinator.Grant.NONE ||
+                coordinator.host == KeyguardOrbPresentationCoordinator.Host.INPUT_ARMED ||
+                coordinator.host == KeyguardOrbPresentationCoordinator.Host.REMOVAL_PENDING ||
+                coordinator.host == KeyguardOrbPresentationCoordinator.Host.REMOVED) return null
+        }
+        return R25RouteSnapshot(ahead.authority, ahead.stateRevision, ahead.freshnessRevision,
+            r18RouteRevision, settings.generation, settings.focus.generation, settings.layoutRevision,
+            profile.publisherRevision, if (owner == null) "STOCK" else "R18_DIRECT",
+            owner?.token?.id, owner?.token?.stamp?.hostGeneration, owner?.preparation?.outputGeneration)
+    }
+
+    private fun r25SnapshotLocked(request: KeyguardCardInspectionRequest): R25RouteSnapshot? {
+        val published = r25MainSnapshot ?: return null
+        if (!published.authority.matches(request) || r25BuildSnapshotLocked() != published) return null
+        return published
     }
 
     private fun readAheadStillCurrent(snapshot: KeyguardReadAheadSnapshot): Boolean =
@@ -402,6 +485,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 r18RouteRevision += 1L
                 cancelR18ReservationLocked()
             }
+            publishReadAheadSnapshotLocked()
         }
     }
 
@@ -470,14 +554,21 @@ class FluviKeyguardCardService : AccessibilityService() {
                 r18Coordinator.snapshot().reservation === early.token) {
                 openingHandoff.arm(early.token, early.token.id, request, authority, early.routeRevision)
             } else false
-            startsWorker to openingArmed
+            val promoted = if (!startsWorker) r25PromoteWaitingLocked() else null
+            Triple(if (startsWorker) inspectionQueue.activeRequest() else promoted?.successor,
+                openingArmed, promoted?.ticket)
         } ?: return null
         runCatching { inspectionProbeForTest?.openingReserved(request, early.token.id, offer.second) }
+        offer.third?.let { old ->
+            recordR25("SUPERSEDED", old.request, offer.first, old.value.route,
+                readEnd = old.value.read.finishedAt, reason = "EARLY_OFFER_BEFORE_CLAIM")
+            r25RequestExclusionCheck(old.request.session)
+        }
         return {
             // A cancellation after posting Main cannot relabel this work.
             // An offered active item must run even if cancelled in the gap;
             // its stale-read branch drains the single-owner queue.
-            if (offer.first) inspectionScope.launch { processInspectionQueue(request) }
+            offer.first?.let { actual -> inspectionScope.launch { processInspectionQueue(actual) } }
         }
     }
 
@@ -524,6 +615,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                               reservedAt: Long? = null) {
         val owner = R18Active(token, prep, context)
         r18Active = owner
+        synchronized(queueLock) { publishReadAheadSnapshotLocked() }
         recordR18(owner, "WAKE_ADOPTED", sample = sample, reservedAt = reservedAt)
         recordR18(owner, "HOST_ADD_BEGIN")
         if (!overlay.stageR18Host(token.stamp.hostGeneration, settings)) {
@@ -2151,35 +2243,51 @@ class FluviKeyguardCardService : AccessibilityService() {
             if (inspectionQueue.pendingRequest() != null) {
                 recordMaximum(maximumPendingInspections, 1)
             }
-            Triple(startsWorker, replacedPending, inspectionQueue.pendingRequest())
+            val promoted = if (!startsWorker) r25PromoteWaitingLocked() else null
+            R25QueueOffer(
+                start = if (startsWorker) inspectionQueue.activeRequest() else promoted?.successor,
+                previousPending = replacedPending,
+                pendingAtOffer = actualPending,
+                pendingAfter = inspectionQueue.pendingRequest(),
+                activeAfter = inspectionQueue.activeRequest(),
+                superseded = promoted?.ticket,
+            )
         }
         postClaimForTest?.let { observed -> runCatching { inspectionProbeForTest?.postClaimObserved(observed) } }
-        inspectionProbeForTest?.queueOffered(request, queueOffer.second, queueOffer.third, queueOffer.first)
-        if (meta != null) inspectionProbeForTest?.ingressOffered(meta, request, queueOffer.second,
-            queueOffer.third, queueOffer.first, frameworkEvent)
+        val startsWorker = queueOffer.start != null
+        inspectionProbeForTest?.queueOffered(request, queueOffer.previousPending, queueOffer.pendingAfter, startsWorker)
+        runCatching { inspectionProbeForTest?.r25QueueTransition(request, queueOffer.pendingAtOffer,
+            queueOffer.activeAfter, queueOffer.superseded?.request) }
+        if (meta != null) inspectionProbeForTest?.ingressOffered(meta, request, queueOffer.previousPending,
+            queueOffer.pendingAfter, startsWorker, frameworkEvent)
+        queueOffer.superseded?.let { old ->
+            recordR25("SUPERSEDED", old.request, queueOffer.start, old.value.route,
+                readEnd = old.value.read.finishedAt, reason = "OFFER_BEFORE_CLAIM")
+            r25RequestExclusionCheck(old.request.session)
+        }
         val recovery = r14Recovery
-        if (recovery?.used == true && queueOffer.second != null && queueOffer.third != null) {
+        if (recovery?.used == true && queueOffer.previousPending != null && queueOffer.pendingAfter != null) {
             val next = recovery.copy(replacements = recovery.replacements + 1)
             r14Recovery = next
-            if (next.replacements <= 4) recordR14Recovery("REPLACED", next, request, queueOffer.third,
-                displaced = queueOffer.second?.id)
+            if (next.replacements <= 4) recordR14Recovery("REPLACED", next, request, queueOffer.pendingAfter,
+                displaced = queueOffer.previousPending.id)
         }
         traceKeyguard(
-            if (queueOffer.first) "INSPECTION_QUEUED" else "INSPECTION_COALESCED",
+            if (startsWorker) "INSPECTION_QUEUED" else "INSPECTION_COALESCED",
             trigger,
             request,
             fields = mapOf(
                 "queuedAtUptimeMs" to now,
                 "triggerReceivedUptimeMs" to (request.triggerReceivedUptimeMs ?: "NA"),
                 "eventTimeUptimeMs" to (request.eventTimeUptimeMs ?: "NA"),
-                "replacedPendingRequestId" to (queueOffer.second?.id ?: "NA"),
+                "replacedPendingRequestId" to (queueOffer.previousPending?.id ?: "NA"),
                 "requestVisibilityEpoch" to request.visibilityEpoch,
                 "requestInteractionEpoch" to request.interactionEpoch,
                 "requestWakeGeneration" to request.wakeGeneration,
                 "windowFreshness" to request.windowFreshness.name,
             ),
         )
-        if (queueOffer.first) inspectionScope.launch { processInspectionQueue(request) }
+        queueOffer.start?.let { actual -> inspectionScope.launch { processInspectionQueue(actual) } }
         return request.id
     }
 
@@ -2208,6 +2316,28 @@ class FluviKeyguardCardService : AccessibilityService() {
         val requestedAt: Long,
         val requestedAtNs: Long,
     )
+
+    private data class R25Completed(
+        val read: CompletedInspection,
+        val handoff: InspectionHandoff,
+        val route: R25RouteSnapshot,
+    )
+
+    private data class R25QueueOffer(
+        val start: KeyguardCardInspectionRequest?,
+        val previousPending: KeyguardCardInspectionRequest?,
+        val pendingAtOffer: KeyguardCardInspectionRequest?,
+        val pendingAfter: KeyguardCardInspectionRequest?,
+        val activeAfter: KeyguardCardInspectionRequest?,
+        val superseded: KeyguardOpeningPublication.Ticket<R25Completed>?,
+    )
+
+    private sealed interface R25Completion {
+        data class Stock(val reason: String, val route: R25RouteSnapshot?,
+            val pending: KeyguardCardInspectionRequest?) : R25Completion
+        data class Promote(val successor: KeyguardCardInspectionRequest, val route: R25RouteSnapshot) : R25Completion
+        data class Park(val notice: KeyguardOpeningPublication.Notice?, val route: R25RouteSnapshot) : R25Completion
+    }
 
     private data class ReadAheadDecision(
         val snapshot: KeyguardReadAheadSnapshot?,
@@ -2304,6 +2434,152 @@ class FluviKeyguardCardService : AccessibilityService() {
     private fun newInspectionHandoff(): InspectionHandoff {
         val prepared = SystemClock.uptimeMillis()
         return InspectionHandoff(prepared, SystemClock.uptimeMillis(), System.nanoTime())
+    }
+
+    /** All callers hold queueLock. A newer request must be a genuine service
+     * ingress of the same owner and cannot inherit an unserved cache clear. */
+    private fun r25CompatibleLocked(ticket: R25Completed, next: KeyguardCardInspectionRequest): Boolean {
+        val route = r25SnapshotLocked(ticket.read.request) ?: return false
+        val genuine = next.r14Ingress != null || when (next.trigger) {
+            "window", "display", "wake", "accessibility" -> true
+            else -> false
+        }
+        return route == ticket.route && genuine && next.id > ticket.read.request.id &&
+            route.authority.matches(next) && !next.windowFreshness.requiresCacheClear &&
+            inspectionFreshness.isEstablished(route.authority, route.freshnessRevision)
+    }
+
+    private fun r25CompleteLocked(read: CompletedInspection, handoff: InspectionHandoff): R25Completion {
+        val request = read.request
+        val result = read.result
+        val pending = inspectionQueue.pendingRequest()
+        val route = r25SnapshotLocked(request)
+        fun bypass(reason: String) = R25Completion.Stock(reason, route, pending)
+        if (route == null) return bypass("ROUTE_OR_STATE")
+        if (!inspectionQueue.canPublishCompleted(request)) return bypass("ORDER_OR_OWNER")
+        if (result.decision != KeyguardCardVisibility.SHOW_FULL || result.surfaceReason != KeyguardSurfaceReason.MAIN_CONFIRMED)
+            return bypass("CLASSIFICATION")
+        if (result.rootUnavailable || result.walkTruncated || result.abortedStale || result.windowTiming.ownAttributionAmbiguous)
+            return bypass("INCOMPLETE_OR_AMBIGUOUS")
+        if (!result.signals.systemStateAvailable || !result.signals.userUnlocked || !result.signals.primaryDisplay ||
+            !result.signals.interactive || !result.signals.displayOn || !result.signals.keyguardLocked)
+            return bypass("SYSTEM_INELIGIBLE")
+        if (result.freshnessRevision != route.freshnessRevision || result.r19ReadSceneSerial == null ||
+            !inspectionFreshness.isEstablished(route.authority, route.freshnessRevision)) return bypass("FRESHNESS_OR_SCENE")
+        val ticket = R25Completed(read, handoff, route)
+        if (pending != null) {
+            if (!r25CompatibleLocked(ticket, pending)) return bypass("PENDING_INCOMPATIBLE")
+            return inspectionQueue.handoffCompleted(request, pending)?.let { R25Completion.Promote(it, route) }
+                ?: bypass("TRANSFER_CHANGED")
+        }
+        return r25Publication.park(inspectionQueue, request, ticket)?.let { R25Completion.Park(it.noticeToPost, route) }
+            ?: bypass("TICKET_UNAVAILABLE")
+    }
+
+    private fun r25PromoteWaitingLocked(): KeyguardOpeningPublication.Superseded<R25Completed>? {
+        val waiting = r25Publication.waitingTicket() ?: return null
+        val pending = inspectionQueue.pendingRequest() ?: return null
+        if (!r25CompatibleLocked(waiting.value, pending)) return null
+        return r25Publication.supersede(inspectionQueue, waiting.request, pending)
+    }
+
+    /** A suppressed positive may have missed an exclusion. This coalesced
+     * sampler check can withdraw but never schedules a positive inspection. */
+    private fun r25RequestExclusionCheck(originalSession: Long) {
+        if (!r25ExclusionPosted.compareAndSet(false, true)) return
+        if (!mainHandler.post {
+                r25ExclusionPosted.set(false)
+                if (inspectionAuthority.serviceSession == originalSession && serviceJob.isActive)
+                    requestSystemCheck("r25SuppressedPositive", evaluate = false)
+            }) r25ExclusionPosted.set(false)
+    }
+
+    private fun recordR25(phase: String, request: KeyguardCardInspectionRequest,
+                          successor: KeyguardCardInspectionRequest? = null,
+                          route: R25RouteSnapshot? = null, at: Long? = null,
+                          readEnd: Long? = null, reason: String = "UNOBSERVED") {
+        val context = request.diagnosticContext ?: return
+        if (context.captureId == null || context.captureId != KeyguardCardDiagnostics.activeCaptureId() ||
+            !KeyguardCardDiagnostics.wantsEvent("R25_OPENING")) return
+        val observed = at ?: SystemClock.uptimeMillis()
+        val readerHigh = maximumConcurrentInspections.get()
+        runCatching {
+            traceKeyguard("R25_OPENING", phase, request, observedUptimeMs = observed,
+                deferredFields = { mapOf("r25Backend" to (route?.backend ?: "UNOBSERVED"),
+                    "r25Original" to request.id, "r25Successor" to (successor?.id ?: "UNOBSERVED"),
+                    "r25ReadEnd" to (readEnd ?: "UNOBSERVED"), "r25Reason" to reason,
+                    "r25SuccessorQueued" to (successor?.queuedAtUptimeMs ?: "UNOBSERVED"),
+                    "r25ReaderHigh" to readerHigh,
+                    "r25TicketHigh" to if (phase == "PARKED" || phase == "MAIN_CLAIM") 1 else "UNOBSERVED") })
+        }
+    }
+
+    private fun r25PostDrain(notice: KeyguardOpeningPublication.Notice, request: KeyguardCardInspectionRequest) {
+        // A test dispatcher may invoke the continuation reentrantly from the
+        // reader. The actual claim and View admission always run on Main.
+        val invoked = AtomicBoolean(false)
+        val drain = Runnable {
+            if (invoked.compareAndSet(false, true)) {
+                if (Looper.myLooper() == Looper.getMainLooper()) r25DrainOnMain(notice)
+                else if (!mainHandler.post { r25DrainOnMain(notice) }) r25FallbackDrain(notice)
+            }
+        }
+        val posted = runCatching { r25MainDispatchForTest?.invoke(request, drain) ?: mainHandler.post(drain) }.getOrDefault(false)
+        if (!posted && invoked.compareAndSet(false, true)) r25FallbackDrain(notice)
+    }
+
+    private fun r25FallbackDrain(notice: KeyguardOpeningPublication.Notice) {
+        if (serviceJob.isActive) {
+            // One existing ordered Main dispatch is the only live-owner fallback.
+            inspectionScope.launch {
+                try {
+                    withContext(Dispatchers.Main.immediate) { r25DrainOnMain(notice) }
+                } catch (failure: Exception) {
+                    android.util.Log.e("FluviKeyguard", "R25 ordered Main dispatch failed", failure)
+                    r25DiscardNoticeIfCurrent(notice)
+                }
+            }
+        } else {
+            r25DiscardNoticeIfCurrent(notice)
+        }
+    }
+
+    private fun r25DiscardNoticeIfCurrent(notice: KeyguardOpeningPublication.Notice) {
+        val discarded = synchronized(queueLock) {
+            r25Publication.discardFailedNotice(inspectionQueue, notice)
+        } ?: return
+        recordR25("DISCARDED", discarded.ticket.request, discarded.successor, discarded.ticket.value.route,
+            readEnd = discarded.ticket.value.read.finishedAt, reason = "MAIN_DISPATCH_FAILED")
+        // Preserve a real successor and its freshness if the service still
+        // lives; a dead session cannot start more work.
+        discarded.successor?.takeIf { serviceJob.isActive }?.let { actual ->
+            inspectionScope.launch { processInspectionQueue(actual) }
+        }
+    }
+
+    private fun r25DrainOnMain(notice: KeyguardOpeningPublication.Notice) {
+        val ticket = synchronized(queueLock) { r25Publication.claim(inspectionQueue, notice) } ?: return
+        val completed = ticket.value
+        val request = ticket.request
+        try {
+            val current = synchronized(queueLock) {
+                r25SnapshotLocked(request) == completed.route &&
+                    firstAuthorizedOrb.isUnclaimedReadCurrent(request.id, completed.read.result.r19ReadSceneSerial)
+            }
+            recordR25("MAIN_CLAIM", request, route = completed.route, readEnd = completed.read.finishedAt,
+                reason = if (current) "CURRENT" else "OBSOLETE")
+            if (current) applyCompletedInspection(completed.read, completed.handoff)
+            else {
+                if (KeyguardCardDiagnostics.wantsEvent("INSPECTION_REJECTED"))
+                    traceKeyguard("INSPECTION_REJECTED", "r25Obsolete", request,
+                        fields = mapOf("rejectionReason" to "r25Obsolete"))
+                r25RequestExclusionCheck(request.session)
+            }
+        } finally {
+            val next = synchronized(queueLock) { r25Publication.finish(inspectionQueue, request) }
+            if (next != null && serviceJob.isActive) inspectionScope.launch { processInspectionQueue(next) }
+            scheduleR19Join()
+        }
     }
 
     /** Main is still the only authority to accept an answer or mutate Views.
@@ -2423,6 +2699,32 @@ class FluviKeyguardCardService : AccessibilityService() {
             val handoff = newInspectionHandoff()
             KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.HANDOFF, active.id, active.attachGeneration)
             if (decision.successor == null || decision.snapshot == null) {
+                when (val opening = synchronized(queueLock) { r25CompleteLocked(read, handoff) }) {
+                    is R25Completion.Promote -> {
+                        traceCompletedInspection(read, null)
+                        recordR25("SUPERSEDED", active, opening.successor, opening.route, readEnd = read.finishedAt,
+                            reason = "PENDING_AT_COMPLETION")
+                        r25RequestExclusionCheck(active.session)
+                        promotedOwner = opening.successor
+                        request = opening.successor
+                        continue
+                    }
+                    is R25Completion.Park -> {
+                        traceCompletedInspection(read, if (opening.notice != null) handoff else null)
+                        recordR25("PARKED", active, route = opening.route, readEnd = read.finishedAt,
+                            reason = if (opening.notice != null) "AWAITING_MAIN" else "COALESCED_MAIN_NOTICE")
+                        opening.notice?.let {
+                            recordR25("POST_REQUESTED", active, route = opening.route, readEnd = read.finishedAt)
+                            r25PostDrain(it, active)
+                        }
+                        if (promotedOwner == active) promotedOwner = null
+                        request = null
+                        continue
+                    }
+                    is R25Completion.Stock -> if (read.result.decision == KeyguardCardVisibility.SHOW_FULL)
+                        recordR25("BYPASS", active, opening.pending, opening.route, readEnd = read.finishedAt,
+                            reason = opening.reason)
+                }
                 withContext(Dispatchers.Main.immediate) { applyCompletedInspection(read, handoff) }
                 request = synchronized(queueLock) { inspectionQueue.complete(active) }
                 if (promotedOwner == active) promotedOwner = null

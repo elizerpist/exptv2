@@ -115,6 +115,9 @@ internal interface KeyguardInspectionProbeForTest {
         startsWorker: Boolean, frameworkEvent: Boolean) {}
     fun queueOffered(request: KeyguardCardInspectionRequest, previous: KeyguardCardInspectionRequest?,
         pending: KeyguardCardInspectionRequest?, startsWorker: Boolean) {}
+    /** Observation of the actual queue transition, not an admission. */
+    fun r25QueueTransition(request: KeyguardCardInspectionRequest, pendingAtOffer: KeyguardCardInspectionRequest?,
+        activeAfter: KeyguardCardInspectionRequest?, superseded: KeyguardCardInspectionRequest?) {}
     fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
     fun beforeDecision(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
         pending: KeyguardCardInspectionRequest?, authority: KeyguardInspectionAuthority) {}
@@ -240,6 +243,19 @@ internal class KeyguardCardInspectionQueue {
         active = next
         return next
     }
+
+    /** A completed positive can hand the same reader to an exact pending
+     * successor only before Main has claimed that completed request. */
+    fun handoffCompleted(
+        completed: KeyguardCardInspectionRequest,
+        successor: KeyguardCardInspectionRequest,
+    ): KeyguardCardInspectionRequest? {
+        if (preceding != null || active != completed || pending != successor) return null
+        return complete(completed)
+    }
+
+    fun canPublishCompleted(request: KeyguardCardInspectionRequest): Boolean =
+        active == request && preceding == null
 
     /** A still-running opening walk may hand its one reader to an exact,
      * already offered successor. Unlike R12, no completed predecessor waits

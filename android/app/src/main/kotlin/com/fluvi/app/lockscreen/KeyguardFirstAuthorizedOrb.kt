@@ -83,6 +83,12 @@ internal class KeyguardFirstAuthorizedOrb(private val lock: Any = Any()) {
         next
     }
 
+    /** Read-only check for a Main continuation; it grants no visual authority. */
+    fun isUnclaimedReadCurrent(requestId: Long, readSceneSerial: Long?): Boolean = synchronized(lock) {
+        readSceneSerial != null && requestId > 0 && requestId >= newestRead &&
+            requestId >= newestRequiredRead && readSceneSerial == scene
+    }
+
     /** Diagnostic-only explanation at the same scalar comparison boundary.
      * The caller may hold the shared lock across offer and this observation. */
     fun offerRejection(requestId: Long, readSceneSerial: Long?, freshnessRevision: Long?,

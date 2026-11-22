@@ -25,6 +25,54 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         KeyguardCardDiagnostics.clearCapture(context)
     }
 
+    @Test fun r25OpeningSummarySurvivesLightPressureAndCaptureRotation() = r25OpeningSummary("LIGHT")
+    @Test fun r25OpeningSummarySurvivesFullPressureAndCaptureRotation() = r25OpeningSummary("FULL")
+
+    private fun r25OpeningSummary(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r25-fixture", "profile", mode)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 925, 7, "wake", 100))
+        fun event(phase: String, original: Long, successor: Long?, at: Long, end: Long) {
+            KeyguardCardDiagnostics.captureEvent(context, "R25_OPENING", phase, requestId = original,
+                diagnosticContext = owner, observedUptimeMs = at,
+                fields = mapOf("r25Original" to original, "r25Successor" to (successor ?: "UNOBSERVED"),
+                    "r25Backend" to "STOCK", "r25ReadEnd" to end, "r25Reason" to "OFFER_BEFORE_CLAIM",
+                    "r25SuccessorQueued" to (successor?.plus(200) ?: "UNOBSERVED"),
+                    "r25ReaderHigh" to 1, "r25TicketHigh" to 1))
+        }
+        event("PARKED", 10, null, 110, 109)
+        event("POST_REQUESTED", 10, null, 111, 109)
+        event("SUPERSEDED", 10, 11, 112, 109)
+        KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_STARTED", "window", requestId = 11,
+            diagnosticContext = owner, observedUptimeMs = 113)
+        KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_FINISHED", "MAIN_CONFIRMED", requestId = 11,
+            diagnosticContext = owner, observedUptimeMs = 114)
+        event("SUPERSEDED", 11, 12, 115, 114)
+        KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_STARTED", "window", requestId = 12,
+            diagnosticContext = owner, observedUptimeMs = 116)
+        KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_FINISHED", "MAIN_CONFIRMED", requestId = 12,
+            diagnosticContext = owner, observedUptimeMs = 117)
+        event("MAIN_CLAIM", 12, null, 118, 117)
+        repeat(800) { index ->
+            KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure", requestId = 1000L + index,
+                diagnosticContext = owner, observedUptimeMs = 300L + index)
+            if (index % 80 == 79) KeyguardCardDiagnostics.captureSnapshot(context)
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val row = report.lineSequence().single { it.startsWith(" R25_CORE ") }
+        assertTrue(row, row.contains("session=925 wake=7") && row.contains("backend=STOCK"))
+        assertTrue(row, row.contains("first=10@109->11@211/112/113/114/OFFER_BEFORE_CLAIM"))
+        assertTrue(row, row.contains("last=11@114->12@212/115/116/117/OFFER_BEFORE_CLAIM"))
+        assertTrue(row, row.contains("supersessions=2") && row.contains("physical=UNOBSERVED"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        event("SUPERSEDED", 90, 91, 2000, 1999)
+        assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+        KeyguardCardDiagnostics.startCapture(context, "r25-new", "profile", mode)
+        KeyguardCardDiagnostics.beginLockAttempt(context, 926, 8, "wake", 2100)
+        event("SUPERSEDED", 90, 91, 2101, 2100)
+        val next = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertFalse(next.contains("->91@"))
+    }
+
     @Test fun r224RestrictionEvidenceSurvivesLightPressureAndRestart() = r224RestrictionEvidence("LIGHT")
     @Test fun r224RestrictionEvidenceSurvivesFullPressureAndRestart() = r224RestrictionEvidence("FULL")
 
