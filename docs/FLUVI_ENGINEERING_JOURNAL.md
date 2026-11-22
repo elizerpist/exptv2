@@ -15704,3 +15704,121 @@ Give every gate with source/test/harness identity, failed as well as accepted sl
 Code may be structurally validated without a measured latency win. Report implementation, automated validation, owner APK verification and physical result independently. The physical defect stays open until the owner reports earlier appearance without loss of the fast unlock withdrawal on the named APK. After delivery the phone test requested for this decision is the same LIGHT mode/settings for both builds, a matched wake sequence including initial and repeated wakes, plus perceived onset, flicker and disappearance. PHYSICAL VALIDATION — PENDING, USER ONLY.
 
 FLUVI_R23_WAKE_OPENING_END
+
+# Fluvi R24 — Android-wide first-frame ORB architecture decision
+
+FLUVI_R24_ANDROID_FIRST_FRAME_BEGIN
+
+## 1. Title and disposition
+
+This supersedes the R23 B-to-C reader change as the response to the owner's wake-latency requirement. The product is a normally installable Android app, across manufacturers, with no per-model policy. The requested limit is **10 ms maximum**. This is an architecture decision and a stop instruction for the superseded assignment. The design below identifies the missing platform contract. There is no approved APK implementation of the universal deadline. Preserve any independent work already produced. Do not start an R23 build on the strength of its older handoff.
+
+## 2. Authoritative application state
+
+Repository elizerpist/exptv2, coordination branch fix/orb-v4-latency-lockscreen. The tested profile app and current reviewed implementation are ad1eac09442cb8d78a992874d22157fe6bd5a05f. The owner already received the corresponding experimental Human APK. Coordination commit 0e1d0991770249e8ec6d141fb4765c71beb2bd57 records that delivery. Its successor 60f96ab6584952d9964550a43da723278f6c8091 appended the R23 plan (149 lines, one journal file); its head had zero Actions runs and zero check runs. At review time the remote branch-name check returned only the coordination ref for the R23/R24 search. A local or unpushed branch cannot be inferred from that result.
+
+## 3. Preflight for anyone resuming this assignment
+
+Read the live docs/FLUVI_ENGINEERING_JOURNAL.md and MILESTONE_COMMITS.md, including the R18–R23 entries, docs/R22_4_ORB_QUALIFICATION_REPORT_2026-11-21.md and docs/R22_5_VISUAL_EVIDENCE_REPORT_2026-11-22.md on coordination. The project assets in the review workspace are project_sources/02-FLUVI_PROMPT_WRITER_RULES-1-.md, project_sources/01-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md and project_sources/03-DEBUGGING_LOOP_VERY_IMPORTANT.txt. Portable FLUVI_RULE_ASSET_BEGIN/END blocks are in the journal at 161f63675121302432be2026898bed07b23d7ded. The current asset SHA-256 values in order are ebf3629b7f723113ea9f13a89fc37c52ec2f9a4db2fc4e64b901dc1a622b61f2, c777abadfdfd6c778a37b7448cc8b7943a1ca3a086676e7b47360be008f62f4b and 5d85bad2c00e4a6ab680b843fe68cb9265dccb7d2af3e6acbe5d9e9528d4c674. The reviewer selects the architecture and the product owner accepts physical behavior.
+
+## 4. Physical feedback and the two clocks
+
+The owner observes fast disappearance on unlock and late appearance when the lockscreen wakes. Treat the current handset as one observation. Keep two user-facing measurements: (1) physical wake stimulus to the first correct visible ORB; (2) first visible eligible main-lockscreen frame to the first correct visible ORB. Measure both from the same wake. The first includes panel wake and system scheduling. The second describes whether the ORB pops in after the rest of the lockscreen. The architecture targets the very same eligible frame. The 10 ms ceiling remains a maximum. A p95, an app callback, a neutral placeholder or one successful device cannot substitute for either optical result.
+
+## 5. Evidence and clock audit
+
+R22.4 primary evidence is the owner-pasted LIGHT capture 97908f95-517d-41d1-b71f-6c3ebc81d98c and FULL capture 846f48d4-e1d9-441b-92d9-707504e15be4, both from the same already-connected process. Four direct winners were retained per capture. Both exports were truncated. Physical wake, first and last pixel were unobserved.
+
+| Elapsed from the app's first wake callback (ms) | LIGHT 1 / 4 / 5 / 6 | FULL 1 / 2 / 3 / 4 |
+|---|---|---|
+| Final showing read completed | 604 / 342 / 337 / 341 | 299 / 149 / 270 / 314 |
+| Accepted native reveal call returned | 652 / 387 / 374 / 375 | 321 / 200 / 312 / 357 |
+
+FULL 1 is the discriminating case. Hidden host bound at +43 ms, final showing read finished at +299, proof accepted at +300, first buffer ready at +305, native transaction returned at +321 and first distinct motion was submitted at +330. The worker found the bitmap in its in-process map. The 5 ms is a single proof-to-buffer interval that includes work beyond lookup. There is no disk-read measurement here. Shutdown and wake paths run concurrently with other work, so subtract matching same-wake endpoints and do not add nested scopes.
+
+## 6. History and what changed the decision
+
+R18 reduced layer creation work; its initial FULL route prepared the discreet image. R19 prepared a blank FULL-capable target. R20 drew directly on a first-image miss. R21 kept an already submitted reveal through eligible rechecks. R22 added a bounded transfer between readers and captured later superseding requests. R22.4 also addressed an isolated output/parent retirement issue. R22.5 did not obtain calibrated emulator frames. Its marker experiment did not ship in the phone build. R23 proposed one further reader transfer. The three observed obsolete B tails left at most 63, 30 and 67 ms of that B work before completion. Even deleting that whole observed tail in each case accounts for only 20 ms averaged over the eight retained slots, before other scheduling effects. The comparable small LIGHT groups for R18, R21 and R22.4 averaged 377.5, 395.5 and 447 ms to native submit/return as recorded in the R23 review. No controlled average speedup or optical deadline compliance has been established.
+
+## 7. Source and dependency provenance
+
+The matching graph is tooling commit f28fadc75e399868b8541a7d5617977b2a7de877. Its manifest SHA-256 is 63772aeb51033d51b8c2278137bd2286b7086d46b3e4b8b9324ff24e669f7b71. It indexes the app source; the Kotlin inventory and source define the native edges. The ownership boundary leads outside this app repository into the OS keyguard compositor. The repository contains no shippable control of device SystemUI or panel firmware.
+
+## 8. Current source facts and prior art in Fluvi
+
+Under android/app/src/main/kotlin/com/fluvi/app/lockscreen, FluviKeyguardCardService.readSystemWindows/inspectSurface obtain scene evidence, KeyguardFirstAuthorizedOrb.offer/consume validate the current request, scene and revisions, and advanceR19First joins proof and readiness. material/KeyguardOrbR18Presenter prepares and retires the owned surface; material/KeyguardOrbSurfaceWorker indexes posters and draws an authorized hit or miss. A fresh external scene can invalidate the proof even if the pixels are ready. The public locked bit includes occlusion and screen-off states.
+
+Fluvi already builds frame sequences off-thread for the launcher. widget/orb/FluviOrbWidget.kt, FluviOrbWidgetProvider.render, checks each configured generation, constructs RemoteViews and publishes with AppWidgetManager.updateAppWidget. The widget host advances the sequence. res/xml/fluvi_orb_widget_info.xml describes the home provider; res/xml/fluvi_financial_snapshot_widget_info.xml declares a different provider for home and keyguard. The home ORB options do not encode the lockscreen FULL disclosure policy. Provider metadata cannot establish which host owns the first lockscreen frame or certify what that frame contained.
+
+## 9. Proven, unproven and missing
+
+PROVEN in the observed build: all eight first-positive request IDs differed from the consumed request; seven rejections recorded SCENE_CHANGED and one NEWER_READ_REQUIRED. Final showing reads took place well before the accepted native reveal, including on a cache hit. PROVEN platform constraint: Android 15, 16 and 17 CDD §3.8.2 makes lockscreen app-widget support optional. Host placement and entry trigger belong to the host. Android app processes may be reclaimed. UNPROVEN: which individual OS/app operation determined the first optical pixel on any wake, or whether every newer inspection was avoidable. MISSING: an Android-wide API for a normal app to participate with scene-appropriate content in the initial main-keyguard composition with a 10 ms physical deadline. No further capture on one model can establish a universal platform contract.
+
+## 10. Architecture decision
+
+Move the decision to include the ORB into the component that composes the lockscreen. Move first-frame production to content changes. A system implementation of both sides could remove wake-time Fluvi scheduling, window inspection, fresh surface creation, full-image drawing and a separate reveal transaction from the first-frame dependency chain. This is the selected design for simultaneous lockscreen appearance. Implementing it solely inside exptv2 cannot make the unmodified Android installations in the product population implement the required host. Even an integrated host would still need a separate panel/input timing commitment to guarantee 10 ms from physical wake.
+
+## 11. Delivery scope and existing app users
+
+One Android contract, with no manufacturer checks or per-model timeouts. A capable installed host could support simultaneous appearance. A widget picker entry, home AppWidget support, an SDK version check, an app-owned window, or an assumed permanently resident service cannot establish that capability. The existing overlay can remain a compatibility route with measured latency and privacy characteristics. Users on that route remain in the denominator of the universal product claim. A provider that only appears after a swipe, while docked, or after an async host request also fails ordinary wake-first placement. A custom OS image would reach only its installed population and constitutes a separate delivery decision.
+
+## 12. Ownership and lifecycle
+
+| Boundary and current owner | Proposed transition and consumer | Risk and required control |
+|---|---|---|
+| Visual revision: lockscreen material/profile producer; home provider is a separate consumer | On data, palette, mode, scope, density, size or policy revision, a bounded worker produces the correct first picture and continuation parameters. Publish a complete immutable generation to a trusted system host in advance. | Late production completion must not replace a newer revision. Reject wrong user, display or policy epoch. Keep the home provider isolated. |
+| First frame: KeyguardFirstAuthorizedOrb + app-owned surface | The host holds prepared content for the enrolled user and display. In its own scene commit it selects FULL, permitted neutral, or absent. | A locked bit cannot distinguish an incoming call or credentials. FULL requires explicit user policy and a matching host-owned eligible scene at composition. |
+| Retirement: KeyguardOrbR18Presenter.seal and worker | Within the same host scene transition remove detailed content on shade, credentials, occlusion, unlock or privacy restriction. Invalidate outstanding generations before reuse. | Static and moving pixels share the same parent and visibility decision. No cached detailed surface above a restricted scene, secondary overlay or late old buffer. |
+| First motion: KeyguardOrbSurfaceWorker on the app route | The host continues the accepted generation from the same phase on its next eligible presentation. Advance with the visible frame clock. | No second attach, reset or flash. Pause offscreen, on screen-off and on reduced-motion settings. Test the first moving frame separately from first appearance. |
+| Host/process loss or switch | Retire/dispose old ownership. Recover only a still-authorized, current generation, otherwise render the allowed neutral/absent state while re-priming. | Bound memory to current plus in-flight replacement until compositor release. Process death, reboot before first unlock, user switch, data/day rollover and trim must never resurrect private imagery. A late or missing full first frame stays a miss. |
+
+## 13. Falsification controls for an actual future host
+
+For a future integrator, the structural positives are (a) a current, prepublished FULL generation in the very first eligible scene frame while the app is asleep, and (b) showing the same current generation where policy permits after a normal app-process kill without a wake-time callback. Separate cold unprimed, immediately superseded, stale private, hidden and restricted cases. Switch to credentials, incoming-call occlusion, shade and another user with a FULL frame queued. Inspect the composed frame at transition. Include rapid wake/unlock/relock and loss of the host. A stale FULL pixel fails privacy; a neutral or missing FULL on an eligible wake fails the performance sample. One violation disproves a claimed hard bound.
+
+## 14. Proposed host contract
+
+These are proposed operations, not Android SDK APIs. Prepublication carries visual generation, user/display identity, size/density, data/policy revisions, prepared pixels and animation phase. The trusted host installs a complete generation atomically and acknowledges receipt before readiness is recorded. A restrictive transition always wins over a queued publication. Revoke, replace and release are idempotent and keyed by generation. Keep detailed content private to the enrolled system keyguard; the integrity of an arbitrary widget host or a widget option alone cannot authorize financial data. Keep both disk I/O and the Fluvi process outside the warm first-frame path. Avoid continuous offscreen animation. No duplicated app overlay in the integrated route.
+
+## 15. Performance and acceptance
+
+Record physical wake-to-ORB, optical main-lockscreen-to-ORB and first distinct motion separately. Use a common-timed external wake marker and sufficiently fast camera or photodiodes with known errors. Compare lockscreen and ORB at the same scanline or compensate for scanout. Identify the *correct* visible content with a synthetic test pattern. If the upper uncertainty bound crosses 10 ms, classify the sample as inconclusive; a demonstrated violation fails. Report every eligible wake, missing content, first/cold and warm populations, refresh mode, motion cadence, maximum and uncertainty. Atomic same-frame inclusion is a frame-identity result independent of time spent waking a powered-off display. A single handset, emulator screenshot, app callback or commit receipt cannot certify every Android device.
+
+## 16. Order and migration
+
+A platform integration would first require an identifiable trusted host with an actual first-scene composition and revocation hook and a deployable system delivery path. Next establish source-level ownership and compare the above positive and exclusion fixtures using synthetic content. Then connect the app's revision producer to that host, make cutover mutually exclusive with the existing overlay, and restore the original route if the integration is disabled. Host loss fails closed before re-entry through any other route. A change of delivery scope or of the universal 10 ms requirement belongs to the product owner. No such change has been assumed.
+
+## 17. Verification in this review
+
+Rechecked the coordination commit diff, remote named refs, app graph provenance, worker lookup/revocation, proof validation, separate widget providers and platform specifications. The following read-only commands reproduce the branch checks:
+
+    git ls-remote --heads origin 'fix/orb-v4-latency-lockscreen' '*r23*' '*r24*'
+    git show --stat 60f96ab6584952d9964550a43da723278f6c8091
+    git show ad1eac09442cb8d78a992874d22157fe6bd5a05f:android/app/src/main/res/xml/fluvi_orb_widget_info.xml
+    git show ad1eac09442cb8d78a992874d22157fe6bd5a05f:android/app/src/main/res/xml/fluvi_financial_snapshot_widget_info.xml
+
+Sources for the platform decision:
+
+- Android 15, 16 and 17 Compatibility Definition, §3.8.2. https://source.android.com/docs/compatibility/15/android-15-cdd / https://source.android.com/docs/compatibility/16/android-16-cdd / https://source.android.com/docs/compatibility/17/android-17-cdd
+- Google widget FAQ, host availability and trigger. https://android-developers.googleblog.com/2025/03/widgets-on-lock-screen-faq.html
+- Keyguard logical state. https://developer.android.com/reference/android/app/KeyguardManager#isKeyguardLocked()
+- VSync, app scheduling, composition and physical display. https://source.android.com/docs/core/graphics/implement-vsync
+- Android process lifecycle. https://developer.android.com/guide/components/activities/process-lifecycle
+
+## 18. Commit discipline
+
+This review appends only docs/FLUVI_ENGINEERING_JOURNAL.md on the coordination branch. Preserve R23 as history, linking its commit and this disposition. Preserve the existing APK and original evidence.
+
+## 19. Build, graph and delivery
+
+No Android code, workflow, infrastructure or graph change is required for this decision. Running a new APK through CI cannot make an optional lockscreen host mandatory. A new owner APK is therefore not a deliverable of this decision.
+
+## 20. Status
+
+Architecture decision recorded. Universal SKU on a stock Android handset with an ordinary third-party APK: no supported deadline contract. Platform reference architecture specified, implementation not started. Automated app qualification and new APK: not run / none. The previously recorded R22.4 isolated-panel visual FAIL remains open and distinct from these direct-backend handset measurements. Fast unlock withdrawal is an owner observation to preserve. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+## 21. Agent handoff
+
+Read this decision before executing FLUVI_R23_WAKE_OPENING_BEGIN. Treat the former B-to-C implementation prompt as superseded for the universal 10 ms target. Preserve existing work and evidence. On the current exptv2 stock-APK scope, the execution disposition is BLOCKED BY PLATFORM CONTRACT. No source change, new capture, build or publication follows from this decision. The reviewer reopens implementation only against a concrete compatible host delivery contract or an explicit change to the product requirement. A successful same-frame result on an integrated platform qualifies that configuration alone.
+
+FLUVI_R24_ANDROID_FIRST_FRAME_END
