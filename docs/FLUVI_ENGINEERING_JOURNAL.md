@@ -17261,3 +17261,10 @@ frame, stopped-app behavior, privacy result or 10 ms verdict is claimed.
   from `4f89734c4f8dae1ae0cdb645e34ee7e5302f6942`. All R29 integrated host,
   app-stopped transition, privacy/composition and physical 10 ms gates remain
   NOT RUN. PHYSICAL VALIDATION — PENDING, USER ONLY.
+- The tooling-only follow-up also has a separate exact-source WIP graph:
+  [manifest](https://github.com/elizerpist/exptv2/blob/d1822baaad7936673e237058e857c543a74a73bd/docs/codegraph/manifest.json)
+  at graph commit `d1822baaad7936673e237058e857c543a74a73bd`, source
+  `4f89734c4f8dae1ae0cdb645e34ee7e5302f6942`, manifest SHA-256
+  `de102a41fd9af62da7e4dd8c0cb97bc12669758948978d2832a4c1dc73a14789`;
+  [run 45078996197](https://github.com/elizerpist/exptv2/actions/runs/45078996197)
+  passed. It is not the APK's source identity and is not a completed R29 graph.
