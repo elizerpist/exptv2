@@ -17426,3 +17426,50 @@ Lead with the verified producer APK and name the device/system on which each beh
 Client source complete means a real committed visual reaches an authenticated host via the real publisher and exclusive ownership is enforced at both old outputs. Platform source complete means the actual SystemUI lockscreen traversal can consume a current resident ORB and exclude it with a correlated empty receipt. Integration verified requires a built, booted modified system, positive/negative images and both app-stopped transitions. Public APK delivery requires independently verified signed bytes. Keep stock qualitative rejection open and report each physical 10 ms verdict separately. PHYSICAL VALIDATION — PENDING, USER ONLY.
 
 FLUVI_R29_1_COMPLETE_HOST_END
+
+## 2026-11-23 — R29.1 partial checkpoint, producer APK and outstanding integration
+
+The R29.1 continuation at `c3ab049f5b5ab27209ea81ff13128a859a4201da`
+resumed implementation `9d9444795ea34e64525e990f5c08d1b655a6fdaf`.
+The owner tested the earlier signed `5bb91aed3ab1a2e7ce4c6114d069a4d13fd21595`
+WIP on stock Nothing A142 and still perceived lag. Physical first/last pixels
+remain unobserved; the owner is not asked to repeat that stock-only test to
+qualify a SystemUI source change.
+
+Partial implementation checkpoint `de807259cd370d18e422772ed0943b8d65be4bca`
+is pushed to `implement/r29-resident-systemui`. It adds the one-Room-snapshot
+Budget revision, conservative native/Dart provenance, persistent reference
+ownership storage and host adoption/death/expiry/fence hardening. Its three
+real-boundary RED controls and separate-module compilation RED were followed
+by the focused PASS results detailed in the report. **The enrolled publisher,
+exclusive old-owner drain, actual SystemUI lockscreen draw/restriction and
+EMPTY receipt remain absent; do not enable reference enrollment or call this
+a completed R29.1 implementation.**
+
+The [review-only Human profile APK](https://media.githubusercontent.com/media/elizerpist/exptv2/dc15a70f17a70685fa87c493b95c4149e04be135/fluvi_R29_1_WIP_REVIEW_de807259cd37.apk)
+contains exact app source `de807259cd370d18e422772ed0943b8d65be4bca`, has
+120789303 bytes and SHA-256
+`057406296e14bb10c6dbe6ae94e5f6d7564bed02a89c8787bf23c4b9b6fec773`.
+The full anonymous HTTP 200 download, v2/v3 signer
+`faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`,
+three ABI identities and payload parity passed. Private API35 update run
+[45121872782](https://github.com/elizerpist/pushparserv2/actions/runs/45121872782)
+passed upgrade from 5bb91aed with the demo sentinel preserved. The APK alone
+cannot provide the requested SystemUI host on a stock device.
+
+App JVM 329/329, core JVM 150/150, targeted Android compilation/tests and
+Dart producer 3/3 passed. Full Flutter failed with 2780 PASS, 115 FAIL,
+3 skipped; all 115 failed test names match the prior WIP, without claiming
+identical causes. The pinned AOSP bootstrap staging checks passed, but it is
+not the full patch. API35 run 45120980237 was still running when this
+checkpoint report was written. Raw screenshots, logs and RED evidence are
+preserved only on [private evidence commit 4c9e03b](https://github.com/elizerpist/pushparserv2/tree/4c9e03b6a9b1b5c1797617d3a845ac91046e317b).
+
+Exact-source Dart graph and native source inventory are at tooling commit
+`d0a6c6b8f7b6a0465d4667236f5b84e004a888e0`; manifest SHA-256
+`02b6a7462459652e0509c01fda87c5949fc6e2d05566f7d92ed6e69b33af97cd`.
+See `docs/R29_1_RESIDENT_SYSTEMUI_CHECKPOINT_2026-11-23.md` for exact gates,
+failures, source pairs, runner prerequisites and the incomplete platform patch.
+AOSP Soong/build/boot, app-stopped frame controls and all three optical
+≤10 ms endpoints are NOT RUN. The unavailable platform runner is distinct
+from the still-unfinished source. PHYSICAL VALIDATION — PENDING, USER ONLY.
