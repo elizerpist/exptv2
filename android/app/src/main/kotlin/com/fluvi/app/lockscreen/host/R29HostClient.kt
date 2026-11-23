@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Binder
 import android.os.IBinder
 import android.os.Parcel
+import android.os.Process
 import android.os.UserHandle
 import com.fluvi.r29.contract.R29Descriptor
 import com.fluvi.r29.contract.R29Protocol
@@ -25,11 +26,14 @@ internal class R29HostClient(
     private val ownership: R29Ownership,
     private val main: Executor,
     private val listener: Listener,
+    /** Same-UID, non-exported fixture service, accepted only in a debuggable APK. */
+    private val testHost: ComponentName? = null,
 ) {
     interface Listener {
         fun onSession(nonce: String, epoch: Long)
         fun onReady(nonce: String, sequence: Long)
         fun onHostUnavailable()
+        fun onHostEmpty(nonce: String, sequence: Long, epoch: Long) {}
     }
 
     private val application = context.applicationContext
@@ -43,8 +47,17 @@ internal class R29HostClient(
     private var epoch = -1L
     private var sentSequence = 0L
     private var bound = false
-    private val component = ComponentName("com.android.systemui",
+    // Accessed under lock together with the active remote and owner epoch.
+    private val emptyReceipt = R35EmptyReceipt()
+    private val component = testHost ?: ComponentName("com.android.systemui",
         "com.android.systemui.keyguard.fluvi.FluviOrbHostService")
+
+    init {
+        require(testHost == null ||
+            (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+                testHost.packageName == application.packageName &&
+                testHost.className == "com.fluvi.app.lockscreen.host.R35DebugResidentService"))
+    }
 
     /** Resolves the explicit system component and compares its current platform signer and UID. */
     private fun trustedHostUid(): Int? = runCatching {
@@ -52,6 +65,13 @@ internal class R29HostClient(
         val service = pm.getServiceInfo(component, 0)
         val app = service.applicationInfo ?: return@runCatching null
         val packages = pm.getPackagesForUid(app.uid)?.toList() ?: return@runCatching null
+        if (testHost != null) {
+            return@runCatching if (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+                !service.exported && service.packageName == application.packageName && app.uid == Process.myUid() &&
+                packages == listOf(application.packageName) &&
+                pm.checkSignatures(application.packageName, service.packageName) == PackageManager.SIGNATURE_MATCH &&
+                UserHandle.getUserHandleForUid(app.uid) == UserHandle.getUserHandleForUid(0)) app.uid else null
+        }
         if (!service.exported || service.packageName != "com.android.systemui" ||
             app.flags and ApplicationInfo.FLAG_SYSTEM == 0 || packages != listOf("com.android.systemui") ||
             pm.checkSignatures("android", "com.android.systemui") != PackageManager.SIGNATURE_MATCH ||
@@ -126,15 +146,32 @@ internal class R29HostClient(
                         }
                     }
                     R29WireCodec.CALLBACK_READY -> {
-                        val current = synchronized(lock) { nonce == session && value == sentSequence && remote != null }
+                        val current = synchronized(lock) {
+                            nonce == session && value == sentSequence && remote != null &&
+                                ownership.phase() == R29Ownership.Phase.HOST
+                        }
                         if (current) main.execute {
-                            if (synchronized(lock) { nonce == session && value == sentSequence && remote != null })
+                            if (synchronized(lock) { nonce == session && value == sentSequence && remote != null &&
+                                    ownership.phase() == R29Ownership.Phase.HOST })
                                 listener.onReady(nonce, value)
                         }
                     }
-                    // Empty acknowledgement requires a real host traversal and
-                    // is intentionally not accepted by this partial client.
-                    R29WireCodec.CALLBACK_EMPTY -> Unit
+                    R29WireCodec.CALLBACK_EMPTY -> {
+                        val acceptedEpoch = synchronized(lock) {
+                            if (nonce != session || remote == null || value != sentSequence ||
+                                !emptyReceipt.matches(nonce, value, epoch) ||
+                                !ownership.hostConfirmedEmpty(epoch)) null
+                            else {
+                                emptyReceipt.clear()
+                                session = null
+                                epoch
+                            }
+                        }
+                        if (acceptedEpoch != null) main.execute {
+                            if (ownership.epoch() == acceptedEpoch && ownership.appMayShow())
+                                listener.onHostEmpty(nonce, value, acceptedEpoch)
+                        }
+                    }
                 }
                 return true
             } finally { restoreCallingIdentity(original) }
@@ -147,6 +184,7 @@ internal class R29HostClient(
         worker.execute {
             val target = synchronized(lock) {
                 if (snapshot.session != session || snapshot.sequence <= sentSequence || remote == null ||
+                    ownership.phase() != R29Ownership.Phase.HOST ||
                     R29Protocol.invalidReason(snapshot, System.currentTimeMillis(), 1) != null) return@execute
                 sentSequence = snapshot.sequence
                 remote
@@ -158,13 +196,50 @@ internal class R29HostClient(
     fun invalidate(nonce: String, sequence: Long) {
         worker.execute {
             val target = synchronized(lock) {
-                if (nonce != session || sequence <= sentSequence || remote == null) return@execute
+                if (nonce != session || sequence <= sentSequence || remote == null ||
+                    ownership.phase() != R29Ownership.Phase.HOST) return@execute
                 sentSequence = sequence
                 remote
             } ?: return@execute
             if (!send(target, R29WireCodec.TRANSACTION_INVALIDATE) { out ->
                     out.writeString(nonce); out.writeLong(sequence)
                 }) unavailable()
+        }
+    }
+
+    /**
+     * Ask the trusted owner to remove its output. A true return only means the
+     * request was queued. The stock owner remains suppressed until the host
+     * sends the matching authenticated EMPTY receipt for a completed no-orb
+     * composition. The staged reference host intentionally never sends one.
+     */
+    fun requestEmpty(sequence: Long): Boolean {
+        val request = synchronized(lock) {
+            val nonce = session ?: return false
+            val target = remote ?: return false
+            if (sequence <= sentSequence || ownership.phase() != R29Ownership.Phase.HOST ||
+                !emptyReceipt.begin(nonce, sequence, epoch)) return false
+            if (ownership.beginExit() != epoch) {
+                emptyReceipt.clear()
+                return false
+            }
+            sentSequence = sequence
+            nonce to target
+        }
+        return try {
+            worker.execute {
+                val active = synchronized(lock) {
+                    session == request.first && remote === request.second &&
+                        emptyReceipt.matches(request.first, sequence, epoch)
+                }
+                if (active && !send(request.second, R29WireCodec.TRANSACTION_OWNERSHIP) { out ->
+                        out.writeString(request.first); out.writeLong(sequence)
+                    }) unavailable()
+            }
+            true
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            unavailable()
+            false
         }
     }
 
@@ -190,6 +265,7 @@ internal class R29HostClient(
     private fun unavailable() {
         val wasBound = synchronized(lock) {
             remote = null; session = null; sentSequence = 0
+            emptyReceipt.clear()
             val result = bound
             bound = false
             result

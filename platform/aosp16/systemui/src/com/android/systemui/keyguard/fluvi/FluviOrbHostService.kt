@@ -251,7 +251,7 @@ internal class R29HostRuntime private constructor(context: Context) : ComponentC
     }
 
     override fun onTrimMemory(level: Int) {
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) store.reset()
+        if (R35HostMemoryPolicy.shouldEvict(level)) store.reset()
     }
     override fun onLowMemory() { store.reset() }
     override fun onConfigurationChanged(newConfig: Configuration) { store.reset() }

@@ -332,6 +332,7 @@ internal object FluviKeyguardMaterialStore {
                 incomingRevision = candidate.publisherRevision,
             )
         ) return false
+        com.fluvi.app.lockscreen.host.R35MaterialPublication.inputsChanging()
         prefs.edit()
             .putString(PROFILE, candidate.toJson().toString())
             .putString(SESSION, candidate.publisherSession)
@@ -340,6 +341,7 @@ internal object FluviKeyguardMaterialStore {
             .putString(PROFILE_STATUS, "accepted")
             .apply()
         com.fluvi.app.lockscreen.FluviKeyguardCardServiceRegistry.notifyMaterialChanged(candidate)
+        com.fluvi.app.lockscreen.host.R35MaterialPublication.profileAccepted(candidate, values["r29Evidence"])
         return true
     }
 
@@ -350,6 +352,7 @@ internal object FluviKeyguardMaterialStore {
         val current = read(context) ?: return
         val neutral = current.neutralized()
         if (neutral.colors.contentEquals(current.colors) && neutral.opacity == current.opacity) return
+        com.fluvi.app.lockscreen.host.R35MaterialPublication.inputsChanging()
         prefs(context).edit().putString(PROFILE, neutral.toJson().toString()).apply()
         com.fluvi.app.lockscreen.FluviKeyguardCardServiceRegistry.notifyMaterialChanged(neutral)
     }

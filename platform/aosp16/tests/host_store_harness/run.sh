@@ -12,6 +12,7 @@ java -cp "$R29_KOTLIN_COMPILER_CP" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   "$root/platform/aosp16/contract/src/com/fluvi/r29/contract/R29Protocol.kt" \
   "$root/platform/aosp16/contract/src/com/fluvi/r29/contract/R29HostReducer.kt" \
   "$root/platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/R29ResidentStore.kt" \
+  "$root/platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/R35HostMemoryPolicy.kt" \
   "$root/platform/aosp16/tests/host_store_harness/R29HostRendererStub.kt" \
   "$root/platform/aosp16/tests/host_store_harness/ResidentHarness.kt"
 java -cp "$tmpdir:$R29_KOTLIN_STDLIB" com.android.systemui.keyguard.fluvi.ResidentHarnessKt

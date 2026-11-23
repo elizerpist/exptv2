@@ -77,10 +77,20 @@ fun main() {
     checkNotNull(timedRenderer.pending).invoke(Result.success(R29PreparedOrb(still)))
     timedMain.drain()
     timed.detach(nonce) // clean detach keeps the adopted image and its expiry
+    // UI_HIDDEN describes a visibility change, not memory pressure. A cleanly
+    // detached image must remain available for the next eligible frame.
+    if (R35HostMemoryPolicy.shouldEvict(20)) timed.reset()
+    check(timed.current(clock) != null) { "UI_HIDDEN must not evict a ready detached image" }
     val beforeExpiry = changes
     clock = still.validUntilEpochMs
     scheduled.single().run()
     check(changes == beforeExpiry + 1) { "static expiry must invalidate the display owner" }
     check(timed.current(clock) == null)
+    check(R35HostMemoryPolicy.shouldEvict(10)) // RUNNING_LOW
+    check(R35HostMemoryPolicy.shouldEvict(15)) // RUNNING_CRITICAL
+    check(R35HostMemoryPolicy.shouldEvict(40)) // BACKGROUND
+    check(R35HostMemoryPolicy.shouldEvict(80)) // COMPLETE
+    check(!R35HostMemoryPolicy.shouldEvict(5)) // RUNNING_MODERATE
+    check(!R35HostMemoryPolicy.shouldEvict(20)) // UI_HIDDEN
     println("PASS: main adoption, READY, invalidate, reset, death, and static-expiry controls")
 }

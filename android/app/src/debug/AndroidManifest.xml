@@ -2,6 +2,9 @@
     <!-- Required by the Flutter tool to connect to the development VM service. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application>
+        <!-- Same-package, separate-process R35 demo fixture. No profile/release entry. -->
+        <service android:name="com.fluvi.app.lockscreen.host.R35DebugResidentService"
+            android:process=":r35_receiver" android:exported="false" />
         <!-- Target-APK-only host for the API-35 instrumentation smoke. The
              test runner can only start activities installed with the target
              application; this debug declaration never enters a release APK. -->

@@ -196,6 +196,7 @@ internal object FluviKeyguardCardSettings {
             focus = committedFocus,
             generation = old.generation + 1L,
         )
+        val residentPublisherActive = com.fluvi.app.lockscreen.host.R35MaterialPublication.inputsChanging()
         prefs(context).edit()
             .putBoolean(REQUESTED, next.requested)
             .putBoolean(DETAILS, next.showFinancialDetails)
@@ -222,6 +223,9 @@ internal object FluviKeyguardCardSettings {
             com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
         }
         FluviKeyguardCardServiceRegistry.notifySettingsChanged(next)
+        if (residentPublisherActive) {
+            com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
+        }
         return next
     }
 
@@ -256,8 +260,12 @@ internal object FluviKeyguardCardSettings {
             orbPosition = orb,
             layoutRevision = old.layoutRevision + 1L,
         )
+        val residentPublisherActive = com.fluvi.app.lockscreen.host.R35MaterialPublication.inputsChanging()
         writeLayout(context, next)
         FluviKeyguardCardServiceRegistry.notifyLayoutChanged(next)
+        if (residentPublisherActive) {
+            com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
+        }
         return next
     }
 

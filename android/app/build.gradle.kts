@@ -232,6 +232,9 @@ android {
 
 android.sourceSets.getByName("main").assets.srcDir(keyguardHeaderGeneratedAssets)
 android.sourceSets.getByName("main").java.srcDir(rootProject.projectDir.resolve("../platform/aosp16/contract/src"))
+// The disposable debug receiver exercises the exact reference renderer/store.
+// It is not present in the profile or release APK.
+android.sourceSets.getByName("debug").java.srcDir(rootProject.projectDir.resolve("../platform/aosp16/systemui/src"))
 tasks.named("preBuild").configure { dependsOn(generateKeyguardHeaderMaterial) }
 
 flutter {
