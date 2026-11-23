@@ -448,6 +448,69 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         }
     }
 
+    @Test fun r34CoreSurvivesLightPressureAndFreeze() = r34CoreEvidence("LIGHT")
+    @Test fun r34CoreSurvivesFullPressureAndFreeze() = r34CoreEvidence("FULL")
+
+    private fun r34CoreEvidence(mode: String) {
+        val settings = context.getSharedPreferences("fluvi_native_keyguard_card", android.content.Context.MODE_PRIVATE)
+        val hadMode = settings.contains("presentationMode")
+        val savedMode = settings.getString("presentationMode", null)
+        check(settings.edit().putString("presentationMode", "orb").commit())
+        try {
+            KeyguardCardDiagnostics.startCapture(context, "r34", "profile", mode)
+            var old: KeyguardDiagnosticContext? = null
+            repeat(4) { index ->
+                val wake = index + 1L; val base = wake * 1000L; val reservation = 700 + wake
+                val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 778, wake, "wake", base))
+                old = owner
+                KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", "R19_POSTER",
+                    diagnosticContext = owner, requestId = base + 1, attachGeneration = wake,
+                    observedUptimeMs = base + 10, fields = mapOf("r18Host" to 10 + wake, "r18Output" to 20 + wake,
+                        "r18ReservationId" to reservation, "r19Poster" to "R34_PRIVATE_COMPOSITOR_READY",
+                        "r34AssetGeneration" to 80 + wake, "r34PrepareStart" to base - 20, "r34Ready" to base - 10))
+                fun edge(phase: String, request: Long, at: Long, next: Any, outcome: String) {
+                    KeyguardCardDiagnostics.captureEvent(context, "R34_OPENING", phase, diagnosticContext = owner,
+                        requestId = request, observedUptimeMs = at, fields = mapOf(
+                            "r34Request" to request, "r34Next" to next, "r34Reservation" to reservation,
+                            "r34Host" to 10 + wake, "r34Output" to 20 + wake, "r34Scene" to 10,
+                            "r34Inventory" to base + 1, "r34Start" to base, "r34End" to at,
+                            "r34Outcome" to outcome, "r34ReaderHigh" to 1))
+                }
+                edge("TRANSFER", base + 1, base + 3, base + 2, "SAFE_CHILD")
+                edge("READ_END", base + 2, base + 6, "UNOBSERVED", "SHOW_FULL")
+                repeat(100) { n ->
+                    KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure", diagnosticContext = owner,
+                        requestId = base + 100 + n, observedUptimeMs = base + 100 + n)
+                    if (n % 40 == 39) KeyguardCardDiagnostics.captureSnapshot(context)
+                }
+            }
+            val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+            for (wake in 1L..4L) {
+                val base = wake * 1000L
+                val row = report.lineSequence().single { it.startsWith(" R34_CORE ") && it.contains("attempt=$wake ") }
+                assertTrue(row, row.contains("reservation=${700 + wake}"))
+                assertTrue(row, row.contains("asset=${80 + wake}"))
+                assertTrue(row, row.contains("readyBeforeWake=true"))
+                assertTrue(row, row.contains("last=TRANSFER/${base + 1}->${base + 2}"))
+                assertTrue(row, row.contains("firstFull=${base + 2}@${base + 6}"))
+                assertTrue(row, row.contains("physicalFirst=UNOBSERVED physicalLast=UNOBSERVED"))
+            }
+            KeyguardCardDiagnostics.captureEvent(context, "R34_OPENING", "TRANSFER", diagnosticContext = old,
+                requestId = 4001, observedUptimeMs = 4999, fields = mapOf("r34Request" to 4001, "r34Reservation" to 704))
+            assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+            KeyguardCardDiagnostics.startCapture(context, "r34-next", "profile", mode)
+            KeyguardCardDiagnostics.beginLockAttempt(context, 779, 1, "wake", 20_000)
+            KeyguardCardDiagnostics.captureEvent(context, "R34_OPENING", "TRANSFER", diagnosticContext = old,
+                requestId = 4001, observedUptimeMs = 4999, fields = mapOf("r34Request" to 4001, "r34Reservation" to 704))
+            assertFalse((KeyguardCardDiagnostics.freezeCapture(context)["report"] as String).contains("reservation=704"))
+        } finally {
+            val editor = settings.edit()
+            if (hadMode) editor.putString("presentationMode", savedMode) else editor.remove("presentationMode")
+            check(editor.commit())
+        }
+    }
+
     @Test fun r18PipelineEvidenceRemainsBoundedAndOwnedInLight() = r18PipelineEvidence("LIGHT")
     @Test fun r18PipelineEvidenceRemainsBoundedAndOwnedInFull() = r18PipelineEvidence("FULL")
 

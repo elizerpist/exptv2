@@ -91,6 +91,9 @@ internal data class KeyguardOrbSurfaceObservation(
     val full: Boolean,
     val metrics: KeyguardOrbSurfaceMetrics? = null,
     val firstFrame: KeyguardR20FirstFrameObservation? = null,
+    val r34AssetGeneration: Long? = null,
+    val r34PrepareStartUptimeMs: Long? = null,
+    val r34ReadyUptimeMs: Long? = null,
 )
 
 /** Owns the single platform-managed holder producer and its frame clock.

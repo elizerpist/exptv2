@@ -194,7 +194,10 @@ internal class KeyguardOrbR18Presenter(
             current.posterTicket = ticket
             current.target.r34StartPhase = lease.value.phase
             runCatching { onObservation(KeyguardOrbSurfaceObservation(attachment, generation, "POSTER",
-                SystemClock.uptimeMillis(), "R34_PRIVATE_${lease.value.bufferStatus}", true)) }
+                SystemClock.uptimeMillis(), "R34_PRIVATE_${lease.value.bufferStatus}", true,
+                r34AssetGeneration = lease.value.ticket.generation,
+                r34PrepareStartUptimeMs = lease.value.prepareStartedAtUptimeMs,
+                r34ReadyUptimeMs = lease.value.readyAtUptimeMs)) }
             val readyAt = SystemClock.uptimeMillis()
             main.post {
                 if (owner.get() === current && !current.target.revoked && current.posterLease.get() === lease &&
@@ -206,6 +209,8 @@ internal class KeyguardOrbR18Presenter(
             return true
         }
         lease?.close()
+        if (lease == null) runCatching { onObservation(KeyguardOrbSurfaceObservation(attachment, generation,
+            "POSTER", SystemClock.uptimeMillis(), "R34_MISS_OR_STALE_OR_CAPACITY", true)) }
         return worker.authorizeDirectFirst(current.target, profile, ticket)
     }
 

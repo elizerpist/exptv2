@@ -193,7 +193,9 @@ internal class KeyguardOrbPresentationLane(
                         transaction.setBuffer(poster, buffer, null, Consumer { fence -> releasePoster(use, fence) })
                             .setVisibility(output.child, false).setVisibility(poster, true)
                     }
-                    attachReceipt(transaction, output, if (posterLease == null) "REVEAL" else "POSTER_REVEAL", begin)
+                    // Both poster and live-first paths are this owner's
+                    // REVEAL; use the existing capture-qualified receipt slot.
+                    attachReceipt(transaction, output, "REVEAL", begin)
                     if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) KeyguardOrbSurfaceWorkerTestHooks.beforeRevealApply?.invoke(output)
                     if (output.isSealed() || !runCatching { stillAuthorized() }.getOrDefault(false)) {
                         val local = posterUse

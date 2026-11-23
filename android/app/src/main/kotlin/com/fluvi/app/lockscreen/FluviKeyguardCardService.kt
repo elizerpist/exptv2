@@ -1010,6 +1010,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                 fun ns(value: Long?) = value?.takeIf { it > 0 } ?: "UNOBSERVED"
                 mapOf("r18Host" to binding.token.stamp.hostGeneration, "r18Output" to observation.generation,
                     "r18ReservationId" to binding.token.id, "r19Poster" to if (observation.stage == "POSTER") observation.detail else "UNOBSERVED",
+                    "r34AssetGeneration" to (observation.r34AssetGeneration ?: "UNOBSERVED"),
+                    "r34PrepareStart" to (observation.r34PrepareStartUptimeMs ?: "UNOBSERVED"),
+                    "r34Ready" to (observation.r34ReadyUptimeMs ?: "UNOBSERVED"),
                     "r20Method" to (first?.method ?: "UNOBSERVED"), "r20EntryNs" to ns(first?.entryNs),
                     "r20PainterStartNs" to ns(first?.painterStartNs), "r20PainterEndNs" to ns(first?.painterEndNs),
                     "r20ConfigureEndNs" to ns(first?.configureEndNs), "r20LockBeginNs" to ns(first?.lockBeginNs),
@@ -2494,6 +2497,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 (result as? InspectionOutcome.Completed)?.inspection)
         }
         if (result is InspectionOutcome.Yielded) {
+            recordR34Read(request, result.partial.r34ReadOwner, "TRANSFER", started, finished,
+                result.partial.r34InventoryAt, result.sceneAtRead, result.successor.id, "SAFE_CHILD")
             if (claimedOpening != null) synchronized(queueLock) {
                 openingHandoff.successorFinished(request, finished, "YIELDED_TO_C")
                 openingHandoff.followReadFinished(request, finished, result.partial.timing.ingressCallEnd, "YIELDED_TO_C")
@@ -2504,6 +2509,13 @@ class FluviKeyguardCardService : AccessibilityService() {
             return PhysicalReadOutcome.Yielded(request, result.successor, result.partial, result.sceneAtRead, started, finished, result.reason)
         }
         val inspection = (result as InspectionOutcome.Completed).inspection
+        recordR34Read(request, inspection.r34ReadOwner, "READ_END", started, finished,
+            inspection.r34InventoryAt, inspection.r19ReadSceneSerial, outcome = when {
+                inspection.r34PausedForOffer -> "PAUSED"
+                inspection.abortedStale -> "STALE"
+                inspection.rootUnavailable || inspection.walkTruncated || inspection.windowTiming.ownAttributionAmbiguous -> "INCOMPLETE"
+                else -> inspection.decision.name
+            })
         if (claimedOpening != null) {
             val closed = synchronized(queueLock) {
                 openingHandoff.successorFinished(request, finished)
@@ -2848,7 +2860,29 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
     }
 
+    /** Capture-qualified scalar milestones; fields are built on the reducer. */
+    private fun recordR34Read(request: KeyguardCardInspectionRequest, owner: R32DirectSnapshot?,
+                              phase: String, started: Long, finished: Long, inventory: Long?,
+                              scene: Long?, successor: Long? = null, outcome: String? = null) {
+        val exactOwner = owner ?: return
+        val context = request.diagnosticContext ?: return
+        if (context.captureId == null || context.captureId != KeyguardCardDiagnostics.activeCaptureId() ||
+            !KeyguardCardDiagnostics.wantsEvent("R34_OPENING")) return
+        traceKeyguard("R34_OPENING", phase, request, observedUptimeMs = finished, diagnosticContext = context,
+            deferredFields = {
+                mapOf("r34Request" to request.id, "r34Next" to (successor ?: "UNOBSERVED"),
+                    "r34Reservation" to exactOwner.reservation.id, "r34Host" to (exactOwner.route.hostGeneration ?: "UNOBSERVED"),
+                    "r34Output" to (exactOwner.route.outputGeneration ?: "UNOBSERVED"),
+                    "r34Scene" to (scene ?: "UNOBSERVED"), "r34Inventory" to (inventory ?: "UNOBSERVED"),
+                    "r34Start" to started, "r34End" to finished, "r34Outcome" to (outcome ?: "UNOBSERVED"),
+                    "r34ReaderHigh" to maximumConcurrentInspections.get())
+            })
+    }
+
     private fun traceR34Superseded(read: CompletedInspection, result: R34Superseded) {
+        recordR34Read(read.request, read.result.r34ReadOwner, if (result.waiting) "WAIT_OFFER" else "TRANSFER",
+            read.startedAt, read.finishedAt, read.result.r34InventoryAt, read.result.r19ReadSceneSerial,
+            result.successor?.id, if (read.result.r34PausedForOffer) "PARTIAL" else "STALE_POSITIVE")
         traceKeyguard("INSPECTION_REJECTED", if (result.waiting) "r34WaitForOffer" else "r34LatestOffered",
             read.request, observedUptimeMs = read.finishedAt,
             fields = mapOf("rejectionReason" to if (result.waiting) "r34WaitForOffer" else "r34LatestOffered",
@@ -3410,6 +3444,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val freshnessRevision: Long? = null,
         val r19ReadSceneSerial: Long? = null,
         val r34ReadOwner: R32DirectSnapshot? = null,
+        val r34InventoryAt: Long? = null,
         val r34PausedForOffer: Boolean = false,
     )
 
@@ -3440,6 +3475,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val yieldReason: KeyguardOpeningYieldReason? = null,
         val firstIncompleteReason: KeyguardWalkIncompleteReason? = null,
         val r34ReadOwner: R32DirectSnapshot? = null,
+        val r34InventoryAt: Long? = null,
         val r34PausedForOffer: Boolean = false,
     )
 
@@ -3545,6 +3581,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 freshnessRevision = read.freshnessRevision,
                 r19ReadSceneSerial = sceneAtRead,
                 r34ReadOwner = read.r34ReadOwner,
+                r34InventoryAt = read.r34InventoryAt,
                 r34PausedForOffer = read.r34PausedForOffer,
             ))
         }
@@ -3572,6 +3609,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             freshnessRevision = read.freshnessRevision,
             r19ReadSceneSerial = sceneAtRead,
             r34ReadOwner = read.r34ReadOwner,
+            r34InventoryAt = read.r34InventoryAt,
         ))
     }
 
@@ -3627,6 +3665,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val r34Eligible = synchronized(queueLock) { r34EmptyDirectLocked(request) != null }
         var r34ReadOwner: R32DirectSnapshot? = null
         var r34ReadScene: Long? = null
+        var r34InventoryAt: Long? = null
         var r34PausedForOffer = false
         val yieldHandle = if (!r34Eligible && openingHandoff.openingRequestId == request.id) synchronized(queueLock) {
             openingHandoff.yieldHandle(request)
@@ -3659,6 +3698,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         if (r34Eligible) {
                             r34ReadOwner = r34EmptyDirectLocked(request)
                             r34ReadScene = scene
+                            if (r34ReadOwner != null) r34InventoryAt = SystemClock.uptimeMillis()
                         }
                         if (followHandle != null)
                             openingHandoff.followReadStarted(inspectionQueue, request,
@@ -3805,6 +3845,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             yieldReason = result.yieldReason,
             firstIncompleteReason = result.firstIncompleteReason,
             r34ReadOwner = r34ReadOwner,
+            r34InventoryAt = r34InventoryAt,
             r34PausedForOffer = r34PausedForOffer && result.abortedStale,
         )
     }

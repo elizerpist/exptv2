@@ -800,6 +800,8 @@ internal object KeyguardCardDiagnostics {
         val r25Opening: LinkedHashMap<String, String> = linkedMapOf(),
         /** One first R32 overlap pair per bounded attempt; reducer-owned. */
         val r32Overlap: LinkedHashMap<String, String> = linkedMapOf(),
+        /** Fixed-key R34 reader summary survives raw-event eviction. */
+        val r34Opening: LinkedHashMap<String, String> = linkedMapOf(),
         /** Bounded decision evidence survives eviction of raw event lines. */
         val r224Transitions: ArrayDeque<TimingEvent> = ArrayDeque(),
         var r224TransitionsOmitted: Int = 0,
@@ -924,7 +926,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
-        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY", "R18_PIPELINE", "R22_ACQUISITION", "R22_4_TRANSITION", "R25_OPENING", "R32_OVERLAP",
+        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY", "R18_PIPELINE", "R22_ACQUISITION", "R22_4_TRANSITION", "R25_OPENING", "R32_OVERLAP", "R34_OPENING",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "R15_SURFACE_REVOKED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
@@ -1032,7 +1034,7 @@ internal object KeyguardCardDiagnostics {
             event.fields[key]?.takeIf { it != "UNOBSERVED" }?.let { timeline.values.putIfAbsent(destination, it) }
         }
         listOf("r18SampleStart", "r18SampleEnd", "r18Reservation", "r18AlignUptime", "r18AlignNano",
-            "r18AlignUncertaintyNs", "r19Intent", "r19Poster").forEach { retainField(it) }
+            "r18AlignUncertaintyNs", "r19Intent", "r19Poster", "r34AssetGeneration", "r34PrepareStart", "r34Ready").forEach { retainField(it) }
         if (event.reason == "WAKE_ADOPTED") {
             event.requestId?.let { timeline.values.putIfAbsent("r19ReservedRequest", it.toString()) }
         }
@@ -1088,6 +1090,36 @@ internal object KeyguardCardDiagnostics {
             val prefix = if (event.reason == "REVEAL_RECEIPT") "reveal" else "retire"
             listOf("r18ApplyBegin", "r18ApplyEnd", "r18Commit", "r18LatchNs", "r18PresentNs", "r18PresentState")
                 .forEach { field -> retainField(field, "$prefix:$field") }
+        }
+    }
+
+    private fun reduceR34(attempt: TimingAttempt, event: TimingEvent) {
+        val fields = event.fields
+        val reservation = fields["r34Reservation"] ?: return
+        val values = attempt.r34Opening
+        if (values.isNotEmpty() && values["reservation"] != reservation) return
+        values.putIfAbsent("reservation", reservation)
+        listOf("r34Host", "r34Output", "r34Request", "r34Scene", "r34Inventory", "r34Start", "r34End")
+            .forEach { key -> fields[key]?.takeIf { it != "UNOBSERVED" }?.let { values.putIfAbsent(key, it) } }
+        fields["r34ReaderHigh"]?.let { values["readerHigh"] = it }
+        when (event.reason) {
+            "TRANSFER", "WAIT_OFFER" -> {
+                values["superseded"] = ((values["superseded"]?.toIntOrNull() ?: 0) + 1).coerceAtMost(9999).toString()
+                values["lastAction"] = event.reason
+                values["lastRequest"] = fields["r34Request"] ?: "UNOBSERVED"
+                values["lastNext"] = fields["r34Next"] ?: "UNOBSERVED"
+                values["lastOutcome"] = fields["r34Outcome"] ?: "UNOBSERVED"
+                values["lastAt"] = event.uptimeMs.toString()
+            }
+            "READ_END" -> {
+                val outcome = fields["r34Outcome"] ?: "UNOBSERVED"
+                values["lastRead"] = fields["r34Request"] ?: "UNOBSERVED"
+                values["lastResult"] = outcome
+                if (outcome == "SHOW_FULL") {
+                    values.putIfAbsent("firstFull", fields["r34Request"] ?: "UNOBSERVED")
+                    values.putIfAbsent("firstFullAt", event.uptimeMs.toString())
+                }
+            }
         }
     }
 
@@ -2137,6 +2169,7 @@ internal object KeyguardCardDiagnostics {
                 "R22_ACQUISITION" -> reduceR22(attempt, event)
                 "R25_OPENING" -> reduceR25(attempt, event)
                 "R32_OVERLAP" -> reduceR32(attempt, event)
+                "R34_OPENING" -> reduceR34(attempt, event)
                 "R12_SURFACE" -> {
                     val show = showEpisode()
                     if (show != null) reduceSurface(show, event)
@@ -2362,6 +2395,7 @@ internal object KeyguardCardDiagnostics {
         r22Opening = LinkedHashMap(attempt.r22Opening),
         r25Opening = LinkedHashMap(attempt.r25Opening),
         r32Overlap = LinkedHashMap(attempt.r32Overlap),
+        r34Opening = LinkedHashMap(attempt.r34Opening),
         pendingHideCommits = ArrayDeque(attempt.pendingHideCommits),
         pendingR11 = ArrayDeque(attempt.pendingR11.map { it.copy(fields = it.fields.toMap()) }),
         pendingR12 = ArrayDeque(attempt.pendingR12.map { it.copy(fields = it.fields.toMap()) }),
@@ -2555,6 +2589,9 @@ internal object KeyguardCardDiagnostics {
                 select("a${attempt.id}:r22Core", r22CoreRecord(attempt), attempt.id)
                 select("a${attempt.id}:r25Core", r25CoreRecord(attempt), attempt.id)
             }
+        attemptsForCausalEvidence.filter { it.r34Opening.isNotEmpty() ||
+            it.r18Generations.values.any { row -> row.values["r19Poster"]?.startsWith("R34_") == true } }
+            .forEach { attempt -> select("a${attempt.id}:r34Core", r34CoreRecord(attempt), attempt.id) }
         attemptsForCausalEvidence.filter { it.r32Overlap.isNotEmpty() }.forEach { attempt ->
             select("a${attempt.id}:r32Core", r32CoreRecord(attempt), attempt.id)
         }
@@ -2859,6 +2896,30 @@ internal object KeyguardCardDiagnostics {
         val sized = withExportBytes(report)
         check(sized.toByteArray(Charsets.UTF_8).size <= exportLimitBytes)
         return sized
+    }
+
+    private fun r34CoreRecord(attempt: TimingAttempt): String = buildString {
+        val values = attempt.r34Opening
+        fun v(key: String) = values[key]?.take(48) ?: "UNOBSERVED"
+        fun n(value: Any?) = value?.toString()?.take(48) ?: "UNOBSERVED"
+        val direct = attempt.r18Generations.values.firstOrNull {
+            it.values["r26ReservationId"] == values["reservation"]
+        } ?: attempt.r18Generations.values.firstOrNull { it.values["r19Poster"]?.startsWith("R34_") == true }
+        fun d(key: String) = n(direct?.values?.get(key))
+        val ready = direct?.values?.get("r34Ready")?.toLongOrNull()
+        val winner = direct?.values?.get("r19ConsumedRequest")
+        val show = attempt.shows.firstOrNull { it.attachGeneration == direct?.attachment && it.requestId?.toString() == winner }
+        val hide = show?.let { actualWithdrawal(attempt, it) }
+        append(" R34_CORE v=1 attempt=${attempt.id} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
+        append(" reservation=${v("reservation")} host=${v("r34Host")} output=${v("r34Output")} asset=${d("r34AssetGeneration")}")
+        append(" route=${d("r19Poster")} prepare=${d("r34PrepareStart")}/${d("r34Ready")} readyBeforeWake=${ready?.let { it <= attempt.startedUptimeMs } ?: "UNOBSERVED"}")
+        append(" firstRead=${v("r34Request")}@${v("r34Start")}/${v("r34Inventory")}/${v("r34End")} scene=${v("r34Scene")}")
+        append(" superseded=${v("superseded")} last=${v("lastAction")}/${v("lastRequest")}->${v("lastNext")}@${v("lastAt")}/${v("lastOutcome")}")
+        append(" latest=${v("lastRead")}/${v("lastResult")} firstFull=${v("firstFull")}@${v("firstFullAt")} readerHigh=${v("readerHigh")}")
+        append(" proof=${d("R19_PROOF_ACCEPTED")}/${d("R19_PROOF_EXPIRED")} grant=${d("GRANT")} hostReady=${d("HOST_READY")}")
+        append(" submit=${d("reveal:r18ApplyBegin")}/${d("reveal:r18ApplyEnd")}/${d("reveal:r18Commit")} firstMotion=${n(direct?.r19MetricSnapshot?.firstDistinctUptimeMs)}")
+        append(" hide=${n(hide?.operationId)}/${n(hide?.localHideAppliedAtUptimeMs)}/${n(hide?.removeReturnAtUptimeMs)}")
+        appendLine(" clock=uptimeMs physicalFirst=UNOBSERVED physicalLast=UNOBSERVED")
     }
 
     private fun r32CoreRecord(attempt: TimingAttempt): String = buildString {

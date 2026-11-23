@@ -31,10 +31,11 @@ internal class KeyguardR34PrivatePoster(private val context: Context) {
     )
     data class Image(val identity: Identity, val ticket: KeyguardR34PrivateAssetCache.Ticket<Identity>,
                      val bitmap: Bitmap, val phase: KeyguardMaterialTime, val buffer: HardwareBuffer?,
-                     val bufferStatus: String, val readyAtUptimeMs: Long)
+                     val bufferStatus: String, val prepareStartedAtUptimeMs: Long, val readyAtUptimeMs: Long)
     private data class Work(
         val ticket: KeyguardR34PrivateAssetCache.Ticket<Identity>,
         val profile: KeyguardMaterialProfile,
+        var startedAtUptimeMs: Long = 0L, // poster worker only
     )
     private data class GpuWork(val buffer: HardwareBuffer, val renderer: HardwareBufferRenderer,
                                val node: RenderNode, val bitmap: Bitmap, val fence: SyncFence? = null)
@@ -109,6 +110,7 @@ internal class KeyguardR34PrivatePoster(private val context: Context) {
         }
         if (!cache.isCurrent(work.ticket)) { continueDrain(); return }
         val key = work.ticket.key
+        work.startedAtUptimeMs = SystemClock.uptimeMillis()
         val generated = runCatching {
             val supported = context.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
             require(supported in 1..4096 && key.width == supported && key.height == supported)
@@ -197,7 +199,8 @@ internal class KeyguardR34PrivatePoster(private val context: Context) {
 
     private fun finish(work: Work, bitmap: Bitmap, phase: KeyguardMaterialTime,
                        buffer: HardwareBuffer?, status: String) {
-        val image = Image(work.ticket.key, work.ticket, bitmap, phase, buffer, status, SystemClock.uptimeMillis())
+        val image = Image(work.ticket.key, work.ticket, bitmap, phase, buffer, status,
+            work.startedAtUptimeMs, SystemClock.uptimeMillis())
         if (cache.publish(work.ticket, image) && KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
             runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterWarmPosterCreated?.invoke(true) }
         }
