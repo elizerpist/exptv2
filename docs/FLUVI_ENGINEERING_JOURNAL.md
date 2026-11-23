@@ -17658,3 +17658,146 @@ FLUVI_R30_STOCK_ORB_END
 - The first separate withdrawal controls [45134151540](https://github.com/elizerpist/pushparserv2/actions/runs/45134151540) and [45134152733](https://github.com/elizerpist/pushparserv2/actions/runs/45134152733) did not reach a visible acknowledged DIRECT owner after an incomplete FOREIGN_ABOVE read and fallback. The one corrected repeat for each arm, [45136036401](https://github.com/elizerpist/pushparserv2/actions/runs/45136036401) and [45136599181](https://github.com/elizerpist/pushparserv2/actions/runs/45136599181), did not reach its required launcher-focus setup. No real NO_MAIN_MARKER withdrawal, replacement or duplicate-negative pixel result is claimed.
 - The first signed-profile A/B/B/A run [45135743248](https://github.com/elizerpist/pushparserv2/actions/runs/45135743248) failed before all four trials because a debug test method was variant-mangled differently in profile. The single corrected run [45136704345](https://github.com/elizerpist/pushparserv2/actions/runs/45136704345) attempted all 12 cycles; only candidate B1 warm1 reached acknowledged DIRECT. Its original opening was truncated and used child flags 36. The app wake-to-proof/reveal intervals were 5204/5965 ms on this emulator; system-sample seal-to-native-retire return was 16 ms. No matched baseline or calibrated physical frame time is available. Three later inner-circle screenshots matched a prior same-shader/palette reference, but the post-unlock screenshot overlaps retirement and is unclassified.
 - All raw first and corrected runs, twelve capture reports, private screenshots, the 115 Flutter failure names and reproducible limited crop comparison are retained at private evidence commit [`387f2012c86b61f51ed3e2027b103cbc0db3a4c6`](https://github.com/elizerpist/pushparserv2/tree/387f2012c86b61f51ed3e2027b103cbc0db3a4c6/evidence/r30-93248d0a). Formal public CI/native scopes were not started because changed-path visual prerequisites remain unmet. R22.4 visual privacy FAIL and R27 shade ambiguity remain open. Three physical 10 ms endpoints and owner acceptance: **PENDING — USER ONLY**.
+
+## 2026-11-23 — R30 rejected on the owner's phone. R31 returns to the accepted stock opening
+
+FLUVI_R31_STOCK_OPENING_BEGIN
+
+### 1. Title and task intent
+
+IMPLEMENTATION. Deliver one stock Android wake-opening change on the protected de807259 code. If the single reader is walking the first successor (B) and that read is demonstrably obsolete, transfer once at a safe child boundary to the latest queued request (C). Only a fresh, complete read can authorize pixels. Preserve the milestone's unlock behavior and measure it. This is a bounded attempt to reduce phone lag. All three physical 10 ms requirements remain open. The separate integrated SystemUI project has no bearing on whether this APK improves a stock phone.
+
+### 2. Authoritative application state
+
+In elizerpist/exptv2, create implement/r31-stock-opening from de807259cd370d18e422772ed0943b8d65be4bca (parent 9d9444795ea34e64525e990f5c08d1b655a6fdaf). MILESTONE_COMMITS.md at 2eeb2aa528e1b8a5650ac8317dce52af34b1db07 records the owner's faster perceived opening. That build remains the preferred baseline. The phone-rejected child 93248d0aeee4ebc69d305020e7d5b2d5bdbbdb2a is the tip of implement/r30-stock-orb-transitions. Leave its branch and APK accessible for comparison. Start R31 with the milestone's actual original root/child arguments and withdrawal order. Do not merge R30 into the baseline. Journal/report coordination parent 971c839095648d9dbf4d08f1b6c7f9522631be96 is documentation only.
+
+### 3. Hard preflight
+
+Before execution, read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md, docs/FLUVI_ENGINEERING_JOURNAL.md, and relevant MILESTONE_COMMITS.md entries using the versions and access paths supplied in this handoff. Explicitly report missing material. The prompt writer owns diagnosis, causal interpretation, the repair concept and any refactor decision. Implement only the specified technical contract or execute only the specified evidence-collection experiment; do not select a new root cause or repair strategy. If source, logs or tests contradict the plan, preserve and report exact evidence and return the affected decision to the reviewer. Continue independent authorized work. Follow the supplied risk-to-test matrix and the verified focused-validation route. Record every relevant failure and every diagnostic repetition. Start full delivery only after the specified entry conditions; diagnostic selection does not satisfy full required gates. Do not repeat a rejected repair without new evidence and a reviewer decision. Resolve the exact physically tested application source separately from documentation-only HEAD commits. Preserve the dashboard contracts and verify the specified native lockscreen and launcher-widget boundaries.
+
+Read project_sources/02-FLUVI_PROMPT_WRITER_RULES-1-.md, project_sources/01-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md and project_sources/03-DEBUGGING_LOOP_VERY_IMPORTANT.txt. For executors without the project mount, use the portable rule texts in the coordination journal at 161f63675121302432be2026898bed07b23d7ded and the access instructions/digests in R29 §3. Read the whole shared journal, the milestone, docs/R30_QUALIFICATION_REPORT.md at 971c839, and the R27 owner APK amendments. R23 at 60f96ab6584952d9964550a43da723278f6c8091 is historical design evidence. R24 superseded its use as a universal deadline solution. This entry authorizes the narrowly scoped scheduling change in §14 with new handset evidence. Fetch the named refs and record git status --short --branch, git rev-parse HEAD HEAD^ and git ls-remote --heads origin for the implementation, coordination and builder branches. Isolate the worktree if needed.
+
+### 4. Physical user evidence
+
+“Nem lett jobb, nőtt a lag.” The owner rejects R30 for increased perceived lag. The report does not assign the increase independently to wake and unlock. Do not infer an optical latency or label a new milestone. Reference session a5caf6ab-c255-4346-acde-ce35aae33b8a and current session e801b126-819f-422c-9e3b-94916c702b70 were both on stock Nothing A142, Android API 35, connected service, profile, FULL, ORB/orbOnly, keyguard only.
+
+### 5. Capture and timing audit
+
+Current pasted LIGHT capture, 09:35:16 Europe/Budapest, service session 1, process 11276-09ea119e, duration 22,819 ms. 1,127 events recorded, 244 retained, 681 evicted, 202 diagnostic records dropped, 31,605 exported bytes, four detailed wakes among five aggregate openings. All three R27 incomplete-transfer counts eligible/rejected/yielded are zero. R22 clean A→B transfers still happened. The original raw file hash, optical wake, unlock start, scanout, first and last pixel are unavailable. The owner's observed regression stands independently of these limits.
+
+| Wake | A child flags | App wake → paint proof | Winning submission or reveal endpoint | Framework event → callback | Callback → seal / native retire return |
+| --- | ---: | ---: | --- | ---: | --- |
+| 1 | 36 | 449 ms | DIRECT reveal returned +505 ms | 25 ms | 10 / 11 ms |
+| 3 | 4 | 268 ms | DIRECT reveal returned +284 ms | 90 ms | 15 / 17 ms |
+| 4 | 4 | 399 ms, failed DIRECT | SURFACE_LIVE first post +588 ms, first distinct submission +609 ms | 27 ms | Winning fallback layer retire start / return 35 / 36 ms after callback |
+| 5 | 4 | 444 ms | DIRECT reveal returned +461 ms, bitmap hit, worker entry to post 3.165 ms | 91 ms | 15 / 16 ms |
+
+Compare de807259's four DIRECT reveal returns 356/407/342/320 ms. R30's fastest and slowest DIRECT attempts straddle that range. Avoid a paired gain or population rate from separately truncated runs. The slowest DIRECT wake kept the old child flags. On #4 inputAuthorityFailed sealed unpublished DIRECT at +415 ms, then the successful fallback posted 173 ms later. This failure also occurred on 5bb91aed before R30. The reason combines missing host, obsolete first proof or failed coordinator armInput. The specific failing predicate, physical removal and hypothetical time saved remain unknown.
+
+### 6. Commit and automation audit
+
+Application commit 93248d0 “fix(r30): scope opening prefetch and retire completed negatives [skip ci]” changed 8 files, +401/-14: four production Kotlin files and four test/fixture files. It changed qualified child prefetch, sealed an exact presented owner early, and recorded/verified both. Coordination a101faa79a23d68c712a301d4dfa27f7a16d7d7d and 971c839095648d9dbf4d08f1b6c7f9522631be96 document initial and final qualification. Builder 45132491904 passed. Private 45133535652 verified an in-place update from signed de807259 with a retained demo sentinel. Candidate artifact f573e70d3f627a7d75f8dd8afcd6112c2eb4a12e, 120805687 bytes, SHA-256 2bf9b6685f86fb7336f21027ffbc37f5382c9dec93eb80035370e4f18eb01e66. Baseline artifact dc15a70f17a70685fa87c493b95c4149e04be135, 120789303 bytes, SHA-256 057406296e14bb10c6dbe6ae94e5f6d7564bed02a89c8787bf23c4b9b6fec773. Both anonymous full downloads were verified during review.
+
+38 focused JVM tests and app/core 331/150 passed after an initial disk-full assembly failure. Flutter analyze passed with 22 infos; full Flutter 2780 passed, 115 failed, 3 skipped. Gated actual-child controls 45134570200 / 45134704622 proved 36/4 and eligibility only. Corrected real withdrawal controls 45136036401 / 45136599181 missed launcher focus. Profile comparison initially failed at a debug-only variant-mangled method. Corrected run 45136704345 reached acknowledged DIRECT once in twelve trials, in a candidate cycle that used 36; no matched speed result. Shade/credential evidence remains incomplete, R22.4 visual privacy FAIL and R27 ambiguity open. Ordinary public workflow and five formal scopes NOT RUN. Archived private evidence 387f2012c86b61f51ed3e2027b103cbc0db3a4c6. The phone capture now independently demonstrates that the R30 early seal executed on three real withdrawals, without closing visual qualification.
+
+### 7. Graph provenance and consumers
+
+de807259 tooling d0a6c6b8f7b6a0465d4667236f5b84e004a888e0 and 93248d0 tooling cad4b763bbb7acf30b087d35143c0d08238c19ed. R30 manifest SHA-256 8aad08d39d800fd19cb141d55d33ee2ca9bea3846e04df8ca2d0a74911b2151c, index 870f84e9d8451ba8a25cbb19e43dca08d1b216943948c7a1088b83617ab5b7aa, run 45132819546. SCIP-Dart indexes the capture bridge consumed by the app shell, console, button and tests. Kotlin edges are manually traced in source; see docs/codegraph-r30-stock-inventory.md and docs/codegraph-r30-stock-query.txt at the R30 tooling SHA and the R29.1 checkpoint inventory at its graph SHA. Regenerate or validate the exact-source graph and native inventory for the delivered revision. No Dart protocol change is required.
+
+### 8. Source and timing facts
+
+Under android/app/src/main/kotlin/com/fluvi/app/lockscreen, FluviKeyguardCardService.acceptAccessibilityMetadata advances firstAuthorizedOrb's scene before offering genuine scene-changing inspection work. requireRead and KeyguardCardInspectionQueue.offer serialize a new obligation and the actual pending occupant. KeyguardOpeningInspectionHandoff currently arms one runtime opportunity for A only. Its later PostClaim observations depend on diagnostic capture. B runs to completion even after its serial has become obsolete. KeyguardFirstAuthorizedOrb.offer rejects stale scene/obligation at publication. DIRECT keeps ordered Main application after completed reads. KeyguardWindowSnapshotReader.visibleIds already consumes a returned node's exclusion markers before another child call.
+
+| Wake | B complete MAIN, later rejected | B duration | First pending during B → B finish | Last pending during B → B finish | Actual paint proof |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 3 | 65 | 90 ms | 42 ms | 42 ms, request 66 | 66 |
+| 4 | 87 | 55 ms | 53 ms | 38 ms, request 90 | 91, DIRECT later failed |
+| 5 | 120 | 198 ms | 164 ms | 112 ms, request 124 | 125 |
+
+All three B results were rejected SCENE_CHANGED. The table gives observed overlap; it does not identify a usable B checkpoint inside it or predict recoverable time. Later requests can supersede C too. Attempt 1 has no such B and remains a separate slow case. Showing inspections whose details survived visited 42 nodes on R30 versus 23 in the prior detailed phone records. Tree shape varies across runs.
+
+### 9. Proven, unproven, missing
+
+PROVEN: R30 failed the owner's acceptance. Repeated B walks consumed the only reader after a newer real request had already made B's positive result unauthorized. When R30 early-sealed, the subsequent sample lasted only 0.992, 2.260 and 0.623 ms. These durations are no estimate of optical improvement. The three DIRECT hides reached native retire return 1/2/1 ms after seal.
+
+UNPROVEN: whether R30's child flag caused the regression, how often a usable B boundary exists, whether a fresher C advances the final reveal, and whether withdrawal visibly changed. No isolated blame on bitmap, shader or extraction of financial values. MISSING: matched unheld endpoint measurements, exact B call boundaries, same-owner optical first/last pixel, contemporaneous calibrated shade evidence and measured physical 10 ms upper bounds.
+
+### 10. Reviewer decision and falsification
+
+Reset the ordinary candidate source to the confirmed milestone. Introduce exactly one scheduling difference for a hidden, ungranted opening after A has handed off. An intrinsically obsolete B may yield to current pending C at a safe boundary before issuing more child calls. The stricter guards protect restrictive evidence and the single reader. R23 proposed this mechanism under an earlier brief and did not ship. The current source and three real stale B outcomes justify a controlled stock trial. The universal ≤10 ms platform finding stands. If C never becomes eligible, finishes equally late, increases fallbacks, or improves queue timing without moving authorized reveal, report that exact result. No new prefetch experiment, guessed early unlock or relaxation of inputAuthorityFailed.
+
+### 11. Scope and protected behavior
+
+Change the opening handoff, associated service/reader wiring, teardown, compact evidence, focused tests and report. Keep all baseline prefetch arguments including R18 initial API35 root=4 and the accepted child=36. Preserve the de807259 withdrawal, R22.4 restrictions, current TRUE FULL material and continued motion, stable lockscreen, rapid relock, launcher widget and dashboard. No work on a duplicate reader, SystemUI enrollment, bitmap policy, live wallpaper, visibility authority, window input flags or a new DISPLAY/UNLOCK inference. Validate a stock APK without flashing a phone.
+
+### 12. Impact and ownership
+
+| Source/symbol | Caller or consumer | Old → new transition | Risk, guard and distinguishing control |
+| --- | --- | --- | --- |
+| KeyguardOpeningInspectionHandoff.arm/claim, successorStarted/Finished; service scene capture/invalidation and actual queue-offer block | Main ingress, inspection worker | A→B only → optional single B→latest C | Keep runtime identity independent of PostClaim/capture. Arm on actual A claim; begin B at its physical read-start scene. Test already-queued C, replaced C, same uptime/different scene, capture OFF. |
+| KeyguardWindowSnapshotReader.read/visibleIds | Exact primary SystemUI window on B | Finish obsolete B → unwind at next safe pre-child boundary | Consume returned marker first; full cleanup once. No interrupted Binder call, partial positive, yield on missing/ambiguous window attribution or recursive C. Test active-root rejection, shade/credential, null child and truncation. |
+| KeyguardCardInspectionQueue.handoffOpening; service readInspection/processInspectionQueue/finally | One active and at most one pending request | queue moves B→C before B's typed result returns | Compare active/pending identity and freshness under queueLock. Teardown during B unwind can have old local promotedOwner=B but queue owner=C. Test exact cleanup at each edge, including a newer session. |
+| KeyguardFirstAuthorizedOrb.offer and DIRECT ordered Main publication | Fresh C, native presentation | C reads whole current scene with ordinary guards | Keep all existing scene, proof, system, host, grant, paint and exclusion checks. Test superseded C, unrelated window, fallback and late old result. |
+| Compact R22/R26 diagnostics and exporter | LIGHT/FULL, console | Add one joined bounded B/C summary | Retain dropped/omitted counts and genuine NOT_REACHED. No per-node logging or locks with capture OFF. Re-run pressure/rotation tests. |
+
+### 13. RED tests and controls
+
+On the milestone run a fixture through the real reader and queue. Establish virgin unpublished DIRECT A→B, clean attributable SystemUI root, and an inventory with remaining children. Offer C during B's actual acquisition, once with SYSTEM_UI and once with real-shape AMBIGUOUS metadata processed by the same INSPECT path. The baseline must continue B and reject its stale positive. On candidate, demonstrate a common completed boundary, fewer subsequent obsolete B acquisitions, exact typed B→C, and fresh full C. Keep synchronous, asynchronous and same-uptime variants. A controlled ingress is a structural result only. Test no C, C before B starts, synthetic/recovery, wrong display or owner, copied cache-clear debt, C superseded by another event after starting, restrictive marker returned on the in-flight child, incomplete/foreign inventory, cancellation, and successful rapid relock. Assert zero shows from partial B, one actual reader, no bypass of a negative and no stranded queue. In a stable B control compare correct pixels and cadence. Test a visible FULL withdrawal separately, against de807259.
+
+### 14. Implementation contract
+
+1. Add one runtime follow-on handle to KeyguardOpeningInspectionHandoff for the exact original reservation, route revision, session/wake and B request/authority. Set B's read-start scene under queueLock immediately before physical windows acquisition. Record post-start invalidations and match a post-start real INSPECT offer with its actual pending occupant, ingress ID, current scene and default display. The candidate eligibility is independent of diagnostics. The ambiguous framework event in this capture can invalidate B and request a fresh read. It supplies no SystemUI identity, FULL proof or permission to discard a restriction. Require the independent physical SystemUI inventory below. Exact own, foreign-app origin, missing display, synthetic/no matching offer, wrong/future state, and inherited freshness debt cannot transfer.
+2. Give B only a read-only hint and one claim callback on the existing returned-node/pre-next-child path. Reuse the baseline classifier, cleanOpeningInventory, strict attribution, freshness checks and exact not-yet-visible DIRECT guards. Require an accepted default-display SystemUI root, exact own-window handling, no missing/truncated node or disqualifier in the consumed prefix, and work still remaining. Do not move the opportunity before root identity, issue an extra Binder call or alter any prefetch flags. Recheck scope and cancel stale hints before a new claim. Separate A's historical incomplete-null-child path from B's clean-only path.
+3. At claim under queueLock, require active==B, actual pending==the exact latest C, newer scene distinct from B read-start, matched request/ingress, current authority/route/reservation, satisfied freshness obligation, no preceding ordered apply, no retained proof, no paint/grant/visible/touchable or recovery state. Use handoffOpening(B,C) and consume the follow-on exactly once. Return the typed Yielded result, close original B's post-claim observation as YIELDED_TO_C, and recycle B's already acquired objects normally. Skip completed-read publication for this partial B. C starts one complete fresh service read. No C→D transfer. Further invalidations continue through the baseline path.
+4. Fix the specific cancellation gap in processInspectionQueue.finally: always use exact ownership checks. During B unwind check the recorded transfer pair for that B even if promotedOwner still points to B and abandonSessionIfActive(B) returned false. Never clear a different session or a new successor from an old A cleanup. No queue lock around node acquisition, recycling, system calls, tests or tracing. Each terminal path closes or clears only its own handle.
+5. Extend compact evidence keyed by capture/session/wake/A/B/reservation. Include B start scene, newer offer time/ID/origin/scene, actual C and displacement, in-flight call end where observed, first usable checkpoint or rejection, number of B calls after offer, transfer/unwind, C start/end, ultimate proof and winner, reveal/first-post/withdrawal timestamps. Keep A's historical post-claim record intact. Preserve app uptime and paired monotonic nanoseconds in their own domains. Capture OFF and capture rotation must not change which request runs. Do not retain platform node or financial payload. At the existing DIRECT fallback site distinguish the failing existing input predicate with scalar evidence available at decision time; leave the outcome unchanged and avoid recomputing a decision after the owner has changed.
+
+### 15. Performance and owner acceptance
+
+Structural controls measure avoidable calls. Actual performance comparison is an unheld stock signed profile A/B/B/A on identical settings, runner, seed, screen and capture mode: one cold and two warm lock/wake/visible-FULL/unlock cycles per block, same live service within warm block. A=de807259; B=R31. Record every trial. Use the instrumentation-independent profile capture/output path from corrected private run 45136704345. Record tree sizes, route and every fallback separately, end-to-end wake to authorized reveal or winning fallback post, proof, first distinct submitted motion, callback→seal/retire/local hide, reopen and first sustained visible FULL/absence where observable. Preserve missing states rather than matching different routes or pooling native reveal and fallback posts. Display-off, keyguard-locked, service alive, and current visible FULL are distinct preconditions. Acknowledged DIRECT is a success outcome; do not discard slower fallback wakes from the overall report.
+
+For first screen-visible, record calibrated comparisons if available or give limitations. Owner checks the two APKs under the same settings on wake, unlock from confirmed FULL, quick relock and shade. Physical wake stimulus→first correct FULL pixel, first eligible lockscreen frame→first correct FULL pixel, and first restrictive/unlock frame→continuous absence are different measurements. ≤10 ms requires a compatible upper uncertainty bound for each. Never assign phone milliseconds to an emulator screenshot sequence or app callback. A missing matched trial leaves the candidate experimental; build availability and qualification remain independent.
+
+### 16. Order and failure handling
+
+Pin baseline → deterministic red at production boundaries → implement the single transfer and exact ownership cleanup → compile, focused greens and negative controls → freeze the app SHA → build owner APK and verify update → finish applicable actual-device and formal gates. Report all failures with their original evidence and distinguish application, compiler, fixture, scoring, storage or infrastructure. One initial diagnostic execution plus one targeted repeat only after a documented distinguishing correction per failed boundary. No CI loop or artificial waiting to obtain a green result. Return a contradiction to this plan to the reviewer, continue independent work and deliver the accurately labeled diagnostic APK.
+
+### 17. Validation routes and commands
+
+Use provisioned Flutter 3.41.4, JDK17 and Android SDK. Use the source-pinned private API35 KVM lane used in the R30 report for actual service tests. Keep identical production source in control instrumentation and record any observer-only SHA. No requirement for a local emulator or a patched system image.
+
+    git diff --check
+    bash scripts/verify-fluvi-boundaries.sh
+    (cd android && ./gradlew :app:generateKeyguardHeaderMaterial :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin --no-daemon --max-workers=3)
+    (cd android && ./gradlew :app:testDebugUnitTest --tests '*KeyguardOpeningInspectionHandoffTest' --tests '*KeyguardR22ReaderHandoffTest' --tests '*KeyguardR22PostClaimEvidenceTest' --tests '*KeyguardCardInspectionQueueTest' --tests '*KeyguardFirstAuthorizedOrbTest' --tests '*R31*' --no-daemon --max-workers=3)
+    (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --no-daemon --max-workers=3)
+    flutter analyze --no-fatal-infos
+    flutter test --reporter expanded
+    adb shell pm list instrumentation
+
+On the matched debug pair run adb shell am instrument -w -r -e class "$CASE" "$RUNNER" with the actual registered runner. Extend KeyguardFirstAuthorizedOrbInstrumentationTest and KeyguardR22FirstInspectionFixture for positive and restrictive B→C, also run r26VisibleDirectUnlockAndRapidRelock and KeyguardCardDiagnosticsInstrumentationTest LIGHT/FULL controls. Signed profile trials cannot depend on a debug-mangled service accessor. Test the profile observer once before running blocks. Confirm FULL/empty/shade references and retain private images including partial or unknown classifications. Formal gates when changed-path controls qualify:
+
+    gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$APP_REF" -f native_diagnostic=false
+    for scope in r12_live r12_static r12_legacy r12_contract full; do
+      gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$APP_REF" -f native_diagnostic=true -f native_scope="$scope"
+    done
+
+Pin APP_REF to delivered APP_SHA, verify run heads and terminals. Incomplete preconditions give NOT RUN or NOT REACHED. They cannot block the owner's diagnostic download.
+
+### 18. Commits
+
+Record application source, parent, checklist, intent, changed method/contract, validation, risks, graph and physical status. Keep app, tool/test, evidence, binary, report and journal SHAs distinct. Append to current coordination journal without overwriting concurrent entries. Preserve both earlier APKs and the existing protected milestone.
+
+### 19. Mandatory owner APK
+
+Build a newly signed profile HUMAN_DIAGNOSTIC from the actual R31 application SHA via orchestration/r18-phone-builder pinned to 200aaebd1eaa79382feb977ba57996b0c72e2d28. Use gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref orchestration/r18-phone-builder -f app_sha="$APP_SHA". Verify com.fluvi.app, version compatibility, ABI source/purpose markers, payload and established signer faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. On controlled API35 verify adb install -r over the actual signed rejected R30 (the owner's installed version) with a demo sentinel retained. Publish the candidate as an immutable anonymous direct download under the standing owner diagnostic authorization; verify a full HTTP 200 GET, size and SHA-256, and apksigner verify --verbose --print-certs on the downloaded file. Put the working URL first in delivery, with identity/build mode, scope, failures and the separately labeled known baseline. Provide the real candidate even when emulator qualification is inconclusive, label demo-data-only where appropriate, and keep raw screenshots/financial or private evidence out of public artifacts. No production qualification is implied.
+
+### 20. Completion report
+
+Separate milestone/source, implemented behavior, automatic gates and failures, exact owner APK delivery and physical decision. Tabulate qualifying and nonqualifying B opportunities, all tested excludes, actual winning route, final proof, opening and withdrawal endpoints and missing evidence. Report the four widget scopes, diagnostic costs/omissions, bitmap hit/miss, R22.4/R27 risks, and which result requires reviewer follow-up. Link private raw artifacts and readable exact-source public summary. The coding agent reports results; only the owner accepts the physical experience.
+
+### 21. Done and current status
+
+A completed coding handoff includes an update-compatible downloadable R31 with the changed production path and compact evidence, the required tests/limits, and an interpretable account of final authorized reveal plus exit. Today R30 implementation and verified owner delivery exist; automated validation is partial; the owner rejected R30 on stock. The R31 plan is ready, implementation/automatic qualification have not run, and no new R31 APK has been delivered. The de807259 milestone protects its observed opening only. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+FLUVI_R31_STOCK_OPENING_END
