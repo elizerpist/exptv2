@@ -17809,3 +17809,97 @@ FLUVI_R31_STOCK_OPENING_END
 - Preliminary `a2fe31f2` local Android debug and androidTest builds passed, with app 341/341 and core 150/150 JVM tests. The full Flutter run failed: 2780 PASS, 115 FAIL, 3 skipped. All 115 failing test names match the retained R30 run; identical names do not prove identical causes. Flutter analyze passed with 22 infos. The initial cache copy failed for lack of temporary space; an initial baseline compile failed for ungenerated Flutter plugin metadata; an initial focused compile failed for a test constructor property. The mechanical corrections and all logs are retained [privately](https://github.com/elizerpist/pushparserv2/tree/2783a1a079c9c188b2338eb17271e281f4d08265/evidence/r31-a2fe31f29d36).
 - The preliminary profile HUMAN_DIAGNOSTIC APK was anonymously fetched in full: HTTP 200, 120805687 bytes, SHA-256 `8efa5fd8989caafa9ddaf6467a6ae568a172c6c0bcac341aaa765411eb01cdba`, signer SHA-256 `faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`. The payload, source/purpose in all three AOT ABIs and R31 DEX markers matched. Private run [45151095925](https://github.com/elizerpist/pushparserv2/actions/runs/45151095925) installed it over the actual signed R30 APK and retained a demo sentinel. This preliminary APK is superseded for delivery by the forthcoming capture-cut correction; preserve its artifact and update evidence.
 - Exact preliminary-source Dart graph [059499e0](https://github.com/elizerpist/exptv2/tree/059499e0a0e726be35ab18067c658477e84a89f5/docs/codegraph), manifest SHA-256 `948ff26e98055262e0af201673a3300e9ae1a9419fa30af8414bb01420d8fc41`; Kotlin is manual source navigation, not SCIP coverage. Candidate service run `45149778389` and unheld profile A/B/B/A `45151096822` remain in progress and will be retained even if superseded. The prior R22.4 visual privacy failure and R27 shade ambiguity remain open. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+## 2026-11-23 — R31 handset, stock latency and the first-frame refactor decision
+
+Handset capture `430abd6a-7379-4297-81f1-3c2e62121299`. The owner asks how to improve lag and whether to refactor. They have not ranked this build against the milestone or accepted it. The measured route is DIRECT in the four detailed episodes. The baseline remains `de807259cd370d18e422772ed0943b8d65be4bca` for its previously preferred opening. The question concerns an ordinary cross-manufacturer install.
+
+| Attempt | Wake callback → accepted paint proof (ms) | Worker enter → first post (ms, System.nanoTime) | Wake callback → native reveal return (ms) | Restriction event timestamp → Fluvi callback (ms) | Callback → seal / seal → native retire return (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 501 | 8.150 | 542 | 114 | 34 / 5 |
+| 5 | 220 | 3.137 | 236 | 103 | 20 / 1 |
+| 6 | 413 | 5.572 | 434 | 156 | 17 / 1 |
+| 7 | 440 | 2.964 | 462 | 133 | 20 / 1 |
+
+Seven aggregate openings, seven program-warm hits; all four detailed first-paint tickets are DIRECT_MISS. Shader/program readiness and a first-frame bitmap hit are distinct. The other three attempts have no detailed row here. This LIGHT capture was frozen after 26,139 ms, with 1,293 recorded, 244 retained, 808 evicted, 241 diagnostic drops, 31,684 exported bytes and 66 omitted evidence records. Consumer lock-held time and cumulative producer cost are not an app-thread stall measurement. Physical stimulus, eligible/restrictive system frame, first/last financial pixel, and original raw-file digest are missing. Other than the worker column, intervals use uptime within the same row.
+
+**What R31 tested.** In 1 and 6, B completed and was rejected SCENE_CHANGED; its follow-on recorded `inventory`. The first newer offer to B finish was 107 and 78 ms, but only 29 and 13 ms remained from the reported first claim boundary to B finish. The export does not name the individual failing inventory predicate, nor assign that interval as recoverable. In 5 there was no B transfer, and this was the quickest retained wake. In 7, the first active-root call spanned 193 ms; B handed off to C=128, C ran for 62 ms, returned complete MAIN, then lost on SCENE_CHANGED. Request 131 supplied the accepted proof. A further C→D transfer would still require fresh evidence and eventual admission. The source confirms invalidation and the final current-scene and outstanding-read checks. Restriction callback age includes both system and app dispatch uncertainty; it cannot all be charged to Android or to Fluvi. Local window removal after native retirement measures a different endpoint.
+
+**Implementation and qualification.** Phone/source `a2fe31f29d369683983310e24548f664989ee842` introduced the bounded B→C path and its controls across nine files. Its child, implementation head `5b18235f261df24dcee06cf3050e3e20411612fa`, checks the capture identity before and inside the diagnostic child-count lock in FluviKeyguardCardService. It does not change visibility eligibility. Coordination parent `9039f348d20543bf5e5c7adf3ab5aca0c4588d60` changed this journal alone. R31 preliminary signed profile APK SHA-256 `8efa5fd8989caafa9ddaf6467a6ae568a172c6c0bcac341aaa765411eb01cdba`. Builder 45149776901 and signed upgrade 45151095925 PASS. Local JVM app/core 341/341 and 150/150 PASS; Flutter 2780 PASS / 115 FAIL / 3 skipped. Preliminary API35 device job 137613192170 reports SYSTEM_UI, AMBIGUOUS, restrictive, stable and visible-unlock FAIL_OR_NOT_REACHED, LIGHT/FULL evidence pressure PASS. Unheld profile job 137612397395 reports FAIL_OR_NOT_REACHED in all four blocks; private artifacts 14807050568 and 14807052153 preserve failures. These flags do not show that every individual trial exposed no pixels. Builder 45152233603 and exact graph 45152232319 for the capture-cut revision completed successfully. Neither run is a phone test. No full formal qualification is established. R22.4 shade privacy failure remains open. Dart bridge graph `059499e0a0e726be35ab18067c658477e84a89f5` matches the handset, `381000eb52b5d3729134b4df3f33abb5f78c56bd` the child. The native inventory and Kotlin source were used for service, queue and presenter edges; SCIP covers Dart only.
+
+**Architectural decision.** To eliminate the app-side observation chain from the first eligible lockscreen frame, use a host that actually composes the ordinary keyguard. Publish a current, versioned initial image and phase parameters on data/config/policy change. Acknowledge resources before wake. The host includes them in the first eligible frame, continues motion from the same phase, and excludes FULL in the first restrictive composition including shade, credential and occlusion. Enforce one visual owner, independent app-process death, current user/display/policy, bounded resources and revocation. Test a primed host with the Fluvi process suspended, controls with the ORB disabled, and verify first-frame membership and restrictive-frame absence. Physical power stimulus to display additionally includes panel wake and is a separate endpoint. R29.1 already has publisher snapshot/IPC types and prepared host state. Its production publisher wiring, exclusive handover, actual keyguard frame integration and restrictive/empty receipt are unfinished (see platform/aosp16/README.md and docs/R29_1_RESIDENT_SYSTEMUI_CHECKPOINT_2026-11-23.md). The reference needs a compatible system image. Public AppWidget hosting depends on the device and trigger and does not establish ordinary-wake placement or a universal 10 ms guarantee. No ROM migration or R32 application build is being initiated. Public references: https://android-developers.googleblog.com/2025/03/widgets-on-lock-screen-faq.html and https://developer.android.com/reference/android/app/KeyguardManager#isKeyguardLocked().
+
+**Stock-only decision.** One unresolved actionable distinction remains: can identifiable Fluvi Main work be removed from a long dispatch interval on an unmodified Android system? The following limited evidence task uses the existing binary. If the measured wait belongs to the system before delivery or to an in-flight remote call without an actionable Fluvi blocker, do not redesign Fluvi Main on that basis. Any reference-host integration is a separate distribution decision.
+
+FLUVI_R31_STOCK_DISPATCH_REVIEW_BEGIN
+
+### 1. Title and task intent
+EVIDENCE_COLLECTION. Locate any removable Fluvi Main work on the stock opening/withdrawal critical path. The reviewer will decide whether to move a specific piece of application work. Keep the existing profile APK.
+
+### 2. Authoritative application state
+Use signed `a2fe31f29d369683983310e24548f664989ee842`, not the capture-cut child, for correlation with the owner's specimen. The known immutable binary is https://media.githubusercontent.com/media/elizerpist/exptv2/5fe2e63f026a91295246c907c7f0bfcd7d73cb44/fluvi_R31_HUMAN_a2fe31f29d36.apk . Its expected SHA-256 and status are above.
+
+### 3. Hard preflight
+Before execution, read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md, docs/FLUVI_ENGINEERING_JOURNAL.md, and relevant MILESTONE_COMMITS.md entries using the versions and access paths supplied in this handoff. Explicitly report missing material. The prompt writer owns diagnosis, causal interpretation, the repair concept and any refactor decision. Implement only the specified technical contract or execute only the specified evidence-collection experiment; do not select a new root cause or repair strategy. If source, logs or tests contradict the plan, preserve and report exact evidence and return the affected decision to the reviewer. Continue independent authorized work. Follow the supplied risk-to-test matrix and the verified focused-validation route. Record every relevant failure and every diagnostic repetition. Start full delivery only after the specified entry conditions; diagnostic selection does not satisfy full required gates. Do not repeat a rejected repair without new evidence and a reviewer decision. Resolve the exact physically tested application source separately from documentation-only HEAD commits. Preserve the dashboard contracts and verify the specified native lockscreen and launcher-widget boundaries.
+Read project_sources/02-FLUVI_PROMPT_WRITER_RULES-1-.md, project_sources/01-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md and project_sources/03-DEBUGGING_LOOP_VERY_IMPORTANT.txt, or their complete FLUVI_RULE_ASSET_BEGIN/END blocks at 161f63675121302432be2026898bed07b23d7ded in the shared journal. Read root MILESTONE_COMMITS.md, the complete current coordination journal on fix/orb-v4-latency-lockscreen and its R28–R31 decisions and amendments.
+
+### 4. Physical user evidence
+Keep the four observed handset rows above and the three missing detailed rows. OEM/API, process, wake, request and owner identities remain dataset specific. The owner has requested a design review, not granted physical acceptance.
+
+### 5. Log audit
+Inspect private archived control outputs and the available trace inventory before collecting anything. Record SHA-256 of files actually obtained. The matching native and A/B/B/A artifacts are named above. Skip new collection if equivalent trace evidence is already present. Do not copy private screenshots or raw cross-process traces into the public repository.
+
+### 6. Commit and agent evidence
+Use the qualifications above and the private harness at elizerpist/pushparserv2, commit f0401c5fb27429dad618f0c023019024f7b965df, .github/workflows/android-build.yml plus scripts/r30-unheld-abba-api35.sh. Original failures and unscored slots remain in the comparison. This experiment asks a different question from repeating those assertions.
+
+### 7. Graph and impact
+Use the graph matched to a2fe and docs/codegraph-r31-stock-inventory.md there. KeyguardTimingCaptureBridge has app-shell, console, button and test consumers. No protocol change. Inspect android/app/src/main/AndroidManifest.xml and the service's actual process main thread.
+
+### 8. Current source
+In android/app/src/main/kotlin/com/fluvi/app/lockscreen/, FluviKeyguardCardService.onAccessibilityEvent timestamps callback entry before acceptAccessibilityMetadata. KeyguardCardEventGate and invalidateR19Scene precede queue offering. KeyguardWindowSnapshotReader.read acquires windows, active root, per-window roots and children. KeyguardFirstAuthorizedOrb.offer requires a current complete proof. On withdrawal FluviKeyguardCardService.sealR18 submits retirement before ordinary Main cleanup. KeyguardOrbInertHost.stage uses WindowManager.addView on Main. This makes a Main-side wait testable, it does not establish that addView caused one.
+
+### 9. Proven, unproven, missing
+See the table. The split of event age into system dispatch, runnable/scheduled time and Fluvi Main work is unknown. A coincident busy section does not establish that a particular event was already queued. Graphics or financial computation as the dominant bottleneck is unsupported.
+
+### 10. Forensic gate
+H1: at least one long interval contains delivery of the identified framework message followed by a named, app-owned Main operation delaying dispatch. H2: the matching message had not reached Fluvi, or the relevant wait was an in-flight framework read/remote or scheduler wait. Mixed results allowed. If identities or queue ordering cannot be joined, return UNATTRIBUTABLE. Never select a runtime change.
+
+### 11. Scope
+Existing demo-data signed binary, ordinary stock API35 controls in the provisioned private KVM lane. Reuse an existing owner-approved physical trace if already available. No new requirement for the owner to record one and no phone connection is assumed. W-SHOW/W-HIDE only. Private demo data only.
+
+### 12. Impact controls
+| Boundary | Consumer and observation | Risk | Guard/control |
+| --- | --- | --- | --- |
+| Framework event → service Main | Compare eligibility change, Binder delivery when identifiable, Main dispatch and callback entry | Unrelated transaction mistaken for the app event | Require same target PID/TID, direction, method or dispatch identity and evidence of order. Otherwise UNKNOWN. |
+| Worker → scene decision | Join actual wake, request, classification and timed root acquisition | Treating an emulator wait as a phone diagnosis | Separate results by device/build/run, preserve missing states. |
+| Seal → retire and Main remove | Compare gate, exact host/output, phase and return | Scoring cleanup or trace receipt as a pixel | Score only app-owned endpoints. |
+| Clock/suspend and trace loss | Join device capture and system trace | False cross-clock subtraction or tracing overhead | Use documented clock snapshots, explicit same-awake-span alignment and uncertainty; check lost data and an untraced control. |
+
+### 13. Controls
+Analyze any existing equivalent archive first. Otherwise execute two matched blocks with the identical signed binary, one untraced and one traced. Each block has one cold and two warm cycles using the existing unheld profile selector. Keep every attempted cycle, including missing visible owners. Distinguish actual locked sleep, service alive, wake, visibly authorized FULL and unlock. A missing success endpoint does not invalidate usable thread observations.
+
+### 14. Measurement contract
+Capture Perfetto sched_switch/sched_waking, Binder transaction and receipt, available am/wm/view/gfx/aidl trace categories, process descriptors and clock snapshots. Check support before use. Inspect the Fluvi process main and physical reader, system_server and SystemUI only as needed. Collect on the same device as each trial. Do not build, patch, hook or change application callback ordering. Compare exact observed queue receive, observed Main dispatch and service callback, initial root-call start/return, accepted proof, native reveal and winning retire. Label IPC delivery, Main looper enqueue and callback as distinct boundaries; a generic Binder receipt alone is insufficient.
+
+### 15. Performance
+For every joined interval give inclusive start/end, active/runnable/blocked split with overlap removed, exact identifiable owner and uncertainty, or UNKNOWN. Count how many matched slow trials each explanation covers. For unpaired trials give raw observations only. The three optical ceilings and visible animation are unscored by this task.
+
+### 16. Order
+Inspect archives → verify APK signature/hash and existing runner → check Perfetto support → one untraced block and one traced block only if needed → offline joins → return evidence to reviewer. Sole correction allowed for a documented instrumentation/configuration error before usable data; retain originals. No full-CI iteration or re-running to produce a favorable result.
+
+### 17. Validation
+Use the existing KVM/API35 private route above. Preflight: `adb shell getprop ro.build.version.sdk`, `adb shell pm list instrumentation`, `adb shell perfetto --query`, `adb shell atrace --list_categories`. Preserve its existing trace-independent signed-profile observer selector `com.fluvi.app.lockscreen.KeyguardR30UnheldProfileInstrumentationTest#coldAndTwoWarmUnheldCycles` and source/UUID/signer checks. Derive a private observer-only wrapper from the pinned script: use the same candidate APK in both selected blocks and the original setup/teardown. Capture the traced block externally with `adb shell perfetto --txt -c /data/local/tmp/fluvi-r31-review.pbtxt -o /data/misc/perfetto-traces/fluvi-r31-review.pftrace` running concurrently around that single block. Use a 64 MiB ring buffer, bounded recording up to 300 s, no periodic wake sleeps, and pull using `adb pull /data/misc/perfetto-traces/fluvi-r31-review.pftrace`. Check actual event coverage, loss, clock snapshots and full endpoint coverage before joining rows. If a required signal is unavailable, mark the affected attribution NOT OBSERVABLE; do not change permissions or install a system image. Preserve any independently valid rows.
+
+### 18. Commits
+If a wrapper is needed, pin it and its output in the private evidence repository. Record exact observer, application and archive identities separately. Preserve concurrent coordination entries.
+
+### 19. Build, push and graph
+No new application source, APK, graph or full public verification rerun is required for this measurement on a previously built binary. The independent R31 qualification retains its own outstanding gates.
+
+### 20. Completion report
+Report the compact per-trial evidence matrix, all failures and limitations, a private evidence link and exact source, plus one status for each of W-SHOW, W-HIDE, W-LOCK-ANIM and W-HOME-ANIM. Report the last two as outside this experiment. Separate handset evidence, emulator evidence and inference.
+
+### 21. Done
+Close the measurement on a bounded result or an exact signal-access/identity blocker. Return the decision on a production refactor to the reviewer. A future host proof requires the first correct composed frame and first restrictive-frame absence with the producer suspended, plus optical confirmation; a stock callback trace cannot substitute for that proof. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+FLUVI_R31_STOCK_DISPATCH_REVIEW_END
