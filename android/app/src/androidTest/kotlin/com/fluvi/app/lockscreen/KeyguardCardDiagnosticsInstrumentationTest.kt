@@ -68,6 +68,16 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                     if (wake != 6L) edge("R26_SYSTEM_SEAL", base + 11, mapOf("r26SystemRequest" to wake + 700,
                         "r26SystemReason" to "screenOff", "r26SystemReceived" to base + 9,
                         "r26SystemStart" to base + 10, "r26SystemEnd" to base + 11))
+                    edge("R30_EXIT", base + 9, mapOf("r30ExitRequest" to request,
+                        "r30ExitReason" to "MAIN_CONFIRMED", "r30ExitEligibility" to "OTHER_CLASSIFICATION",
+                        "r30ClassAt" to base + 9, "r30SampleStart" to base + 9, "r30SampleEnd" to base + 10))
+                    edge("R30_EXIT", base + 10, mapOf("r30ExitRequest" to request + 1,
+                        "r30ExitReason" to "NO_MAIN_MARKER", "r30ExitEligibility" to "SEALED",
+                        "r30ClassAt" to base + 10, "r30SealAt" to base + 11,
+                        "r30RetireReturn" to base + 12, "r30SampleStart" to base + 13,
+                        "r30SampleEnd" to base + 14, "r30SampleStartNs" to 1000, "r30SampleEndNs" to 2000))
+                    edge("R30_EXIT", base + 15, mapOf("r30ExitRequest" to request + 2,
+                        "r30ExitReason" to "MAIN_CONFIRMED", "r30ExitEligibility" to "OTHER_CLASSIFICATION"))
                     edge("RETIRE_RECEIPT", base + 14, mapOf("r18ApplyBegin" to base + 12,
                         "r18ApplyEnd" to base + 14, "r18Commit" to base + 15))
                     // Same host/output but a contradictory reservation cannot
@@ -91,6 +101,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                     assertTrue(row, row.contains("accepted=${base + 7}@${base + 2}"))
                     assertTrue(row, row.contains("warm=HIT/dualTide_plain warmNs=100/200/300 overlap=false"))
                     assertTrue(row, row.contains("consumed=${base + 7}@${base + 4} showing=${base + 7}/"))
+                    assertTrue(row, row.contains("r30=${base + 8}/NO_MAIN_MARKER/SEALED@${base + 10}"))
+                    assertTrue(row, row.contains("r30Sample=${base + 13}/${base + 14} r30SampleNs=1000/2000"))
+                    assertTrue(row, row.contains("r30Early=${base + 11}/${base + 12}"))
                     assertTrue(row, row.contains("localRemove=${base + 12}/${base + 13}"))
                     assertTrue(row, row.contains(if (wake == 6L) "sample=UNOBSERVED/UNOBSERVED@" else
                         "sample=${wake + 700}/screenOff@${base + 9}/${base + 10}/${base + 11}"))

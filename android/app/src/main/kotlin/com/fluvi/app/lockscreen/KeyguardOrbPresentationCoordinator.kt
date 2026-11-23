@@ -322,6 +322,40 @@ internal class KeyguardOrbPresentationCoordinator(private val lock: Any = Any())
         true
     }
 
+    /** Immutable identity captured before an actual window read. Object
+     * references, not diagnostic hashes, bind a completed negative to the
+     * same displayed output. */
+    class R30PresentedOwner internal constructor(
+        internal val reservation: Reservation,
+        internal val authority: KeyguardInspectionAuthority,
+        internal val host: Any,
+        internal val output: Any,
+        val proofRequestId: Long,
+    )
+
+    fun r30PresentedOwner(token: Reservation, authority: KeyguardInspectionAuthority,
+                          host: Any, output: Any): R30PresentedOwner? = synchronized(lock) {
+        val entry = current ?: return@synchronized null
+        val proof = entry.proofRequestId ?: return@synchronized null
+        if (entry.reservation !== token || entry.activeAuthority != authority ||
+            entry.host !== host || entry.output !== output || entry.hostState != Host.INPUT_ARMED ||
+            entry.grantState != Grant.PRESENTED) return@synchronized null
+        R30PresentedOwner(token, authority, host, output, proof)
+    }
+
+    /** Validate and retire atomically: a delayed read may never resolve an
+     * owner that was installed after that read started. */
+    fun r30SealPresented(owner: R30PresentedOwner, authority: KeyguardInspectionAuthority,
+                         requestId: Long): Withdrawal? = synchronized(lock) {
+        val entry = current ?: return@synchronized null
+        if (owner.authority != authority || entry.activeAuthority != authority ||
+            entry.reservation !== owner.reservation || entry.host !== owner.host ||
+            entry.output !== owner.output || entry.proofRequestId != owner.proofRequestId ||
+            entry.hostState != Host.INPUT_ARMED || entry.grantState != Grant.PRESENTED ||
+            requestId < owner.proofRequestId) return@synchronized null
+        seal(owner.reservation, authority, requestId, true)
+    }
+
     /** An authoritative negative belongs to the same authority and cannot
      * predate the proof that granted this image. Terminal callers may use the
      * current proof request when the system signal has no request ID. */

@@ -1041,6 +1041,19 @@ internal object KeyguardCardDiagnostics {
             listOf("r26SystemRequest", "r26SystemReason", "r26SystemReceived", "r26SystemStart", "r26SystemEnd")
                 .forEach { retainField(it) }
         }
+        if (event.reason == "R30_EXIT") {
+            val fields = listOf("r30ExitRequest", "r30ExitReason", "r30ExitEligibility", "r30ClassAt",
+                "r30SampleStart", "r30SampleEnd", "r30SealAt", "r30RetireReturn",
+                "r30SampleStartNs", "r30SampleEndNs")
+            // A preceding positive/ineligible read must not mask the actual
+            // successful negative. Never replace a successful exact receipt
+            // with a later or out-of-order diagnostic arrival.
+            val existing = timeline.values["r30ExitEligibility"]
+            val incoming = event.fields["r30ExitEligibility"]
+            if (existing == null || (existing != "SEALED" && incoming == "SEALED")) {
+                fields.forEach { timeline.values.remove(it); retainField(it) }
+            }
+        }
         if (event.reason == "R19_FIRST_POSITIVE") {
             timeline.values.putIfAbsent("r19PositiveRequest", event.requestId?.toString() ?: "UNOBSERVED")
             listOf("r19SceneRead", "r19Freshness", "r19ReadStart", "r19RootMs", "r19RootFlags", "r19ChildFlags")
@@ -2864,6 +2877,9 @@ internal object KeyguardCardDiagnostics {
         append(" consumed=${d("r19ConsumedRequest")}@${d("R19_PROOF_CONSUMED")} showing=${v(showing)}/${v(show?.operationId)}")
         append(" reveal=${d("reveal:r18ApplyBegin")}/${d("reveal:r18ApplyEnd")}/${d("reveal:r18Commit")}/${d("reveal:r18LatchNs")}/${d("reveal:r18PresentNs")}/${d("reveal:r18PresentState")}")
         append(" seal=${d("SEALED")}/${d("SEALED_REASON")} sample=${d("r26SystemRequest")}/${d("r26SystemReason")}@${d("r26SystemReceived")}/${d("r26SystemStart")}/${d("r26SystemEnd")}")
+        append(" r30=${d("r30ExitRequest")}/${d("r30ExitReason")}/${d("r30ExitEligibility")}@${d("r30ClassAt")}")
+        append(" r30Sample=${d("r30SampleStart")}/${d("r30SampleEnd")} r30SampleNs=${d("r30SampleStartNs")}/${d("r30SampleEndNs")}")
+        append(" r30Early=${d("r30SealAt")}/${d("r30RetireReturn")}")
         append(" hide=${v(hide?.operationId)}/${v(hide?.requestId)}/${v(hide?.attachGeneration)} eventCallback=${v(cause?.eventTimeUptimeMs)}/${v(hide?.triggerReceivedAtUptimeMs)}")
         append(" localRemove=${v(hide?.localHideAppliedAtUptimeMs)}/${v(hide?.removeReturnAtUptimeMs)}")
         append(" retire=${d("retire:r18ApplyBegin")}/${d("retire:r18ApplyEnd")}/${d("retire:r18Commit")}/${d("retire:r18LatchNs")}/${d("retire:r18PresentNs")}/${d("retire:r18PresentState")}")

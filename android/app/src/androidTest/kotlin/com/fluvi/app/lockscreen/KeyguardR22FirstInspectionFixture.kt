@@ -45,7 +45,7 @@ internal class KeyguardR22FirstInspectionFixture {
     private lateinit var automation: UiAutomation
 
     fun run(scenario: String) {
-        require(scenario in setOf("positive", "negative", "stable", "natural", "automation"))
+        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r30"))
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -144,7 +144,7 @@ internal class KeyguardR22FirstInspectionFixture {
                 check(FluviKeyguardMaterialStore.publish(context,
                     KeyguardR12ServiceTimingInstrumentationTest().materialProfile(), epoch))
             }
-            if (scenario != "natural") {
+            if (scenario != "natural" && scenario != "r30") {
                 automationEvidence(dir, "before-calibration")
                 calibration = KeyguardR22VisualCalibration(instrumentation, dir, automation).also { it.calibrate() }
                 automationEvidence(dir, "after-calibration")
@@ -200,7 +200,7 @@ internal class KeyguardR22FirstInspectionFixture {
                         if (request == a.get()) {
                             aThread.set(Thread.currentThread().id)
                             entryStarted.countDown()
-                            if (scenario != "natural" && !releaseEntry.await(20, TimeUnit.SECONDS)) {
+                            if (scenario != "natural" && scenario != "r30" && !releaseEntry.await(20, TimeUnit.SECONDS)) {
                                 entryTimedOut.set(true); records.add("A_ENTRY_TIMEOUT")
                             }
                         }
@@ -335,7 +335,7 @@ internal class KeyguardR22FirstInspectionFixture {
             entryArmed.set(true)
             shell("input keyevent KEYCODE_WAKEUP")
             await("locked/interactive", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
-            if (scenario == "natural") {
+            if (scenario == "natural" || scenario == "r30") {
                 assertTrue("NOT REACHED: no original reserved opening was observed", entryStarted.await(20, TimeUnit.SECONDS))
                 assertTrue("NOT REACHED: natural opening did not finish or yield", completed.await(20, TimeUnit.SECONDS))
                 val original = checkNotNull(a.get())
@@ -351,6 +351,25 @@ internal class KeyguardR22FirstInspectionFixture {
                     image.recycle()
                 }
                 records.add("NATURAL_UNHELD A=${original.id} yieldedTo=${yieldedTo.get()} injected=false physical=UNOBSERVED")
+                if (scenario == "r30") {
+                    val observed = recordObservation.get()
+                    assertNotNull("NOT REACHED: original opening returned no acquisition observation", observed)
+                    val actual = checkNotNull(observed)
+                    assertTrue("NOT REACHED: original opening did not consume the initial acquisition", actual.eligible)
+                    assertTrue("NOT REACHED: accepted active root and actual child required",
+                        actual.result.timing.activeRootAccepted && actual.firstChildCalled &&
+                            actual.candidate?.id == actual.firstChildWindow &&
+                            actual.result.timing.activeRootPrefetchFlags == 4)
+                    assertTrue("NOT REACHED: complete current FULL proof required",
+                        actual.authorityAtCompletion && !actual.result.abortedStale && !actual.result.rootUnavailable &&
+                            !actual.result.walkTruncated && actual.decision == KeyguardCardVisibility.SHOW_FULL &&
+                            actual.reason == KeyguardSurfaceReason.MAIN_CONFIRMED && yieldedTo.get() == 0L)
+                    val expected = args.getString("r30ExpectedFlags")?.toInt() ?: 4
+                    records.add("R30_CHILD req=${original.id} reservation=${reservation.get()} window=${actual.firstChildWindow} " +
+                        "rootFlags=${actual.result.timing.activeRootPrefetchFlags} childFlags=${actual.firstChildFlags} " +
+                        "childCount=${actual.result.timing.childAcquisitionCount} expected=$expected")
+                    assertEquals("actual original opening child flags", expected, actual.firstChildFlags)
+                }
             } else if (scenario == "automation") {
                 assertTrue("NOT REACHED: no original reserved opening entered its physical read", entryStarted.await(20, TimeUnit.SECONDS))
                 val original = checkNotNull(a.get())

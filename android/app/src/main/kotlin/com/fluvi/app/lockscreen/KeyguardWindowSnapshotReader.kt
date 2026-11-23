@@ -135,6 +135,20 @@ internal object KeyguardWindowSnapshotReaderPolicy {
             candidate.type == AccessibilityWindowInfo.TYPE_SYSTEM
     }
 
+    /** Preserve the historical overload/flags except for the single verified
+     * API 35 virgin opening window. A subsequent per-window root cannot inherit
+     * the first window's identity. */
+    fun r30ChildPrefetchFlags(apiLevel: Int, strategy: KeyguardActiveRootStrategy,
+                              acceptedActiveRoot: Boolean, exactActiveWindow: Boolean,
+                              rootPackage: String?, inventoryAttributable: Boolean,
+                              openingIdentityCurrent: Boolean): Int? {
+        val old = batchedPrefetchFlags(apiLevel).takeIf { acceptedActiveRoot }
+        return if (apiLevel == 35 && strategy == KeyguardActiveRootStrategy.R18_INITIAL_HYBRID &&
+            acceptedActiveRoot && exactActiveWindow && rootPackage == "com.android.systemui" &&
+            inventoryAttributable && openingIdentityCurrent)
+            AccessibilityNodeInfo.FLAG_PREFETCH_DESCENDANTS_HYBRID else old
+    }
+
     fun acceptsActiveRoot(
         candidate: KeyguardWindowReaderWindowMetadata,
         returnedWindowId: Int?,
@@ -190,6 +204,7 @@ internal class KeyguardWindowSnapshotReader(
         /** Invoked only at an eligible physical active-root call, after the
          * cache/freshness/window checks; no View or Binder call under its lock. */
         val activeRootStrategyAtCall: (() -> KeyguardActiveRootStrategy)? = null,
+        val r30OpeningCurrentAtAcceptedRoot: (() -> Boolean)? = null,
         val knownOwnAtInventory: (() -> KeyguardOwnOverlayIdentity?)? = null,
         val strictOwnAttribution: Boolean = false,
         val onDecisiveSystemMarker: (() -> Unit)? = null,
@@ -503,6 +518,7 @@ internal class KeyguardWindowSnapshotReader(
         ) && KeyguardWindowSnapshotReaderPolicy.canUseCandidateWithStrictOwnAttribution(
             request.strictOwnAttribution, activeCandidate,
         )
+        var activeRootStrategy = KeyguardActiveRootStrategy.STOCK
         var activeRoot: AccessibilityNodeInfo? = null
         var activeWindowId: Int? = null
         // An unresolved overlay, other foreign window, missing candidate or
@@ -541,6 +557,7 @@ internal class KeyguardWindowSnapshotReader(
                 val strategy = request.activeRootStrategyAtCall?.invoke()
                     ?: if (request.initialRootOnly) KeyguardActiveRootStrategy.R15_HISTORICAL_ZERO
                     else KeyguardActiveRootStrategy.STOCK
+                activeRootStrategy = strategy
                 if (KeyguardR15AcquisitionTestHooks.ENABLED) KeyguardR15AcquisitionTestHooks.candidate(candidate)
                 KeyguardWindowAcquisitionCalls.activeRoot(strategy, Build.VERSION.SDK_INT) { flags ->
                     timing.activeRootPrefetchFlags = flags
@@ -613,6 +630,7 @@ internal class KeyguardWindowSnapshotReader(
                 )
                 continue
             }
+            val exactActiveWindow = window.id == activeWindowId && activeRoot != null
             val root = if (window.id == activeWindowId) {
                 activeRoot.also { activeRoot = null }
             } else {
@@ -666,7 +684,22 @@ internal class KeyguardWindowSnapshotReader(
                         else -> "NOT_INSTALLED"
                     }
                 }
-                visibleIds(root, window.id, prefetch.takeIf { timing.activeRootAccepted }, authorityIsCurrent, timing,
+                val attributable = exactActiveWindow && cleanOpeningInventory() &&
+                    (!request.strictOwnAttribution || request.knownOwnAtInventory?.invoke() == observedOwn)
+                // The service revalidates its captured opening token once,
+                // after the accepted root has actually returned. Never lock
+                // the service queue from a per-child callback.
+                val openingCurrent = if (Build.VERSION.SDK_INT == 35 &&
+                    activeRootStrategy == KeyguardActiveRootStrategy.R18_INITIAL_HYBRID &&
+                    attributable && rootPackage == "com.android.systemui")
+                    runCatching { request.r30OpeningCurrentAtAcceptedRoot?.invoke() == true }.getOrDefault(false)
+                else false
+                val childFlags = KeyguardWindowSnapshotReaderPolicy.r30ChildPrefetchFlags(
+                    Build.VERSION.SDK_INT, activeRootStrategy, timing.activeRootAccepted, exactActiveWindow,
+                    rootPackage, attributable, openingCurrent,
+                )
+                if (exactActiveWindow) timing.acceptedChildPrefetchFlags = childFlags
+                visibleIds(root, window.id, childFlags, authorityIsCurrent, timing,
                     request.onDecisiveSystemMarker,
                     if (request.openingFirstIngressUptime != null) ::observeIngressCall else null,
                     request.openingChildBefore, request.openingChildReturned,
