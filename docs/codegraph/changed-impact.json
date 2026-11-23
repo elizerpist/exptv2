@@ -1,16 +1,15 @@
 {
   "schema_version": 1,
-  "source_head": "14e05315520ff3282348838804ff6e004c677d30",
-  "base_head": "5b18235f261df24dcee06cf3050e3e20411612fa",
+  "source_head": "1393e8c5023065f2930b67c9c4a95f78c8d1473c",
+  "base_head": "b9b316f7080ae3262e1260e944c863a102639389",
   "changed_files": [
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardInspectionQueue.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR32OverlapPolicy.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR32OverlapPolicyTest.kt"
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/host/R29HostClient.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/host/R29Ownership.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/host/R35MaterialPublication.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/host/R35ResidentPublisher.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/host/R29OwnershipTest.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/host/R35MaterialPublicationTest.kt",
+    "platform/aosp16/tests/host_store_harness/ResidentHarness.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
