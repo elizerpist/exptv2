@@ -1,4 +1,4 @@
-name: R31 Stock Opening Exact-Source Code Graph (orchestration only)
+name: R32 First-Frame Exact-Source Code Graph (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 35
     env:
       APP_SHA: ${{ inputs.app_sha }}
-      TOOLING_BASE: d0a6c6b8f7b6a0465d4667236f5b84e004a888e0
+      TOOLING_BASE: 381000eb52b5d3729134b4df3f33abb5f78c56bd
     steps:
       - uses: actions/checkout@v5
         with:
@@ -91,7 +91,7 @@ jobs:
                   count+=1
           print('verified_shards=',count,'documents=',m['document_count'],'repo_symbols=',m['repository_defined_symbol_count'])
           PY
-          report="$tooling_dir/docs/codegraph-r31-stock-inventory.md"
+          report="$tooling_dir/docs/codegraph-r32-stock-inventory.md"
           printf '# R31 exact-source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
           printf 'The Dart SCIP manifest is `docs/codegraph/manifest.json`; Kotlin has no SCIP coverage and the following is source navigation, not a generated call graph. The output/host lifecycle is Main-owned and visual presentation remains an independently measured outcome.\n\n' >> "$report"
           printf 'R27 source navigation covers ordered DIRECT admission and terminal withdrawal, the one-reader null-child handoff, owner-scoped public-program warmup and bounded R22/R26/R27 export. STOCK remains separately governed by its existing publication policy. The line inventory is source navigation, not runtime or physical-pixel proof.\n\n' >> "$report"
@@ -119,8 +119,11 @@ jobs:
           printf '\n# R31 B to C handoff, exact ownership and diagnostic export\n' >> "$report"
           (cd "$source_dir" && "${search[@]}" 'followReadStarted|followReadFinished|followCObservation|followHandle|hasFollowHint|claimFollow|noteFollowChild|followOnOpening|beforeWindowsAcquisition|cleanOpeningInventory|handoffOpening|abandonOpeningTransferIfActive|abandonSessionIfActive|readInspection|processInspectionQueue|firstAuthorizedOrb|R31_INPUT_|r31InputFailure|r31Boundary|r31Transfer' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{KeyguardOpeningInspectionHandoff,KeyguardWindowSnapshotReader,KeyguardCardInspectionQueue,FluviKeyguardCardService,KeyguardCardSettings,KeyguardFirstAuthorizedOrb}.kt) >> "$report"
           (cd "$source_dir" && "${search[@]}" 'r31|R31|returnedMainIsConsumedBeforeYield|decisiveExclusionIsConsumedBeforeAnyPossibleYield' android/app/src/test/kotlin/com/fluvi/app/lockscreen/{KeyguardR31OpeningHandoffTest,KeyguardR22ReaderHandoffTest}.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/{KeyguardR22FirstInspectionFixture,KeyguardFirstAuthorizedOrbInstrumentationTest,KeyguardCardDiagnosticsInstrumentationTest}.kt) >> "$report"
+          printf '\n# R32 exact-source stock overlap and bounded export\n' >> "$report"
+          (cd "$source_dir" && "${search[@]}" 'KeyguardR32OverlapPolicy|r32MainSnapshot|reserveR32SuccessorLocked|r32PositiveStillCurrentLocked|processR32Overlap|R32_RESTRICTION_ONLY|R32_OVERLAP|R32_CORE|reduceR32|r32CoreRecord|finishPrecedingExact|r32FrameworkIngressId|r32ObsoleteDirectOverlapsPhysicalSuccessor|r32OverlapEvidence' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardInspectionQueue,KeyguardCardSettings,KeyguardR32OverlapPolicy}.kt android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR32OverlapPolicyTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/{KeyguardR22FirstInspectionFixture,KeyguardFirstAuthorizedOrbInstrumentationTest,KeyguardCardDiagnosticsInstrumentationTest}.kt) >> "$report"
+          printf '\nReference SystemUI staging sources are source inventory only; stock SHA does not claim a host publisher, real frame or EMPTY receipt. The separate H checkpoint must be examined independently.\n' >> "$report"
           printf '\n```\n' >> "$report"
-          cp "$RUNNER_TEMP/r22-graph-query.txt" "$tooling_dir/docs/codegraph-r31-stock-query.txt"
+          cp "$RUNNER_TEMP/r22-graph-query.txt" "$tooling_dir/docs/codegraph-r32-stock-query.txt"
           sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$RUNNER_TEMP/r22-manifest-sha256.txt"
       - name: Publish graph to independent immutable tooling branch
         shell: bash
@@ -129,18 +132,18 @@ jobs:
           cd tooling
           git config user.name 'Fluvi Graph Bot'
           git config user.email 'fluvi-graph@users.noreply.github.com'
-          git add docs/codegraph docs/codegraph-r31-stock-inventory.md docs/codegraph-r31-stock-query.txt
+          git add docs/codegraph docs/codegraph-r32-stock-inventory.md docs/codegraph-r32-stock-query.txt
           git diff --cached --check
-          git commit -m 'graph: index R31 stock ORB exact source [skip ci]'
+          git commit -m 'graph: index R32 stock ORB exact source [skip ci]'
           git rev-parse HEAD | tee "$RUNNER_TEMP/r22-graph-commit.txt"
-          graph_ref="tooling/r31-stock-${APP_SHA:0:12}"
+          graph_ref="tooling/r32-stock-${APP_SHA:0:12}"
           test -z "$(git ls-remote origin "refs/heads/$graph_ref")"
           git push origin "HEAD:refs/heads/$graph_ref"
       - name: Preserve graph and receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r31-stock-graph-${{ inputs.app_sha }}-run-${{ github.run_id }}
+          name: r32-stock-graph-${{ inputs.app_sha }}-run-${{ github.run_id }}
           path: |
             tooling/docs/codegraph/**
             tooling/docs/codegraph-r31-stock-*.md
