@@ -1,131 +1,13 @@
 {
   "schema_version": 1,
-  "source_head": "de807259cd370d18e422772ed0943b8d65be4bca",
-  "base_head": "9d9444795ea34e64525e990f5c08d1b655a6fdaf",
+  "source_head": "5b18235f261df24dcee06cf3050e3e20411612fa",
+  "base_head": "a2fe31f29d369683983310e24548f664989ee842",
   "changed_files": [
-    "android/app/src/main/kotlin/com/fluvi/app/MainActivity.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/host/R29OwnershipStore.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/host/R29PublisherSnapshot.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/runtime/FluviLockScreenCard.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/host/R29OwnershipStoreTest.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/host/R29PublisherSnapshotTest.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/runtime/R29SceneTargetTest.kt",
-    "android/fluvi-core/src/main/kotlin/com/fluvi/core/FluviCore.kt",
-    "android/fluvi-core/src/main/kotlin/com/fluvi/core/query/FluviKeyguardBudgetProjection.kt",
-    "lib/app/platform/dashboard_keyguard_material_bridge.dart",
-    "platform/aosp16/README.md",
-    "platform/aosp16/contract/src/com/fluvi/r29/contract/R29FramePolicy.kt",
-    "platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt",
-    "platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/R29HostRenderer.kt",
-    "platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/R29ResidentStore.kt",
-    "platform/aosp16/tests/host_store_harness/R29HostRendererStub.kt",
-    "platform/aosp16/tests/host_store_harness/ResidentHarness.kt",
-    "platform/aosp16/tests/host_store_harness/run.sh",
-    "test/app/platform/r29_material_bridge_test.dart"
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt"
   ],
-  "candidate_changed_symbols": [
-    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#",
-    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#`<constructor>`().",
-    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#balanceFrame.",
-    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#budgetFrame.",
-    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#dispose().",
-    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#mindFrame.",
-    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#schedule().",
-    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#updateHeaderGeometry().",
-    "scip-dart pub fluvi 0.1.0+1 test/app/platform/`r29_material_bridge_test.dart`/main().",
-    "scip-dart pub fluvi 0.1.0+1 test/app/platform/`r29_material_bridge_test.dart`/target()."
-  ],
+  "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
-  "direct_reference_consumers": [
-    {
-      "file": "lib/app/platform/dashboard_keyguard_material_bridge.dart",
-      "is_test": false,
-      "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#balanceFrame.",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#budgetFrame.",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#mindFrame.",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#schedule()."
-      ],
-      "reference_count": 23,
-      "first_line": 14,
-      "first_column": 18,
-      "basis": "scip_reference"
-    },
-    {
-      "file": "lib/features/dashboard/presentation/core_dashboard.dart",
-      "is_test": false,
-      "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#`<constructor>`().",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#dispose().",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#updateHeaderGeometry()."
-      ],
-      "reference_count": 4,
-      "first_line": 197,
-      "first_column": 13,
-      "basis": "scip_reference"
-    },
-    {
-      "file": "test/app/platform/r29_material_bridge_test.dart",
-      "is_test": true,
-      "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#`<constructor>`().",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#dispose().",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#schedule().",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#updateHeaderGeometry().",
-        "scip-dart pub fluvi 0.1.0+1 test/app/platform/`r29_material_bridge_test.dart`/target()."
-      ],
-      "reference_count": 9,
-      "first_line": 50,
-      "first_column": 23,
-      "basis": "scip_reference"
-    }
-  ],
-  "affected_test_locations": [
-    {
-      "file": "test/app/platform/r29_material_bridge_test.dart",
-      "is_test": true,
-      "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#`<constructor>`().",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#dispose().",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#schedule().",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#updateHeaderGeometry().",
-        "scip-dart pub fluvi 0.1.0+1 test/app/platform/`r29_material_bridge_test.dart`/target()."
-      ],
-      "reference_count": 9,
-      "first_line": 50,
-      "first_column": 23,
-      "basis": "scip_reference"
-    }
-  ],
-  "affected_production_locations": [
-    {
-      "file": "lib/app/platform/dashboard_keyguard_material_bridge.dart",
-      "is_test": false,
-      "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#balanceFrame.",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#budgetFrame.",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#mindFrame.",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#schedule()."
-      ],
-      "reference_count": 23,
-      "first_line": 14,
-      "first_column": 18,
-      "basis": "scip_reference"
-    },
-    {
-      "file": "lib/features/dashboard/presentation/core_dashboard.dart",
-      "is_test": false,
-      "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#`<constructor>`().",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#dispose().",
-        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_keyguard_material_bridge.dart`/DashboardKeyguardMaterialBridge#updateHeaderGeometry()."
-      ],
-      "reference_count": 4,
-      "first_line": 197,
-      "first_column": 13,
-      "basis": "scip_reference"
-    }
-  ]
+  "direct_reference_consumers": [],
+  "affected_test_locations": [],
+  "affected_production_locations": []
 }
