@@ -3271,6 +3271,20 @@ class FluviKeyguardCardService : AccessibilityService() {
                 if (owner != null && !inspectionQueue.abandonSessionIfActive(owner))
                     inspectionQueue.abandonOpeningTransferIfActive(owner)
                 request?.takeIf { it != owner }?.let { inspectionQueue.abandonOpeningTransferIfActive(it) }
+            } else {
+                // Exceptions or coroutine cancellation cannot strand the
+                // single reader or discard a handoff already claimed during
+                // node recycling. Do not create a replacement positive result.
+                val owner = request ?: promotedOwner
+                val recovery = owner?.let { old -> synchronized(queueLock) { inspectionQueue.recoverUnwoundReader(old) } }
+                if (recovery != null && owner != null && serviceJob.isActive) {
+                    val next = recovery.next
+                    if (next != null) inspectionScope.launch { processInspectionQueue(next) }
+                    else mainHandler.post {
+                        if (serviceJob.isActive && inspectionAuthority.matches(owner))
+                            requestSystemCheck("r34ReaderCancelled", evaluate = true)
+                    }
+                }
             }
         }
     }

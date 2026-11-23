@@ -128,6 +128,20 @@ class KeyguardCardInspectionQueueTest {
         assertEquals(latest.id, queue.activeRequest()?.id)
     }
 
+    @Test fun `cancelled unwinding preserves claimed reader and newer pending event`() {
+        val queue = KeyguardCardInspectionQueue()
+        val a = request(1, "wake"); val b = request(2, "window"); val c = request(3, "window")
+        assertTrue(queue.offer(a)); assertFalse(queue.offer(b))
+        assertEquals(b, queue.handoffOpening(a, b))
+        assertFalse(queue.offer(c))
+        assertEquals(b, queue.recoverUnwoundReader(a)?.next)
+        assertEquals(b, queue.activeRequest())
+        assertEquals(c, queue.pendingRequest())
+        assertNull(queue.recoverUnwoundReader(a))
+        assertEquals(c, queue.recoverUnwoundReader(b)?.next)
+        assertEquals(c, queue.activeRequest())
+    }
+
     @Test fun `one active inspection retains only the newest coalesced request`() {
         val queue = KeyguardCardInspectionQueue()
         val first = request(1, "wake")

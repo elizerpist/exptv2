@@ -291,6 +291,23 @@ internal class KeyguardCardInspectionQueue {
         return promoted
     }
 
+    data class UnwoundRecovery(val next: KeyguardCardInspectionRequest?)
+
+    /** Called only when a failed/cancelled physical reader has fully unwound.
+     * A transfer already claimed before unwinding must start its exact new
+     * owner; otherwise complete only the failed owner and retain latest work. */
+    fun recoverUnwoundReader(owner: KeyguardCardInspectionRequest): UnwoundRecovery? {
+        if (preceding != null) return null
+        if (openingTransferFrom == owner && active == openingTransferTo && openingTransferTo != null) {
+            val claimed = active
+            openingTransferFrom = null
+            openingTransferTo = null
+            return UnwoundRecovery(claimed)
+        }
+        if (active != owner) return null
+        return UnwoundRecovery(complete(owner))
+    }
+
     /** Used only after the owning service job was torn down while its reader
      * was unwinding. A late cleanup can never touch another active owner. */
     fun abandonSessionIfActive(owner: KeyguardCardInspectionRequest): Boolean {

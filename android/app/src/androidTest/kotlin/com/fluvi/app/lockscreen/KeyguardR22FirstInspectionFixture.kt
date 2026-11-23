@@ -95,6 +95,7 @@ internal class KeyguardR22FirstInspectionFixture {
         val r32RealPending = CountDownLatch(1)
         val r34RealOffers = CountDownLatch(2)
         val r34ObservedOffer = AtomicLong(0L)
+        val r34WinningRequest = AtomicLong(0L)
         val r32MainHeld = CountDownLatch(1)
         val r32ResumeMain = AtomicReference<Runnable?>()
         val r32LatestPending = AtomicLong(0L)
@@ -679,10 +680,22 @@ internal class KeyguardR22FirstInspectionFixture {
             if (!negativeScene) {
                 await("NOT REACHED: exact direct reveal was not submitted", 15_000) {
                     val current = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
-                    val winner = if (scenario == "stable") original.id else if (r31) c.get() else b.get()
+                    val expected = if (scenario == "stable") original.id else if (r31) c.get() else b.get()
                     current.lineSequence().any { line ->
-                        line.startsWith(" R21_CORE ") && line.contains("/ACCEPTED ingress=") &&
-                            line.contains(" reservation=${reservation.get()} ") && line.contains(" consumedReq=$winner ")
+                        if (!line.startsWith(" R21_CORE ") || !line.contains("/ACCEPTED ingress=") ||
+                            !line.contains(" reservation=${reservation.get()} ")) false
+                        else if (!r34) line.contains(" consumedReq=$expected ")
+                        else {
+                            // Real SystemUI can offer still newer requests after
+                            // the deliberately held transfer. A later complete
+                            // read may legitimately win; never relabel B as it.
+                            val winner = Regex("consumedReq=([0-9]+)").find(line)?.groupValues?.get(1)?.toLongOrNull()
+                            val complete = winner != null && winner >= expected && synchronized(records) {
+                                records.any { it.startsWith("END id=$winner decision=SHOW_FULL reason=MAIN_CONFIRMED root=false truncated=false stale=false") }
+                            }
+                            if (complete) r34WinningRequest.set(checkNotNull(winner))
+                            complete
+                        }
                     }
                 }
             }
@@ -709,7 +722,8 @@ internal class KeyguardR22FirstInspectionFixture {
                 val visual = checkNotNull(calibration)
                 val identity = checkNotNull(visualIdentity)
                 val underlay = checkNotNull(visualUnderlay)
-                val winner = if (scenario == "stable") original.id else if (r31) c.get() else b.get()
+                val winner = if (scenario == "stable") original.id else if (r31) c.get() else if (r34) r34WinningRequest.get() else b.get()
+                if (r34) records.add("R34_ACTUAL_WINNER selected=${b.get()} winner=$winner")
                 val winningCore = snapshot.lineSequence().singleOrNull { it.startsWith(" R21_CORE ") &&
                     it.contains(" reservation=${reservation.get()} ") && it.contains(" consumedReq=$winner ") }
                 assertNotNull("NOT REACHED: no exact protected winner", winningCore)
