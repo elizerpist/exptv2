@@ -207,6 +207,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val readAhead: KeyguardReadAheadSnapshot,
         val route: R25RouteSnapshot,
         val reservation: KeyguardOrbPresentationCoordinator.Reservation,
+        val sceneSerial: Long,
     )
     private class R18Active(token: KeyguardOrbPresentationCoordinator.Reservation,
                             preparation: KeyguardCardWindow.R18Preparation,
@@ -393,14 +394,18 @@ class FluviKeyguardCardService : AccessibilityService() {
         val ahead = readAheadSnapshot
         val owner = r18Active
         val coordinator = r18Coordinator.snapshot()
-        r32MainSnapshot = if (route?.backend == "R18_DIRECT" && ahead != null && owner != null &&
+        val proposed = if (route?.backend == "R18_DIRECT" && ahead != null && owner != null &&
             owner.preparation.full && owner.preparation.emptyAwaitingDisclosure && !owner.paintRequested &&
             owner.firstProof == null && r14Recovery == null && coordinator.reservation === owner.token &&
             coordinator.proofRequestId == null && coordinator.grant == KeyguardOrbPresentationCoordinator.Grant.NONE &&
             (coordinator.host == KeyguardOrbPresentationCoordinator.Host.NONE ||
                 coordinator.host == KeyguardOrbPresentationCoordinator.Host.INERT ||
                 coordinator.host == KeyguardOrbPresentationCoordinator.Host.READY)
-        ) R32DirectSnapshot(ahead, route, owner.token) else null
+        ) R32DirectSnapshot(ahead, route, owner.token, firstAuthorizedOrb.sceneSerial()) else null
+        r32MainSnapshot = KeyguardR34SnapshotIdentity.publish(r32MainSnapshot, proposed) { old, next ->
+            old.readAhead == next.readAhead && old.route == next.route && old.reservation === next.reservation &&
+                old.sceneSerial == next.sceneSerial
+        }
     }
 
     private fun publishReadAheadState(invalidate: Boolean = false) {
@@ -1769,7 +1774,7 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (::overlay.isInitialized) overlay.clearPrivateOrbPoster()
+        if (::overlay.isInitialized) overlay.onMemoryTrim(level)
     }
 
     /** Freeze's scalar cut shares the same order as queue offers; no Android,
@@ -2844,7 +2849,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         return inspectionQueue.activeRequest() == plan.successor && inspectionQueue.pendingRequest() == null &&
             inspectionAuthority == plan.direct.readAhead.authority &&
             readAheadSnapshot == plan.direct.readAhead && r32MainSnapshot === plan.direct &&
-            r25MainSnapshot == plan.direct.route && r18RouteRevision == plan.direct.route.routeRevision &&
+            plan.direct.sceneSerial == firstAuthorizedOrb.sceneSerial() && r25MainSnapshot == plan.direct.route && r18RouteRevision == plan.direct.route.routeRevision &&
             state.reservation === plan.direct.reservation &&
             state.grant == KeyguardOrbPresentationCoordinator.Grant.NONE && state.proofRequestId == null &&
             (state.host == KeyguardOrbPresentationCoordinator.Host.NONE ||

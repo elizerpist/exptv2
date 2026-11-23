@@ -405,13 +405,22 @@ internal class KeyguardCardWindow(
     private fun preparePrivateOrbPoster(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?) {
         val unlocked = runCatching { serviceContext.getSystemService(android.os.UserManager::class.java).isUserUnlocked }
             .getOrDefault(false)
-        val allowed = settings.requested && settings.showFinancialDetails &&
+        val allowed = r18PipelineEnabled && Build.VERSION.SDK_INT == 35 &&
+            effectiveRenderMode == KeyguardOrbRenderMode.SURFACE_LIVE &&
+            settings.requested && settings.showFinancialDetails &&
             settings.presentationMode == KeyguardCardPresentationMode.ORB && unlocked
         surfacePresenter?.preparePrivatePoster(profile, surfaceSize(), surfaceSize(),
             settings.generation, settings.focus.generation, allowed)
     }
 
     fun clearPrivateOrbPoster() { checkMainThread(); surfacePresenter?.clearPrivatePoster() }
+
+    /** Leaving the Activity is the normal pre-lock lifecycle. Keep its one
+     * still-eligible private image; real memory pressure clears admission. */
+    fun onMemoryTrim(level: Int) {
+        checkMainThread()
+        if (level != android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) clearPrivateOrbPoster()
+    }
 
     /** Creates/configures the one retained root while detached. It has no
      * WindowManager presence and therefore grants neither visibility nor touch

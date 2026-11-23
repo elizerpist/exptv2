@@ -36,6 +36,20 @@ class KeyguardR34PrivateAssetCacheTest {
         assertNull(cache.acquire(2))
     }
 
+    @Test fun missingReceiptsBoundOutstandingPrivateResources() {
+        val released = mutableListOf<String>()
+        val cache = KeyguardR34PrivateAssetCache<Int, String> { released += it }
+        val first = checkNotNull(cache.request(1)); assertTrue(cache.publish(first, "first"))
+        val heldFirst = checkNotNull(cache.acquire(1))
+        val second = checkNotNull(cache.request(2)); assertTrue(cache.publish(second, "second"))
+        val heldSecond = checkNotNull(cache.acquire(2))
+        val third = checkNotNull(cache.request(3)); assertTrue(cache.publish(third, "third"))
+        assertNull("missing receipts must not grow the ownership set", cache.acquire(3))
+        heldFirst.close(); assertNotNull(cache.acquire(3)?.also { it.close() })
+        heldSecond.close(); cache.close()
+        assertEquals(setOf("first", "second", "third"), released.toSet())
+    }
+
     @Test fun failureCanRetryAndClearRejectsAnInFlightCompletion() {
         val released = mutableListOf<String>()
         val cache = KeyguardR34PrivateAssetCache<String, String> { released += it }

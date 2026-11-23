@@ -21,6 +21,10 @@ internal class KeyguardR34PrivateAssetCache<K : Any, V : Any>(
     private var generation = 0L
     private var desired: Ticket<K>? = null
     private var ready: Entry<K, V>? = null
+    // At most the two existing native output generations can borrow an image.
+    // A missing platform release therefore blocks admission instead of growing
+    // a chain of retired buffers without bound.
+    private var outstandingLeases = 0
     private var closed = false
 
     /** Equal re-publication preserves the same request. Any real transition,
@@ -58,15 +62,18 @@ internal class KeyguardR34PrivateAssetCache<K : Any, V : Any>(
 
     fun acquire(key: K): Lease<V>? = synchronized(lock) {
         val entry = ready ?: return@synchronized null
-        if (closed || entry.retired || desired !== entry.ticket || entry.ticket.key != key) return@synchronized null
+        if (closed || entry.retired || desired !== entry.ticket || entry.ticket.key != key ||
+            outstandingLeases >= MAX_LEASES) return@synchronized null
         entry.leases++
+        outstandingLeases++
         Lease(entry.value) { releaseLease(entry) }
     }
 
     private fun releaseLease(entry: Entry<K, V>) {
         val released = synchronized(lock) {
-            check(entry.leases > 0)
+            check(entry.leases > 0 && outstandingLeases > 0)
             entry.leases--
+            outstandingLeases--
             if (entry.retired && entry.leases == 0) entry.value else null
         }
         released?.let(release)
@@ -74,6 +81,8 @@ internal class KeyguardR34PrivateAssetCache<K : Any, V : Any>(
 
     fun clear() = retire(close = false)
     fun close() = retire(close = true)
+
+    private companion object { const val MAX_LEASES = 2 }
 
     private fun retire(close: Boolean) {
         var retired: V? = null

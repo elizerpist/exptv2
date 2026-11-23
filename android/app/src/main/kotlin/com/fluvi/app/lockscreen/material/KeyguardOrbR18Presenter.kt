@@ -25,6 +25,9 @@ internal class KeyguardOrbR18Presenter(
     private val onDrained: (Long, Long, Any) -> Unit = { _, _, _ -> },
     private val onAllocated: (Long, Long, Long) -> Unit = { _, _, _ -> },
     private val onObservation: (KeyguardOrbSurfaceObservation) -> Unit = {},
+    private val acquirePrivatePoster: (KeyguardMaterialProfile, KeyguardOrbSurfaceTarget, KeyguardR19FirstPaintTicket) ->
+        KeyguardR34PrivateAssetCache.Lease<KeyguardR34PrivatePoster.Image>? = { _, _, _ -> null },
+    private val privatePosterIsCurrent: (KeyguardR34PrivatePoster.Image) -> Boolean = { false },
 ) {
     private data class Owner(
         val serial: Long,
@@ -35,6 +38,14 @@ internal class KeyguardOrbR18Presenter(
         val ready: AtomicBoolean = AtomicBoolean(false),
         @Volatile var readyAtUptimeMs: Long = 0L,
         val bound: AtomicBoolean = AtomicBoolean(false),
+        val posterLease: AtomicReference<KeyguardR34PrivateAssetCache.Lease<KeyguardR34PrivatePoster.Image>?> = AtomicReference(),
+        @Volatile var posterSelected: Boolean = false,
+        @Volatile var posterDisplayed: Boolean = false,
+        @Volatile var posterInFlight: Boolean = false,
+        @Volatile var fallbackWaiting: Boolean = false,
+        @Volatile var posterVisualKey: String? = null,
+        @Volatile var posterProfile: KeyguardMaterialProfile? = null,
+        @Volatile var posterTicket: KeyguardR19FirstPaintTicket? = null,
     )
 
     private val main = Handler(Looper.getMainLooper())
@@ -66,6 +77,21 @@ internal class KeyguardOrbR18Presenter(
      * readiness only, not physical presentation or an admission. */
     fun onWorkerFirstPosted(target: KeyguardOrbSurfaceTarget, at: Long) {
         val captured = owner.get()?.takeIf { it.target === target && !target.revoked } ?: return
+        if (captured.fallbackWaiting) {
+            captured.fallbackWaiting = false
+            worker.grantPresentation(target)
+            return
+        }
+        if (captured.posterDisplayed) {
+            val output = target.directOutput ?: return
+            lane.promoteLive(output, stillCurrent = { owner.get() === captured && !target.revoked }) { success ->
+                if (success && owner.get() === captured && !target.revoked) {
+                    captured.posterDisplayed = false
+                    worker.grantPresentation(target)
+                } else if (owner.get() === captured && !target.revoked) onWorkerFailure(target, "r34LivePromotion")
+            }
+            return
+        }
         if (captured.ready.compareAndSet(false, true)) {
             captured.readyAtUptimeMs = at
             main.post {
@@ -159,6 +185,27 @@ internal class KeyguardOrbR18Presenter(
         val existing = current.target.firstDirectAuthorization.get()
         if (existing != null) return existing.attachment == ticket.attachment && existing.generation == ticket.generation &&
             existing.dataRevision == ticket.dataRevision && existing.visualKey == ticket.visualKey
+        val lease = acquirePrivatePoster(profile, current.target, ticket)
+        if (lease != null && current.target.firstDirectAuthorization.compareAndSet(null, ticket)) {
+            current.posterLease.set(lease)
+            current.posterSelected = true
+            current.posterVisualKey = profile.visualKey
+            current.posterProfile = profile.copyForSurface()
+            current.posterTicket = ticket
+            current.target.r34StartPhase = lease.value.phase
+            runCatching { onObservation(KeyguardOrbSurfaceObservation(attachment, generation, "POSTER",
+                SystemClock.uptimeMillis(), "R34_PRIVATE_${lease.value.bufferStatus}", true)) }
+            val readyAt = SystemClock.uptimeMillis()
+            main.post {
+                if (owner.get() === current && !current.target.revoked && current.posterLease.get() === lease &&
+                    current.ready.compareAndSet(false, true)) {
+                    current.readyAtUptimeMs = readyAt
+                    onPrepared(attachment, generation, readyAt)
+                }
+            }
+            return true
+        }
+        lease?.close()
         return worker.authorizeDirectFirst(current.target, profile, ticket)
     }
 
@@ -180,9 +227,12 @@ internal class KeyguardOrbR18Presenter(
         val current = owner.get() ?: return null
         val target = current.target
         val visual = (if (full) profile else profile.neutralized()).visualKey
+        val imageMatches = target.firstPostedVisualKey == visual ||
+            (current.posterSelected && current.posterVisualKey == visual &&
+                (current.posterLease.get() != null || current.posterInFlight || current.posterDisplayed || current.fallbackWaiting))
         return if (current.attachment == attachment && current.generation == generation && current.ready.get() &&
             !target.revoked && target.full == full && target.width == width && target.height == height &&
-            target.densityDpi == densityDpi && target.firstPostedVisualKey == visual) target.directOutput else null
+            target.densityDpi == densityDpi && imageMatches) target.directOutput else null
     }
 
     /** Call only from Main after actual attachment. The framework-owned
@@ -202,9 +252,17 @@ internal class KeyguardOrbR18Presenter(
         host.getLocationInSurface(location)
         val transaction = runCatching { parent.buildReparentTransaction(output.child) }.getOrNull()
         if (transaction == null) { done(false); return }
+        var posterIncluded = false
+        output.posterChild?.takeIf { it.isValid }?.let { poster ->
+            val additional = runCatching { parent.buildReparentTransaction(poster) }.getOrNull()
+            if (additional != null) {
+                posterIncluded = runCatching { transaction.merge(additional); true }.getOrDefault(false)
+                runCatching { additional.close() }
+            }
+        }
         current.target.blankBindPending.set(true)
         lane.bind(output, transaction, location[0].toFloat(), location[1].toFloat(),
-            current.target.width, current.target.height,
+            current.target.width, current.target.height, posterIncluded,
             stillCurrent = { owner.get() === current && !current.target.revoked },
             completed = { success ->
                 current.target.blankBindPending.set(false)
@@ -224,12 +282,39 @@ internal class KeyguardOrbR18Presenter(
             done(false); return
         }
         val output = current.target.directOutput ?: run { done(false); return }
-        lane.reveal(output, crossGrantBoundary = {
-            owner.get() === current && !current.target.revoked && crossGrantBoundary()
+        val poster = current.posterLease.getAndSet(null)
+        if (current.posterSelected && poster == null) { done(false); return }
+        val directPoster = poster != null && poster.value.buffer != null && output.posterBound && output.posterChild?.isValid == true
+        current.posterInFlight = poster != null
+        lane.reveal(output, posterLease = if (directPoster) poster else null, crossGrantBoundary = {
+            owner.get() === current && !current.target.revoked &&
+                (poster == null || privatePosterIsCurrent(poster.value)) && crossGrantBoundary()
         }, nativeApplied = {
             owner.get() === current && !current.target.revoked && nativeApplied()
         }, completed = { success ->
-            if (success && owner.get() === current && !current.target.revoked) worker.grantPresentation(current.target)
+            val live = success && owner.get() === current && !current.target.revoked
+            if (live) {
+                if (poster == null) worker.grantPresentation(current.target)
+                else {
+                    val profile = current.posterProfile
+                    val ticket = current.posterTicket
+                    if (directPoster) {
+                        current.posterDisplayed = true
+                        if (profile == null || ticket == null || !worker.authorizeDirectFirst(current.target, profile, ticket))
+                            onWorkerFailure(current.target, "r34LiveContinuation")
+                    } else {
+                        current.fallbackWaiting = true
+                        if (profile == null || ticket == null ||
+                            !worker.authorizeDirectCachedFallback(current.target, profile, ticket, poster) {
+                                privatePosterIsCurrent(poster.value)
+                            }) {
+                            poster.close()
+                            onWorkerFailure(current.target, "r34CanvasFallback")
+                        }
+                    }
+                }
+            } else if (poster != null && !directPoster) poster.close()
+            current.posterInFlight = false
             val acknowledgement = Runnable { done(success && owner.get() === current && !current.target.revoked) }
             val dispatcher = if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone else null
             if (dispatcher != null) dispatcher(acknowledgement) else main.post(acknowledgement)
@@ -270,6 +355,7 @@ internal class KeyguardOrbR18Presenter(
                 requestedOwner.compareAndSet(requested, null)
             serial.incrementAndGet()
             warmup?.retire(current.target)
+            current.posterLease.getAndSet(null)?.close()
             worker.revoke(current.target, discardFull = true)
             current.target.directOutput?.let(lane::retire)
             return

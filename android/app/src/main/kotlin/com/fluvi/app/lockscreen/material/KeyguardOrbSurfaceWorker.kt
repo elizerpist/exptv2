@@ -55,6 +55,7 @@ internal class KeyguardOrbSurfaceTarget(
     @Volatile var firstPostedVisualKey: String? = null
     @Volatile var firstPostedWasFull = false
     val firstDirectAuthorization = AtomicReference<KeyguardR19FirstPaintTicket?>()
+    @Volatile var r34StartPhase: KeyguardMaterialTime? = null
     // Boundary-only public-program diagnostics; never carries profile data.
     val blankBindPending = AtomicBoolean(false)
     @Volatile var r27WarmStatus = "NOT_REQUESTED"
@@ -303,13 +304,104 @@ internal class KeyguardOrbSurfaceWorker(
                              ticket: KeyguardR19FirstPaintTicket): Boolean {
         if (target.directOutput == null || !target.full || target.revoked || ticket.attachment != target.attachment ||
             ticket.generation != target.generation || ticket.requestId <= 0 || ticket.visualKey != profile.visualKey ||
-            authorizedTarget.get() !== target || !target.firstDirectAuthorization.compareAndSet(null, ticket)) return false
+            authorizedTarget.get() !== target) return false
+        val existing = target.firstDirectAuthorization.get()
+        if (existing !== ticket && (existing != null || !target.firstDirectAuthorization.compareAndSet(null, ticket))) return false
         val safe = profile.copyForSurface()
         val request = preparationGeneration.incrementAndGet()
         val accepted = handler.post {
             if (!disposed && !target.revoked && currentTarget === target && authorizedTarget.get() === target &&
                 request == preparationGeneration.get() && target.firstDirectAuthorization.get() === ticket)
                 prepareAuthorized(target, safe, request, ticket)
+        }
+        return accepted
+    }
+
+    /** The compatible-buffer route was unavailable. After the exact native
+     * grant, blit the already-rendered bitmap to the existing producer once;
+     * constructing the mutable live painter happens only after that post. */
+    fun authorizeDirectCachedFallback(
+        target: KeyguardOrbSurfaceTarget, profile: KeyguardMaterialProfile, ticket: KeyguardR19FirstPaintTicket,
+        lease: KeyguardR34PrivateAssetCache.Lease<KeyguardR34PrivatePoster.Image>,
+        stillCurrent: () -> Boolean,
+    ): Boolean {
+        val direct = target.directOutput
+        if (direct == null || !target.full || target.revoked || ticket.attachment != target.attachment ||
+            ticket.generation != target.generation || ticket.visualKey != profile.visualKey ||
+            authorizedTarget.get() !== target || target.firstDirectAuthorization.get() !== ticket) return false
+        val safe = profile.copyForSurface()
+        val request = preparationGeneration.incrementAndGet()
+        val accepted = handler.post {
+            val valid = { !disposed && !target.revoked && currentTarget === target &&
+                authorizedTarget.get() === target && request == preparationGeneration.get() &&
+                target.firstDirectAuthorization.get() === ticket && runCatching { stillCurrent() }.getOrDefault(false) }
+            var entered = false
+            var borrowed: Surface? = null
+            var canvas: Canvas? = null
+            var posted = false
+            val measure = if (runCatching { isCaptureActive() }.getOrDefault(false)) FirstMeasurement(target, ticket, System.nanoTime()).also {
+                it.method = "R34_PRIVATE_BLIT"; firstMeasurement = it
+            } else null
+            try {
+                if (!valid()) {
+                    if (!target.revoked && currentTarget === target) fail(target, "r34CacheInvalidated")
+                    return@post
+                }
+                if (!target.access.tryEnter()) return@post
+                entered = true
+                val surface = direct.borrow() ?: throw IllegalStateException("direct surface unavailable")
+                borrowed = surface
+                if (measure != null) measure.lockBeginNs = System.nanoTime()
+                val locked = surface.lockHardwareCanvas()
+                canvas = locked
+                if (measure != null) measure.lockReturnNs = System.nanoTime()
+                locked.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+                locked.drawBitmap(lease.value.bitmap, 0f, 0f, bitmapPaint)
+                if (measure != null) measure.drawEndNs = System.nanoTime()
+                if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED)
+                    runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterFirstFrameDraw?.invoke(target, "R34_PRIVATE_BLIT") }
+                canvas = null
+                surface.unlockCanvasAndPost(locked)
+                posted = true
+                if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED)
+                    runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost?.invoke(target) }
+                if (measure != null) measure.postReturnNs = System.nanoTime()
+                if (!valid()) return@post
+                val phase = lease.value.phase
+                currentScene = KeyguardMaterialScene(safe, true, System.nanoTime()).anchoredAt(phase, System.nanoTime())
+                currentPoster = null
+                firstSelection = null
+                firstPosted = true
+                target.firstPostedVisualKey = safe.visualKey
+                target.firstPostedWasFull = true
+                lastPostedVisual = safe.visualKey
+                lastPostedFull = true
+                lastPostedElapsed = phase.elapsedSeconds
+                lastPostedPhase = phase.phase
+                lastPostedBackground = phase.backgroundPhase
+                lastPostedInterior = phase.interiorPhase
+                observe(target, "POSTER", "R34_PRIVATE_BLIT")
+                runCatching { onFirstPosted(target, SystemClock.uptimeMillis()) }
+                finishFirstObservation(target, null)
+                if (!valid()) return@post
+                val selector = KeyguardOrbProgramSelector.forProfile(safe)
+                val ready = warmProgram?.takeIf { it.target === target && it.selector == selector }
+                if (ready != null) warmProgram = null
+                if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED)
+                    KeyguardOrbSurfaceWorkerTestHooks.onDirectProgramConstructor?.invoke(target, "R34_LIVE_AFTER_BLIT")
+                currentPainter = KeyguardOrbSurfacePainter(context, safe, target.width, target.height, ready?.shader)
+            } catch (error: Throwable) {
+                finishFirstObservation(target, "R34_BLIT:${error.javaClass.simpleName}")
+                if (!target.revoked && currentTarget === target) fail(target, "r34Blit:${error.javaClass.simpleName}")
+            } finally {
+                val unfinished = canvas
+                val ownerSurface = borrowed
+                if (unfinished != null && ownerSurface != null) runCatching { ownerSurface.unlockCanvasAndPost(unfinished) }
+                if (ownerSurface != null) direct.releaseBorrow()
+                if (entered) target.access.leave()
+                if (!posted && firstMeasurement?.target === target) finishFirstObservation(target, "R34_BLIT_NOT_POSTED")
+                lease.close()
+            }
         }
         return accepted
     }
@@ -342,7 +434,8 @@ internal class KeyguardOrbSurfaceWorker(
                                   firstTicket: KeyguardR19FirstPaintTicket? = null) {
         val enteredNs = if (firstTicket != null && runCatching { isCaptureActive() }.getOrDefault(false)) System.nanoTime() else 0L
         if (target.directOutput != null) observe(target, "R19_PAINT_ENTER", "worker")
-        val phase = if (lastPostedVisual == safe.visualKey && lastPostedFull == target.full) {
+        val phase = if (firstTicket != null && target.r34StartPhase != null) checkNotNull(target.r34StartPhase)
+        else if (lastPostedVisual == safe.visualKey && lastPostedFull == target.full) {
             KeyguardMaterialTime(lastPostedElapsed, lastPostedPhase, lastPostedBackground, lastPostedInterior)
         } else initialPhase(safe)
         val measurement = if (firstTicket != null && enteredNs != 0L)
@@ -358,7 +451,9 @@ internal class KeyguardOrbSurfaceWorker(
             validatePosterSize(target.width, target.height)
             if (!valid()) throw StalePreparation()
             val key = posterKey(safe, target.full, target.width, target.height, target.densityDpi, phase)
-            val cached = posters[key]
+            // A prepared R34 poster carries its own phase and exact identity;
+            // the live continuation must not inherit a prior lease's painter.
+            val cached = if (firstTicket != null && target.r34StartPhase != null) null else posters[key]
             if (firstTicket != null) firstSelection = FirstSelection(target, firstTicket, phase, request, cached == null)
             if (firstTicket != null && cached == null) {
                 measurement?.method = "DIRECT_MISS"

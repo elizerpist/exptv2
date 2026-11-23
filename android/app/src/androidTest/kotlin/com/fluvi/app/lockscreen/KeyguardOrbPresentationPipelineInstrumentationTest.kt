@@ -1,6 +1,10 @@
 package com.fluvi.app.lockscreen
 
+import android.app.Activity
+import android.app.Application
+import android.content.ComponentCallbacks2
 import android.content.Intent
+import android.os.Bundle
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Build
@@ -16,6 +20,7 @@ import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.R
+import com.fluvi.app.runtime.FluviFinancialCardPresenter
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.lockscreen.material.AndroidKeyguardShaderArtifactReader
 import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
@@ -118,6 +123,194 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
             instrumentation.runOnMainSync { assertFalse(checkNotNull(window).isAttached) }
         } finally {
             KeyguardOrbSurfaceWorkerTestHooks.afterWarmPosterCreated = null
+            instrumentation.runOnMainSync { window?.dispose(); activity.finish() }
+            val edit = preferences.edit()
+            if (previous == null) edit.remove("mode") else edit.putString("mode", previous)
+            check(edit.commit())
+        }
+    }
+
+    @Test fun r34UiHiddenKeepsConfiguredPosterForAuthorizedWindow() = r34WindowPoster("SHOW")
+    @Test fun r34PressureInvalidatesLeasedPosterBeforeSubmit() = r34WindowPoster("PRESSURE")
+    @Test fun r34RestrictionBeforeSubmitCannotRevealPoster() = r34WindowPoster("RESTRICT")
+
+    /** Uses the production retained window, native host and compositor. The
+     * permission callback is a controlled positive, not a service-privacy pass. */
+    private fun r34WindowPoster(scenario: String) {
+        assumeTrue(Build.VERSION.SDK_INT == 35)
+        val context = instrumentation.targetContext
+        assumeTrue(context.getSystemService(android.os.UserManager::class.java).isUserUnlocked)
+        val preferences = context.getSharedPreferences("fluvi_keyguard_orb_diagnostic_route", android.content.Context.MODE_PRIVATE)
+        val previous = preferences.getString("mode", null)
+        val activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
+        val stopped = CountDownLatch(1); val warmed = CountDownLatch(1); val allocated = CountDownLatch(1)
+        val hostReady = CountDownLatch(1); val bound = CountDownLatch(1); val imageReady = CountDownLatch(1)
+        val heldLive = CountDownLatch(1); val releaseLive = CountDownLatch(1)
+        val beforeCross = CountDownLatch(1); val releaseCross = CountDownLatch(1); val revealed = CountDownLatch(1)
+        val result = AtomicReference<Boolean>(); val host = AtomicReference<View>(); val failure = AtomicReference<String?>()
+        val route = AtomicReference<String>(); val applied = AtomicInteger(); val firstPosts = AtomicInteger()
+        val closedActivity = object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityCreated(a: Activity, state: Bundle?) = Unit
+            override fun onActivityStarted(a: Activity) = Unit
+            override fun onActivityResumed(a: Activity) = Unit
+            override fun onActivityPaused(a: Activity) = Unit
+            override fun onActivityStopped(a: Activity) { if (a === activity) stopped.countDown() }
+            override fun onActivitySaveInstanceState(a: Activity, state: Bundle) = Unit
+            override fun onActivityDestroyed(a: Activity) = Unit
+        }
+        var window: KeyguardCardWindow? = null
+        var reference: Bitmap? = null
+        val runDir = File(context.filesDir, "keyguard-service-probe/r20/r34-$scenario-${SystemClock.elapsedRealtime()}").apply { mkdirs() }
+        try {
+            check(preferences.edit().putString("mode", "SURFACE_LIVE").commit())
+            activity.application.registerActivityLifecycleCallbacks(closedActivity)
+            val size = context.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
+            val green = Color.rgb(11, 177, 67)
+            val base = r20CalibratedProfile()
+            val phase = 1.196795f
+            val selected = base.copy(phase = phase, elapsedSeconds = phase,
+                background = base.background.copy(phase = phase), interior = base.interior.copy(phase = phase))
+            val fixed = KeyguardMaterialTime(phase, phase, phase, phase)
+            lateinit var root: FrameLayout
+            lateinit var referenceView: KeyguardHeaderMaterialView
+            val artifact = AndroidKeyguardShaderArtifactReader.load(context, selected.effectId, selected.usesPortal)
+            instrumentation.runOnMainSync {
+                root = FrameLayout(activity).apply { setBackgroundColor(green) }
+                referenceView = KeyguardHeaderMaterialView(activity,
+                    materialTimeSource = KeyguardMaterialTimeSource { _, _ -> fixed }).apply {
+                    layoutParams = FrameLayout.LayoutParams(size, size).apply { leftMargin = 100; topMargin = 250 }
+                    setScene(KeyguardMaterialScene(selected, true, 0L), enabled = true)
+                    setBootstrapActive(false)
+                    assertEquals(KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED, installPreparedShader(artifact))
+                }
+                root.addView(referenceView); activity.setContentView(root); referenceView.frame(System.nanoTime())
+            }
+            fun crop(view: View, screen: Bitmap): Bitmap {
+                val location = IntArray(2)
+                instrumentation.runOnMainSync { view.getLocationOnScreen(location) }
+                check(view.width == size && view.height == size && location[0] >= 0 && location[1] >= 0 &&
+                    location[0] + size <= screen.width && location[1] + size <= screen.height)
+                return Bitmap.createBitmap(screen, location[0], location[1], size, size)
+            }
+            assertTrue("reference view did not draw", r20Wait(10_000) {
+                instrumentation.runOnMainValue { referenceView.diagnostics().lastCanvasHardwareAccelerated == true &&
+                    referenceView.diagnostics().shaderDrawCount > 0 && referenceView.width == size }
+            })
+            val refScreen = awaitScreenshot(8_000) { screen ->
+                val sample = crop(referenceView, screen)
+                try { colorDistance(green, sample.getPixel(0, 0)) <= 15 &&
+                    colorDistance(green, sample.getPixel(size / 2, size / 2)) > 45 } finally { sample.recycle() }
+            }
+            reference = crop(referenceView, refScreen); refScreen.recycle()
+            checkNotNull(reference).save(File(runDir, "reference.png"))
+            instrumentation.runOnMainSync { root.removeView(referenceView) }
+            val settings = KeyguardCardSettings(requested = true, showFinancialDetails = true,
+                presentationMode = KeyguardCardPresentationMode.ORB, animationMode = KeyguardCardAnimationMode.ORB_ONLY)
+            val hostGeneration = 71L
+            KeyguardOrbSurfaceWorkerTestHooks.afterWarmPosterCreated = { full -> if (full) warmed.countDown() }
+            KeyguardOrbSurfaceWorkerTestHooks.beforeFirstLock = { target ->
+                if (target.firstDirectAuthorization.get()?.requestId == 801L) {
+                    heldLive.countDown(); check(releaseLive.await(30, TimeUnit.SECONDS))
+                }
+            }
+            KeyguardOrbSurfaceWorkerTestHooks.onDirectProgramConstructor = { target, stage ->
+                if (target.firstDirectAuthorization.get()?.requestId == 801L && stage == "R34_LIVE_AFTER_BLIT") {
+                    heldLive.countDown(); check(releaseLive.await(30, TimeUnit.SECONDS))
+                }
+            }
+            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = { target ->
+                if (target.firstDirectAuthorization.get()?.requestId == 801L) firstPosts.incrementAndGet()
+            }
+            instrumentation.runOnMainSync {
+                window = KeyguardCardWindow(activity, onOpen = {}, onToggle = {}, onInteractionStarted = {},
+                    onPositionCommitted = { _, _, _, _ -> }, onInteractionDiagnostic = { _, _ -> },
+                    manager = PanelWindowManager(activity), r18PipelineEnabled = true,
+                    onR19Allocated = { _, _, _ -> allocated.countDown() },
+                    onR18BufferReady = { _, _, _ -> imageReady.countDown() },
+                    onR18HostReady = { generation, view, _ -> if (generation == hostGeneration) { host.set(view); hostReady.countDown() } },
+                    onR18Failure = { _, _, why -> failure.set(why) },
+                    onR19Observation = { observation -> if (observation.stage == "POSTER") route.set(observation.detail) })
+                checkNotNull(window).prepareRetainedView(settings, selected)
+                assertNotNull("missing virgin preparation", checkNotNull(window).r18Preparation())
+            }
+            assertTrue("private poster was not prepared", warmed.await(20, TimeUnit.SECONDS))
+            assertTrue("DIRECT output was not allocated", allocated.await(20, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync { assertTrue("activity did not move to background", activity.moveTaskToBack(true)) }
+            assertTrue("activity never stopped in the background", stopped.await(15, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync { checkNotNull(window).onMemoryTrim(ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) }
+            val restored = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+            assertSame("the retained window must retain its Activity host", activity, restored)
+            instrumentation.runOnMainSync { assertTrue(checkNotNull(window).stageR18Host(hostGeneration, settings)) }
+            assertTrue("real panel host did not become ready", hostReady.await(20, TimeUnit.SECONDS))
+            val actualHost = checkNotNull(host.get())
+            val hostLocation = IntArray(2)
+            instrumentation.runOnMainSync { actualHost.getLocationOnScreen(hostLocation) }
+            val before = awaitScreenshot(8_000) { image ->
+                val x = hostLocation[0] + size / 2; val y = hostLocation[1] + size / 2
+                x in 0 until image.width && y in 0 until image.height && colorDistance(green, image.getPixel(x, y)) <= 15
+            }
+            before.save(File(runDir, "before-reveal.png")); before.recycle()
+            val prep = instrumentation.runOnMainValue { checkNotNull(checkNotNull(window).r18Preparation()) }
+            instrumentation.runOnMainSync { checkNotNull(window).bindR18Host(hostGeneration, prep) {
+                if (!it) failure.set("hiddenBindFailed"); bound.countDown()
+            } }
+            assertTrue("hidden host bind did not complete", bound.await(10, TimeUnit.SECONDS)); assertNull(failure.get())
+            val ticket = KeyguardR19FirstPaintTicket(prep.attachment, prep.outputGeneration, 801, 1,
+                settings.focus.generation, selected.visualKey)
+            instrumentation.runOnMainSync { assertTrue(checkNotNull(window).authorizeR19First(prep, ticket)) }
+            assertTrue("current private image was not selected", imageReady.await(20, TimeUnit.SECONDS)); assertNull(failure.get())
+            assertTrue("opening did not select a private image: ${route.get()}", route.get()?.startsWith("R34_PRIVATE_") == true)
+            instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    checkNotNull(window).showOrUpdate(FluviFinancialCardPresenter.loading(), settings, hostGeneration))
+                if (scenario == "PRESSURE") checkNotNull(window).onMemoryTrim(ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW)
+                if (scenario == "RESTRICT") KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross = {
+                    beforeCross.countDown(); check(releaseCross.await(20, TimeUnit.SECONDS))
+                }
+                checkNotNull(window).revealR18(prep, boundary = { applied.incrementAndGet(); true },
+                    nativeApplied = { true }) { result.set(it); revealed.countDown() }
+            }
+            if (scenario == "RESTRICT") {
+                assertTrue("native submit boundary was not reached", beforeCross.await(10, TimeUnit.SECONDS))
+                instrumentation.runOnMainSync { checkNotNull(window).hide() }
+                releaseCross.countDown()
+            }
+            assertTrue("reveal result missing", revealed.await(15, TimeUnit.SECONDS)); assertNull(failure.get())
+            if (scenario == "SHOW") {
+                assertEquals(true, result.get()); assertEquals(1, applied.get())
+                assertTrue("live painter was not held after poster selection", heldLive.await(15, TimeUnit.SECONDS))
+                val screen = awaitScreenshot(10_000) { image ->
+                    val sample = crop(actualHost, image)
+                    try { r20Compare(checkNotNull(reference), sample).nearlyEqual() } finally { sample.recycle() }
+                }
+                val shown = crop(actualHost, screen); screen.recycle(); shown.save(File(runDir, "cached-poster.png"))
+                assertTrue("cached image differs from the calibrated configured scene", r20Compare(checkNotNull(reference), shown).nearlyEqual())
+                assertTrue("poster exterior lost transparency", colorDistance(green, shown.getPixel(0, 0)) <= 15)
+                if (route.get() == "R34_PRIVATE_COMPOSITOR_READY") assertEquals("live frame satisfied the poster check", 0, firstPosts.get())
+                else assertEquals("fallback must blit exactly once before live work", 1, firstPosts.get())
+                shown.recycle(); releaseLive.countDown()
+            } else {
+                assertEquals("stale/restricted poster must not reveal", false, result.get())
+                assertEquals("stale/restricted poster crossed the permission boundary", 0, applied.get())
+                if (scenario == "PRESSURE") instrumentation.runOnMainSync { checkNotNull(window).hide() }
+                val screen = awaitScreenshot(10_000) { image ->
+                    val x = hostLocation[0] + size / 2; val y = hostLocation[1] + size / 2
+                    x in 0 until image.width && y in 0 until image.height && colorDistance(green, image.getPixel(x, y)) <= 15
+                }
+                screen.save(File(runDir, "after-exclusion.png")); screen.recycle()
+            }
+            File(runDir, "fixture.txt").writeText("scenario=$scenario route=${route.get()} permissionCalls=${applied.get()} posts=${firstPosts.get()}\n")
+        } finally {
+            releaseLive.countDown(); releaseCross.countDown()
+            KeyguardOrbSurfaceWorkerTestHooks.afterWarmPosterCreated = null
+            KeyguardOrbSurfaceWorkerTestHooks.beforeFirstLock = null
+            KeyguardOrbSurfaceWorkerTestHooks.onDirectProgramConstructor = null
+            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = null
+            KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross = null
+            reference?.recycle()
+            activity.application.unregisterActivityLifecycleCallbacks(closedActivity)
             instrumentation.runOnMainSync { window?.dispose(); activity.finish() }
             val edit = preferences.edit()
             if (previous == null) edit.remove("mode") else edit.putString("mode", previous)

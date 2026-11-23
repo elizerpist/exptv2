@@ -46,7 +46,7 @@ internal class KeyguardOrbSurfacePresenter(
         },
         isCaptureActive = isCaptureActive,
     )
-    private var privatePoster: KeyguardR34PrivatePoster? = null
+    @Volatile private var privatePoster: KeyguardR34PrivatePoster? = null
     private var current: KeyguardOrbSurfaceTarget? = null
     private var surface: SurfaceView? = null
     private var guard: PrivacyGuard? = null
@@ -79,7 +79,10 @@ internal class KeyguardOrbSurfacePresenter(
     private fun directOnMain(): KeyguardOrbR18Presenter {
         checkMain()
         return direct ?: KeyguardOrbR18Presenter(context.applicationContext, worker, isCaptureActive, onR18Prepared,
-            onR18Failure, onR18Receipt, onR18Drained, onR18Allocated, onR19Observation).also { direct = it }
+            onR18Failure, onR18Receipt, onR18Drained, onR18Allocated, onR19Observation,
+            acquirePrivatePoster = { profile, target, ticket ->
+                privatePoster?.acquire(profile, target.width, target.height, target.densityDpi, ticket.dataRevision)
+            }, privatePosterIsCurrent = { image -> privatePoster?.isCurrent(image) == true }).also { direct = it }
     }
 
     fun prepareR18(attachment: Long, generation: Long, profile: KeyguardMaterialProfile,
