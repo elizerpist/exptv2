@@ -1,6 +1,8 @@
 package com.android.systemui.keyguard.fluvi
 import com.fluvi.r29.contract.*
 import java.util.concurrent.Executor
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 private class Queue : Executor {
     val jobs = ArrayDeque<Runnable>()
@@ -82,5 +84,28 @@ fun main() {
     scheduled.single().run()
     check(changes == beforeExpiry + 1) { "static expiry must invalidate the display owner" }
     check(timed.current(clock) == null)
-    println("PASS: main adoption, READY, invalidate, reset, death, and static-expiry controls")
+    // A Binder-style callback must not retain the store monitor while a
+    // concurrent invalidation enters it. This checks the real store method;
+    // the fake renderer supplies only preparation completion.
+    val concurrentWorker = Queue(); val concurrentMain = Queue(); val concurrentRenderer = R29HostRenderer()
+    val concurrentStore = R29ResidentStore(concurrentRenderer, concurrentWorker, concurrentMain) { }
+    val invalidated = CountDownLatch(1)
+    var callbackSawUnlockedStore = false
+    var invalidationThread: Thread? = null
+    check(concurrentStore.beginSession(nonce) { _, sequence ->
+        invalidationThread = Thread {
+            concurrentStore.invalidate(nonce, sequence + 1)
+            invalidated.countDown()
+        }.apply { start() }
+        callbackSawUnlockedStore = invalidated.await(2, TimeUnit.SECONDS)
+    })
+    val currentForCallback = input(nonce, 1)
+    check(concurrentStore.prepare(currentForCallback, System.currentTimeMillis(), 2048))
+    concurrentWorker.drain()
+    checkNotNull(concurrentRenderer.pending).invoke(Result.success(R29PreparedOrb(currentForCallback)))
+    concurrentMain.drain()
+    invalidationThread?.join(2_000)
+    check(callbackSawUnlockedStore) { "READY callback held store lock across external callback" }
+    check(concurrentStore.current(System.currentTimeMillis()) == null)
+    println("PASS: main adoption, READY, invalidate, reset, death, static-expiry, unlocked callback")
 }

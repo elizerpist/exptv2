@@ -164,6 +164,7 @@ internal class R29ResidentStore(
                 }
                 val output = result.getOrNull()
                 if (output != null) main.execute {
+                    var readyCallback: ((String, Long) -> Unit)? = null
                     val adopted = synchronized(lock) {
                         if (!attached || session != work.session || callback == null ||
                             !reducer.adopt(work.session, work.sequence, nowEpochMs())) {
@@ -178,14 +179,23 @@ internal class R29ResidentStore(
                                 ready.set(null)
                                 false
                             } else {
-                                // Serialize receipt delivery with invalidate and
-                                // detach. The service uses a one-way Binder call.
-                                runCatching { callback?.invoke(work.session, work.sequence) }
+                                readyCallback = callback
                                 true
                             }
                         }
                     }
-                    if (adopted) onChanged()
+                    if (adopted) {
+                        // The receiver revalidates its own session and sequence;
+                        // never run Binder or external code while holding lock.
+                        val deliver = readyCallback?.takeIf { expected ->
+                            synchronized(lock) {
+                                attached && session == work.session && latestSequence == work.sequence &&
+                                    callback === expected && ready.get() === output
+                            }
+                        }
+                        if (deliver != null) runCatching { deliver(work.session, work.sequence) }
+                        onChanged()
+                    }
                 }
                 next?.let(::enqueue)
             }
