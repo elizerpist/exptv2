@@ -197,6 +197,9 @@ internal class KeyguardWindowSnapshotReader(
          * a volatile scalar hint; the second claims a real successor only at
          * a useful, fully inspected acquisition boundary. */
         val openingYieldHint: (() -> Boolean)? = null,
+        /** The follow-on may claim only a clean child boundary of the exact SystemUI root. */
+        val followOnOpening: Boolean = false,
+        val beforeWindowsAcquisition: (() -> Unit)? = null,
         val openingFirstIngressUptime: (() -> Long)? = null,
         val openingChildBefore: ((Int, Int) -> Unit)? = null,
         val openingChildReturned: ((Int, Int, Boolean) -> Unit)? = null,
@@ -453,6 +456,7 @@ internal class KeyguardWindowSnapshotReader(
                 cacheClearResult = cacheClearResult,
             ), abortedStale = true,
         )
+        request.beforeWindowsAcquisition?.invoke()
         val windowsStartedAt = SystemClock.uptimeMillis()
         val currentWindows = runCatching { service.windows }.getOrElse { emptyList() }
         val windowsReadMs = SystemClock.uptimeMillis() - windowsStartedAt
@@ -526,7 +530,7 @@ internal class KeyguardWindowSnapshotReader(
         // A TYPE_SYSTEM inventory entry does not identify its package. Before
         // the root is returned, a foreign system window is still unresolved;
         // report the checkpoint but keep the ordinary read in that case.
-        val beforeRoot = if (request.openingYieldHint?.invoke() == true)
+        val beforeRoot = if (!request.followOnOpening && request.openingYieldHint?.invoke() == true)
             maybeYield("beforeActiveRoot", KeyguardOpeningYieldReason.CLEAN_OPENING, false, 0) else null
         if (beforeRoot != null) return Result(emptyList(), false, false, windowsReadMs,
             SystemClock.uptimeMillis() - treeStartedAt, 0,
@@ -673,10 +677,13 @@ internal class KeyguardWindowSnapshotReader(
                     request.openingEligibleCheckpoint, request.openingYieldHint,
                     if (installed) { kind, reason, count ->
                         if (request.openingYieldHint?.invoke() == true) {
-                            val exactSystemRoot = reason != KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD ||
-                                (rootPackage == "com.android.systemui" && window.id == activeWindowId &&
-                                    (!request.strictOwnAttribution || request.knownOwnAtInventory?.invoke() == observedOwn))
-                            maybeYield(kind, reason, exactSystemRoot && cleanOpeningInventory(), visited + count)
+                            val exactSystemRoot = if (request.followOnOpening || reason == KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD)
+                                rootPackage == "com.android.systemui" && window.id == activeWindowId &&
+                                    (!request.strictOwnAttribution || request.knownOwnAtInventory?.invoke() == observedOwn)
+                            else true
+                            if (request.followOnOpening && (reason != KeyguardOpeningYieldReason.CLEAN_OPENING ||
+                                    count <= 1 || timing.childCount == 0)) null
+                            else maybeYield(kind, reason, exactSystemRoot && cleanOpeningInventory(), visited + count)
                         } else null
                     } else null).also {
                     if (timing.firstIncompleteReason == null) timing.firstIncompleteReason = it.firstIncompleteReason

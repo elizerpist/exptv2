@@ -1020,6 +1020,7 @@ internal object KeyguardCardDiagnostics {
             "R19_ALLOCATED", "R19_FIRST_POSITIVE", "R19_PROOF_ACCEPTED", "R19_PROOF_EXPIRED", "R19_EXPIRED_SYSTEM",
             "R19_EXPIRED_INGRESS", "R19_EXPIRED_DISPLAY",
             "R19_PAINT_REQUEST", "R19_PAINT_ENTER", "R19_POSTER", "R19_PROOF_CONSUMED", "R20_FIRST_FRAME")
+        if (phase.startsWith("R31_INPUT_")) timeline.values.putIfAbsent("r31InputFailure", phase)
         if (phase in retained) {
             if (phase == "INPUT_ARMED" && !timeline.values.containsKey(phase)) attempt.attachCount += 1
             timeline.values.putIfAbsent(phase, event.uptimeMs.toString())
@@ -1517,6 +1518,17 @@ internal object KeyguardCardDiagnostics {
             values["r22PostReplacements"] = observation.replacements.toString()
             values["r22PostBStart"] = observation.bStartedAt?.toString() ?: "UNOBSERVED"
             values["r22PostBEnd"] = observation.bFinishedAt?.toString() ?: "UNOBSERVED"
+            observation.followOn?.let { f ->
+                fun n(value: Any?) = value?.toString() ?: "UNOBSERVED"
+                values["r31BScene"] = "${n(f.startedAt)}/${n(f.startScene)}"
+                values["r31First"] = "${n(f.firstOfferId)}@${n(f.firstOfferAt)}"
+                values["r31Latest"] = "${n(f.latestOfferId)}@${n(f.latestOfferAt)}"
+                values["r31Ingress"] = "${n(f.ingressId)}/${n(f.origin)}/${n(f.offeredScene)}"
+                values["r31Displaced"] = n(f.displacedId)
+                values["r31Boundary"] = "${n(f.checkpointAt)}/${n(f.checkpointChildren)}/${n(f.callEnd)}/${n(f.childrenAfterOffer)}"
+                values["r31Transfer"] = "${n(f.outcome)}/${n(f.claimedId)}/${n(f.unwindAt)}"
+                values["r31C"] = "${n(f.cStart)}/${n(f.cEnd)}/${n(f.cResult)}"
+            }
         }
     }
 
@@ -2946,6 +2958,9 @@ internal object KeyguardCardDiagnostics {
         append(" postv=1 postOrd=${v("r22PostOrdinal")} postAuthority=${v("r22PostAuthority")} coverage=${v("r22PostCoverage")}")
         append(" postFirst=${values["r22PostFirst"] ?: "UNOBSERVED"} postLatest=${values["r22PostLatest"] ?: "UNOBSERVED"}")
         append(" postCount=${v("r22PostOffers")}/${v("r22PostReplacements")} postB=${v("r22PostBStart")}/${v("r22PostBEnd")}")
+        append(" r31v=1 bScene=${v("r31BScene")} first=${v("r31First")} latest=${v("r31Latest")}")
+        append(" ingress=${v("r31Ingress")} displaced=${v("r31Displaced")} boundary=${v("r31Boundary")}")
+        append(" transfer=${v("r31Transfer")} c=${e("r31C")} inputFailure=${d("r31InputFailure")}")
         appendLine(" clock=uptimeMs firstPostClock=System.nanoTime physical=UNOBSERVED")
     }
 

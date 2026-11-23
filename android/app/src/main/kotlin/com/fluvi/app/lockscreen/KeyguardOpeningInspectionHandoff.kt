@@ -14,6 +14,13 @@ internal class KeyguardOpeningInspectionHandoff {
         val callbackAt: Long?, val freshness: KeyguardWindowFreshness,
         val freshnessCopied: Boolean, val displacedId: Long?,
     )
+    data class FollowOnEvidence(
+        val startScene: Long?, val startedAt: Long?, val firstOfferId: Long?, val firstOfferAt: Long?,
+        val latestOfferId: Long?, val latestOfferAt: Long?, val ingressId: Long?, val origin: String?,
+        val offeredScene: Long?, val displacedId: Long?, val checkpointAt: Long?, val checkpointChildren: Int?,
+        val outcome: String?, val claimedId: Long?, val callEnd: Long?, val unwindAt: Long?,
+        val cStart: Long?, val cEnd: Long?, val cResult: String?, val childrenAfterOffer: Int?,
+    )
     data class PostClaimSnapshot(
         val context: KeyguardDiagnosticContext,
         val openingId: Long, val reservationId: Long,
@@ -21,6 +28,7 @@ internal class KeyguardOpeningInspectionHandoff {
         val ordinal: Long, val first: PendingObservation?, val latest: PendingObservation?,
         val offers: Int, val replacements: Int,
         val bStartedAt: Long?, val bFinishedAt: Long?, val closedReason: String?,
+        val followOn: FollowOnEvidence? = null,
     )
 
     data class Snapshot(
@@ -74,6 +82,34 @@ internal class KeyguardOpeningInspectionHandoff {
     )
 
     private data class Hint(val requestId: Long, val ingressId: Long, val scene: Long)
+    /** Runtime state is independent of the optional diagnostic PostClaim. */
+    private class FollowOn(val successor: KeyguardCardInspectionRequest) {
+        var startScene: Long? = null
+        var startedAt: Long? = null
+        var invalidatedScene: Long? = null
+        var hint: Hint? = null
+        var pending: KeyguardCardInspectionRequest? = null
+        var consumed = false
+        @Volatile var firstIngressForReader = 0L
+        var firstOfferId: Long? = null
+        var firstOfferAt: Long? = null
+        var latestOfferId: Long? = null
+        var latestOfferAt: Long? = null
+        var latestIngressId: Long? = null
+        var latestScene: Long? = null
+        var origin: String? = null
+        var displaced: Long? = null
+        var checkpointAt: Long? = null
+        var checkpointChildren: Int? = null
+        var outcome: String? = null
+        var claimedId: Long? = null
+        var callEnd: Long? = null
+        var unwindAt: Long? = null
+        var cStart: Long? = null
+        var cEnd: Long? = null
+        var cResult: String? = null
+        var childrenAfterOffer = 0
+    }
     private class PostClaim(
         val context: KeyguardDiagnosticContext,
         val claimedId: Long,
@@ -125,6 +161,7 @@ internal class KeyguardOpeningInspectionHandoff {
         var consumed = false
         var invalidated = false
         var postClaim: PostClaim? = null
+        var followOn: FollowOn? = null
         var incompleteChecks = 0
         var incompleteEligible = 0
         var incompleteRejected = 0
@@ -137,6 +174,8 @@ internal class KeyguardOpeningInspectionHandoff {
     private var nextObservationOrdinal = 0L
     @Volatile var hasHint: Boolean = false
         private set
+    @Volatile private var followHint = false
+    @Volatile private var followObservedOffer = false
     @Volatile var openingRequestId: Long = 0L
         private set
     @Volatile var claimedRequestId: Long = 0L
@@ -154,6 +193,8 @@ internal class KeyguardOpeningInspectionHandoff {
         claimedRequestId = 0L
         offeredRequestId = 0L
         hasHint = false
+        followHint = false
+        followObservedOffer = false
         return true
     }
 
@@ -167,7 +208,18 @@ internal class KeyguardOpeningInspectionHandoff {
     /** Called at the same ordered scene advancement, before a real offer. */
     fun externalInvalidation(scene: Long, at: Long) {
         val op = current ?: return
-        if (op.consumed || op.invalidated || op.completedAt != null ||
+        if (op.consumed) {
+            val follow = op.followOn ?: return
+            val start = follow.startScene ?: return
+            if (op.invalidated || follow.consumed || scene <= start) return
+            follow.invalidatedScene = scene
+            if (op.postClaim != null && follow.firstIngressForReader == 0L) follow.firstIngressForReader = at
+            follow.hint = null
+            follow.pending = null
+            followHint = false
+            return
+        }
+        if (op.invalidated || op.completedAt != null ||
             op.startedAt == null || op.sceneAtRead == null || scene <= requireNotNull(op.sceneAtRead)) return
         if (op.firstIngressAt == null) {
             op.firstIngressAt = at
@@ -182,9 +234,43 @@ internal class KeyguardOpeningInspectionHandoff {
 
     /** A synthetic/non-ingress replacement cannot inherit an old event hint. */
     fun offered(request: KeyguardCardInspectionRequest, pending: KeyguardCardInspectionRequest?,
-                externalScene: Long?, currentScene: Long, frameworkEvent: Boolean = false) {
+                externalScene: Long?, currentScene: Long, frameworkEvent: Boolean = false,
+                previous: KeyguardCardInspectionRequest? = null) {
         val op = current ?: return
-        if (op.consumed || op.invalidated || op.completedAt != null) return
+        if (op.invalidated) return
+        if (op.consumed) {
+            val follow = op.followOn ?: return
+            if (follow.consumed || follow.startScene == null) return
+            follow.hint = null
+            follow.pending = null
+            followHint = false
+            val ingress = request.r14Ingress
+            val eligible = externalScene != null && externalScene == currentScene &&
+                externalScene == follow.invalidatedScene && externalScene > requireNotNull(follow.startScene) &&
+                ingress != null && ingress.displayId == 0 && ingress.callbackAt <= request.queuedAtUptimeMs &&
+                (ingress.eventAt == null || ingress.eventAt <= ingress.callbackAt) &&
+                (ingress.origin == KeyguardR14Origin.SYSTEM_UI || ingress.origin == KeyguardR14Origin.AMBIGUOUS) &&
+                pending == request && !request.windowFreshness.requiresCacheClear &&
+                op.authority.matches(request) && request.id > follow.successor.id
+            if (eligible) {
+                follow.hint = Hint(request.id, requireNotNull(ingress).id, requireNotNull(externalScene))
+                follow.pending = request
+                if (follow.firstOfferAt == null) {
+                    follow.firstOfferAt = request.queuedAtUptimeMs
+                    follow.firstOfferId = request.id
+                }
+                follow.latestOfferId = request.id
+                follow.latestOfferAt = request.queuedAtUptimeMs
+                follow.latestIngressId = ingress.id
+                follow.latestScene = externalScene
+                follow.origin = ingress.origin.name
+                follow.displaced = previous?.id?.takeIf { it != request.id }
+                followHint = true
+                if (op.postClaim != null) followObservedOffer = true
+            }
+            return
+        }
+        if (op.completedAt != null) return
         val ingress = request.r14Ingress
         val oldHintId = op.hint?.requestId ?: op.previousHintId
         if (oldHintId != null && pending != null && oldHintId != pending.id) {
@@ -273,6 +359,7 @@ internal class KeyguardOpeningInspectionHandoff {
         }
         if (incomplete) op.incompleteYielded += 1
         op.claimedId = successor.id
+        op.followOn = FollowOn(successor)
         claimedRequestId = successor.id
         val originalContext = op.opening.diagnosticContext
         if (observationCaptureId != null && originalContext?.captureId == observationCaptureId &&
@@ -350,7 +437,13 @@ internal class KeyguardOpeningInspectionHandoff {
     private fun postClaimSnapshot(op: Opportunity): PostClaimSnapshot? = op.postClaim?.let {
         PostClaimSnapshot(it.context, op.opening.id, op.reservationId, op.authority, it.claimedId,
             it.ordinal, it.first, it.latest, it.offers, it.replacements,
-            it.bStartedAt, it.bFinishedAt, it.closedReason)
+            it.bStartedAt, it.bFinishedAt, it.closedReason, op.followOn?.let { f ->
+                FollowOnEvidence(f.startScene, f.startedAt, f.firstOfferId, f.firstOfferAt,
+                    f.latestOfferId, f.latestOfferAt, f.latestIngressId, f.origin, f.latestScene,
+                    f.displaced, f.checkpointAt, f.checkpointChildren, f.outcome, f.claimedId,
+                    f.callEnd, f.unwindAt, f.cStart, f.cEnd, f.cResult,
+                    f.childrenAfterOffer.takeIf { f.firstOfferId != null })
+            })
     }
 
     fun readFinished(request: KeyguardCardInspectionRequest, at: Long) {
@@ -363,8 +456,119 @@ internal class KeyguardOpeningInspectionHandoff {
     }
 
     fun invalidate() {
-        current?.let { it.invalidated = true; it.lastReason = it.lastReason ?: "ownerInvalidated"; it.hint = null }
+        current?.let { it.invalidated = true; it.lastReason = it.lastReason ?: "ownerInvalidated"; it.hint = null; it.followOn?.hint = null }
         hasHint = false
+        followHint = false
+        followObservedOffer = false
+    }
+
+    /** Only B's physical read establishes the scene baseline. Call under queueLock. */
+    fun followReadStarted(queue: KeyguardCardInspectionQueue, request: KeyguardCardInspectionRequest,
+                          scene: Long, at: Long) {
+        val op = current ?: return
+        val follow = op.followOn ?: return
+        if (op.invalidated || !op.consumed || follow.consumed || follow.successor != request ||
+            queue.activeRequest() != request || !op.authority.matches(request) || follow.startScene != null) return
+        follow.startScene = scene
+        follow.startedAt = at
+    }
+
+    class FollowHandle internal constructor(
+        internal val token: Any,
+        internal val opening: KeyguardCardInspectionRequest,
+        internal val successor: KeyguardCardInspectionRequest,
+    )
+
+    fun followHandle(request: KeyguardCardInspectionRequest): FollowHandle? = current?.let { op ->
+        val follow = op.followOn
+        if (!op.invalidated && op.consumed && follow != null && !follow.consumed &&
+            follow.successor == request) FollowHandle(op.token, op.opening, request) else null
+    }
+
+    fun hasFollowHint(handle: FollowHandle): Boolean = followHint && claimedRequestId == handle.successor.id
+    fun observesFollowChildren(handle: FollowHandle): Boolean =
+        followObservedOffer && claimedRequestId == handle.successor.id
+    fun noteFollowChild(handle: FollowHandle) {
+        val op = current ?: return
+        val follow = op.followOn ?: return
+        if (op.token === handle.token && follow.successor == handle.successor && !follow.consumed &&
+            op.postClaim != null && follow.firstOfferId != null) follow.childrenAfterOffer += 1
+    }
+
+    /** Caller holds queueLock. C is a complete fresh read, never a partial proof. */
+    fun claimFollow(queue: KeyguardCardInspectionQueue, handle: FollowHandle,
+                    currentToken: Any?, currentRouteRevision: Long, currentScene: Long,
+                    conditions: Conditions, checkpoint: String, at: Long, children: Int): KeyguardCardInspectionRequest? {
+        val op = current ?: return null
+        val follow = op.followOn ?: return null
+        if (op.invalidated || !op.consumed || follow.consumed || op.token !== handle.token ||
+            op.opening != handle.opening || follow.successor != handle.successor || currentToken !== op.token) return null
+        val hint = follow.hint ?: return null
+        if (follow.checkpointAt == null) {
+            follow.checkpointAt = at
+            follow.checkpointChildren = children
+        }
+        val pending = queue.pendingRequest()
+        val reason = when {
+            checkpoint != "beforeChild" -> "checkpoint"
+            queue.activeRequest() != handle.successor || pending != follow.pending -> "queueOwner"
+            currentRouteRevision != op.routeRevision || !conditions.routeCurrent || !conditions.reservationCurrent -> "route"
+            !conditions.authorityCurrent || !op.authority.matches(handle.successor) || pending == null ||
+                !op.authority.matches(pending) -> "authority"
+            !conditions.hostSafe || !conditions.grantNone || !conditions.noPaint ||
+                !conditions.noVisibleOrShowing || !conditions.virginDirect || !conditions.noRetainedProof -> "presentation"
+            !conditions.freshnessEstablished || pending.windowFreshness.requiresCacheClear -> "freshness"
+            !conditions.noObservedDisqualifier || !conditions.workRemaining -> "inventory"
+            follow.startScene == null || hint.scene <= requireNotNull(follow.startScene) || hint.scene != currentScene -> "scene"
+            pending.id != hint.requestId || pending.r14Ingress?.id != hint.ingressId -> "replaced"
+            else -> null
+        }
+        if (reason != null) { follow.outcome = reason; return null }
+        val promoted = queue.handoffOpening(handle.successor, requireNotNull(pending))
+            ?: run { follow.outcome = "queueChanged"; return null }
+        follow.consumed = true
+        follow.claimedId = promoted.id
+        follow.outcome = "YIELDED_TO_C"
+        follow.hint = null
+        follow.pending = null
+        followHint = false
+        followObservedOffer = false
+        return promoted
+    }
+
+    /** Close only B's exact follow-on; it can never be re-armed by a later event. */
+    fun followReadFinished(request: KeyguardCardInspectionRequest, at: Long, callEnd: Long?,
+                           reason: String): PostClaimSnapshot? {
+        val op = current ?: return null
+        val follow = op.followOn ?: return null
+        if (follow.successor != request || !op.authority.matches(request)) return null
+        follow.unwindAt = at
+        follow.callEnd = callEnd
+        if (!follow.consumed) {
+            follow.consumed = true
+            follow.outcome = follow.outcome ?: when {
+                reason == "CANCELLED" -> reason
+                follow.firstOfferId == null -> "NO_ELIGIBLE_OFFER"
+                follow.checkpointAt == null -> "NOT_REACHED"
+                else -> reason
+            }
+            follow.hint = null
+            follow.pending = null
+            followHint = false
+            followObservedOffer = false
+        }
+        op.postClaim?.let { it.ordinal = ++nextObservationOrdinal }
+        return postClaimSnapshot(op)
+    }
+
+    fun followCObservation(request: KeyguardCardInspectionRequest, at: Long, result: String?): PostClaimSnapshot? {
+        val op = current ?: return null
+        val follow = op.followOn ?: return null
+        if (follow.claimedId != request.id || !op.authority.matches(request)) return null
+        if (result == null) { if (follow.cStart == null) follow.cStart = at }
+        else { follow.cEnd = at; follow.cResult = result }
+        op.postClaim?.let { it.ordinal = ++nextObservationOrdinal }
+        return postClaimSnapshot(op)
     }
 
     /** A lightweight immutable handle for the particular original walk. */
@@ -386,8 +590,12 @@ internal class KeyguardOpeningInspectionHandoff {
     } == true
 
     /** Captures the original owner; later wakes cannot relabel an old call. */
-    fun ingressReader(request: KeyguardCardInspectionRequest): (() -> Long)? =
-        current?.takeIf { it.opening == request }?.let { owner -> { owner.firstIngressForReader } }
+    fun ingressReader(request: KeyguardCardInspectionRequest): (() -> Long)? {
+        val owner = current ?: return null
+        if (owner.opening == request) return { owner.firstIngressForReader }
+        val follow = owner.followOn ?: return null
+        return if (follow.successor == request && owner.postClaim != null) { { follow.firstIngressForReader } } else null
+    }
 
     fun snapshotForSuccessor(request: KeyguardCardInspectionRequest): Snapshot? = current?.let {
         val exact = it.claimedId ?: it.latestOfferedId

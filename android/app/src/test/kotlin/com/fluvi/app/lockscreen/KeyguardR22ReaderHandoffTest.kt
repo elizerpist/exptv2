@@ -376,6 +376,110 @@ class KeyguardR22ReaderHandoffTest {
         assertEquals(KeyguardSurface.MAIN_KEYGUARD, KeyguardSurfaceClassifier.classify(fresh.snapshots))
     }
 
+    @Test fun r31ObsoleteSuccessorTransfersOnlyAtConsumedChildBoundary() {
+        tree()
+        val h = Handoff()
+        h.offerB()
+        assertEquals(h.b, h.gate.claim(h.queue, h.a, h.token, 9, h.scene, h.safe,
+            "afterChild", 21))
+        h.gate.followReadStarted(h.queue, h.b, h.scene, 22)
+        val handle = requireNotNull(h.gate.followHandle(h.b))
+        val c = h.request(3, true)
+        var boundaries = 0
+        Platform.afterChild = { index ->
+            if (index == 0) {
+                Platform.afterChild = null
+                h.scene = 12
+                h.gate.externalInvalidation(h.scene, 30)
+                assertFalse(h.queue.offer(c))
+                h.gate.offered(c, h.queue.pendingRequest(), h.scene, h.scene, true)
+            }
+        }
+        val readingB = KeyguardWindowSnapshotReader.Request(null, 5,
+            openingYieldHint = { h.gate.hasFollowHint(handle) },
+            followOnOpening = true,
+            claimOpeningYield = { checkpoint, reason, boundary, inventory, _, _, children ->
+                boundaries++
+                if (reason != KeyguardOpeningYieldReason.CLEAN_OPENING) null else
+                    h.gate.claimFollow(h.queue, handle, h.token, 9, h.scene,
+                        h.safe.copy(freshnessEstablished = boundary, noObservedDisqualifier = inventory,
+                            virginDirect = true, noRetainedProof = true), checkpoint, 31, children)
+            })
+        val result = reader.read(readingB, { true })
+        assertTrue("B reached a clean post-child boundary with remaining work", boundaries > 0)
+        assertEquals("the current pending C must own the only reader", c, result.yieldedTo)
+        assertTrue("partial B cannot be classified", result.snapshots.isEmpty())
+        assertEquals(listOf(0), Platform.childCalls)
+        assertEquals(c, h.queue.activeRequest())
+    }
+
+    @Test fun r31ReturnedShadeMarkerPreventsTransfer() {
+        tree(first = shadeMarker)
+        val h = Handoff(); h.offerB()
+        assertEquals(h.b, h.gate.claim(h.queue, h.a, h.token, 9, h.scene, h.safe, "afterChild", 21))
+        h.gate.followReadStarted(h.queue, h.b, h.scene, 22)
+        val handle = requireNotNull(h.gate.followHandle(h.b))
+        val c = h.request(3, true)
+        Platform.afterChild = { index -> if (index == 0) {
+            Platform.afterChild = null; h.scene = 12; h.gate.externalInvalidation(h.scene, 30)
+            h.queue.offer(c); h.gate.offered(c, h.queue.pendingRequest(), h.scene, h.scene, true)
+        } }
+        var decisive = 0
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+            openingYieldHint = { h.gate.hasFollowHint(handle) }, followOnOpening = true,
+            onDecisiveSystemMarker = { decisive++ },
+            claimOpeningYield = { checkpoint, reason, boundary, inventory, _, _, children ->
+                if (reason != KeyguardOpeningYieldReason.CLEAN_OPENING) null else
+                    h.gate.claimFollow(h.queue, handle, h.token, 9, h.scene,
+                        h.safe.copy(freshnessEstablished = boundary, noObservedDisqualifier = inventory,
+                            virginDirect = true, noRetainedProof = true), checkpoint, 31, children)
+            }), { true })
+        assertEquals(1, decisive); assertNull(read.yieldedTo)
+        assertEquals(KeyguardSurface.SHADE, KeyguardSurfaceClassifier.classify(read.snapshots))
+        assertEquals(h.b, h.queue.activeRequest()); assertEquals(c, h.queue.pendingRequest())
+    }
+
+    @Test fun r31NullChildCannotUseTheOriginalIncompleteOpeningException() {
+        tree(); val h = Handoff(); h.offerB()
+        assertEquals(h.b, h.gate.claim(h.queue, h.a, h.token, 9, h.scene, h.safe, "afterChild", 21))
+        h.gate.followReadStarted(h.queue, h.b, h.scene, 22)
+        val handle = requireNotNull(h.gate.followHandle(h.b)); val c = h.request(3, true)
+        Platform.nullIndices = setOf(0)
+        Platform.afterChild = { index -> if (index == 0) {
+            Platform.afterChild = null; h.scene = 12; h.gate.externalInvalidation(h.scene, 30)
+            h.queue.offer(c); h.gate.offered(c, h.queue.pendingRequest(), h.scene, h.scene, true)
+        } }
+        var claims = 0
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+            openingYieldHint = { h.gate.hasFollowHint(handle) }, followOnOpening = true,
+            claimOpeningYield = { _, _, _, _, _, _, _ -> claims++; c }), { true })
+        assertNull(read.yieldedTo); assertTrue(read.walkTruncated); assertEquals(0, claims)
+        assertEquals(h.b, h.queue.activeRequest()); assertEquals(c, h.queue.pendingRequest())
+        assertEquals(KeyguardSurface.UNKNOWN, KeyguardSurfaceClassifier.classifyDetailed(read.snapshots,
+            unavailableRoot = read.rootUnavailable, walkTruncated = read.walkTruncated).surface)
+    }
+
+    @Test fun r31DifferentSystemPackageIsNotAnAcceptedSystemUiRoot() {
+        val nodes = tree(); val root = checkNotNull(Platform.nodes[nodes.first])
+        Platform.nodes[nodes.first] = root.copy(pkg = "com.android.keyguard")
+        val h = Handoff(); h.offerB()
+        assertEquals(h.b, h.gate.claim(h.queue, h.a, h.token, 9, h.scene, h.safe, "afterChild", 21))
+        h.gate.followReadStarted(h.queue, h.b, h.scene, 22)
+        val handle = requireNotNull(h.gate.followHandle(h.b)); val c = h.request(3, true)
+        Platform.afterChild = { index -> if (index == 0) {
+            Platform.afterChild = null; h.scene = 12; h.gate.externalInvalidation(h.scene, 30)
+            h.queue.offer(c); h.gate.offered(c, h.queue.pendingRequest(), h.scene, h.scene, true)
+        } }
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+            openingYieldHint = { h.gate.hasFollowHint(handle) }, followOnOpening = true,
+            claimOpeningYield = { checkpoint, _, boundary, inventory, _, _, children ->
+                h.gate.claimFollow(h.queue, handle, h.token, 9, h.scene,
+                    h.safe.copy(freshnessEstablished = boundary, noObservedDisqualifier = inventory,
+                        virginDirect = true, noRetainedProof = true), checkpoint, 31, children)
+            }), { true })
+        assertNull(read.yieldedTo); assertEquals(h.b, h.queue.activeRequest()); assertEquals(c, h.queue.pendingRequest())
+    }
+
     @Test fun missingChildCannotProduceACompletePositive() {
         tree()
         Platform.missingChild = true
