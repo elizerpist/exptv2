@@ -447,7 +447,7 @@ internal class KeyguardR22FirstInspectionFixture {
             }
 
             shell("input keyevent KEYCODE_SLEEP")
-            if (r32) {
+            if (r32 || r34) {
                 // Doze and keyguard reporting need not become true together.
                 // The wake still requires interactive AND locked, and A is
                 // held until the independent complete SystemUI tree exists.

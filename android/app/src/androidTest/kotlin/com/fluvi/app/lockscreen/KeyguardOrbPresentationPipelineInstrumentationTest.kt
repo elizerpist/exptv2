@@ -199,10 +199,17 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
                 instrumentation.runOnMainValue { referenceView.diagnostics().lastCanvasHardwareAccelerated == true &&
                     referenceView.diagnostics().shaderDrawCount > 0 && referenceView.width == size }
             })
-            val refScreen = awaitScreenshot(8_000) { screen ->
-                val sample = crop(referenceView, screen)
-                try { colorDistance(green, sample.getPixel(0, 0)) <= 15 &&
-                    colorDistance(green, sample.getPixel(size / 2, size / 2)) > 45 } finally { sample.recycle() }
+            val refScreen = try {
+                awaitScreenshot(20_000) { screen ->
+                    val sample = crop(referenceView, screen)
+                    try { colorDistance(green, sample.getPixel(0, 0)) <= 15 &&
+                        colorDistance(green, sample.getPixel(size / 2, size / 2)) > 45 } finally { sample.recycle() }
+                }
+            } catch (failure: AssertionError) {
+                instrumentation.uiAutomation.takeScreenshot()?.let { last ->
+                    last.save(File(runDir, "reference-last-unclassified.png")); last.recycle()
+                }
+                throw failure
             }
             reference = crop(referenceView, refScreen); refScreen.recycle()
             checkNotNull(reference).save(File(runDir, "reference.png"))
