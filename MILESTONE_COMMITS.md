@@ -1,5 +1,12 @@
 # Milestone commits
 
+## 2026-11-23 — Faster lockscreen ORB appearance on the owner's stock Android phone
+
+- **Protected behavior.** The owner tested `de807259cd370d18e422772ed0943b8d65be4bca` on a Nothing A142 running Android API 35 and reported that the ORB appeared faster on wake. Use this exact build as the phone-tested comparison and rollback point for opening speed. The owner wants further improvement.
+- **Scope of acceptance.** Faster perceived opening is accepted. Visible withdrawal on unlock still lags. The requested immediate opening and withdrawal, including the three physical 10 ms ceilings, remain open. Retain correct FULL material, privacy through shade/credentials and fast relock as explicit regression checks.
+- **Reproduction identity.** Profile HUMAN_DIAGNOSTIC, ordinary ORB, orbOnly, FULL, keyguard only. Capture `a5caf6ab-c255-4346-acde-ce35aae33b8a` at 07:57 on 2026-11-23 (Europe/Budapest). App parent `9d9444795ea34e64525e990f5c08d1b655a6fdaf`. APK SHA-256 `057406296e14bb10c6dbe6ae94e5f6d7564bed02a89c8787bf23c4b9b6fec773`. [Application commit](https://github.com/elizerpist/exptv2/commit/de807259cd370d18e422772ed0943b8d65be4bca)
+- **Comparison evidence.** Four detailed stock DIRECT wakes (1, 3, 4, 5) returned from native reveal 356, 407, 342 and 320 ms after the app wake callback. Capture truncation, unobserved physical endpoints and unpaired runs prevent a quantified optical gain or attribution to one code change. The experimental SystemUI host did not render these episodes. The open R22.4 privacy result is tracked independently.
+
 ## 2026-09-10 — Avatar render-pacing physical performance milestone
 
 - Behavioural milestone:
