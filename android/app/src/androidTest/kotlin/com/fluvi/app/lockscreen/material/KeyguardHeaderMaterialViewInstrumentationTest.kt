@@ -48,6 +48,7 @@ import com.fluvi.app.lockscreen.resolveKeyguardCardGeometry
 import com.fluvi.app.R
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import java.io.File
@@ -4098,6 +4099,49 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
+    /** Independent observation of the original regression with the exact
+     * producer use watched: the time-source request can also tag B. */
+    @Test fun r34ExactRetiredReadyCannotSubmitIntoReplacement() {
+        withOrbRetirementFixture("r34-exact-stale-ready") { fixture ->
+            var attachmentA = 0L
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.hide())
+                attachmentA = fixture.window.currentAttachGeneration + 1L
+            }
+            fixture.holdReady(attachmentA)
+            val reusedRequest = fixture.prepareFirst(PHASE_A)
+            fixture.instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+            }
+            val old = fixture.awaitReady(attachmentA).frame
+            assertEquals(attachmentA, old.lease.attachment)
+            assertFalse("held old frame was already submitted", fixture.hasSubmitted(reusedRequest))
+            fixture.watchExactSubmission(old)
+            var attachmentB = 0L
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.hide())
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+                attachmentB = fixture.window.currentAttachGeneration
+            }
+            fixture.deliverReady(attachmentA)
+            val replacement = fixture.submitted(reusedRequest)
+            assertEquals("the shared time-source request must now belong to B", attachmentB, replacement.lease.attachment)
+            val drained = fixture.ownership.awaitLease("lease-drained", old.lease)
+            assertTrue(drained.slots.none { it.lease == old.lease && it.state != "FREE" })
+            assertFalse("retired A's exact lease/slot/use was submitted", fixture.hasExactSubmission())
+            android.util.Log.i("FluviR34ExactReady", "old=${old.lease.attachment}/${old.lease.generation}/${old.slotId}/${old.useGeneration} " +
+                "replacement=${replacement.lease.attachment}/${replacement.lease.generation}/${replacement.slotId}/${replacement.useGeneration}")
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.isAttached)
+                assertEquals(attachmentB, fixture.window.currentAttachGeneration)
+                assertFalse(fixture.hides.any { it.attachment == attachmentB })
+            }
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
+
     @Test fun isolatedOrbPreApplyFailureAndPostTransferObserverFailureHaveDifferentOwnership() {
         withOrbRetirementFixture("first-pre-apply-failure") { fixture ->
             var attachment = 0L
@@ -4957,6 +5001,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         fun prepareFirst(phase: Float): Long = request(phase)
         fun submitted(requestId: Long): KeyguardOrbBufferProducerFrame = submissions.await(requestId)
         fun hasSubmitted(requestId: Long): Boolean = submissions.hasSubmitted(requestId)
+        fun watchExactSubmission(frame: KeyguardOrbBufferProducerFrame) = submissions.watchExact(frame)
+        fun hasExactSubmission(): Boolean = submissions.hasExactSubmission()
         fun holdReady(attachment: Long) { readyAttachment.set(attachment) }
         fun failBeforeApply(attachment: Long) { failBeforeAttachment.set(attachment) }
         fun failAfterTransfer(attachment: Long) { failAfterAttachment.set(attachment) }
@@ -5667,6 +5713,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
     /** Waits for Main to submit the exact frame identity. It intentionally
      * does not reinterpret submission as physical presentation. */
     private class SubmittedFrameTracker : KeyguardOrbBufferPublicationObserver {
+        private val exactWatch = AtomicReference<KeyguardOrbBufferProducerFrame?>()
+        private val exactSubmitted = AtomicBoolean(false)
         private val expectedPhases = java.util.concurrent.ConcurrentHashMap<Long, Float>()
         private val latches = java.util.concurrent.ConcurrentHashMap<Long, CountDownLatch>()
         private val submitted = java.util.concurrent.ConcurrentHashMap<Long, KeyguardOrbBufferProducerFrame>()
@@ -5679,6 +5727,10 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
 
         override fun onSubmitted(frame: KeyguardOrbBufferProducerFrame) {
+            exactWatch.get()?.let { old ->
+                if (old.lease == frame.lease && old.slotId == frame.slotId && old.useGeneration == frame.useGeneration)
+                    exactSubmitted.set(true)
+            }
             val requestId = frame.testRequestId ?: return
             if (expectedAttachments[requestId]?.let { it != frame.lease.attachment } == true) return
             val expectedPhase = expectedPhases[requestId] ?: return
@@ -5693,6 +5745,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
 
         fun hasSubmitted(requestId: Long): Boolean = submitted.containsKey(requestId)
+        fun watchExact(frame: KeyguardOrbBufferProducerFrame) { exactWatch.set(frame) }
+        fun hasExactSubmission(): Boolean = exactSubmitted.get()
     }
 
     /** Adapts only the privileged overlay token to the test Activity's panel
