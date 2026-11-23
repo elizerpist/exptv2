@@ -45,7 +45,9 @@ internal class KeyguardR22FirstInspectionFixture {
     private lateinit var automation: UiAutomation
 
     fun run(scenario: String) {
-        require(scenario in setOf("positive", "negative", "stable", "natural", "automation"))
+        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative"))
+        val r31 = scenario == "r31_system" || scenario == "r31_ambiguous" || scenario == "r31_negative"
+        val negativeScene = scenario == "negative" || scenario == "r31_negative"
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -110,6 +112,15 @@ internal class KeyguardR22FirstInspectionFixture {
         val nextChild = AtomicBoolean(false)
         val recordObservation = AtomicReference<KeyguardR15AcquisitionTestHooks.Observation?>()
         val bFinished = CountDownLatch(1)
+        val cFinished = CountDownLatch(1)
+        val secondOfferAt = AtomicLong(0L)
+        val c = AtomicLong(0L)
+        val bYieldedTo = AtomicLong(0L)
+        val cThread = AtomicLong(0L)
+        val bChildHeld = AtomicBoolean(false)
+        val secondOffered = AtomicBoolean(false)
+        val bCallsAfterOffer = AtomicLong(0L)
+        val resultC = AtomicReference<String?>()
         val bEntered = CountDownLatch(1)
         val releaseB = CountDownLatch(1)
         val realNegativeEvent = CountDownLatch(1)
@@ -204,6 +215,7 @@ internal class KeyguardR22FirstInspectionFixture {
                                 entryTimedOut.set(true); records.add("A_ENTRY_TIMEOUT")
                             }
                         }
+                        if (request.id == bYieldedTo.get() && request.id != 0L) cThread.set(Thread.currentThread().id)
                         if (request.id == yieldedTo.get() && request.id != 0L) {
                             bThread.set(Thread.currentThread().id)
                             bStarted.countDown()
@@ -236,7 +248,7 @@ internal class KeyguardR22FirstInspectionFixture {
                         }
                     }
                     override fun openingEligibleCheckpoint(request: KeyguardCardInspectionRequest, windowId: Int, nextIndex: Int) {
-                        if (scenario in setOf("positive", "negative", "stable") && request == a.get() &&
+                        if ((r31 || scenario in setOf("positive", "negative", "stable")) && request == a.get() &&
                             firstChildObserved.get() && windowId.toLong() == independentWindowId.get() &&
                             firstChildHeld.compareAndSet(false, true)) {
                             records.add("A_ELIGIBLE_CHECKPOINT id=${request.id} window=$windowId next=$nextIndex at=${SystemClock.uptimeMillis()}")
@@ -258,6 +270,10 @@ internal class KeyguardR22FirstInspectionFixture {
                             yieldedTo.set(successor.id)
                             records.add("YIELDED A=${request.id} B=${successor.id} start=$startedAt end=$finishedAt visited=$visited")
                             completed.countDown()
+                        } else if (r31 && request.id == yieldedTo.get() && request.id != 0L) {
+                            bYieldedTo.set(successor.id)
+                            records.add("R31_YIELDED B=${request.id} C=${successor.id} start=$startedAt end=$finishedAt visited=$visited")
+                            bFinished.countDown()
                         }
                     }
                     override fun readCompleted(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
@@ -272,6 +288,10 @@ internal class KeyguardR22FirstInspectionFixture {
                         if (request.id == yieldedTo.get() && request.id > 0L) {
                             resultB.set("B:$decision/$reason/$rootUnavailable/$walkTruncated/$abortedStale")
                             bFinished.countDown()
+                        }
+                        if (r31 && request.id == bYieldedTo.get() && request.id > 0L) {
+                            resultC.set("C:$decision/$reason/$rootUnavailable/$walkTruncated/$abortedStale")
+                            cFinished.countDown()
                         }
                         if (negativeArmed.get() && !abortedStale && decision in setOf(
                                 KeyguardCardVisibility.HIDDEN_SHADE, KeyguardCardVisibility.HIDDEN_CREDENTIAL,
@@ -295,12 +315,34 @@ internal class KeyguardR22FirstInspectionFixture {
                             records.add("REAL_NEGATIVE_PENDING id=${request.id} window=${meta.windowId} previous=${previous?.id} at=${SystemClock.uptimeMillis()}")
                             realNegativePending.countDown()
                         }
-                        if (!frameworkEvent && meta.eventTimeUptimeMs == injectedAt.get()) {
+                        if (r31 && !frameworkEvent && secondOfferAt.get() != 0L && meta.eventTimeUptimeMs == secondOfferAt.get()) {
+                            c.set(request.id)
+                            records.add("R31_C_OFFER id=${request.id} pending=${pending?.id} origin=${request.r14Ingress?.origin} previous=${previous?.id} at=${SystemClock.uptimeMillis()}")
+                            if (pending?.id == request.id && !startsWorker) secondOffered.set(true)
+                        }
+                        if (!frameworkEvent && meta.eventTimeUptimeMs == injectedAt.get() &&
+                            (!r31 || secondOfferAt.get() == 0L)) {
                             b.set(request.id)
                             records.add("B_OFFER id=${request.id} pending=${pending?.id} activeWorker=${!startsWorker} " +
                                 "wake=${request.wakeGeneration} at=${SystemClock.uptimeMillis()} framework=false")
                             if (pending?.id == request.id && !startsWorker) afterB.set(true)
                         }
+                    }
+                }
+            }
+            if (r31) {
+                KeyguardR15AcquisitionTestHooks.beforeChildCall = { request, window, index ->
+                    if (request.id == yieldedTo.get() && secondOffered.get()) {
+                        bCallsAfterOffer.incrementAndGet()
+                        records.add("R31_B_CHILD_AFTER_C window=$window index=$index at=${SystemClock.uptimeMillis()}")
+                    }
+                }
+                KeyguardR15AcquisitionTestHooks.afterReturnedChild = { request, window, index, present, _ ->
+                    if (request.id == yieldedTo.get() && request.id != 0L && present &&
+                        window.toLong() == independentWindowId.get() && bChildHeld.compareAndSet(false, true)) {
+                        records.add("R31_B_CHILD_RETURN id=${request.id} window=$window index=$index at=${SystemClock.uptimeMillis()}")
+                        bEntered.countDown()
+                        if (!releaseB.await(20, TimeUnit.SECONDS)) { bEntryTimedOut.set(true); records.add("R31_B_CHILD_TIMEOUT") }
                     }
                 }
             }
@@ -435,7 +477,28 @@ internal class KeyguardR22FirstInspectionFixture {
                 assertTrue("NOT REACHED: claimed B did not physically start", bStarted.await(15, TimeUnit.SECONDS))
                 assertEquals("B must run on the same physical reader", aThread.get(), bThread.get())
                 assertFalse("A requested another child after B was claimed", nextChild.get())
-                if (scenario == "negative") {
+                if (r31 && !negativeScene) {
+                    assertTrue("NOT REACHED: B did not return a real SystemUI child", bEntered.await(15, TimeUnit.SECONDS))
+                    instrumentation.runOnMainSync {
+                        val now = SystemClock.uptimeMillis(); secondOfferAt.set(now)
+                        val window = if (scenario == "r31_system") independentWindowId.get().toInt() else -1
+                        service.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
+                            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, window, Display.DEFAULT_DISPLAY, 0,
+                            "com.android.systemui", now))
+                    }
+                    assertTrue("NOT REACHED: controlled C was not the actual pending occupant", secondOffered.get())
+                    assertFalse("NOT REACHED: B child barrier expired", bEntryTimedOut.get())
+                    releaseB.countDown()
+                    assertTrue("NOT REACHED: B neither yielded nor completed", bFinished.await(20, TimeUnit.SECONDS))
+                    records.add("R31_B_TERMINAL result=${resultB.get()} yield=${bYieldedTo.get()} afterC=${bCallsAfterOffer.get()}")
+                    if (bYieldedTo.get() == 0L) assertEquals("NOT REACHED: B did not finish a complete FULL read",
+                        "B:SHOW_FULL/MAIN_CONFIRMED/false/false/false", resultB.get())
+                    assertEquals("R31 RED: B continued instead of transferring to the actual C", c.get(), bYieldedTo.get())
+                    assertEquals("B acquired another child after C was offered", 0L, bCallsAfterOffer.get())
+                    assertTrue("NOT REACHED: promoted C did not finish", cFinished.await(20, TimeUnit.SECONDS))
+                    assertEquals("NOT REACHED: C did not return complete MAIN/FULL", "C:SHOW_FULL/MAIN_CONFIRMED/false/false/false", resultC.get())
+                    assertEquals("C must use the one physical reader", aThread.get(), cThread.get())
+                } else if (negativeScene) {
                     assertTrue("NOT REACHED: claimed B did not reach the real read-entry boundary", bEntered.await(15, TimeUnit.SECONDS))
                     negativeArmed.set(true)
                     File(dir, "shade-command.txt").writeText(shell("cmd statusbar expand-notifications"))
@@ -471,10 +534,10 @@ internal class KeyguardR22FirstInspectionFixture {
                         "B:SHOW_FULL/MAIN_CONFIRMED/false/false/false", resultB.get())
                 }
             }
-            if (scenario != "negative") {
+            if (!negativeScene) {
                 await("NOT REACHED: exact direct reveal was not submitted", 15_000) {
                     val current = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
-                    val winner = if (scenario == "stable") original.id else b.get()
+                    val winner = if (scenario == "stable") original.id else if (r31) c.get() else b.get()
                     current.lineSequence().any { line ->
                         line.startsWith(" R21_CORE ") && line.contains("/ACCEPTED ingress=") &&
                             line.contains(" reservation=${reservation.get()} ") && line.contains(" consumedReq=$winner ")
@@ -492,17 +555,17 @@ internal class KeyguardR22FirstInspectionFixture {
                 assertTrue(core.contains("outcome=YIELDED/"))
                 assertTrue(core.contains("claimed=${yieldedTo.get()}@"))
                 assertFalse("a yielded A must have no completion classification", core.contains("aResult=SHOW_FULL"))
-                if (scenario == "negative") {
+                if (negativeScene) {
                     val post = checkNotNull(observedPostClaim.get()) { "NOT REACHED: no observed post-claim pending item" }
                     assertTrue("protected core lost the actual first post-claim request", core.contains("postFirst=${post.first?.id}@"))
                     assertTrue("post-claim identity belongs to another reservation", post.reservationId == reservation.get())
                 }
             }
-            if (scenario != "negative") {
+            if (!negativeScene) {
                 val visual = checkNotNull(calibration)
                 val identity = checkNotNull(visualIdentity)
                 val underlay = checkNotNull(visualUnderlay)
-                val winner = if (scenario == "stable") original.id else b.get()
+                val winner = if (scenario == "stable") original.id else if (r31) c.get() else b.get()
                 val winningCore = snapshot.lineSequence().singleOrNull { it.startsWith(" R21_CORE ") &&
                     it.contains(" reservation=${reservation.get()} ") && it.contains(" consumedReq=$winner ") }
                 assertNotNull("NOT REACHED: no exact protected winner", winningCore)
@@ -588,7 +651,7 @@ internal class KeyguardR22FirstInspectionFixture {
             }.onFailure { errors += "underlayEvidence:${it.javaClass.simpleName}:${it.message}" }
             visualUnderlayFull?.recycle()
             visualUnderlay?.recycle()
-            if (scenario == "negative") runCatching { shell("cmd statusbar collapse") }
+            if (negativeScene) runCatching { shell("cmd statusbar collapse") }
             KeyguardR15AcquisitionTestHooks.afterReturnedChild = null
             KeyguardR15AcquisitionTestHooks.beforeChildCall = null
             KeyguardR15AcquisitionTestHooks.observer = null
