@@ -18110,3 +18110,150 @@ The additional exact-source independent [API35 visual batch 45194281850](https:/
 The independent full JVM runner [45196707490](https://github.com/elizerpist/pushparserv2/actions/runs/45196707490), artifact `14830126648`, passed 347/347 app tests and 150/150 core tests with zero skipped, as counted from XML. The local ENOSPC and two local SIGBUS crashes remain failures in the record. Both unheld runs retained all 24 trials: 22 failed to reach acknowledged DIRECT and two separate baseline samples were unscored; no retained R32_CORE overlap row or matched R32 winner was observed. There is no measured performance improvement. The physical phone endpoints and acceptance remain **PENDING, USER ONLY**.
 
 All visual samples, JVM XML, failed logs and A/B/B/A archives are access-controlled in `elizerpist/pushparserv2`, branch `evidence/r32-first-frame` at `3fde513` or its descendants; `docs/R32_FIRST_FRAME_REPORT.md` contains exact per-background categories, sample intervals, source and artifact links. The partial SystemUI reference remains incomplete and disabled: an actual publisher, exclusive handover, EMPTY receipt, lockscreen draw and synchronous restriction path have not been implemented or verified. No full AOSP build, boot or reference-frame/physical result is claimed. Further reviewer action is required for the S1 fixture, visual privacy failure and H integration; no extra runtime hypothesis was introduced.
+
+## 2026-11-23 — R32 handset rejects the ordinary-APK opening; R33 cached first-frame design
+
+The owner tested R32, reports continued visible lag, and retains the 10 ms maximum. W-SHOW is physically rejected on this build. W-HIDE has new software timings but no new owner verdict. W-LOCK-ANIM/W-HOME-ANIM have no new acceptance. The stock R32 overlap actually ran on the handset. All four retained B reads returned SHOW_FULL but failed revalidation. A later proof supplied each reveal. The prior report's absence of an R32 phone capture was true at its publication and is superseded by this entry. The owner prefers an ordinary install across manufacturers; this review authorizes no migration of the owner's phone or substitute reference-only APK. The full design and its deployment limit follow.
+
+FLUVI_R33_ORB_FIRST_FRAME_BEGIN
+
+# Fluvi R33 — Display the cached ORB in the first eligible lockscreen frame
+
+## 1. Title / task intent
+
+IMPLEMENTATION design, W-SHOW. One objective: put the correct pre-rendered FULL ORB in the ordinary lockscreen's first eligible displayed frame and preserve exclusion at the first restrictive frame. The owner rejected R32 for persistent lag on stock Android. Do not ship another stock scheduling or bitmap-only change as the answer to the 10 ms requirement. Distribution boundary: the owner requests ordinary installable Android software. No universal public ordinary-keyguard frame integration is established. The contract below is executable for the existing paired AOSP reference only if that separate platform scope is selected and supported. A reference result is not a fix delivered to the owner's factory phone. No system install, phone flashing or paid runner provisioning is authorized by this handoff.
+
+## 2. Authoritative application state
+
+elizerpist/exptv2. Read coordination branch fix/orb-v4-latency-lockscreen, reviewed documentation HEAD 441e4286ded6db6eddeb9b295611ef85a289e27e. Handset/application 14e05315520ff3282348838804ff6e004c677d30, implement/r32-first-frame, parent 5b18235f261df24dcee06cf3050e3e20411612fa. Experimental profile HUMAN_DIAGNOSTIC, 120867326 bytes, SHA-256 b51b1d57358f92d86be88a2fd66819dde3cf91e73faa6a636dd47a7cf6bee802. LFS pointer at 1070c3aff750ebf30f69c1bcb622901e0085ceae matches. Preferred opening comparator de807259cd370d18e422772ed0943b8d65be4bca. Reference-only code e6df9043cb1a879d1f28a3128ee01a543cb8e59b is a child of the tested app. It was absent from the tested APK. Platform pin frameworks/base 99b01a65cc4c104933788b3143285ab6bae65827, android-16.0.0_r1.
+
+## 3. Hard preflight
+
+Read the complete project assets project_sources/02-FLUVI_PROMPT_WRITER_RULES-1-.md (v2.1, ebf3629b7f723113ea9f13a89fc37c52ec2f9a4db2fc4e64b901dc1a622b61f2), project_sources/01-FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM-1-.md (v1.2, c777abadfdfd6c778a37b7448cc8b7943a1ca3a086676e7b47360be008f62f4b) and project_sources/03-DEBUGGING_LOOP_VERY_IMPORTANT.txt (5d85bad2c00e4a6ab680b843fe68cb9265dccb7d2af3e6acbe5d9e9528d4c674). Portable exact assets are recorded in the FLUVI_RULE_ASSET_BEGIN/END blocks in docs/FLUVI_ENGINEERING_JOURNAL.md at 161f63675121302432be2026898bed07b23d7ded. Read the full current coordination journal, root MILESTONE_COMMITS.md, R18–R22 presentation decisions, R24 and R28 host decisions, R29/29.1, R30 rejection, R31, R32 handoff and both R32 qualification entries, docs/R32_FIRST_FRAME_REPORT.md and platform/aosp16/README.md.
+
+    git fetch origin fix/orb-v4-latency-lockscreen implement/r32-first-frame implement/r32-systemui-reference tooling/r32-stock-14e05315520f tooling/r32-host-e6df9043cb1a
+    git status --short --branch
+    git ls-remote --heads origin fix/orb-v4-latency-lockscreen implement/r32-first-frame implement/r32-systemui-reference
+    git show -s --format='%H %P %s' 14e05315 e6df9043
+    git diff --stat 14e05315 e6df9043
+
+Use separate source and coordination worktrees. If only a stock APK is in scope, disposition is STOCK FIRST-FRAME CONTRACT UNAVAILABLE on this route. Do not open another app-only CI cycle for this design. The reference has no verified full platform build/boot lane in R32. Require evidence of an available authorized runner and a bootable, writable **reference target**, separately from Android APK CI, before booking platform qualification. Read-only design and independent source checks can proceed. Reviewer owns causal interpretation and architectural changes. Return contradictory source/test evidence to the reviewer.
+
+## 4. Physical evidence
+
+Owner reports visible lag on the R32 APK. No approval, matched device comparison, optical latency, new flicker finding or new unlock verdict. de807259 was preferred for opening only. Preserve animation continuity, layout, configured mode/scope/palette, privacy and withdrawal. Keep the launcher widget and the app dashboard out of the change.
+
+## 5. Drive log audit
+
+Source: native Google document titled Orb, owner-supplied link, modified 2026-11-23 16:13:56 CET. One tab, one complete frozen report envelope, capture 2ba986ac-3f9f-4b74-ba9d-6175c2bf054e, started 16:01:49 CET, 24.437 s, process 10303-7f0c376a, Nothing A142/API 35, LIGHT, ORB/orbOnly/full, foreground/background off. Capture text returned via Drive as UTF-8 with BOM and CRLF, 31807 bytes, SHA-256 fc4fc506452ee104698ebedad1579d04d7407841f82fcadbb2e484cabd526a12. The native tab matches after newline/BOM normalization. This digest identifies the retrieved representation. The capture itself reports exportBytes=31664. Do not describe the digest as a hash of an original phone file. 1212 recorded, 247 retained, 765 evicted, 200 diagnostic drops, 65 evidence records and 247 raw event lines omitted. Six openings/warm hits in the aggregate; four detailed R26_DIRECT/R32_CORE pairs (1,4,5,6). Use same-capture, same-attempt joins. Never count a summary and a core as two openings.
+
+| Attempt | Wake → first paint authorization | Worker entry → first post | Wake → consumed reveal proof | Wake → native reveal return | R32 successor → final proof request |
+|---|---:|---:|---:|---:|---|
+| 1 | 923 ms | 5.489 ms | 1389 ms | 1428 ms | 9 → 17 |
+| 4 | 474 ms | 7.145 ms | 488 ms | 520 ms | 88 → 89 |
+| 5 | 295 ms | 5.191 ms | 306 ms | 314 ms | 112 → 113 |
+| 6 | 332 ms | 8.490 ms | 348 ms | 365 ms | 132 → 139 |
+
+Wake, accepted, consumed and reveal return are app uptime in R26_DIRECT. Worker duration uses the eighth minus the first firstNs field, both System.nanoTime. Attempt 1 painted on ticket 12 and revealed on proof 17. All four successor reads returned SHOW_FULL and were then B_REJECTED/REVALIDATION with no bProof. All four paint tickets were DIRECT_MISS and all four used a warmed program. The export does not name the exact failed conjunct for each B. Event time → restrictive callback was 108/110/243/87 ms; this is secondary and not an optical hide measurement. Physical first/last pixel and system wake animation start unobserved. No request to repeat this log.
+
+## 6. Commit / agent evidence audit
+
+- Native keyguard card followed the original launcher/notification work. R12 introduced the surface path. R18 preallocated a hidden output. R19 made the FULL-capable target blank and required current disclosure evidence before first FULL paint. R20 drew a cache miss directly. R21 kept an eligible reveal through later events. R22–R27 adjusted read scheduling, presentation and shader warmup; they still depended on an app-side keyguard observation.
+- R28 selected first-frame ownership. R29/29.1 staged a reference renderer/store/protocol. On a factory phone de807259 still ran DIRECT; its preferred opening is a regression comparator. R30 regressed by owner report. R31 returned to the preferred base and attempted a bounded reader handoff. R32 stock changed pair reservation, disposal, revalidation, evidence and tests across eight files. It did not change the presenter, poster cache or first display owner. e6df9043 changed two reference files for READY delivery outside the store lock. Coordination commits b13c839b (prior design), db102674 (report/checkpoint), 441e4286 (validation findings) changed documentation.
+- Public profile builder 45188620093 and exact stock/reference graph runs 45188497463/45189437574 succeeded. Signed upgrade run 45191213623 passed both jobs. Independent units 45196707490 passed (347 app, 150 core per report). Full Flutter 2780 pass / 115 fail / 3 skip; the same failing test names on parent do not prove identical causes. S1 device job on 45189787025 failed to establish the intended opportunity. Independently, privacy batch 45194281850 failed: calibrated FULL on white after redaction return; black and stale-pressure had unclassified samples. Two 12-trial comparisons were inconclusive. Full ordinary and scoped native delivery gates NOT RUN. These are distinct from the new phone result, which actually reached R32 pairs. No matched counterfactual measures R32's speed benefit.
+
+## 7. Graph provenance and impact
+
+Stock Dart SCIP b3847093bcc9a6aae80c329b8ad5f1844bab32c5, reference 82afc7f6d50773f8fe4275ef162c4fd90bd3291b. Their manifests identify the two distinct application SHAs. The bridge has actual Dart references from core_dashboard.dart. Use docs/codegraph-r32-stock-inventory.md and docs/codegraph-r32-host-inventory.md on those tooling refs for native navigation; verify with current Kotlin and pinned AOSP. Neither SCIP index covers Kotlin/AOSP. No Kotlin semantic graph was present; the following are source-traced calls, not inferred execution.
+
+| File / symbol | Caller or consumer | Old → requested transition | Reachable regression | Guard and test |
+|---|---|---|---|---|
+| MainActivity.kt publishProfile, KeyguardCardSettings.kt update/patchLayout, host/R29PublisherSnapshot.create | Real accepted projection → host client | Local result only → publish/invalidate a versioned snapshot on change | A1 arrives after A2, privacy/focus/period/size changes, independent writer | Publish only coherent same-revision data; reject old nonce/epoch/seq, revoke before replacement, H1 |
+| host/R29Ownership + R29OwnershipStore, keyguard service/window and material/KeyguardOrbPresentationLane.reveal | Stock and fallback visual/input owners | Independent stock ownership → drain before host owns | Already submitted frame, crash, double owner | Persist suppression, linearize outstanding ticket, confirmed drain, H2 |
+| host/R29HostClient, FluviOrbHostService, R29ResidentStore | Binder callback and main-thread adoption | Prepared store without authoritative handback → matched READY/EMPTY | Stale callback/dead peer, stale hardware frame | READY for resources only; EMPTY after correlated frame replacement/destruction; H2/H3 |
+| LockscreenContent.Content, DefaultBlueprint, R29FramePolicy.allow, R29PreparedOrb.draw | Real active clock composition and outgoing scene | No call → draw current poster within same host frame | Held outgoing layer, stale data over shade/PIN/occlusion, losing a measured child | Passive root decoration, precomposition exclusion/old-layer invalidation, calibrated H4/H5 |
+| R29HostRenderer.prepare, resetVisiblePhase, R29ResidentStore.current | Worker → host draw owner | Pre-rendered object unused → draw once, then advance same scene | Stale async completion, expiry, animated jump, excess GPU work | One adopted revision, one active/one latest demand, original quarantine, H1/H6 |
+
+## 8. Current source facts
+
+In stock, FluviKeyguardCardService.reserveR18WakeBeforeMain/advanceR19First join current disclosure proof, output, hidden bind and paint. KeyguardOrbR18Presenter.seal calls worker.revoke(discardFull=true). KeyguardOrbSurfaceWorker removes FULL posters on that path and skips retirement poster generation. Its lookup includes visual key, dimensions, density, disclosure and four phase/time components. KeyguardOrbDirectProgramWarmup indexes effect/portal and builds a program with no uniforms, image or pixel submission. So changing a cache flag alone either saves a short worker interval or risks an outdated/private frame. It cannot create the earlier authorization or force SystemUI to include an app layer in the clock frame.
+
+In the reference, R29HostRenderer.prepare already creates the actual poster, separately prepares the live painter, and adopts only after its bounded GPU check. R29PreparedOrb.draw already draws the poster first. There is no production call from the pinned keyguard root. The platform patch touches Android.bp and the SystemUI manifest; it does not patch LockscreenContent. R29HostClient discards CALLBACK_EMPTY. The stock APK cannot install those system components.
+
+## 9. PROVEN / UNPROVEN / MISSING EVIDENCE
+
+PROVEN: The four retained paints meet 10 ms from worker entry to post. Time before first paint authorization alone already spans 295–923 ms. The overlapped successors failed to supply the winning disclosure. The installed route lacks the requested ready-at-the-display-owner behavior. UNPROVEN: a bitmap would save the entire worker span, the exact reason for each B rejection, attribution of callback/read delays to Android versus Fluvi, any optical maximum or an across-device speedup. MISSING: independent optical timeline, two detailed openings, qualified restrictive-frame exclusion, production first-frame host and build/boot evidence. Tests that failed to reach a fixture and infrastructure ENOSPC/SIGBUS are separate from the reproducible stock architecture.
+
+## 10. Root cause / falsification
+
+For the demonstrated software delay, the decisive dependency is late display authority: the first FULL frame waits for an asynchronous post-wake observation on an owner outside the keyguard composition. In attempt 1 even first-frame paint authority and reveal authority diverged. The relevant test holds the producer asleep after a clean acknowledged publish: the ordinary clock must still appear on time with the right ORB in its first eligible frame. Any wake-time app read, IPC, decode, substitute color, or first correct frame after that frame falsifies the structural change. No new queue-hop experiment.
+
+## 11. Scope lock
+
+Stock operating systems without a verified integration retain their actual capabilities; their route cannot be relabeled FIRST_FRAME. Public keyguard AppWidget placement and triggers depend on the host. A lockscreen wallpaper replaces a user surface and cannot certify our specific disclosure rules. Neither is a drop-in universal equivalent. No new accessibility privileges, stale-proof reuse, launcher widget edits, wallpaper replacement, notification disguise or alteration of ordinary keyguard behavior. The proposed platform implementation remains default-off in the established reference lane. Do not substitute it as a deliverable for a stock-only decision.
+
+## 12. Layers, bounds and ownership
+
+One visual owner per user/display/epoch. Use the existing passive reference enrollment contract. At the pinned packages/SystemUI/compose/features/src/com/android/systemui/keyguard/ui/composable/LockscreenContent.kt, decorate the actual blueprint root under NotificationLockscreenScrim; preserve its tag, isContentVisible=false empty transition box, six measured DefaultBlueprint children, geometry, clip and original clock timing. Reuse the resolved root-local ORB bounds and valid density for its target. Do not add a window, semantics node or independent input target. Configurations requiring stock interaction are outside the passive reference qualification. Dismiss/restrict on the same output transition, including recorded outgoing layers. Keep EMPTY distinct from a local invalidation.
+
+## 13. Required red / negative tests
+
+H1: publish exact A1, then B, then A2 through real accepted app input; hold and deliver A1 last. Only A2 may be eligible. Change palette/data/period/geometry and privacy; cold, expired, malformed or unknown gives an empty slot. Cross-process stale source cannot silently keep FULL. H2: from visible stock and from queued native submit enter host enrollment, interrupt on each side of submit, then restart. Exactly one visual/input owner or safely none. H3: leave while visible/offscreen, delay old session's READY/EMPTY, restart or kill publisher; only a matching applied absence permits handback. Preserve distinct clean detach and unexpected death.
+
+H4: on the real reference image, with a prepared demo revision and the app cleanly detached and suspended, observe first clock frame and correct cached ORB, at their actual bounds; the OFF control must still show the clock at the ordinary time. H5: shade/QS, PIN, actual foreign occluding window, unlock, interrupted relock with previously visible FULL. Examine the first restrictive presentation including retained transition surfaces. A known late-by-one-frame specimen and a partially visible old ORB must fail the scorer. H6: correct first poster phase, next distinct motion, static/reduced motion, low-memory drop and expiry; no detached ticker. Missing parent draw, positive exposure, unclassified pixels and failure to reach setup are different results. Keep trial IDs and all outcomes.
+
+## 14. Implementation contract
+
+1. Publication is triggered by accepted data/material/settings/layout/privacy/expiry changes while the phone is awake; initial preparation must already have finished before the tested lock/wake. Connect MainActivity's accepted publishProfile result and the authoritative sceneTarget/current revision to R29PublisherSnapshot.create and R29HostClient.publish. Invalidate at source before making a private revision obsolete. If a writer cannot guarantee this order, exclude that source from FULL. A finite-validity frozen demo projection suffices for the reference control; label it.
+2. The host owns the pixels in memory. Reuse R29HostRenderer.prepare and the prepared bitmap; store resource identity with session, epoch, monotonic sequence, visual/data/privacy/layout revisions and size. Revoke on mismatch, time/zone, switch or disconnect as the existing lifecycle requires. Keep expensive canonical painting, shader setup and GPU preparation off the draw thread. No disk content read on wake. Adopt outside external callback execution and keep stale-safe revalidation at receipt.
+3. Supply a single scene-local draw decision: on an eligible ordinary keyguard traversal with known current identity and valid READY, draw that poster directly into the clock's composition. Otherwise omit the ORB from that traversal; leave the clock independent and count the miss. For animation, reuse the exact poster phase and existing live painter in subsequent eligible frames. Reset after exclusion. Pure pre-rendering cannot set permission to display financial data.
+4. Feed restrictive scene/overlay/occlusion input before the frame that can expose an outgoing layer. At the pinned platform the implementation class KeyguardTransitionRepositoryImpl lives in src/com/android/systemui/keyguard/data/repository/KeyguardTransitionRepository.kt; its startTransition is a transition boundary, not by itself proof of all shade or WindowManager occlusion cases. Retire outgoing recorded content in the same transition. Disable the path for any unsupported ordering. If the PAIRED reference cannot supply synchronously ordered independent occlusion, return the specific missing contract without weakening FULL exclusion.
+5. Integrate R29Ownership with existing app reservation, fallback/window and final native submit. Suppress first, capture every outstanding old-owner ticket, drain, then authenticate handover. Extend R29HostClient/FluviOrbHostService from invalidate-only leave to immutable epoch/sequence-matched empty receipt from an actually replaced/presented empty frame or confirmed destroyed visible layer. No ACK under lock, no timer-based transfer. Reference failure must never cause two owners. Machine-test the reverse handoff before enabling the real display node.
+6. Put targeted diagnostics in those exact components in the same candidate: one bounded row per wake/restriction, route, session fingerprint, epoch/seq, ready-before-wake, ready/miss reason, eligible/clock/poster/first-motion/first-restrictive/empty frame IDs and clock domain; count wake-time producer/disk/IPC/compile calls. No values, pixels or identifiers from financial data in public evidence. Distinguish generated, adopted, submitted, composed and optically visible.
+
+## 15. Performance gate
+
+Owner's ceiling is 10 ms maximum, inclusive. Report separately physical wake stimulus → correct FULL; first eligible lockscreen clock → correct FULL; first restrictive frame → disappearance. Clock-relative zero extra frames is the design target. Do not count a delayed clock as success. At 60 Hz a missed frame is nominally 16.67 ms. Same frame can satisfy the relative target; neither frame ID nor renderer time certifies button-to-photon latency. Use a common-timed independent high-speed capture or equivalent calibrated sensors with screen scanout correction, reference points at matched scan positions and reported uncertainty. Score each trial with an interval: upper bound ≤10 passes, lower bound >10 fails, straddling is indeterminate. Report max, misses and every failed attempt separately. A finite sample cannot prove a universal bound. Cold unprimed and warm are separate; do not exclude cold/miss from an unconditional claim.
+
+## 16. Implementation order
+
+Prove that the intended deployment actually controls ordinary keyguard composition before a new delivery build. On the authorized reference, first reproduce the missing real draw with an independent clock/ORB control. Implement exclusive ownership, real publication and composition as one end-to-end path; verify H1–H4 on frozen demo data. Add restrictive invalidation, EMPTY and H5/H6 before active enrollment qualifies. Retain default-off until all gates. Delay expensive full qualification until the real path is reached. The order is deliberately different from R32: an independently buildable stock APK or successful store callback is no longer a surrogate milestone.
+
+## 17. Validation
+
+Cheap checks: git diff --check; bash scripts/verify-fluvi-boundaries.sh. On the established compatible Flutter/Android builder use flutter pub get; flutter analyze --no-fatal-infos; flutter test test/app/platform/r29_material_bridge_test.dart --reporter expanded. Inside android run ./gradlew :app:generateKeyguardHeaderMaterial :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin --no-daemon and ./gradlew :app:testDebugUnitTest --tests '*R29*' --no-daemon. Require nonzero counts, exact XML and the H1/H2/H3 integration tests above. The API35 private runner can test the client; it cannot build or qualify Android 16 SystemUI.
+
+For the platform checkout use the existing R32 §17 env/target commands after verifying the pin and paths. With AOSP_BASE set to the pinned frameworks/base, from the Fluvi root:
+
+    R29_AOSP_BASE="$AOSP_BASE" R29_GENERATED_ASSETS="$PWD/build/app/generated/keyguardHeaderMaterial/assets" python3 -m unittest discover -v -s platform/aosp16/tests
+    python3 platform/aosp16/tools/stage_aosp_wip.py --base "$AOSP_BASE" --assets "$PWD/build/app/generated/keyguardHeaderMaterial/assets"
+
+Current result is an incomplete bootstrap. Extend the staging patch and tests to check the actual live root and restrictive path. On a clean, disposable complete AOSP checkout and only on an authorized capable lane, apply the integrated patch without the incomplete override, then:
+
+    source build/envsetup.sh
+    lunch aosp_cf_x86_64_only_phone-bp2a-userdebug
+    m SystemUI SystemUiRoboTests SystemUITests
+    atest SystemUiRoboTests:com.android.systemui.keyguard.fluvi.FluviOrbFramePolicyTest
+    m
+    launch_cvd --daemon
+    atest SystemUITests:com.android.systemui.keyguard.fluvi.FluviOrbCompositionTest
+
+The last test is the new actual-composition fixture to implement. Require per-case results that reached the declared display, keyguard, owner and data preconditions in the same attempt. One parent and one candidate for each structural control, two warm wakes per block OFF/ON/ON/OFF plus one cold miss, one clean-detach/suspended wake and one suspended unlock. Record each restrictive case once including both calibrated contrasting backgrounds. Stop on definitive privacy failure; preserve remaining not-run cases. No retry-to-green. Use all reported failures to identify a contradicted contract and return it to the reviewer.
+
+## 18. Commit discipline
+
+One cohesive source change per reviewable contract; no opportunistic stock refactor. Commit body: Why / Evidence / Changed / Validation / Known limitations / Physical validation. Record exact source, tests and frozen evidence identity in the shared journal. Journal-only reviewer work must preserve concurrent entries and skip push CI. Private raw optical/financial evidence stays private.
+
+## 19. Push / build / graph
+
+Only after structural and privacy gates, run the final required Flutter/Android suite on the exact candidate, ordinary fluvi-core.yml and its native scopes r12_contract, r12_live, r12_static, r12_legacy and full using workflow_dispatch on an immutable app ref. Check every run's head_sha and relevant job steps. Example command: gh workflow run fluvi-core.yml -R elizerpist/exptv2 --ref "$APP_REF" -f native_diagnostic=true -f native_scope="$SCOPE". Exact-source Human builder is the existing orchestration/r18-phone-builder route (pin 200aaebd1eaa79382feb977ba57996b0c72e2d28) with -f app_sha="$APP_SHA". Package identifier com.fluvi.app, update signer, embedded SHA, SHA-256, downloadable full bytes and signed upgrade over R32 must match. A companion APK is valuable only with a verified host image. Supply the complete image/patch, fingerprint, partition/SystemUI hash and actually exercised route separately. Refresh exact-source SCIP and native/platform inventories; distinguish tooling SHA from app and platform SHAs. No platform capability on an ordinary device means the ordinary-device goal remains unavailable; never ship the unchanged stock behavior as this refactor's result.
+
+## 20. Completion report
+
+Report implementation, automatic qualification, reference image, Human APK, stock applicability and physical acceptance independently. Include exact commits/parents/refs, routing, coverage, each gate's PASS/FAIL/NOT RUN, target fingerprints and resource caps; table every trial by session, revisions, native and optical endpoints, uncertainty and missing data. Retain failed parent fixtures and all paired controls. If a runnable reference or public distribution interface is missing, state exactly which deliverable cannot be produced and which evidence is still valid.
+
+## 21. Definition of done
+
+On the supported host the correct poster is ready before wake, first visible alongside the first eligible lockscreen clock with the producer suspended, followed by the correct animation, and absent on the first restrictive composition. No stale owner or unauthorized disclosure, no delayed clock, qualified image/APK pairing and no missing mandatory release gates. Report independently whether each physical ceiling held in the measured trials. For the requested ordinary stock Android product, an equivalent verified host is an additional distribution requirement; a reference result cannot close that item. This review delivered a design. New implementation, build and physical acceptance are outstanding. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+FLUVI_R33_ORB_FIRST_FRAME_END
