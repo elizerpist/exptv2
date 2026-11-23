@@ -434,7 +434,14 @@ internal class KeyguardR22FirstInspectionFixture {
             }
 
             shell("input keyevent KEYCODE_SLEEP")
-            await("sleep/locked", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+            if (r32) {
+                // Doze and keyguard reporting need not become true together.
+                // The wake still requires interactive AND locked, and A is
+                // held until the independent complete SystemUI tree exists.
+                await("sleep/non-interactive", 8_000) { !power.isInteractive }
+            } else {
+                await("sleep/locked", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+            }
             entryArmed.set(true)
             shell("input keyevent KEYCODE_WAKEUP")
             await("locked/interactive", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
