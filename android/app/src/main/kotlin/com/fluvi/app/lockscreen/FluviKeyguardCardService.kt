@@ -1423,6 +1423,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 Intent.ACTION_SCREEN_OFF -> {
                     val owner = currentDiagnosticAttempt
                     hideImmediately("screenOff", triggerReceivedUptimeMs = receivedAt)
+                    inspectionProbeForTest?.screenOffCompleted(receivedAt)
                     if (owner != null) traceKeyguard("SCREEN_OFF_RECEIVED", "broadcast", observedUptimeMs = receivedAt,
                         diagnosticContext = owner, fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true))
                 }

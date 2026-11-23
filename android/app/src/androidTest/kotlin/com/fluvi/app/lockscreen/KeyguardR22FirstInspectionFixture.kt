@@ -90,6 +90,8 @@ internal class KeyguardR22FirstInspectionFixture {
         val completed = CountDownLatch(1)
         val bStarted = CountDownLatch(1)
         val r32ReadReady = CountDownLatch(1)
+        val r32ScreenOffCompleted = CountDownLatch(1)
+        val r32WakeCommandAt = AtomicLong(0L)
         val r32ReleaseRead = CountDownLatch(1)
         val r32RealPending = CountDownLatch(1)
         val r32MainHeld = CountDownLatch(1)
@@ -233,9 +235,17 @@ internal class KeyguardR22FirstInspectionFixture {
                     } else false
                 }
                 service.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
+                    override fun screenOffCompleted(receivedAt: Long) {
+                        if (r32) {
+                            records.add("R32_SCREEN_OFF_HANDLED received=$receivedAt at=${SystemClock.uptimeMillis()}")
+                            r32ScreenOffCompleted.countDown()
+                        }
+                    }
                     override fun openingReserved(request: KeyguardCardInspectionRequest, reservationId: Long, armed: Boolean) {
                         records.add("RESERVED id=${request.id} wake=${request.wakeGeneration} reservation=$reservationId armed=$armed at=${SystemClock.uptimeMillis()}")
-                        if (entryArmed.get() && armed && a.compareAndSet(null, request)) reservation.set(reservationId)
+                        val afterR32WakeCommand = !r32 || (r32WakeCommandAt.get() != 0L &&
+                            request.queuedAtUptimeMs >= r32WakeCommandAt.get())
+                        if (entryArmed.get() && armed && afterR32WakeCommand && a.compareAndSet(null, request)) reservation.set(reservationId)
                     }
                     override fun started(request: KeyguardCardInspectionRequest) {
                         records.add("START id=${request.id} wake=${request.wakeGeneration} at=${SystemClock.uptimeMillis()} thread=${Thread.currentThread().id}")
@@ -439,9 +449,12 @@ internal class KeyguardR22FirstInspectionFixture {
                 // The wake still requires interactive AND locked, and A is
                 // held until the independent complete SystemUI tree exists.
                 await("sleep/non-interactive", 8_000) { !power.isInteractive }
+                assertTrue("NOT REACHED: the real screen-off callback did not complete",
+                    r32ScreenOffCompleted.await(8, TimeUnit.SECONDS))
             } else {
                 await("sleep/locked", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
             }
+            if (r32) r32WakeCommandAt.set(SystemClock.uptimeMillis())
             entryArmed.set(true)
             shell("input keyevent KEYCODE_WAKEUP")
             await("locked/interactive", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }

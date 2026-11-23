@@ -93,6 +93,8 @@ internal data class KeyguardInspectionAuthority(
  * and start observations are worker-owned; apply observations are Main-owned.
  * No live Event, node or View is retained in this boundary. */
 internal interface KeyguardInspectionProbeForTest {
+    /** Observes the real terminal screen-off callback after its hide handling. */
+    fun screenOffCompleted(receivedAt: Long) {}
     fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> = actual
     fun started(request: KeyguardCardInspectionRequest) {}
     /** Observation only; callbacks run outside queueLock on the sampler/reader. */
