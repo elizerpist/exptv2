@@ -386,6 +386,68 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         }
     }
 
+    @Test fun r32OverlapEvidenceSurvivesLightPressure() = r32OverlapEvidence("LIGHT")
+    @Test fun r32OverlapEvidenceSurvivesFullPressure() = r32OverlapEvidence("FULL")
+
+    private fun r32OverlapEvidence(mode: String) {
+        val settings = context.getSharedPreferences("fluvi_native_keyguard_card", android.content.Context.MODE_PRIVATE)
+        val hadMode = settings.contains("presentationMode")
+        val savedMode = settings.getString("presentationMode", null)
+        check(settings.edit().putString("presentationMode", "orb").commit())
+        try {
+            KeyguardCardDiagnostics.startCapture(context, "r32", "profile", mode)
+            var old: KeyguardDiagnosticContext? = null
+            repeat(4) { index ->
+                val wake = index + 1L; val base = wake * 1000
+                val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 778, wake, "wake", base))
+                old = owner
+                fun edge(phase: String, at: Long, extra: Map<String, Any?> = emptyMap()) {
+                    KeyguardCardDiagnostics.captureEvent(context, "R32_OVERLAP", phase,
+                        diagnosticContext = owner, requestId = base + 1, observedUptimeMs = at,
+                        fields = mapOf("r32A" to base + 1, "r32B" to base + 2,
+                            "r32Reservation" to 700 + wake, "r32ReadScene" to 10, "r32CurrentScene" to 11,
+                            "r32Reserve" to base + 1, "r32Backend" to "R18_DIRECT") + extra)
+                }
+                edge("RESERVED", base + 1)
+                edge("B_READ_START", base + 2)
+                edge("A_MAIN_ENTER", base + 3)
+                edge("B_READ_END", base + 4, mapOf("r32C" to base + 3, "r32BScene" to 11, "r32Outcome" to "SHOW_FULL"))
+                edge("A_MAIN_EXIT", base + 5, mapOf("r32Outcome" to "RESTRICTION_ONLY"))
+                edge("B_REJECTED", base + 6, mapOf("r32Outcome" to "REVALIDATION"))
+                repeat(100) { n ->
+                    KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure", diagnosticContext = owner,
+                        requestId = base + 100 + n, observedUptimeMs = base + 100 + n)
+                    if (n % 40 == 39) KeyguardCardDiagnostics.captureSnapshot(context)
+                }
+            }
+            val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+            for (wake in 1L..4L) {
+                val row = report.lineSequence().single { it.startsWith(" R32_CORE ") && it.contains("attempt=$wake ") }
+                val base = wake * 1000
+                assertTrue(row, row.contains("pair=${base + 1}/${base + 2}/${base + 3} reservation=${700 + wake}"))
+                assertTrue(row, row.contains("aMain=${base + 3}/${base + 5}/RESTRICTION_ONLY"))
+                assertTrue(row, row.contains("bRead=${base + 2}/${base + 4}/SHOW_FULL"))
+                assertTrue(row, row.contains("physical=UNOBSERVED"))
+            }
+            KeyguardCardDiagnostics.captureEvent(context, "R32_OVERLAP", "B_MAIN_PATH", diagnosticContext = old,
+                requestId = 4001, observedUptimeMs = 4999, fields = mapOf("r32A" to 4001, "r32B" to 4002,
+                    "r32Reservation" to 704, "r32Outcome" to "LATE"))
+            assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+            KeyguardCardDiagnostics.startCapture(context, "r32-next", "profile", mode)
+            KeyguardCardDiagnostics.beginLockAttempt(context, 779, 1, "wake", 20_000)
+            KeyguardCardDiagnostics.captureEvent(context, "R32_OVERLAP", "B_MAIN_PATH", diagnosticContext = old,
+                requestId = 4001, observedUptimeMs = 4999, fields = mapOf("r32A" to 4001, "r32B" to 4002,
+                    "r32Reservation" to 704, "r32Outcome" to "LATE"))
+            val next = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            assertFalse(next.contains("pair=4001/4002"))
+        } finally {
+            val editor = settings.edit()
+            if (hadMode) editor.putString("presentationMode", savedMode) else editor.remove("presentationMode")
+            check(editor.commit())
+        }
+    }
+
     @Test fun r18PipelineEvidenceRemainsBoundedAndOwnedInLight() = r18PipelineEvidence("LIGHT")
     @Test fun r18PipelineEvidenceRemainsBoundedAndOwnedInFull() = r18PipelineEvidence("FULL")
 

@@ -798,6 +798,8 @@ internal object KeyguardCardDiagnostics {
         val r22Opening: LinkedHashMap<String, String> = linkedMapOf(),
         /** Fixed keys only: the diagnostic consumer owns this once per wake. */
         val r25Opening: LinkedHashMap<String, String> = linkedMapOf(),
+        /** One first R32 overlap pair per bounded attempt; reducer-owned. */
+        val r32Overlap: LinkedHashMap<String, String> = linkedMapOf(),
         /** Bounded decision evidence survives eviction of raw event lines. */
         val r224Transitions: ArrayDeque<TimingEvent> = ArrayDeque(),
         var r224TransitionsOmitted: Int = 0,
@@ -922,7 +924,7 @@ internal object KeyguardCardDiagnostics {
         "INSPECTION_REJECTED", "RETRY_SCHEDULED", "RETRY_FIRED", "RETRY_CANCELLED",
         "AWAITING_MAIN_SURFACE", "PENDING_REPLACED_AFTER_UNKNOWN", "RETRY_SUPPRESSED_FOR_PENDING", "RETRY_BUDGET_EXHAUSTED_AWAITING",
         "SHOW_FOR_ATTACH", "ADD_VIEW_BEGIN", "ADD_VIEW_RETURN", "POST_ADD_SETUP_COMPLETE", "VIEW_ATTACH_STATE", "FIRST_ROOT_PREDRAW", "ATTACH_FAILED", "FIRST_ROOT_DRAW",
-        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY", "R18_PIPELINE", "R22_ACQUISITION", "R22_4_TRANSITION", "R25_OPENING",
+        "R10_ROOT_REGISTRATION", "R10_ROOT_ATTACH_DISPATCH", "R10_ROOT_FIRST_LAYOUT", "R10_MAIN_ASYNC_READY", "R11_FIRST", "R12_SURFACE", "R14_RECOVERY", "R18_PIPELINE", "R22_ACQUISITION", "R22_4_TRANSITION", "R25_OPENING", "R32_OVERLAP",
         "FIRST_SHADER_DRAW", "FIRST_CURRENT_MATERIAL_DRAW", "FIRST_LIVE_DRAW", "FRAME_COMMIT_CALLBACK_RECEIVED", "BOOTSTRAP_DRAW", "BOOTSTRAP_COMMIT_CALLBACK_RECEIVED", "MATERIAL_LIVE_PROMOTED", "HIDE_DECIDED", "LOCAL_HIDE_BEGIN", "LOCAL_HIDE_APPLIED",
         "ISOLATED_LAYER_HIDE_SUBMITTED", "ISOLATED_LAYER_HIDE_COMMIT_RECEIVED", "R09_RETIREMENT", "R15_SURFACE_REVOKED", "REMOVE_VIEW_BEGIN", "REMOVE_VIEW_RETURN", "DETACH_FAILED", "HIDE_COMPLETED", "CAPTURE_FROZEN",
     )
@@ -1086,6 +1088,41 @@ internal object KeyguardCardDiagnostics {
             val prefix = if (event.reason == "REVEAL_RECEIPT") "reveal" else "retire"
             listOf("r18ApplyBegin", "r18ApplyEnd", "r18Commit", "r18LatchNs", "r18PresentNs", "r18PresentState")
                 .forEach { field -> retainField(field, "$prefix:$field") }
+        }
+    }
+
+    private fun reduceR32(attempt: TimingAttempt, event: TimingEvent) {
+        val f = event.fields
+        val a = f["r32A"] ?: return
+        val b = f["r32B"] ?: return
+        val reservation = f["r32Reservation"] ?: return
+        val values = attempt.r32Overlap
+        if (values.isNotEmpty() && (values["a"] != a || values["b"] != b ||
+                values["reservation"] != reservation)) return
+        values.putIfAbsent("a", a)
+        values.putIfAbsent("b", b)
+        values.putIfAbsent("reservation", reservation)
+        listOf("r32ReadScene", "r32CurrentScene", "r32Reserve", "r32Backend").forEach { key ->
+            f[key]?.takeIf { it != "UNOBSERVED" }?.let { values.putIfAbsent(key, it) }
+        }
+        when (event.reason) {
+            "A_MAIN_ENTER" -> values.putIfAbsent("aMainEnter", event.uptimeMs.toString())
+            "A_MAIN_EXIT" -> {
+                values.putIfAbsent("aMainExit", event.uptimeMs.toString())
+                values.putIfAbsent("aDisposition", f["r32Outcome"] ?: "UNOBSERVED")
+            }
+            "B_READ_START" -> values.putIfAbsent("bStart", event.uptimeMs.toString())
+            "B_READ_END" -> {
+                values.putIfAbsent("bEnd", event.uptimeMs.toString())
+                f["r32C"]?.takeIf { it != "UNOBSERVED" }?.let { values.putIfAbsent("c", it) }
+                f["r32BScene"]?.takeIf { it != "UNOBSERVED" }?.let { values.putIfAbsent("bScene", it) }
+                values.putIfAbsent("bResult", f["r32Outcome"] ?: "UNOBSERVED")
+            }
+            "B_MAIN_PATH", "B_REJECTED", "PAIR_LOST" -> {
+                values.putIfAbsent("bDisposition", event.reason)
+                values.putIfAbsent("bDispositionAt", event.uptimeMs.toString())
+                values.putIfAbsent("bDispositionReason", f["r32Outcome"] ?: "UNOBSERVED")
+            }
         }
     }
 
@@ -2099,6 +2136,7 @@ internal object KeyguardCardDiagnostics {
                 "R18_PIPELINE" -> reduceR18(attempt, event)
                 "R22_ACQUISITION" -> reduceR22(attempt, event)
                 "R25_OPENING" -> reduceR25(attempt, event)
+                "R32_OVERLAP" -> reduceR32(attempt, event)
                 "R12_SURFACE" -> {
                     val show = showEpisode()
                     if (show != null) reduceSurface(show, event)
@@ -2323,6 +2361,7 @@ internal object KeyguardCardDiagnostics {
         }),
         r22Opening = LinkedHashMap(attempt.r22Opening),
         r25Opening = LinkedHashMap(attempt.r25Opening),
+        r32Overlap = LinkedHashMap(attempt.r32Overlap),
         pendingHideCommits = ArrayDeque(attempt.pendingHideCommits),
         pendingR11 = ArrayDeque(attempt.pendingR11.map { it.copy(fields = it.fields.toMap()) }),
         pendingR12 = ArrayDeque(attempt.pendingR12.map { it.copy(fields = it.fields.toMap()) }),
@@ -2516,6 +2555,9 @@ internal object KeyguardCardDiagnostics {
                 select("a${attempt.id}:r22Core", r22CoreRecord(attempt), attempt.id)
                 select("a${attempt.id}:r25Core", r25CoreRecord(attempt), attempt.id)
             }
+        attemptsForCausalEvidence.filter { it.r32Overlap.isNotEmpty() }.forEach { attempt ->
+            select("a${attempt.id}:r32Core", r32CoreRecord(attempt), attempt.id)
+        }
         // Existing critical records retain priority; this short row uses the
         // same bounded attempt/generation state and the same export budget.
         attemptsForCausalEvidence.filter { it.presentationMode == "ORB" || it.r18Generations.isNotEmpty() }
@@ -2817,6 +2859,28 @@ internal object KeyguardCardDiagnostics {
         val sized = withExportBytes(report)
         check(sized.toByteArray(Charsets.UTF_8).size <= exportLimitBytes)
         return sized
+    }
+
+    private fun r32CoreRecord(attempt: TimingAttempt): String = buildString {
+        val values = attempt.r32Overlap
+        fun v(key: String) = values[key]?.take(48) ?: "UNOBSERVED"
+        fun n(value: Any?) = value?.toString()?.take(48) ?: "UNOBSERVED"
+        val direct = attempt.r18Generations.values.firstOrNull {
+            it.values["r26ReservationId"] == values["reservation"]
+        }
+        val winner = direct?.values?.get("r19ConsumedRequest")
+        val show = attempt.shows.firstOrNull {
+            it.attachGeneration == direct?.attachment && it.requestId?.toString() == winner
+        }
+        val hide = show?.let { actualWithdrawal(attempt, it) }
+        append(" R32_CORE v=1 attempt=${attempt.id} session=${attempt.serviceSession} wake=${attempt.wakeEpoch}")
+        append(" pair=${v("a")}/${v("b")}/${v("c")} reservation=${v("reservation")}")
+        append(" scene=${v("r32ReadScene")}/${v("r32CurrentScene")}/${v("bScene")} reserve=${v("r32Reserve")}")
+        append(" aMain=${v("aMainEnter")}/${v("aMainExit")}/${v("aDisposition")}")
+        append(" bRead=${v("bStart")}/${v("bEnd")}/${v("bResult")} bApply=${v("bDisposition")}@${v("bDispositionAt")}/${v("bDispositionReason")}")
+        append(" route=${v("r32Backend")} winnerProof=${n(winner)} bProof=${if (winner == values["b"] && winner != null) winner else "UNOBSERVED"} grant=${n(direct?.values?.get("GRANT"))}")
+        append(" reveal=${n(direct?.values?.get("reveal:r18ApplyEnd"))} hide=${n(hide?.operationId)}/${n(hide?.localHideAppliedAtUptimeMs)}/${n(hide?.removeReturnAtUptimeMs)}")
+        appendLine(" clock=uptimeMs physical=UNOBSERVED")
     }
 
     private fun r25CoreRecord(attempt: TimingAttempt): String = buildString {

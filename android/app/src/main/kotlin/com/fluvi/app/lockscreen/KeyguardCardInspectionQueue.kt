@@ -41,6 +41,8 @@ internal data class KeyguardCardInspectionRequest(
     val r14Ingress: KeyguardR14Ingress? = null,
     val wakeEligibility: KeyguardWakeEligibilityEvidence? = null,
     val latestSamplerEvidence: KeyguardSamplerEvidence? = null,
+    /** Actual framework ingress for this queue offer; copied reconciliation is not a new event. */
+    val r32FrameworkIngressId: Long? = null,
 ) {
     /** Carry an unserved event, never an acquired answer, across a local
      * withdrawal in the SAME service/wake. The new request must reacquire
@@ -60,6 +62,7 @@ internal data class KeyguardCardInspectionRequest(
             attachGeneration = authority.attachGeneration,
             queuedAtUptimeMs = queuedAt,
             latestSamplerEvidence = null,
+            r32FrameworkIngressId = null,
             windowFreshness = if (windowFreshness.requiresCacheClear && !freshness.requiresCacheClear) windowFreshness else freshness,
         )
     }
@@ -119,6 +122,7 @@ internal interface KeyguardInspectionProbeForTest {
     fun r25QueueTransition(request: KeyguardCardInspectionRequest, pendingAtOffer: KeyguardCardInspectionRequest?,
         activeAfter: KeyguardCardInspectionRequest?, superseded: KeyguardCardInspectionRequest?) {}
     fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
+    fun positiveApplyAttempt(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
     fun beforeDecision(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
         pending: KeyguardCardInspectionRequest?, authority: KeyguardInspectionAuthority) {}
     fun readAheadDecision(request: KeyguardCardInspectionRequest, pendingId: Long?, reservedId: Long?,
@@ -320,6 +324,14 @@ internal class KeyguardCardInspectionQueue {
 
     fun finishPreceding(request: KeyguardCardInspectionRequest): Boolean {
         if (preceding != request) return false
+        preceding = null
+        return true
+    }
+
+    /** R32 cleanup cannot release a later reader or a different wake. */
+    fun finishPrecedingExact(request: KeyguardCardInspectionRequest,
+                             successor: KeyguardCardInspectionRequest): Boolean {
+        if (preceding != request || active != successor) return false
         preceding = null
         return true
     }

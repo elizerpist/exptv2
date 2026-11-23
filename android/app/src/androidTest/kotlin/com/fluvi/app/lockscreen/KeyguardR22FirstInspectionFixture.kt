@@ -45,8 +45,9 @@ internal class KeyguardR22FirstInspectionFixture {
     private lateinit var automation: UiAutomation
 
     fun run(scenario: String) {
-        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative"))
+        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative", "r32_overlap"))
         val r31 = scenario == "r31_system" || scenario == "r31_ambiguous" || scenario == "r31_negative"
+        val r32 = scenario == "r32_overlap"
         val negativeScene = scenario == "negative" || scenario == "r31_negative"
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
@@ -88,6 +89,19 @@ internal class KeyguardR22FirstInspectionFixture {
         val stableExternal = AtomicBoolean(false)
         val completed = CountDownLatch(1)
         val bStarted = CountDownLatch(1)
+        val r32ReadReady = CountDownLatch(1)
+        val r32ReleaseRead = CountDownLatch(1)
+        val r32RealPending = CountDownLatch(1)
+        val r32MainHeld = CountDownLatch(1)
+        val r32ResumeMain = AtomicReference<Runnable?>()
+        val r32LatestPending = AtomicLong(0L)
+        val r32SelectedB = AtomicLong(0L)
+        val r32BStarted = CountDownLatch(1)
+        val r32AExited = CountDownLatch(1)
+        val r32ADisclosureAttempt = AtomicBoolean(false)
+        val r32OutputDuringHeldApply = AtomicBoolean(false)
+        val r32SavedFirstLock = KeyguardOrbSurfaceWorkerTestHooks.beforeFirstLock
+        val r32SavedRevealCross = KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross
         val a = AtomicReference<KeyguardCardInspectionRequest?>()
         val reservation = AtomicLong(0L)
         val posted = AtomicReference<PostedFrame?>()
@@ -179,6 +193,16 @@ internal class KeyguardR22FirstInspectionFixture {
                     savedRevealCross?.invoke(output)
                 }
             }
+            if (r32) {
+                KeyguardOrbSurfaceWorkerTestHooks.beforeFirstLock = { target ->
+                    if (r32MainHeld.count == 0L && r32AExited.count != 0L) r32OutputDuringHeldApply.set(true)
+                    r32SavedFirstLock?.invoke(target)
+                }
+                KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross = { output ->
+                    if (r32MainHeld.count == 0L && r32AExited.count != 0L) r32OutputDuringHeldApply.set(true)
+                    r32SavedRevealCross?.invoke(output)
+                }
+            }
             KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT")
             capture = true
             KeyguardR15AcquisitionTestHooks.stockArm = true
@@ -201,6 +225,13 @@ internal class KeyguardR22FirstInspectionFixture {
             automationEvidence(dir, "service-connected")
             records.add("AUTOMATION_CONNECTED actual=true handle=${System.identityHashCode(automation)} at=${SystemClock.uptimeMillis()}")
             instrumentation.runOnMainSync {
+                if (r32) service.r32MainApplyGateForTest = { request, resume ->
+                    if (request == a.get() && r32ResumeMain.compareAndSet(null, resume)) {
+                        records.add("R32_A_MAIN_HELD id=${request.id} at=${SystemClock.uptimeMillis()}")
+                        r32MainHeld.countDown()
+                        true
+                    } else false
+                }
                 service.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
                     override fun openingReserved(request: KeyguardCardInspectionRequest, reservationId: Long, armed: Boolean) {
                         records.add("RESERVED id=${request.id} wake=${request.wakeGeneration} reservation=$reservationId armed=$armed at=${SystemClock.uptimeMillis()}")
@@ -214,6 +245,10 @@ internal class KeyguardR22FirstInspectionFixture {
                             if (scenario != "natural" && !releaseEntry.await(20, TimeUnit.SECONDS)) {
                                 entryTimedOut.set(true); records.add("A_ENTRY_TIMEOUT")
                             }
+                        }
+                        if (r32 && request.id == r32SelectedB.get() && request.id != 0L) {
+                            records.add("R32_B_START id=${request.id} at=${SystemClock.uptimeMillis()} thread=${Thread.currentThread().id}")
+                            r32BStarted.countDown()
                         }
                         if (request.id == bYieldedTo.get() && request.id != 0L) cThread.set(Thread.currentThread().id)
                         if (request.id == yieldedTo.get() && request.id != 0L) {
@@ -280,6 +315,12 @@ internal class KeyguardR22FirstInspectionFixture {
                         reason: KeyguardSurfaceReason, rootUnavailable: Boolean, walkTruncated: Boolean,
                         abortedStale: Boolean, startedAt: Long, finishedAt: Long) {
                         records.add("END id=${request.id} decision=$decision reason=$reason root=$rootUnavailable truncated=$walkTruncated stale=$abortedStale")
+                        if (r32 && request == a.get() && decision == KeyguardCardVisibility.SHOW_FULL &&
+                            reason == KeyguardSurfaceReason.MAIN_CONFIRMED && !rootUnavailable && !walkTruncated && !abortedStale) {
+                            records.add("R32_A_COMPLETE_HELD id=${request.id} start=$startedAt finish=$finishedAt")
+                            r32ReadReady.countDown()
+                            if (!r32ReleaseRead.await(20, TimeUnit.SECONDS)) records.add("R32_A_READ_HOLD_TIMEOUT")
+                        }
                         if (request.id == a.get()?.id) {
                             stableReading.set(false)
                             resultB.compareAndSet(null, "A:$decision/$reason/$rootUnavailable/$walkTruncated/$abortedStale")
@@ -297,6 +338,18 @@ internal class KeyguardR22FirstInspectionFixture {
                                 KeyguardCardVisibility.HIDDEN_SHADE, KeyguardCardVisibility.HIDDEN_CREDENTIAL,
                                 KeyguardCardVisibility.HIDDEN_UNLOCKED)) negativeResult.countDown()
                     }
+                    override fun positiveApplyAttempt(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
+                        if (r32 && request == a.get()) {
+                            r32ADisclosureAttempt.set(true)
+                            records.add("R32_A_POSITIVE_ATTEMPT id=${request.id} decision=$decision at=${SystemClock.uptimeMillis()}")
+                        }
+                    }
+                    override fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
+                        if (r32 && request == a.get()) {
+                            records.add("R32_A_MAIN_EXIT id=${request.id} at=${SystemClock.uptimeMillis()}")
+                            r32AExited.countDown()
+                        }
+                    }
                     override fun ingress(meta: KeyguardAccessibilityEventMeta, receivedAt: Long,
                         action: KeyguardEventAction, frameworkEvent: Boolean) {
                         if (negativeArmed.get() && frameworkEvent && action == KeyguardEventAction.INSPECT &&
@@ -309,6 +362,14 @@ internal class KeyguardR22FirstInspectionFixture {
                     override fun ingressOffered(meta: KeyguardAccessibilityEventMeta, request: KeyguardCardInspectionRequest,
                         previous: KeyguardCardInspectionRequest?, pending: KeyguardCardInspectionRequest?,
                         startsWorker: Boolean, frameworkEvent: Boolean) {
+                        if (r32 && r32ReadReady.count == 0L && frameworkEvent && !startsWorker &&
+                            pending?.id == request.id && request.wakeGeneration == a.get()?.wakeGeneration &&
+                            request.r14Ingress?.origin in setOf(KeyguardR14Origin.SYSTEM_UI, KeyguardR14Origin.AMBIGUOUS) &&
+                            meta.displayId == Display.DEFAULT_DISPLAY) {
+                            r32LatestPending.set(request.id)
+                            records.add("R32_REAL_PENDING id=${request.id} previous=${previous?.id} origin=${request.r14Ingress?.origin} at=${SystemClock.uptimeMillis()}")
+                            r32RealPending.countDown()
+                        }
                         if (scenario == "stable" && stableReading.get() && frameworkEvent) stableExternal.set(true)
                         if (negativeArmed.get() && frameworkEvent && !startsWorker && pending?.id == request.id) {
                             pendingWindows.add(request.id to meta.windowId)
@@ -373,7 +434,14 @@ internal class KeyguardR22FirstInspectionFixture {
             }
 
             shell("input keyevent KEYCODE_SLEEP")
-            await("sleep/locked", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+            if (r32) {
+                // Doze and keyguard reporting need not become true together.
+                // The wake still requires interactive AND locked, and A is
+                // held until the independent complete SystemUI tree exists.
+                await("sleep/non-interactive", 8_000) { !power.isInteractive }
+            } else {
+                await("sleep/locked", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+            }
             entryArmed.set(true)
             shell("input keyevent KEYCODE_WAKEUP")
             await("locked/interactive", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
@@ -393,6 +461,46 @@ internal class KeyguardR22FirstInspectionFixture {
                     image.recycle()
                 }
                 records.add("NATURAL_UNHELD A=${original.id} yieldedTo=${yieldedTo.get()} injected=false physical=UNOBSERVED")
+            } else if (r32) {
+                assertTrue("NOT REACHED: original reserved opening did not start", entryStarted.await(20, TimeUnit.SECONDS))
+                val original = checkNotNull(a.get())
+                var independent = ""
+                await("NOT REACHED: complete independent locked SystemUI tree", 8_000) {
+                    independent = independentOpeningScene(service, requireComplete = true)
+                    independent.startsWith("VALID ")
+                }
+                records.add("R32_INDEPENDENT $independent")
+                await("NOT REACHED: hidden exact DIRECT owner", 8_000) {
+                    instrumentation.runOnMainSync { visualIdentity = service.r22VisualIdentityForTest() }
+                    visualIdentity?.let { it.reservationId == reservation.get() &&
+                        it.openingRequestId == original.id && it.winningRequestId == null } == true
+                }
+                releaseEntry.countDown()
+                assertTrue("NOT REACHED: original read was not a complete MAIN/FULL result", r32ReadReady.await(20, TimeUnit.SECONDS))
+                shell("input keyevent KEYCODE_VOLUME_UP")
+                assertTrue("NOT REACHED: no genuine later framework request became pending", r32RealPending.await(8, TimeUnit.SECONDS))
+                var pending: KeyguardCardInspectionRequest? = null
+                instrumentation.runOnMainSync { pending = service.inspectionStateForTest().pending }
+                val selected = checkNotNull(pending) { "NOT REACHED: newer pending request disappeared" }
+                assertEquals("NOT REACHED: selected pending is not the observed real ingress", r32LatestPending.get(), selected.id)
+                r32SelectedB.set(selected.id)
+                records.add("R32_A_TO_B A=${original.id} B=${selected.id} reservation=${reservation.get()} at=${SystemClock.uptimeMillis()}")
+                r32ReleaseRead.countDown()
+                assertTrue("NOT REACHED: A's Main continuation was not held", r32MainHeld.await(10, TimeUnit.SECONDS))
+                assertFalse("A Main must still be held", r32AExited.count == 0L)
+                assertTrue("S1: B physical read did not begin while A Main was held", r32BStarted.await(5, TimeUnit.SECONDS))
+                assertFalse("stale A or B submitted output while predecessor Main was held", r32OutputDuringHeldApply.get())
+                checkNotNull(r32ResumeMain.get()).run()
+                assertTrue("NOT REACHED: A Main did not complete after release", r32AExited.await(10, TimeUnit.SECONDS))
+                assertFalse("stale A reached a positive apply boundary", r32ADisclosureAttempt.get())
+                var finalIdentity: KeyguardR22VisualIdentityForTest? = null
+                await("NOT REACHED: no fresh DIRECT proof after A disposal", 20_000) {
+                    instrumentation.runOnMainSync { finalIdentity = service.r22VisualIdentityForTest() }
+                    finalIdentity?.winningRequestId?.let { it != original.id && it >= selected.id } == true
+                }
+                val winner = checkNotNull(finalIdentity)
+                records.add("R32_FRESH_WINNER B=${selected.id} proof=${winner.winningRequestId} at=${SystemClock.uptimeMillis()} physical=UNOBSERVED")
+                visualCalibration = "S1_STRUCTURAL_FRESH_PROOF_ONLY_VISUAL_NOT_QUALIFIED"
             } else if (scenario == "automation") {
                 assertTrue("NOT REACHED: no original reserved opening entered its physical read", entryStarted.await(20, TimeUnit.SECONDS))
                 val original = checkNotNull(a.get())
@@ -631,6 +739,8 @@ internal class KeyguardR22FirstInspectionFixture {
             releaseEntry.countDown()
             release.countDown()
             releaseB.countDown()
+            r32ReleaseRead.countDown()
+            r32ResumeMain.get()?.run()
             // The held reader has been released before any PNG encoding or
             // inventory write. Keep even failed precondition samples.
             runCatching {
@@ -659,12 +769,19 @@ internal class KeyguardR22FirstInspectionFixture {
             KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = null
             KeyguardOrbSurfaceWorkerTestHooks.postedMaterialTime = null
             KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = savedRevealCross
+            if (r32) {
+                KeyguardOrbSurfaceWorkerTestHooks.beforeFirstLock = r32SavedFirstLock
+                KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross = r32SavedRevealCross
+            }
             File(dir, "visual-edges.txt").writeText(
                 (synchronized(ingressEdges) { ingressEdges.toList() } + synchronized(visualEdges) { visualEdges.toList() })
                     .joinToString("\n", postfix = "\n") + "overflow=${visualOverflow.get()}\n")
             runCatching { calibration?.close() }.onFailure { errors += "visualCleanup:${it.javaClass.simpleName}:${it.message}" }
             runCatching { instrumentation.runOnMainSync {
-                FluviKeyguardCardServiceRegistry.serviceForInstrumentation()?.inspectionProbeForTest = null
+                FluviKeyguardCardServiceRegistry.serviceForInstrumentation()?.let {
+                    it.inspectionProbeForTest = null
+                    it.r32MainApplyGateForTest = null
+                }
             } }
             runCatching {
                 if (capture) {
