@@ -199,6 +199,8 @@ internal class KeyguardWindowSnapshotReader(
         val openingYieldHint: (() -> Boolean)? = null,
         /** The follow-on may claim only a clean child boundary of the exact SystemUI root. */
         val followOnOpening: Boolean = false,
+        /** R34 transfers only from the actual accepted SystemUI root. */
+        val r34ExactSystemRoot: Boolean = false,
         val beforeWindowsAcquisition: (() -> Unit)? = null,
         val openingFirstIngressUptime: (() -> Long)? = null,
         val openingChildBefore: ((Int, Int) -> Unit)? = null,
@@ -207,6 +209,8 @@ internal class KeyguardWindowSnapshotReader(
         val openingEligibleCheckpoint: ((Int, Int) -> Unit)? = null,
         val captureOriginalOpeningEvidence: Boolean = false,
         val claimOpeningYield: ((String, KeyguardOpeningYieldReason, Boolean, Boolean, Int, Int, Int) -> KeyguardCardInspectionRequest?)? = null,
+        /** Checked only after the returned node's own exclusion markers. */
+        val pauseOpeningAfterYieldAttempt: (() -> Boolean)? = null,
     )
 
     /** One immutable, bounded original-A observation; never owns a node. */
@@ -677,7 +681,8 @@ internal class KeyguardWindowSnapshotReader(
                     request.openingEligibleCheckpoint, request.openingYieldHint,
                     if (installed) { kind, reason, count ->
                         if (request.openingYieldHint?.invoke() == true) {
-                            val exactSystemRoot = if (request.followOnOpening || reason == KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD)
+                            val exactSystemRoot = if (request.followOnOpening || request.r34ExactSystemRoot ||
+                                reason == KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD)
                                 rootPackage == "com.android.systemui" && window.id == activeWindowId &&
                                     (!request.strictOwnAttribution || request.knownOwnAtInventory?.invoke() == observedOwn)
                             else true
@@ -685,7 +690,7 @@ internal class KeyguardWindowSnapshotReader(
                                     count <= 1 || timing.childCount == 0)) null
                             else maybeYield(kind, reason, exactSystemRoot && cleanOpeningInventory(), visited + count)
                         } else null
-                    } else null).also {
+                    } else null, if (installed) request.pauseOpeningAfterYieldAttempt else null).also {
                     if (timing.firstIncompleteReason == null) timing.firstIncompleteReason = it.firstIncompleteReason
                     if (it.yieldReason != null) timing.openingYieldReason = it.yieldReason
                     walkTruncated = walkTruncated || it.truncated
@@ -729,6 +734,7 @@ internal class KeyguardWindowSnapshotReader(
         openingEligibleCheckpoint: ((Int, Int) -> Unit)?,
         openingYieldHint: (() -> Boolean)?,
         tryOpeningYield: ((String, KeyguardOpeningYieldReason, Int) -> KeyguardCardInspectionRequest?)?,
+        pauseOpeningAfterYieldAttempt: (() -> Boolean)?,
     ): VisibleIds {
         val ids = linkedSetOf<String>()
         var decisiveReported = false
@@ -791,6 +797,7 @@ internal class KeyguardWindowSnapshotReader(
                         }
                         yieldedTo = tryOpeningYield("beforeChild", eligibleReason, visited)
                         if (yieldedTo != null) { yieldReason = eligibleReason; return }
+                        if (pauseOpeningAfterYieldAttempt?.invoke() == true) { aborted = true; return }
                     } else if (timing.captureOpening && timing.checkpointState == null && openingYieldHint?.invoke() == true) {
                         timing.checkpointState = if (truncated) "SKIPPED_TRUNCATED" else if (decisiveReported)
                             "SKIPPED_DECISIVE" else "NOT_INSTALLED"

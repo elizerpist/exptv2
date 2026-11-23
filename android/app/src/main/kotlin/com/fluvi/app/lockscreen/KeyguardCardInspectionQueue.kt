@@ -43,6 +43,8 @@ internal data class KeyguardCardInspectionRequest(
     val latestSamplerEvidence: KeyguardSamplerEvidence? = null,
     /** Actual framework ingress for this queue offer; copied reconciliation is not a new event. */
     val r32FrameworkIngressId: Long? = null,
+    /** Scene assigned to this exact external framework offer; null for copied or synthetic work. */
+    val r34SceneSerial: Long? = null,
 ) {
     /** Carry an unserved event, never an acquired answer, across a local
      * withdrawal in the SAME service/wake. The new request must reacquire
@@ -63,6 +65,7 @@ internal data class KeyguardCardInspectionRequest(
             queuedAtUptimeMs = queuedAt,
             latestSamplerEvidence = null,
             r32FrameworkIngressId = null,
+            r34SceneSerial = null,
             windowFreshness = if (windowFreshness.requiresCacheClear && !freshness.requiresCacheClear) windowFreshness else freshness,
         )
     }
@@ -217,21 +220,23 @@ internal class KeyguardCardInspectionQueue {
 
     /** @return true only when the caller must start a worker immediately. */
     fun offer(request: KeyguardCardInspectionRequest): Boolean {
-        if (active == null) {
-            active = request
-            return true
-        }
-        // Coalescing may replace an unstarted wake request with an ordinary
-        // window event. Preserve its still-unperformed freshness boundary,
-        // while keeping the new event/time/authority as the actual request.
+        // A parked obsolete read may leave an unperformed obligation in the
+        // pending slot. Transfer that obligation to the next real offer, never
+        // manufacture an event or silently lose a lifecycle cache clear.
         val previous = pending
-        pending = if (previous != null && previous.windowFreshness.requiresCacheClear &&
+        val actual = if (previous != null && previous.windowFreshness.requiresCacheClear &&
             !request.windowFreshness.requiresCacheClear &&
             previous.session == request.session && previous.wakeGeneration == request.wakeGeneration &&
             previous.visibilityEpoch == request.visibilityEpoch &&
             previous.interactionEpoch == request.interactionEpoch &&
             previous.attachGeneration == request.attachGeneration
         ) request.copy(windowFreshness = previous.windowFreshness) else request
+        if (active == null) {
+            pending = null
+            active = actual
+            return true
+        }
+        pending = actual
         return false
     }
 
@@ -246,6 +251,16 @@ internal class KeyguardCardInspectionQueue {
         pending = null
         active = next
         return next
+    }
+
+    /** Only after the physical reader has unwound. Keep an older pending
+     * freshness obligation until the newer scene's actual request arrives. */
+    fun parkObsoleteAfterRead(request: KeyguardCardInspectionRequest): Boolean {
+        if (active != request || preceding != null) return false
+        active = null
+        openingTransferFrom = null
+        openingTransferTo = null
+        return true
     }
 
     /** A completed positive can hand the same reader to an exact pending

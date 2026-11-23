@@ -19,13 +19,15 @@ internal class KeyguardFirstAuthorizedOrb(private val lock: Any = Any()) {
         val full: Boolean,
     )
 
-    private var scene = 0L
+    @Volatile private var scene = 0L
     private var newestRead = 0L
     private var newestRequiredRead = 0L
     private var retained: Proof? = null
     private var consumed = false
 
     fun sceneSerial(): Long = synchronized(lock) { scene }
+    /** Hint only: every transfer rechecks scene and owner under the shared lock. */
+    fun sceneHint(): Long = scene
     fun current(): Proof? = synchronized(lock) { retained }
 
     /** Call before an accepted potentially scene-changing event can be

@@ -584,10 +584,11 @@ internal class KeyguardCardWindow(
         return removed
     }
 
-    fun revealR18(preparation: R18Preparation, boundary: () -> Boolean, nativeApplied: () -> Boolean, done: (Boolean) -> Unit) {
+    fun revealR18(preparation: R18Preparation, boundary: () -> Boolean, nativeApplied: () -> Boolean,
+                  stillAuthorized: () -> Boolean = { true }, done: (Boolean) -> Unit) {
         checkMainThread()
         if (r18Preparation != preparation || !lifecycle.isAttached()) { done(false); return }
-        surfacePresenter?.revealR18(preparation.attachment, preparation.outputGeneration, boundary, nativeApplied, done) ?: done(false)
+        surfacePresenter?.revealR18(preparation.attachment, preparation.outputGeneration, boundary, nativeApplied, stillAuthorized, done) ?: done(false)
     }
 
     /** Called under exact coordinator authority; safe even with Main held. */

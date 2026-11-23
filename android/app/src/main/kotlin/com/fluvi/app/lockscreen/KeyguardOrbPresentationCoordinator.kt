@@ -267,6 +267,16 @@ internal class KeyguardOrbPresentationCoordinator(private val lock: Any = Any())
         true
     }
 
+    /** Non-mutating final check after crossing, before the native apply.
+     * A concurrently cancelled permit must not submit a new private buffer. */
+    fun isCrossedCurrent(reveal: Reveal): Boolean = synchronized(lock) {
+        val entry = current ?: return@synchronized false
+        entry.reservation === reveal.reservation && entry.output === reveal.output && entry.host === reveal.host &&
+            entry.proofRequestId == reveal.proofRequestId && entry.activeAuthority == reveal.authority &&
+            entry.revealSequence == reveal.sequence && entry.grantState == Grant.REVEAL_QUEUED &&
+            entry.hostState == Host.INPUT_ARMED && entry.submitPhase == SubmitPhase.CROSSED
+    }
+
     /** The compositor calls this only after its captured native apply returns.
      * A concurrently cancelled permit remains cancelled even if Android did
      * submit pixels. The return value is this owner's transition ordinal. */

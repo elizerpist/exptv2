@@ -45,7 +45,8 @@ internal class KeyguardR22FirstInspectionFixture {
     private lateinit var automation: UiAutomation
 
     fun run(scenario: String) {
-        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative", "r32_overlap"))
+        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative", "r32_overlap", "r34_latest"))
+        val r34 = scenario == "r34_latest"
         val r31 = scenario == "r31_system" || scenario == "r31_ambiguous" || scenario == "r31_negative"
         val r32 = scenario == "r32_overlap"
         val negativeScene = scenario == "negative" || scenario == "r31_negative"
@@ -92,6 +93,8 @@ internal class KeyguardR22FirstInspectionFixture {
         val r32ReadReady = CountDownLatch(1)
         val r32ReleaseRead = CountDownLatch(1)
         val r32RealPending = CountDownLatch(1)
+        val r34RealOffers = CountDownLatch(2)
+        val r34ObservedOffer = AtomicLong(0L)
         val r32MainHeld = CountDownLatch(1)
         val r32ResumeMain = AtomicReference<Runnable?>()
         val r32LatestPending = AtomicLong(0L)
@@ -283,7 +286,7 @@ internal class KeyguardR22FirstInspectionFixture {
                         }
                     }
                     override fun openingEligibleCheckpoint(request: KeyguardCardInspectionRequest, windowId: Int, nextIndex: Int) {
-                        if ((r31 || scenario in setOf("positive", "negative", "stable")) && request == a.get() &&
+                        if ((r31 || r34 || scenario in setOf("positive", "negative", "stable")) && request == a.get() &&
                             firstChildObserved.get() && windowId.toLong() == independentWindowId.get() &&
                             firstChildHeld.compareAndSet(false, true)) {
                             records.add("A_ELIGIBLE_CHECKPOINT id=${request.id} window=$windowId next=$nextIndex at=${SystemClock.uptimeMillis()}")
@@ -369,6 +372,15 @@ internal class KeyguardR22FirstInspectionFixture {
                             r32LatestPending.set(request.id)
                             records.add("R32_REAL_PENDING id=${request.id} previous=${previous?.id} origin=${request.r14Ingress?.origin} at=${SystemClock.uptimeMillis()}")
                             r32RealPending.countDown()
+                        }
+                        if (r34 && firstChildHeld.get() && frameworkEvent && !startsWorker &&
+                            pending?.id == request.id && request.wakeGeneration == a.get()?.wakeGeneration &&
+                            request.r34SceneSerial != null && request.r32FrameworkIngressId == request.r14Ingress?.id &&
+                            request.r14Ingress?.origin in setOf(KeyguardR14Origin.SYSTEM_UI, KeyguardR14Origin.AMBIGUOUS) &&
+                            meta.displayId == Display.DEFAULT_DISPLAY && request.id > r34ObservedOffer.get()) {
+                            r34ObservedOffer.set(request.id)
+                            records.add("R34_REAL_PENDING id=${request.id} scene=${request.r34SceneSerial} previous=${previous?.id} at=${SystemClock.uptimeMillis()}")
+                            r34RealOffers.countDown()
                         }
                         if (scenario == "stable" && stableReading.get() && frameworkEvent) stableExternal.set(true)
                         if (negativeArmed.get() && frameworkEvent && !startsWorker && pending?.id == request.id) {
@@ -568,6 +580,28 @@ internal class KeyguardR22FirstInspectionFixture {
                     "A:SHOW_FULL/MAIN_CONFIRMED/false/false/false", resultB.get())
                 assertEquals("stable A must not be yielded", 0L, yieldedTo.get())
                 assertFalse("NOT REACHED: external ingress invalidated the stable read", stableExternal.get())
+            } else if (r34) {
+                // These are actual framework events, not injected accessibility
+                // metadata. Keep every observed pending identity in the report.
+                shell("input keyevent KEYCODE_VOLUME_UP")
+                shell("input keyevent KEYCODE_VOLUME_DOWN")
+                assertTrue("NOT REACHED: fewer than two real SystemUI offers", r34RealOffers.await(10, TimeUnit.SECONDS))
+                var pending: KeyguardCardInspectionRequest? = null
+                instrumentation.runOnMainSync { pending = service.inspectionStateForTest().pending }
+                val latest = checkNotNull(pending) { "NOT REACHED: real latest request was no longer pending" }
+                assertEquals("NOT REACHED: latest offer changed before selection", r34ObservedOffer.get(), latest.id)
+                assertNotNull("NOT REACHED: request has no actual scene identity", latest.r34SceneSerial)
+                b.set(latest.id); afterB.set(true)
+                records.add("R34_EXPECTED_LATEST A=${original.id} latest=${latest.id} scene=${latest.r34SceneSerial}")
+                release.countDown()
+                assertTrue("NOT REACHED: original did not terminate at a safe child", completed.await(20, TimeUnit.SECONDS))
+                assertEquals("R34 obsolete reader did not transfer to the actual latest offer", latest.id, yieldedTo.get())
+                assertTrue("NOT REACHED: real latest reader did not start", bStarted.await(15, TimeUnit.SECONDS))
+                assertEquals("R34 must use one physical reader", aThread.get(), bThread.get())
+                assertFalse("R34 acquired another original child after transfer", nextChild.get())
+                assertTrue("NOT REACHED: latest physical reader did not finish", bFinished.await(20, TimeUnit.SECONDS))
+                assertEquals("NOT REACHED: latest read did not classify complete MAIN/FULL",
+                    "B:SHOW_FULL/MAIN_CONFIRMED/false/false/false", resultB.get())
             } else {
                 instrumentation.runOnMainSync {
                     val now = SystemClock.uptimeMillis()
@@ -656,17 +690,19 @@ internal class KeyguardR22FirstInspectionFixture {
             File(dir, "before-freeze.txt").writeText(snapshot)
             val core = snapshot.lineSequence().firstOrNull { it.startsWith(" R22_CORE ") &&
                 it.contains("opening=${original.id}/") }
-            assertNotNull("missing protected R22 acquisition core", core)
-            assertTrue("wrong reservation in protected core", checkNotNull(core).contains("opening=${original.id}/${reservation.get()} "))
-            if (scenario == "stable") assertTrue(core.contains("outcome=A_FINISHED/"))
-            else {
-                assertTrue(core.contains("outcome=YIELDED/"))
-                assertTrue(core.contains("claimed=${yieldedTo.get()}@"))
-                assertFalse("a yielded A must have no completion classification", core.contains("aResult=SHOW_FULL"))
-                if (negativeScene) {
-                    val post = checkNotNull(observedPostClaim.get()) { "NOT REACHED: no observed post-claim pending item" }
-                    assertTrue("protected core lost the actual first post-claim request", core.contains("postFirst=${post.first?.id}@"))
-                    assertTrue("post-claim identity belongs to another reservation", post.reservationId == reservation.get())
+            if (!r34) {
+                assertNotNull("missing protected R22 acquisition core", core)
+                assertTrue("wrong reservation in protected core", checkNotNull(core).contains("opening=${original.id}/${reservation.get()} "))
+                if (scenario == "stable") assertTrue(core.contains("outcome=A_FINISHED/"))
+                else {
+                    assertTrue(core.contains("outcome=YIELDED/"))
+                    assertTrue(core.contains("claimed=${yieldedTo.get()}@"))
+                    assertFalse("a yielded A must have no completion classification", core.contains("aResult=SHOW_FULL"))
+                    if (negativeScene) {
+                        val post = checkNotNull(observedPostClaim.get()) { "NOT REACHED: no observed post-claim pending item" }
+                        assertTrue("protected core lost the actual first post-claim request", core.contains("postFirst=${post.first?.id}@"))
+                        assertTrue("post-claim identity belongs to another reservation", post.reservationId == reservation.get())
+                    }
                 }
             }
             if (!negativeScene) {

@@ -166,7 +166,8 @@ internal class KeyguardOrbPresentationLane(
     /** This operation is never submitted by a worker frame callback. */
     fun reveal(output: KeyguardOrbDirectOutput,
                posterLease: KeyguardR34PrivateAssetCache.Lease<KeyguardR34PrivatePoster.Image>? = null,
-               crossGrantBoundary: () -> Boolean, nativeApplied: () -> Boolean, completed: (Boolean) -> Unit) {
+               crossGrantBoundary: () -> Boolean, nativeApplied: () -> Boolean,
+               stillAuthorized: () -> Boolean = { true }, completed: (Boolean) -> Unit) {
         val accepted = handler.post {
             if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross?.invoke(output)
             if (output.isSealed() || !output.child.isValid || !runCatching { crossGrantBoundary() }.getOrDefault(false)) {
@@ -194,6 +195,12 @@ internal class KeyguardOrbPresentationLane(
                     }
                     attachReceipt(transaction, output, if (posterLease == null) "REVEAL" else "POSTER_REVEAL", begin)
                     if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) KeyguardOrbSurfaceWorkerTestHooks.beforeRevealApply?.invoke(output)
+                    if (output.isSealed() || !runCatching { stillAuthorized() }.getOrDefault(false)) {
+                        val local = posterUse
+                        if (local != null) finishPoster(local) else posterLease?.close()
+                        runCatching { completed(false) }
+                        return@post
+                    }
                     applyEntered = true
                     transaction.apply()
                     applied = true

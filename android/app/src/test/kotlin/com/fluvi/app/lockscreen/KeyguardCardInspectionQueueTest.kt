@@ -109,6 +109,25 @@ class KeyguardCardInspectionQueueTest {
         assertEquals(current, queue.complete(active))
     }
 
+    @Test fun `parked obsolete reader keeps its pending freshness until a real later offer`() {
+        val queue = KeyguardCardInspectionQueue()
+        val active = request(1, "wake")
+        val older = request(2, "window").copy(windowFreshness = KeyguardWindowFreshness.LIFECYCLE_BOUNDARY)
+        val latest = request(3, "window")
+        assertTrue(queue.offer(active))
+        assertFalse(queue.offer(older))
+        assertTrue(queue.parkObsoleteAfterRead(active))
+        assertNull(queue.activeRequest())
+        assertEquals(older, queue.pendingRequest())
+        assertFalse(queue.parkObsoleteAfterRead(active))
+        assertTrue(queue.offer(latest))
+        assertEquals(latest.id, queue.activeRequest()?.id)
+        assertEquals(KeyguardWindowFreshness.LIFECYCLE_BOUNDARY, queue.activeRequest()?.windowFreshness)
+        assertNull(queue.pendingRequest())
+        assertNull(queue.complete(active))
+        assertEquals(latest.id, queue.activeRequest()?.id)
+    }
+
     @Test fun `one active inspection retains only the newest coalesced request`() {
         val queue = KeyguardCardInspectionQueue()
         val first = request(1, "wake")

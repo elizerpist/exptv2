@@ -133,6 +133,7 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
     @Test fun r34UiHiddenKeepsConfiguredPosterForAuthorizedWindow() = r34WindowPoster("SHOW")
     @Test fun r34PressureInvalidatesLeasedPosterBeforeSubmit() = r34WindowPoster("PRESSURE")
     @Test fun r34RestrictionBeforeSubmitCannotRevealPoster() = r34WindowPoster("RESTRICT")
+    @Test fun r34RestrictionAfterGrantBeforeNativeApplyCannotRevealPoster() = r34WindowPoster("RESTRICT_AFTER_CROSS")
 
     /** Uses the production retained window, native host and compositor. The
      * permission callback is a controlled positive, not a service-privacy pass. */
@@ -144,7 +145,8 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
         val previous = preferences.getString("mode", null)
         val activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
-        val stopped = CountDownLatch(1); val warmed = CountDownLatch(1); val allocated = CountDownLatch(1)
+        val stopped = CountDownLatch(1); val resumed = CountDownLatch(1); val restoring = AtomicBoolean(false)
+        val warmed = CountDownLatch(1); val allocated = CountDownLatch(1)
         val hostReady = CountDownLatch(1); val bound = CountDownLatch(1); val imageReady = CountDownLatch(1)
         val heldLive = CountDownLatch(1); val releaseLive = CountDownLatch(1)
         val beforeCross = CountDownLatch(1); val releaseCross = CountDownLatch(1); val revealed = CountDownLatch(1)
@@ -153,7 +155,7 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
         val closedActivity = object : Application.ActivityLifecycleCallbacks {
             override fun onActivityCreated(a: Activity, state: Bundle?) = Unit
             override fun onActivityStarted(a: Activity) = Unit
-            override fun onActivityResumed(a: Activity) = Unit
+            override fun onActivityResumed(a: Activity) { if (a === activity && restoring.get()) resumed.countDown() }
             override fun onActivityPaused(a: Activity) = Unit
             override fun onActivityStopped(a: Activity) { if (a === activity) stopped.countDown() }
             override fun onActivitySaveInstanceState(a: Activity, state: Bundle) = Unit
@@ -239,9 +241,13 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
             instrumentation.runOnMainSync { assertTrue("activity did not move to background", activity.moveTaskToBack(true)) }
             assertTrue("activity never stopped in the background", stopped.await(15, TimeUnit.SECONDS))
             instrumentation.runOnMainSync { checkNotNull(window).onMemoryTrim(ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) }
-            val restored = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
+            // startActivitySync waits for a new Activity instance, while
+            // REORDER_TO_FRONT deliberately resumes the existing instance.
+            restoring.set(true)
+            context.startActivity(Intent(context, KeyguardMaterialTestActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
-            assertSame("the retained window must retain its Activity host", activity, restored)
+            assertTrue("retained Activity did not resume after UI_HIDDEN", resumed.await(15, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync { assertFalse("retained Activity was destroyed", activity.isFinishing || activity.isDestroyed) }
             instrumentation.runOnMainSync { assertTrue(checkNotNull(window).stageR18Host(hostGeneration, settings)) }
             assertTrue("real panel host did not become ready", hostReady.await(20, TimeUnit.SECONDS))
             val actualHost = checkNotNull(host.get())
@@ -269,10 +275,13 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
                 if (scenario == "RESTRICT") KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross = {
                     beforeCross.countDown(); check(releaseCross.await(20, TimeUnit.SECONDS))
                 }
+                if (scenario == "RESTRICT_AFTER_CROSS") KeyguardOrbSurfaceWorkerTestHooks.beforeRevealApply = {
+                    beforeCross.countDown(); check(releaseCross.await(20, TimeUnit.SECONDS))
+                }
                 checkNotNull(window).revealR18(prep, boundary = { applied.incrementAndGet(); true },
                     nativeApplied = { true }) { result.set(it); revealed.countDown() }
             }
-            if (scenario == "RESTRICT") {
+            if (scenario == "RESTRICT" || scenario == "RESTRICT_AFTER_CROSS") {
                 assertTrue("native submit boundary was not reached", beforeCross.await(10, TimeUnit.SECONDS))
                 instrumentation.runOnMainSync { checkNotNull(window).hide() }
                 releaseCross.countDown()
@@ -293,7 +302,7 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
                 shown.recycle(); releaseLive.countDown()
             } else {
                 assertEquals("stale/restricted poster must not reveal", false, result.get())
-                assertEquals("stale/restricted poster crossed the permission boundary", 0, applied.get())
+                assertEquals("unexpected permission boundary count", if (scenario == "RESTRICT_AFTER_CROSS") 1 else 0, applied.get())
                 if (scenario == "PRESSURE") instrumentation.runOnMainSync { checkNotNull(window).hide() }
                 val screen = awaitScreenshot(10_000) { image ->
                     val x = hostLocation[0] + size / 2; val y = hostLocation[1] + size / 2
@@ -309,6 +318,7 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
             KeyguardOrbSurfaceWorkerTestHooks.onDirectProgramConstructor = null
             KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = null
             KeyguardOrbSurfaceWorkerTestHooks.beforeRevealCross = null
+            KeyguardOrbSurfaceWorkerTestHooks.beforeRevealApply = null
             reference?.recycle()
             activity.application.unregisterActivityLifecycleCallbacks(closedActivity)
             instrumentation.runOnMainSync { window?.dispose(); activity.finish() }

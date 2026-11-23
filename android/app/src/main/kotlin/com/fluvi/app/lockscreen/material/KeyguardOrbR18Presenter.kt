@@ -274,7 +274,7 @@ internal class KeyguardOrbR18Presenter(
 
     /** Input and the exact fresh privacy proof must already be armed. */
     fun reveal(attachment: Long, generation: Long, crossGrantBoundary: () -> Boolean,
-               nativeApplied: () -> Boolean, done: (Boolean) -> Unit) {
+               nativeApplied: () -> Boolean, stillAuthorized: () -> Boolean = { true }, done: (Boolean) -> Unit) {
         checkMain()
         val current = owner.get()
         if (current == null || current.attachment != attachment || current.generation != generation ||
@@ -291,6 +291,9 @@ internal class KeyguardOrbR18Presenter(
                 (poster == null || privatePosterIsCurrent(poster.value)) && crossGrantBoundary()
         }, nativeApplied = {
             owner.get() === current && !current.target.revoked && nativeApplied()
+        }, stillAuthorized = {
+            owner.get() === current && !current.target.revoked &&
+                (poster == null || privatePosterIsCurrent(poster.value)) && stillAuthorized()
         }, completed = { success ->
             val live = success && owner.get() === current && !current.target.revoked
             if (live) {
