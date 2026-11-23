@@ -47,6 +47,9 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
     @Test fun r21ExclusionRetiresSubmittedOrbWithMainAckHeld() = runService(false, true)
 
+    @Test fun r31StructuralSystemUiAndPixelsOnly() = KeyguardR22FirstInspectionFixture().run("r31_system_structural")
+    @Test fun r31StructuralAmbiguousAndPixelsOnly() = KeyguardR22FirstInspectionFixture().run("r31_ambiguous_structural")
+
     @Test fun r31ActualSuccessorTransfersToSystemUiIngress() = KeyguardR22FirstInspectionFixture().run("r31_system")
     @Test fun r31ActualSuccessorTransfersToAmbiguousIngress() = KeyguardR22FirstInspectionFixture().run("r31_ambiguous")
     @Test fun r31RestrictiveIngressWhileSuccessorChildIsHeld() = KeyguardR22FirstInspectionFixture().run("r31_negative")

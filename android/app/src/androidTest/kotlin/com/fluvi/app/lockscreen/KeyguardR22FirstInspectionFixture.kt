@@ -45,8 +45,9 @@ internal class KeyguardR22FirstInspectionFixture {
     private lateinit var automation: UiAutomation
 
     fun run(scenario: String) {
-        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative"))
-        val r31 = scenario == "r31_system" || scenario == "r31_ambiguous" || scenario == "r31_negative"
+        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative", "r31_system_structural", "r31_ambiguous_structural"))
+        val r31 = scenario.startsWith("r31_")
+        val structuralOnly = scenario.endsWith("_structural")
         val negativeScene = scenario == "negative" || scenario == "r31_negative"
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
@@ -481,7 +482,7 @@ internal class KeyguardR22FirstInspectionFixture {
                     assertTrue("NOT REACHED: B did not return a real SystemUI child", bEntered.await(15, TimeUnit.SECONDS))
                     instrumentation.runOnMainSync {
                         val now = SystemClock.uptimeMillis(); secondOfferAt.set(now)
-                        val window = if (scenario == "r31_system") independentWindowId.get().toInt() else -1
+                        val window = if (scenario.startsWith("r31_system")) independentWindowId.get().toInt() else -1
                         service.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
                             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, window, Display.DEFAULT_DISPLAY, 0,
                             "com.android.systemui", now))
@@ -599,6 +600,7 @@ internal class KeyguardR22FirstInspectionFixture {
                 KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
                 waitPosted(KeyguardR22VisualCalibration.timeA)
                 visual.awaitServiceMatch("service-phase-A-return", identity.bounds, visual.a, underlay)
+                if (!structuralOnly) {
                 negativeArmed.set(true)
                 File(dir, "visual-shade-command.txt").writeText(shell("cmd statusbar expand-notifications"))
                 assertTrue("NOT REACHED: no real shade ingress for visual withdrawal", realNegativeEvent.await(10, TimeUnit.SECONDS))
@@ -617,6 +619,9 @@ internal class KeyguardR22FirstInspectionFixture {
                 }
                 verifyExclusionPixels(visual, identity, samples, checkNotNull(shadeWindow), "withdrawal")
                 visualCalibration = "PASS"
+                } else {
+                    visualCalibration = "STRUCTURAL_A_B_A_ONLY_SHADE_NOT_RUN"
+                }
             }
             val screenshot = automation.takeScreenshot()
             screenshot?.let { image -> File(dir, "service-unclassified.png").outputStream().use {
