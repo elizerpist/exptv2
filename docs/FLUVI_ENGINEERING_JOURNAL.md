@@ -17473,3 +17473,27 @@ failures, source pairs, runner prerequisites and the incomplete platform patch.
 AOSP Soong/build/boot, app-stopped frame controls and all three optical
 ≤10 ms endpoints are NOT RUN. The unavailable platform runner is distinct
 from the still-unfinished source. PHYSICAL VALIDATION — PENDING, USER ONLY.
+
+### R29.1 checkpoint API35 result
+
+Private [run 45120980237](https://github.com/elizerpist/pushparserv2/actions/runs/45120980237)
+at app `de807259cd370d18e422772ed0943b8d65be4bca` completed **FAIL**:
+build job `137514447034` passed and device job `137518058898` failed. The
+three R29 Parcel controls and 10/16 inherited controls passed. Six controls
+failed or did not reach prerequisites: `direct-pending` and `direct-stable`
+missed a complete positive real DIRECT snapshot; `stale-ingress` missed the
+first FULL paint; `visible-unlock` missed DIRECT reveal acknowledgement;
+`opening-service-positive` missed real shade ingress; and
+`opening-service-negative` missed real framework exclusion ingress. These
+are the same six control names as the earlier WIP, but their exact boundaries
+are recorded per run, not assumed identical. The test package pair hashes are
+`3e4e06f963193fd689fe1eb94a06564328347b3f7656222c57e086cf20e33b49`
+and `1e2a971d384c05991d0e87b62604b5a6ad0ecb39caa0835b9ba69c3e6639acbc`.
+
+The full raw run and the exact APK pair are preserved on the access-controlled
+[private evidence commit 23fce4e](https://github.com/elizerpist/pushparserv2/tree/23fce4e7df657b6a9a393d219f66d6ef09e236ad).
+Native evidence archive SHA-256:
+`49eca4368fd8b74b28646a2d6c716b3055f766df38a386b9e64a4f5bde474313`.
+Formal completion, integrated SystemUI, app-stopped frame tests and all three
+physical latency targets remain unverified; no new runtime remedy is selected
+from these failed controls. PHYSICAL VALIDATION — PENDING, USER ONLY.

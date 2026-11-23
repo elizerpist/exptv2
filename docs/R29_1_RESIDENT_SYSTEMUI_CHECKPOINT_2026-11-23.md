@@ -80,12 +80,12 @@ SystemUI draw or old-owner exclusivity is claimed.
 - The prior API35 run 45076752427 had 10/16 inherited controls pass, with six
   failures or setup boundaries not reached; the three R29 Parcel tests passed.
   R22.4 visual privacy FAIL and the R27 shade ambiguity remain open.
-- Exact-source API35 run 45120980237: RESULT_PENDING.
+- [Exact-source API35 run 45120980237](https://github.com/elizerpist/pushparserv2/actions/runs/45120980237): **FAIL**, build job `137514447034` PASS, device job `137518058898` FAIL. All 3 R29 Parcel controls and 10/16 inherited controls passed. Six did not reach their asserted prerequisites: `direct-pending` and `direct-stable` lacked a complete positive real DIRECT snapshot; `stale-ingress` did not reach first FULL paint; `visible-unlock` did not reach DIRECT reveal acknowledgement; `opening-service-positive` saw no real shade ingress; `opening-service-negative` saw no real framework exclusion ingress. App/test APK SHA-256 values were `3e4e06f963193fd689fe1eb94a06564328347b3f7656222c57e086cf20e33b49` and `1e2a971d384c05991d0e87b62604b5a6ad0ecb39caa0835b9ba69c3e6639acbc`. Private artifacts `14794415854` and `14794382110` retain the pair and native evidence. These are unmodified API35 controls, not patched-SystemUI tests.
 - Ordinary public CI and formal `r12_live`, `r12_static`, `r12_legacy`,
   `r12_contract` and `full` scopes on a completed R29.1 source: NOT RUN;
   there is no completed integrated source. No public raw screenshots or traces
   were uploaded. Raw local test logs and failed golden images are preserved
-  on the [private evidence branch](https://github.com/elizerpist/pushparserv2/tree/4c9e03b6a9b1b5c1797617d3a845ac91046e317b).
+  on the [private evidence branch](https://github.com/elizerpist/pushparserv2/tree/23fce4e7df657b6a9a393d219f66d6ef09e236ad).
 
 ## Source graph and platform limits
 
