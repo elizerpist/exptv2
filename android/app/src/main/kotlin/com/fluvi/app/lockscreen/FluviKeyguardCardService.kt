@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -147,6 +148,13 @@ class FluviKeyguardCardService : AccessibilityService() {
     private val r25ExclusionPosted = AtomicBoolean(false)
     /** Test dispatch may hold a single Main continuation without blocking Main. */
     @Volatile internal var r25MainDispatchForTest: ((KeyguardCardInspectionRequest, Runnable) -> Boolean)? = null
+    /** Test-only asynchronous gate: holding the continuation never blocks the Main Looper. */
+    @Volatile internal var r32MainApplyGateForTest: ((KeyguardCardInspectionRequest, Runnable) -> Boolean)? = null
+    private suspend fun r32AwaitApplyGateForTest(request: KeyguardCardInspectionRequest) {
+        val gate = r32MainApplyGateForTest ?: return
+        val resume = CompletableDeferred<Unit>()
+        if (gate(request, Runnable { resume.complete(Unit) })) resume.await()
+    }
     internal fun r25ReaderBarrierForTest(acknowledge: () -> Unit) {
         inspectionScope.launch { acknowledge() }
     }
@@ -2779,7 +2787,10 @@ class FluviKeyguardCardService : AccessibilityService() {
                         recordR25("BYPASS", active, opening.pending, opening.route, readEnd = read.finishedAt,
                             reason = opening.reason)
                 }
-                withContext(Dispatchers.Main.immediate) { applyCompletedInspection(read, handoff) }
+                withContext(Dispatchers.Main.immediate) {
+                    r32AwaitApplyGateForTest(active)
+                    applyCompletedInspection(read, handoff)
+                }
                 request = synchronized(queueLock) { inspectionQueue.complete(active) }
                 if (promotedOwner == active) promotedOwner = null
                 scheduleR19Join()
@@ -2794,6 +2805,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             val successor = decision.successor
             val next = coroutineScope {
                 val earlierApply = async(Dispatchers.Main) {
+                    r32AwaitApplyGateForTest(active)
                     applyCompletedInspection(read, handoff, snapshot, successor)
                 }
                 val successorOutcome: PhysicalReadOutcome
@@ -3664,6 +3676,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 observedAt = decisionObservedAt, readStart = inspectionStartedAt, readEnd = inspectionFinishedAt)
         }
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.DECISION, request.id, request.attachGeneration, extra = decision.ordinal)
+        if (decision == KeyguardCardVisibility.SHOW_FULL || decision == KeyguardCardVisibility.SHOW_DISCREET)
+            inspectionProbeForTest?.positiveApplyAttempt(request, decision)
         val staged = r18Active
         if (staged != null && !overlay.isAttached &&
             (decision == KeyguardCardVisibility.SHOW_DISCREET || decision == KeyguardCardVisibility.SHOW_FULL)) {

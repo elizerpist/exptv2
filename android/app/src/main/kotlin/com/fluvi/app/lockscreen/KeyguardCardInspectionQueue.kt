@@ -119,6 +119,7 @@ internal interface KeyguardInspectionProbeForTest {
     fun r25QueueTransition(request: KeyguardCardInspectionRequest, pendingAtOffer: KeyguardCardInspectionRequest?,
         activeAfter: KeyguardCardInspectionRequest?, superseded: KeyguardCardInspectionRequest?) {}
     fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
+    fun positiveApplyAttempt(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
     fun beforeDecision(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
         pending: KeyguardCardInspectionRequest?, authority: KeyguardInspectionAuthority) {}
     fun readAheadDecision(request: KeyguardCardInspectionRequest, pendingId: Long?, reservedId: Long?,
