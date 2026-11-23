@@ -1,18 +1,16 @@
 {
   "schema_version": 1,
-  "source_head": "ad1eac09442cb8d78a992874d22157fe6bd5a05f",
-  "base_head": "f09da8647c78964e46bce604e5889355e86eef49",
+  "source_head": "93248d0aeee4ebc69d305020e7d5b2d5bdbbdb2a",
+  "base_head": "de807259cd370d18e422772ed0943b8d65be4bca",
   "changed_files": [
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt",
-    "android/app/src/debug/kotlin/com/fluvi/app/lockscreen/KeyguardR224RestrictionTestHooks.kt",
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt",
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardWindow.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardCardMaterialController.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbBufferRenderer.kt",
-    "android/app/src/profile/kotlin/com/fluvi/app/lockscreen/KeyguardR224RestrictionTestHooks.kt",
-    "android/app/src/release/kotlin/com/fluvi/app/lockscreen/KeyguardR224RestrictionTestHooks.kt"
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardOrbPresentationCoordinator.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR30TransitionPolicyTest.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
