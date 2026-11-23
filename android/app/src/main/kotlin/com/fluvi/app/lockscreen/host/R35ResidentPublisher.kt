@@ -63,6 +63,7 @@ internal class R35ResidentPublisher(
     private val client = R29HostClient(application, ownership, main, this, testHost)
     private val lock = Any()
     private var session: String? = null
+    private var sessionEpoch = -1L
     private var sequence = 0L
     private var generation = 0L
     private var lastPublishedSequence = 0L
@@ -74,12 +75,13 @@ internal class R35ResidentPublisher(
     fun connectAfterDrain(epoch: Long) { client.connect(epoch) }
 
     override fun onSession(nonce: String, epoch: Long) {
-        if (ownership.epoch() != epoch || !R35MaterialPublication.install(ownership, nonce, this)) {
+        if (!ownership.isCurrentHost(epoch) || !R35MaterialPublication.install(ownership, epoch, nonce, this)) {
             client.close()
             return
         }
         synchronized(lock) {
             session = nonce
+            sessionEpoch = epoch
             sequence = 0
             generation += 1
             lastPublishedSequence = 0
@@ -129,7 +131,7 @@ internal class R35ResidentPublisher(
             // while the projection or geometry was being resolved.
             synchronized(lock) {
                 if (session != request.first || generation != request.second ||
-                    ownership.phase() != R29Ownership.Phase.HOST) return@synchronized
+                    !ownership.isCurrentHost(sessionEpoch)) return@synchronized
                 lastPublishedSequence = next
                 client.publish(descriptor)
             }
@@ -174,7 +176,7 @@ internal class R35ResidentPublisher(
 
     private fun stopObserving() {
         R35MaterialPublication.remove(this)
-        synchronized(lock) { session = null; generation += 1; lastPublishedSequence = 0 }
+        synchronized(lock) { session = null; sessionEpoch = -1; generation += 1; lastPublishedSequence = 0 }
         coreJob?.cancel()
         coreJob = null
         if (observersRegistered) {

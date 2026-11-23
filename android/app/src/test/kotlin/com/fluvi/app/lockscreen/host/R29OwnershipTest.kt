@@ -79,4 +79,21 @@ class R29OwnershipTest {
         assertNull(overflow.beginEnrollment())
         assertFalse(overflow.hostMayBeRequested())
     }
+
+    @Test fun lateOldHostDeathCannotRevokeANewerEnrollment() {
+        val owner = R29Ownership(MemoryStore())
+        val old = requireNotNull(owner.beginEnrollment())
+        assertTrue(owner.oldOwnerDrained(old))
+        assertTrue(owner.hostOwns(old))
+        assertEquals(old, owner.beginExit())
+        assertTrue(owner.hostConfirmedEmpty(old))
+        val current = requireNotNull(owner.beginEnrollment())
+        assertTrue(owner.oldOwnerDrained(current))
+        assertTrue(owner.hostOwns(current))
+        owner.hostUnavailable(old)
+        assertTrue(owner.isCurrentHost(current))
+        assertFalse(owner.isCurrentHost(old))
+        owner.hostUnavailable(current)
+        assertFalse(owner.hostMayBeRequested())
+    }
 }

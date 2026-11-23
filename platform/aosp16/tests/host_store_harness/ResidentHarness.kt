@@ -62,6 +62,34 @@ fun main() {
     check(store.current(System.currentTimeMillis()) != null)
     check(store.clientDied(replacementNonce))
     check(store.current(System.currentTimeMillis()) == null) { "unexpected death must revoke adopted output" }
+    // A second request arrives while the first renderer job still owns the
+    // sole worker. Completion of obsolete A must neither become current nor
+    // produce READY; the actual pending B must start and be adopted instead.
+    val raceWorker = Queue(); val raceMain = Queue(); val raceRenderer = R29HostRenderer()
+    val raceReceipts = mutableListOf<Long>()
+    val race = R29ResidentStore(raceRenderer, raceWorker, raceMain) { }
+    check(race.beginSession(nonce) { _, seq -> raceReceipts.add(seq) })
+    val raceA = input(nonce, 1)
+    val raceB = input(nonce, 2)
+    check(race.prepare(raceA, System.currentTimeMillis(), 2048))
+    raceWorker.drain()
+    val finishA = checkNotNull(raceRenderer.pending)
+    check(race.prepare(raceB, System.currentTimeMillis(), 2048))
+    finishA(Result.success(R29PreparedOrb(raceA)))
+    raceMain.drain()
+    check(raceReceipts.isEmpty()) { "obsolete A must never report READY" }
+    check(race.current(System.currentTimeMillis()) == null)
+    raceWorker.drain()
+    checkNotNull(raceRenderer.pending).invoke(Result.success(R29PreparedOrb(raceB)))
+    raceMain.drain()
+    check(raceReceipts == listOf(2L)) { "only the latest B may report READY" }
+    check(race.current(System.currentTimeMillis())?.descriptor?.sequence == 2L)
+    race.detach(nonce)
+    check(race.current(System.currentTimeMillis())?.descriptor?.sequence == 2L) {
+        "a clean detach must retain the acknowledged generation"
+    }
+    if (R35HostMemoryPolicy.shouldEvict(10)) race.reset()
+    check(race.current(System.currentTimeMillis()) == null) { "genuine low-memory pressure must evict" }
     // A static image must expire even if no draw calls current().
     val timedWorker = Queue(); val timedMain = Queue(); val timedRenderer = R29HostRenderer()
     val scheduled = mutableListOf<Runnable>()
@@ -92,5 +120,5 @@ fun main() {
     check(R35HostMemoryPolicy.shouldEvict(80)) // COMPLETE
     check(!R35HostMemoryPolicy.shouldEvict(5)) // RUNNING_MODERATE
     check(!R35HostMemoryPolicy.shouldEvict(20)) // UI_HIDDEN
-    println("PASS: main adoption, READY, invalidate, reset, death, and static-expiry controls")
+    println("PASS: main adoption, latest-wins, READY, detach, pressure, invalidate, reset, death, and expiry controls")
 }

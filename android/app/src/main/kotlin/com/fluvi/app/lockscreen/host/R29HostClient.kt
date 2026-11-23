@@ -148,11 +148,11 @@ internal class R29HostClient(
                     R29WireCodec.CALLBACK_READY -> {
                         val current = synchronized(lock) {
                             nonce == session && value == sentSequence && remote != null &&
-                                ownership.phase() == R29Ownership.Phase.HOST
+                                ownership.isCurrentHost(epoch)
                         }
                         if (current) main.execute {
                             if (synchronized(lock) { nonce == session && value == sentSequence && remote != null &&
-                                    ownership.phase() == R29Ownership.Phase.HOST })
+                                    ownership.isCurrentHost(epoch) })
                                 listener.onReady(nonce, value)
                         }
                     }
@@ -184,7 +184,7 @@ internal class R29HostClient(
         worker.execute {
             val target = synchronized(lock) {
                 if (snapshot.session != session || snapshot.sequence <= sentSequence || remote == null ||
-                    ownership.phase() != R29Ownership.Phase.HOST ||
+                    !ownership.isCurrentHost(epoch) ||
                     R29Protocol.invalidReason(snapshot, System.currentTimeMillis(), 1) != null) return@execute
                 sentSequence = snapshot.sequence
                 remote
@@ -197,7 +197,7 @@ internal class R29HostClient(
         worker.execute {
             val target = synchronized(lock) {
                 if (nonce != session || sequence <= sentSequence || remote == null ||
-                    ownership.phase() != R29Ownership.Phase.HOST) return@execute
+                    !ownership.isCurrentHost(epoch)) return@execute
                 sentSequence = sequence
                 remote
             } ?: return@execute
@@ -217,7 +217,7 @@ internal class R29HostClient(
         val request = synchronized(lock) {
             val nonce = session ?: return false
             val target = remote ?: return false
-            if (sequence <= sentSequence || ownership.phase() != R29Ownership.Phase.HOST ||
+            if (sequence <= sentSequence || !ownership.isCurrentHost(epoch) ||
                 !emptyReceipt.begin(nonce, sequence, epoch)) return false
             if (ownership.beginExit() != epoch) {
                 emptyReceipt.clear()
@@ -263,14 +263,14 @@ internal class R29HostClient(
     }
 
     private fun unavailable() {
-        val wasBound = synchronized(lock) {
+        val (wasBound, unavailableEpoch) = synchronized(lock) {
             remote = null; session = null; sentSequence = 0
             emptyReceipt.clear()
             val result = bound
             bound = false
-            result
+            result to epoch
         }
-        ownership.hostUnavailable()
+        ownership.hostUnavailable(unavailableEpoch)
         main.execute {
             if (wasBound) runCatching { application.unbindService(connection) }
             listener.onHostUnavailable()

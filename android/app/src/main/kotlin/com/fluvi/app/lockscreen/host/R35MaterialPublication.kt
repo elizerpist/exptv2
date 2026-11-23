@@ -50,13 +50,13 @@ internal object R35MaterialPublication {
         fun onPublicationFailure() {}
     }
 
-    private data class Enrollment(val owner: R29Ownership, val session: String, val consumer: Consumer)
+    private data class Enrollment(val owner: R29Ownership, val epoch: Long, val session: String, val consumer: Consumer)
     @Volatile private var enrollment: Enrollment? = null
 
-    @Synchronized fun install(owner: R29Ownership, session: String, consumer: Consumer): Boolean {
-        if (enrollment != null || owner.phase() != R29Ownership.Phase.HOST ||
+    @Synchronized fun install(owner: R29Ownership, epoch: Long, session: String, consumer: Consumer): Boolean {
+        if (enrollment != null || !owner.isCurrentHost(epoch) ||
             !R29Protocol.validSession(session)) return false
-        enrollment = Enrollment(owner, session, consumer)
+        enrollment = Enrollment(owner, epoch, session, consumer)
         return true
     }
 
@@ -66,7 +66,7 @@ internal object R35MaterialPublication {
 
     fun inputsChanging(): Boolean {
         val current = enrollment ?: return false
-        if (current.owner.phase() != R29Ownership.Phase.HOST) return false
+        if (!current.owner.isCurrentHost(current.epoch)) return false
         return runCatching { current.consumer.onInputsChanging(); true }.getOrElse {
             failClosed(current)
             false
@@ -75,7 +75,7 @@ internal object R35MaterialPublication {
 
     fun profileAccepted(profile: KeyguardMaterialProfile, rawEvidence: Any?) {
         val current = enrollment ?: return
-        if (current.owner.phase() != R29Ownership.Phase.HOST) return
+        if (!current.owner.isCurrentHost(current.epoch)) return
         // A profile is mutable through its array members. Freeze the complete
         // local input before an asynchronous publisher can inspect it.
         val snapshot = profile.copy(
@@ -94,7 +94,7 @@ internal object R35MaterialPublication {
             if (enrollment !== current) return
             enrollment = null
         }
-        current.owner.hostUnavailable()
+        current.owner.hostUnavailable(current.epoch)
         runCatching { current.consumer.onPublicationFailure() }
     }
 }

@@ -29,6 +29,7 @@ internal class R29Ownership(private val store: Store) {
     @Synchronized fun epoch(): Long = epoch
     @Synchronized fun appMayShow(): Boolean = phase == Phase.STOCK
     @Synchronized fun hostMayBeRequested(): Boolean = phase == Phase.QUIESCENT || phase == Phase.HOST
+    @Synchronized fun isCurrentHost(value: Long): Boolean = phase == Phase.HOST && epoch == value
 
     /** Returns the epoch to drain, or null when durable suppression failed. */
     @Synchronized fun beginEnrollment(): Long? {
@@ -56,6 +57,11 @@ internal class R29Ownership(private val store: Store) {
     /** Binder loss never re-enables the legacy owner. */
     @Synchronized fun hostUnavailable() {
         if (phase == Phase.HOST || phase == Phase.QUIESCENT) phase = Phase.DRAINING
+    }
+
+    /** A late disconnect from an earlier enrollment must not revoke a newer host. */
+    @Synchronized fun hostUnavailable(value: Long) {
+        if (value == epoch && (phase == Phase.HOST || phase == Phase.QUIESCENT)) phase = Phase.DRAINING
     }
 
     @Synchronized fun beginExit(): Long? {

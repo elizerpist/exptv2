@@ -41,7 +41,7 @@ class R35MaterialPublicationTest {
         val epoch = requireNotNull(owner.beginEnrollment())
         assertTrue(owner.oldOwnerDrained(epoch))
         assertTrue(owner.hostOwns(epoch))
-        assertTrue(R35MaterialPublication.install(owner, "0123456789abcdef0123456789abcdef", consumer))
+        assertTrue(R35MaterialPublication.install(owner, epoch, "0123456789abcdef0123456789abcdef", consumer))
     }
 
     @Test fun actualAcceptedStorePublicationForwardsOnlyCapturedProvenance() {
@@ -74,7 +74,7 @@ class R35MaterialPublicationTest {
         val epoch = requireNotNull(owner.beginEnrollment())
         assertTrue(owner.oldOwnerDrained(epoch))
         assertTrue(owner.hostOwns(epoch))
-        assertTrue(R35MaterialPublication.install(owner, "0123456789abcdef0123456789abcdef", checking))
+        assertTrue(R35MaterialPublication.install(owner, epoch, "0123456789abcdef0123456789abcdef", checking))
         try {
             FluviKeyguardCardSettings.update(context, mapOf("requested" to true))
             assertEquals(false, beforeCommit)
