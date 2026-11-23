@@ -1,4 +1,4 @@
-name: R29 WIP Exact-Source Code Graph (orchestration only)
+name: R30 Stock ORB Exact-Source Code Graph (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -21,7 +21,7 @@ on:
 permissions:
   contents: write
 jobs:
-  r29-wip-exact-source-graph:
+  r30-exact-source-graph:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -91,8 +91,8 @@ jobs:
                   count+=1
           print('verified_shards=',count,'documents=',m['document_count'],'repo_symbols=',m['repository_defined_symbol_count'])
           PY
-          report="$tooling_dir/docs/codegraph-r29-wip-inventory.md"
-          printf '# R29 WIP exact-source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
+          report="$tooling_dir/docs/codegraph-r30-stock-inventory.md"
+          printf '# R30 exact-source graph and native inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
           printf 'The Dart SCIP manifest is `docs/codegraph/manifest.json`; Kotlin has no SCIP coverage and the following is source navigation, not a generated call graph. The output/host lifecycle is Main-owned and visual presentation remains an independently measured outcome.\n\n' >> "$report"
           printf 'R27 source navigation covers ordered DIRECT admission and terminal withdrawal, the one-reader null-child handoff, owner-scoped public-program warmup and bounded R22/R26/R27 export. STOCK remains separately governed by its existing publication policy. The line inventory is source navigation, not runtime or physical-pixel proof.\n\n' >> "$report"
           printf '```text\n' >> "$report"
@@ -116,8 +116,12 @@ jobs:
           printf '\n# R29 WIP native cross-process source inventory\n' >> "$report"
           printf 'The client, ownership gate and snapshot builder are presently unwired. Binder entry is a SystemUI process thread, preparation runs on one host worker and adoption/notifications are posted to Main. The composition scene and restrictive-frame hook are absent; these source references do not establish runtime behavior.\n' >> "$report"
           (cd "$source_dir" && "${search[@]}" 'R29HostClient|R29PublisherSnapshot|R29Ownership|onTransact|trustedCaller|prepare\(|workerFinished|adopt\(|invalidate\(|current\(|R29FramePolicy|class R29HostRenderer|class R29PreparedOrb|R29WireCodec|R29MaterialMapper' android/app/src/main/kotlin/com/fluvi/app/lockscreen/host/*.kt platform/aosp16/contract/src/com/fluvi/r29/contract/*.kt platform/aosp16/contract/src/com/fluvi/app/lockscreen/material/*.kt platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/*.kt) >> "$report"
+          printf '\n# R30 stock opening and withdrawal source inventory\n' >> "$report"
+          printf 'The following Kotlin locations are manually navigated; Dart SCIP does not index Kotlin. The child flag is an acquisition hint and the seal receipt is not physical presentation evidence.\n\n' >> "$report"
+          (cd "$source_dir" && "${search[@]}" 'R30OpeningIdentity|r30PresentedAtRead|r30SealCompletedNegative|recordR30Exit|r30SealReceipt|r30OpeningCurrentAtAcceptedRoot|currentOpeningLocked|r30OwnerReplaced|r30ChildPrefetchFlags|exactActiveWindow|acceptedChildPrefetchFlags|r30PresentedOwner|r30SealPresented|R30_EXIT|r30ExitEligibility|r30SampleStart|r26CoreRecord|r22CoreRecord' android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardWindowSnapshotReader,KeyguardOrbPresentationCoordinator,KeyguardCardSettings}.kt) >> "$report"
+          (cd "$source_dir" && "${search[@]}" 'r30OriginalOpeningChildFlags|R30_CHILD|onlyExactVirginApi35SystemUiOpening|earlySealRequiresExactPresentedOwner|r26ExactDirectEvidenceSurvivesLightAndFullPressure' android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/{KeyguardFirstAuthorizedOrbInstrumentationTest,KeyguardR22FirstInspectionFixture,KeyguardCardDiagnosticsInstrumentationTest}.kt android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR30TransitionPolicyTest.kt) >> "$report"
           printf '\n```\n' >> "$report"
-          cp "$RUNNER_TEMP/r22-graph-query.txt" "$tooling_dir/docs/codegraph-r29-wip-query.txt"
+          cp "$RUNNER_TEMP/r22-graph-query.txt" "$tooling_dir/docs/codegraph-r30-stock-query.txt"
           sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$RUNNER_TEMP/r22-manifest-sha256.txt"
       - name: Publish graph to independent immutable tooling branch
         shell: bash
@@ -126,22 +130,22 @@ jobs:
           cd tooling
           git config user.name 'Fluvi Graph Bot'
           git config user.email 'fluvi-graph@users.noreply.github.com'
-          git add docs/codegraph docs/codegraph-r29-wip-inventory.md docs/codegraph-r29-wip-query.txt
+          git add docs/codegraph docs/codegraph-r30-stock-inventory.md docs/codegraph-r30-stock-query.txt
           git diff --cached --check
-          git commit -m 'graph: index R29 incomplete prototype exact source [skip ci]'
+          git commit -m 'graph: index R30 stock ORB exact source [skip ci]'
           git rev-parse HEAD | tee "$RUNNER_TEMP/r22-graph-commit.txt"
-          graph_ref="tooling/r29-orb-wip-${APP_SHA:0:12}"
+          graph_ref="tooling/r30-stock-${APP_SHA:0:12}"
           test -z "$(git ls-remote origin "refs/heads/$graph_ref")"
           git push origin "HEAD:refs/heads/$graph_ref"
       - name: Preserve graph and receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r29-wip-graph-${{ inputs.app_sha }}-run-${{ github.run_id }}
+          name: r30-stock-graph-${{ inputs.app_sha }}-run-${{ github.run_id }}
           path: |
             tooling/docs/codegraph/**
-            tooling/docs/codegraph-r29-wip-*.md
-            tooling/docs/codegraph-r29-wip-*.txt
+            tooling/docs/codegraph-r30-stock-*.md
+            tooling/docs/codegraph-r30-stock-*.txt
             ${{ runner.temp }}/r22-*.txt
           if-no-files-found: warn
           retention-days: 30
