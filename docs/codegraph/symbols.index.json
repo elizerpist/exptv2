@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "record_count": 20269,
+  "record_count": 20271,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/_ProfileScenario#`<get>initialDate`.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/automation/data/`method_channel_automation_repository.dart`/MethodChannelAutomationRepository#activateRule().",
-      "sha256": "7e1b462f558a5800fadc17c402009cfaeac4ac492398af91b9cb604a545f5f20"
+      "sha256": "700aa7d2310f704ae9a07fef5c865b656291bc2e81d2ff46e80d861dd51ac487"
     },
     {
       "path": "symbols/part-001.jsonl",
@@ -69,15 +69,15 @@
       "path": "symbols/part-009.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/pulse/presentation/`pulse_triage_inspector_page.dart`/PulseSituationsPage#indicators.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_data_runtime_test.dart`/_StableFrameScheduler#`<get>pendingCount`.",
-      "sha256": "98743ca6a0b19c5c1e16ff349893e5214da7221c704544b72725ddcbe6592466"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_data_runtime_test.dart`/_RuntimeRepository#revisionListenCount.",
+      "sha256": "1f8451742d95c0272e3f46f6ecd1af0d007b0bb70619a9b51206685b1d7466ee"
     },
     {
       "path": "symbols/part-010.jsonl",
-      "record_count": 269,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_data_runtime_test.dart`/_StableFrameScheduler#fireFrame().",
+      "record_count": 271,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/dashboard/runtime/`dashboard_data_runtime_test.dart`/_RuntimeRepository#watchCoreRevision().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
-      "sha256": "e04af2238c7713fbde0d5ff59e4a1d77415471fb5b1895ecb25d3a9635b844e7"
+      "sha256": "ceebe13f9c532056715ab988c3e48e24b4df1ab91442da07c693abaaaee39b97"
     }
   ]
 }
