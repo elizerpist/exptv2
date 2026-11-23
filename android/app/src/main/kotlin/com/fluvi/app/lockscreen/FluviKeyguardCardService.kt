@@ -1767,6 +1767,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         super.onDestroy()
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (::overlay.isInitialized) overlay.clearPrivateOrbPoster()
+    }
+
     /** Freeze's scalar cut shares the same order as queue offers; no Android,
      * formatting or diagnostic-consumer work runs while this lock is held. */
     internal fun cutR22DiagnosticCapture(cut: () -> Unit) {
@@ -1784,6 +1789,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             try {
             val previous = lastSettings
             lastSettings = settings
+            if ((!settings.requested || !settings.showFinancialDetails) && ::overlay.isInitialized) overlay.clearPrivateOrbPoster()
             if (r18Active != null && previous != settings) hideImmediately("r18SettingsChanged", terminalWake = false)
             if (!settings.requested) {
                 hideImmediately("settings")
@@ -1878,6 +1884,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             publishReadAheadState(invalidate = true)
             try {
             showEvent = false
+            if (::overlay.isInitialized) overlay.clearPrivateOrbPoster()
             if (r18Active != null) hideImmediately("r18FocusChanged", terminalWake = false)
             invalidateFullContent()
             // A focus change may make a visible amount misleading. Redact in

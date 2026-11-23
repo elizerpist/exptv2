@@ -46,6 +46,7 @@ internal class KeyguardOrbSurfacePresenter(
         },
         isCaptureActive = isCaptureActive,
     )
+    private var privatePoster: KeyguardR34PrivatePoster? = null
     private var current: KeyguardOrbSurfaceTarget? = null
     private var surface: SurfaceView? = null
     private var guard: PrivacyGuard? = null
@@ -60,6 +61,18 @@ internal class KeyguardOrbSurfacePresenter(
         checkMain()
         if (profile != null) worker.prepare(profile, width, height, context.resources.displayMetrics.densityDpi, allowFull)
     }
+
+    /** A private prepared image is not a presentation grant. */
+    fun preparePrivatePoster(profile: KeyguardMaterialProfile?, width: Int, height: Int,
+                             settingsGeneration: Long, focusGeneration: Long, allowed: Boolean) {
+        checkMain()
+        if (!allowed || profile == null) { privatePoster?.clear(); return }
+        val owner = privatePoster ?: KeyguardR34PrivatePoster(context.applicationContext).also { privatePoster = it }
+        owner.prepare(profile, width, height, context.resources.displayMetrics.densityDpi,
+            settingsGeneration, focusGeneration)
+    }
+
+    fun clearPrivatePoster() { checkMain(); privatePoster?.clear() }
 
     /** These methods expose the R18 path through the same render worker.
      * The caller remains responsible for fresh privacy/input authority. */
@@ -296,6 +309,8 @@ internal class KeyguardOrbSurfacePresenter(
         detached()
         direct?.dispose()
         direct = null
+        privatePoster?.dispose()
+        privatePoster = null
         worker.dispose()
     }
 

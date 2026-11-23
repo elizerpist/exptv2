@@ -83,6 +83,48 @@ class KeyguardOrbPresentationPipelineInstrumentationTest {
         }
     }
 
+    /** The real retained-window entry point must prepare the configured FULL
+     * image before wake, while the native output is still unshown. This is a
+     * readiness control, not a privacy admission or a physical-pixel test. */
+    @Test fun r34RetainedWindowPreparesConfiguredPosterBeforeWake() {
+        assumeTrue(Build.VERSION.SDK_INT == 35)
+        val context = instrumentation.targetContext
+        assumeTrue(context.getSystemService(android.os.UserManager::class.java).isUserUnlocked)
+        val preferences = context.getSharedPreferences("fluvi_keyguard_orb_diagnostic_route", android.content.Context.MODE_PRIVATE)
+        val previous = preferences.getString("mode", null)
+        val activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
+        val ready = CountDownLatch(1)
+        val allocated = CountDownLatch(1)
+        var window: KeyguardCardWindow? = null
+        try {
+            check(preferences.edit().putString("mode", "SURFACE_LIVE").commit())
+            KeyguardOrbSurfaceWorkerTestHooks.afterWarmPosterCreated = { full -> if (full) ready.countDown() }
+            instrumentation.runOnMainSync {
+                val target = KeyguardCardWindow(activity, onOpen = {}, onToggle = {}, onInteractionStarted = {},
+                    onPositionCommitted = { _, _, _, _ -> }, onInteractionDiagnostic = { _, _ -> },
+                    manager = PanelWindowManager(activity), r18PipelineEnabled = true,
+                    onR19Allocated = { _, _, _ -> allocated.countDown() })
+                window = target
+                target.prepareRetainedView(KeyguardCardSettings(requested = true, showFinancialDetails = true,
+                    presentationMode = KeyguardCardPresentationMode.ORB,
+                    animationMode = KeyguardCardAnimationMode.ORB_ONLY), r20CalibratedProfile())
+                assertEquals(KeyguardOrbRenderMode.SURFACE_LIVE, target.renderModeStatus().effective)
+                assertNotNull("fixture did not reach the virgin DIRECT preparation", target.r18Preparation())
+                assertFalse("preparation must not attach a display window", target.isAttached)
+            }
+            assertTrue("virgin DIRECT allocation was not reached", allocated.await(20, TimeUnit.SECONDS))
+            assertTrue("configured private FULL poster was not ready before wake", ready.await(20, TimeUnit.SECONDS))
+            instrumentation.runOnMainSync { assertFalse(checkNotNull(window).isAttached) }
+        } finally {
+            KeyguardOrbSurfaceWorkerTestHooks.afterWarmPosterCreated = null
+            instrumentation.runOnMainSync { window?.dispose(); activity.finish() }
+            val edit = preferences.edit()
+            if (previous == null) edit.remove("mode") else edit.putString("mode", previous)
+            check(edit.commit())
+        }
+    }
+
     @Test fun r19PrewakeAllocationRetainsExactTimeWithoutPostingFullPixels() {
         assumeTrue(Build.VERSION.SDK_INT == 35)
         val context = instrumentation.targetContext

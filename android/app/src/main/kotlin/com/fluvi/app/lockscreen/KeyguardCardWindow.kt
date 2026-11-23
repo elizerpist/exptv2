@@ -402,6 +402,17 @@ internal class KeyguardCardWindow(
         }
     }
 
+    private fun preparePrivateOrbPoster(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?) {
+        val unlocked = runCatching { serviceContext.getSystemService(android.os.UserManager::class.java).isUserUnlocked }
+            .getOrDefault(false)
+        val allowed = settings.requested && settings.showFinancialDetails &&
+            settings.presentationMode == KeyguardCardPresentationMode.ORB && unlocked
+        surfacePresenter?.preparePrivatePoster(profile, surfaceSize(), surfaceSize(),
+            settings.generation, settings.focus.generation, allowed)
+    }
+
+    fun clearPrivateOrbPoster() { checkMainThread(); surfacePresenter?.clearPrivatePoster() }
+
     /** Creates/configures the one retained root while detached. It has no
      * WindowManager presence and therefore grants neither visibility nor touch
      * authority on an unlocked device. */
@@ -412,6 +423,7 @@ internal class KeyguardCardWindow(
         val current = root ?: createRoot().also { root = it }
         configurePresentation(current, settings.presentationMode)
         selectRenderRoute(current, settings, KeyguardOrbRenderModeStore.read(serviceContext))
+        preparePrivateOrbPoster(settings, profile)
         // Begin immutable source/metadata loading while detached. A later
         // authorized attach may install the prepared program without first
         // opening assets from Canvas.onDraw.
@@ -994,6 +1006,7 @@ internal class KeyguardCardWindow(
             selectRenderRoute(current, settings, if (lifecycle.isAttached()) attachedConfiguredMode
                 else KeyguardOrbRenderModeStore.read(serviceContext))
         }
+        preparePrivateOrbPoster(settings, profile)
         materialController?.prepare(
             profile,
             settings.animationMode,
