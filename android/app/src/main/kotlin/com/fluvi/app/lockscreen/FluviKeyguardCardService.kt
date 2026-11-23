@@ -3252,8 +3252,13 @@ class FluviKeyguardCardService : AccessibilityService() {
                 openingChildBefore = if (((yieldHandle != null || followHandle != null) && inspectionProbeForTest != null) ||
                     (captureOpening && followHandle != null)) {
                     { window, index ->
-                        if (captureOpening && followHandle != null && openingHandoff.observesFollowChildren(followHandle))
-                            synchronized(queueLock) { openingHandoff.noteFollowChild(followHandle) }
+                        if (captureOpening && followHandle != null && openingHandoff.observesFollowChildren(followHandle) &&
+                            request.diagnosticContext?.captureId == KeyguardCardDiagnostics.activeCaptureId()) {
+                            synchronized(queueLock) {
+                                if (request.diagnosticContext?.captureId == KeyguardCardDiagnostics.activeCaptureId())
+                                    openingHandoff.noteFollowChild(followHandle)
+                            }
+                        }
                         runCatching { inspectionProbeForTest?.openingChildBefore(request, window, index) }
                         Unit
                     }
