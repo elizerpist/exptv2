@@ -1,6 +1,7 @@
 package com.fluvi.core
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.fluvi.core.database.FluviDatabase
 import com.fluvi.core.database.FluviDatabaseFactory
 import com.fluvi.core.model.FluviClock
@@ -8,6 +9,11 @@ import com.fluvi.core.model.FluviIdGenerator
 import com.fluvi.core.model.MonotonicUlidGenerator
 import com.fluvi.core.model.SystemFluviClock
 import com.fluvi.core.query.FluviLedgerReadService
+import com.fluvi.core.query.FluviKeyguardBudgetAxis
+import com.fluvi.core.query.FluviKeyguardBudgetProjection
+import com.fluvi.core.query.FluviQueryScope
+import com.fluvi.core.query.resolveKeyguardCategoryLimit
+import java.time.LocalDate
 import com.fluvi.core.query.FluviBudgetReadService
 import com.fluvi.core.pulse.FluviPulseReadService
 import com.fluvi.core.pulse.FluviPulseThresholdUseCase
@@ -61,6 +67,26 @@ class FluviCore internal constructor(
     val checkpoints: LedgerCheckpointCoordinator,
     val demoSeed: SeedFluviDemoDatasetUseCase,
 ) : AutoCloseable {
+    /** Reads the category, total, limits and core revision from one Room snapshot. */
+    suspend fun keyguardBudgetProjection(
+        categoryId: String,
+        scope: FluviQueryScope,
+        axis: FluviKeyguardBudgetAxis,
+        date: LocalDate,
+    ): FluviKeyguardBudgetProjection = database.withTransaction {
+        require(categoryId.isNotBlank() && scope.categoryIds == setOf(categoryId))
+        val revision = query.currentCoreRevision()
+        val category = categories.getById(categoryId)
+        val remaining = category?.let {
+            val total = query.total(scope).amountScaled100
+            val limit = resolveKeyguardCategoryLimit(financialLimits.list(), scope.direction, categoryId, axis, date)
+            if (limit != null && limit > 0L) {
+                ((1.0 - total.toDouble() / limit.toDouble()) * 100.0).coerceIn(0.0, 100.0)
+            } else null
+        }
+        FluviKeyguardBudgetProjection(revision, category?.colorId, remaining, category != null)
+    }
+
     override fun close() {
         database.close()
     }

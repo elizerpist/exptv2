@@ -99,6 +99,9 @@ final class DashboardKeyguardMaterialBridge {
         referenceGeometry: _geometry!,
         sceneIdentity: _sceneIdentity(target),
       );
+      // The provenance is captured in the same synchronous turn as the
+      // selected frame. It does not itself authorize a lockscreen reveal.
+      profile['r29Evidence'] = _r29Evidence(target);
       if (_disposed || requestedGeneration != _generation) return;
       await _channel.invokeMethod<Object?>('publishProfile', profile);
     } on MissingPluginException {
@@ -155,6 +158,40 @@ final class DashboardKeyguardMaterialBridge {
       headerIconColor: tuning.budgetHeader.iconColor.color,
       headerModeIconSizePercent: tuning.headerModeIconSizePercent,
     );
+  }
+
+  Map<String, Object?> _r29Evidence(Map<Object?, Object?>? target) {
+    final revision = target?['coreRevision'];
+    final currentRevision = target?['r29CurrentCoreRevision'];
+    final remaining = target?['remainingPercent'];
+    final supported =
+        target?['mode'] == 'budget' &&
+        target?['projectionAvailable'] == true &&
+        target?['r29SettingsCurrent'] == true &&
+        revision is int &&
+        revision > 0 &&
+        revision == currentRevision &&
+        target?['focusGeneration'] is int &&
+        target?['r29LayoutRevision'] is int &&
+        target?['r29PrivacyRevision'] is int &&
+        _controller.tuning.value.budgetCategory.source ==
+            DashboardBudgetHeaderColorSource.category &&
+        DashboardHeaderCategoryCompressedV1Scale.forColorIdOrNull(
+              target?['categoryColorId'] as String?,
+            ) !=
+            null &&
+        remaining is num &&
+        remaining.isFinite;
+    return <String, Object?>{
+      'targetCoreRevision': revision,
+      'visualCoreRevision': supported ? revision : null,
+      'currentCoreRevision': currentRevision,
+      'focusGeneration': target?['focusGeneration'],
+      'layoutRevision': target?['r29LayoutRevision'],
+      'privacyRevision': target?['r29PrivacyRevision'],
+      'visualProjectionFull':
+          supported && target?['r29ShowFinancialDetails'] == true,
+    };
   }
 
   String _sceneIdentity(Map<Object?, Object?>? target) => <Object?>[

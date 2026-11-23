@@ -23,7 +23,7 @@ class R29PublisherSnapshotTest {
     private val settings = KeyguardCardSettings(requested = true, showFinancialDetails = true,
         presentationMode = KeyguardCardPresentationMode.ORB, focus = focus, layoutRevision = 4, generation = 5)
     private val target = FluviKeyguardMaterialSceneTarget(focus.mode, focus.timeAxis, focus.direction,
-        focus.categoryId, "blue", 55.0, true, focus.generation)
+        focus.categoryId, "blue", 55.0, true, focus.generation, coreRevision = 7)
     private val portal = KeyguardMaterialPortal(false, 0, 0f, 0f, 50f, 68f, false, 0f, FloatArray(12))
     private val profile = KeyguardMaterialProfile(1, 6, KeyguardMaterialProfile.SOURCE_SHADER_HASH,
         "flutter-session", 42, "budget|month|expense|private-category|2", "deepDrift", 8, .3f, 11f, .5f,
@@ -62,6 +62,8 @@ class R29PublisherSnapshotTest {
         assertNull(create(evidence = evidence.copy(validUntilEpochMs = now)))
         assertNull(create(evidence = evidence.copy(period = R29Period.DAY)))
         assertNull(create(target = target.copy(focusGeneration = 3)))
+        assertNull("target must be bound to the same core revision", create(target = target.copy(coreRevision = 8)))
+        assertNull("missing target revision is not current", create(target = target.copy(coreRevision = null)))
         assertNull(create(profile = profile.copy(sceneIdentity = "budget|month|expense|old|2")))
         assertNull(create(settings = settings.copy(requested = false)))
         assertNull(create(geometry = geometry.copy(displayId = 1)))

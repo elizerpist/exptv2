@@ -39,3 +39,22 @@ The supplied `FluviOrbFramePolicyTest` is a unit test of the shared policy,
 not a compositor/image test. Actual Soong build, SystemUI tests, boot, app-dead
 wake/withdrawal and all optical endpoints remain **NOT RUN** until the missing
 integration and a compatible Android 16 reference builder/device exist.
+
+## R29.1 partial checkpoint
+
+The isolated Budget scene target now carries the core revision from one Room
+read transaction, and the Dart material publication carries scoped provenance
+when it derives the supported category palette. The host store now adopts
+worker results on Main, suppresses stale READY delivery, distinguishes an
+unexpected callback death from clean detach, and schedules static expiry. The
+GPU preparation wait is bounded; an unconfirmed job remains quarantined.
+These are preparatory changes only: **enrollment, exclusive old-owner drain,
+real publisher-to-Binder delivery, the lockscreen composition and synchronous
+restriction/empty-frame receipt are still absent**. Reference enrollment must
+remain disabled and the patch remains the incomplete bootstrap above.
+
+`tests/host_store_harness/run.sh` is a deterministic unit control for the
+actual resident store using a fake renderer and explicit worker/Main queues.
+Set `R29_KOTLIN_COMPILER_CP` to a Kotlin compiler/runtime classpath and
+`R29_KOTLIN_STDLIB` to its stdlib jar. It is not a GPU, Binder, SystemUI or
+physical-frame test.

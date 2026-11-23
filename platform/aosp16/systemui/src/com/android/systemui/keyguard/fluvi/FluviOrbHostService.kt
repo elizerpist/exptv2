@@ -39,6 +39,34 @@ class FluviOrbHostService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private val random = SecureRandom()
     private lateinit var runtime: R29HostRuntime
+    private data class ClientConnection(
+        val nonce: String,
+        val binder: IBinder,
+        val death: IBinder.DeathRecipient,
+    )
+    private val connectionLock = Any()
+    private var clientConnection: ClientConnection? = null
+
+    private fun clientDied(nonce: String, binder: IBinder) {
+        val old = synchronized(connectionLock) {
+            val current = clientConnection
+            if (current == null || current.nonce != nonce || current.binder !== binder) return
+            clientConnection = null
+            current
+        }
+        runCatching { old.binder.unlinkToDeath(old.death, 0) }
+        runtime.store.clientDied(nonce)
+    }
+
+    private fun cleanDetach(nonce: String) {
+        synchronized(connectionLock) {
+            val current = clientConnection
+            if (current == null || current.nonce != nonce) return
+            runtime.store.detach(nonce)
+            clientConnection = null
+            runCatching { current.binder.unlinkToDeath(current.death, 0) }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -111,17 +139,25 @@ class FluviOrbHostService : Service() {
                         throw SecurityException("R29 owner not quiescent")
                     val bytes = ByteArray(16).also(random::nextBytes)
                     val nonce = bytes.joinToString("") { "%02x".format(it.toInt() and 0xff) }
-                    if (!runtime.store.beginSession(nonce) { token, sequence ->
-                            runCatching { sendCallback(callback, R29WireCodec.CALLBACK_READY, token, sequence) }
-                        }) throw SecurityException("R29 session refused")
-                    try {
-                        callback.linkToDeath({ runtime.store.detach(nonce) }, 0)
-                    } catch (error: Throwable) {
-                        runtime.store.detach(nonce)
-                        throw error
+                    synchronized(connectionLock) {
+                        if (!runtime.store.beginSession(nonce) { token, sequence ->
+                                runCatching { sendCallback(callback, R29WireCodec.CALLBACK_READY, token, sequence) }
+                            }) throw SecurityException("R29 session refused")
+                        val previous = clientConnection
+                        val death = IBinder.DeathRecipient { clientDied(nonce, callback) }
+                        clientConnection = ClientConnection(nonce, callback, death)
+                        try {
+                            callback.linkToDeath(death, 0)
+                        } catch (error: Throwable) {
+                            clientConnection = null
+                            runtime.store.clientDied(nonce)
+                            throw error
+                        } finally {
+                            if (previous != null) runCatching { previous.binder.unlinkToDeath(previous.death, 0) }
+                        }
                     }
                     runCatching { sendCallback(callback, R29WireCodec.CALLBACK_SESSION, nonce, ownershipEpoch) }
-                        .onFailure { runtime.store.detach(nonce) }
+                        .onFailure { clientDied(nonce, callback) }
                 }
                 R29WireCodec.TRANSACTION_PREPARE -> {
                     val descriptor = R29WireCodec.readDescriptor(data)
@@ -141,7 +177,7 @@ class FluviOrbHostService : Service() {
                 R29WireCodec.TRANSACTION_DETACH -> {
                     val nonce = data.readString() ?: throw SecurityException("R29 nonce missing")
                     if (data.dataAvail() != 0) throw SecurityException("R29 trailing data")
-                    runtime.store.detach(nonce)
+                    cleanDetach(nonce)
                 }
                 R29WireCodec.TRANSACTION_OWNERSHIP -> {
                     val nonce = data.readString() ?: throw SecurityException("R29 nonce missing")
@@ -171,7 +207,13 @@ internal class R29HostRuntime private constructor(context: Context) : ComponentC
         Thread(runnable, "fluvi-r29-host-prepare").apply { isDaemon = true }
     }
     private val main = Executor { runnable -> mainHandler.post(runnable) }
-    val store = R29ResidentStore(R29HostRenderer(application, worker), worker, main) { onChanged?.invoke() }
+    val store = R29ResidentStore(
+        R29HostRenderer(application, worker), worker, main,
+        scheduleExpiry = { runnable, delay ->
+            check(mainHandler.postDelayed(runnable, delay)) { "R29 expiry handler unavailable" }
+        },
+        cancelExpiry = { runnable -> mainHandler.removeCallbacks(runnable) },
+    ) { onChanged?.invoke() }
     @Volatile var onChanged: (() -> Unit)? = null
 
     private val revokeReceiver = object : BroadcastReceiver() {

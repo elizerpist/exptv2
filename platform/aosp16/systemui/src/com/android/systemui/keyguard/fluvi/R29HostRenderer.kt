@@ -8,6 +8,7 @@ import android.graphics.HardwareBufferRenderer
 import android.graphics.Paint
 import android.graphics.RenderNode
 import android.hardware.HardwareBuffer
+import android.hardware.SyncFence
 import com.fluvi.app.lockscreen.material.KeyguardMaterialScene
 import com.fluvi.app.lockscreen.material.KeyguardMaterialTime
 import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceFrameTime
@@ -17,6 +18,8 @@ import com.fluvi.r29.contract.R29Descriptor
 import com.fluvi.r29.contract.R29Disclosure
 import com.fluvi.r29.contract.R29Motion
 import java.util.concurrent.Executor
+import java.util.concurrent.Executors
+import java.time.Duration
 
 /**
  * Prepared away from the composition thread. Ownership of [livePainter]
@@ -61,8 +64,36 @@ internal class R29PreparedOrb(
  */
 internal class R29HostRenderer(private val context: Context, private val worker: Executor) {
     private data class PendingGpu(val renderer: HardwareBufferRenderer, val buffer: HardwareBuffer, val node: RenderNode)
+    private data class QuarantinedGpu(val gpu: PendingGpu, val fence: SyncFence?)
     private var pending: PendingGpu? = null
-    private var quarantined: PendingGpu? = null
+    private var quarantined: QuarantinedGpu? = null
+    // The watcher can only release the one timed-out job. It cannot prepare
+    // or adopt a frame, and a quarantined job blocks further allocations.
+    private val releaseWatcher = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "fluvi-r29-fence-release").apply { isDaemon = true }
+    }
+
+    private fun release(gpu: PendingGpu) {
+        gpu.node.discardDisplayList()
+        gpu.renderer.close()
+        gpu.buffer.close()
+    }
+
+    private fun quarantine(gpu: PendingGpu, fence: SyncFence?) {
+        val held = QuarantinedGpu(gpu, fence)
+        quarantined = held
+        if (fence == null || !runCatching { fence.isValid }.getOrDefault(false)) return
+        releaseWatcher.execute {
+            val signalled = runCatching { fence.awaitForever() }.getOrDefault(false)
+            if (signalled) worker.execute {
+                if (quarantined === held) {
+                    quarantined = null
+                    runCatching { fence.close() }
+                    release(gpu)
+                }
+            }
+        }
+    }
 
     /** All calls and [finished] execute on [worker]; [finished] is not a display acknowledgement. */
     fun prepare(descriptor: R29Descriptor, finished: (Result<R29PreparedOrb>) -> Unit) {
@@ -103,28 +134,33 @@ internal class R29HostRenderer(private val context: Context, private val worker:
             renderer.setContentRoot(node)
             pending = gpu
             renderer.obtainRenderRequest().draw(worker) { render ->
-                // A missing/invalid/unsignalled fence never becomes READY and
-                // never frees an allocation whose GPU ownership is unknown.
-                val safe = runCatching {
-                    render.status == HardwareBufferRenderer.RenderResult.SUCCESS &&
-                        render.fence?.use { it.isValid && it.awaitForever() } == true
+                // An invalid fence is considered signalled by Android; for
+                // READY we require an actual valid, signalled release proof.
+                // Keep the same fence alive across the bounded wait and any
+                // subsequent release-only watcher.
+                val fence = render.fence
+                val fenceSignalled = runCatching {
+                    fence != null && fence.isValid && fence.await(Duration.ofSeconds(1))
                 }.getOrDefault(false)
                 pending = null
-                if (safe) {
-                    node.discardDisplayList()
-                    renderer.close()
-                    buffer.close()
-                    finished(Result.success(prepared))
+                if (fenceSignalled) {
+                    runCatching { fence?.close() }
+                    release(gpu)
+                    if (render.status == HardwareBufferRenderer.RenderResult.SUCCESS) {
+                        finished(Result.success(prepared))
+                    } else {
+                        finished(Result.failure(IllegalStateException("poster GPU render failed")))
+                    }
                 } else {
-                    quarantined = gpu
-                    finished(Result.failure(IllegalStateException("poster GPU fence unconfirmed")))
+                    quarantine(gpu, fence)
+                    finished(Result.failure(IllegalStateException("poster GPU fence missing, invalid, or timed out")))
                 }
             }
         } catch (error: Throwable) {
             // Transfer may have happened before an exception. Retain this one
             // allocation and refuse future work rather than speculate on reuse.
             pending = null
-            quarantined = gpu
+            quarantine(gpu, null)
             finished(Result.failure(error))
         }
     }

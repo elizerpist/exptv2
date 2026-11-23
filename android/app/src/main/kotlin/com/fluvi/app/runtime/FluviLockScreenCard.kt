@@ -8,14 +8,14 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
 import com.fluvi.core.FluviCoreFactory
-import com.fluvi.core.model.FluviFinancialLimitPeriod
 import com.fluvi.core.model.FluviFinancialLimitTarget
 import com.fluvi.core.model.LedgerDirection
 import com.fluvi.core.query.FluviPeriodSelection
+import com.fluvi.core.query.FluviKeyguardBudgetAxis
+import com.fluvi.core.query.resolveKeyguardCategoryLimit
 import com.fluvi.core.query.FluviQueryScope
 import java.text.NumberFormat
 import java.time.LocalDate
-import java.time.YearMonth
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -159,6 +159,7 @@ internal data class FluviKeyguardMaterialSceneTarget(
      * borrow another screen's palette. */
     val projectionAvailable: Boolean,
     val focusGeneration: Long,
+    val coreRevision: Long? = null,
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "mode" to mode.name,
@@ -169,6 +170,7 @@ internal data class FluviKeyguardMaterialSceneTarget(
         "remainingPercent" to remainingPercent,
         "projectionAvailable" to projectionAvailable,
         "focusGeneration" to focusGeneration,
+        "coreRevision" to coreRevision,
     )
 }
 
@@ -304,41 +306,23 @@ internal object FluviLockScreenCardCoordinator {
         val core = FluviCoreFactory.create(context.applicationContext)
         try {
             val now = LocalDate.now()
-            val category = core.categories.getById(requireNotNull(configuration.categoryId))
-            val actual = category?.let {
-                core.query.total(
-                    scopeFor(
-                        configuration.direction.ledgerDirection,
-                        configuration.timeAxis,
-                        now,
-                        it.id,
-                    ),
-                ).amountScaled100
-            }
-            val limit = category?.let {
-                limitFor(
-                    core.financialLimits.list(),
-                    configuration.direction.ledgerDirection,
-                    it.id,
-                    configuration.timeAxis,
-                    now,
-                )
-            }
-            val remaining = if (actual != null && limit != null && limit > 0L) {
-                ((1.0 - actual.toDouble() / limit.toDouble()) * 100.0)
-                    .coerceIn(0.0, 100.0)
-            } else {
-                null
-            }
+            val categoryId = requireNotNull(configuration.categoryId)
+            val projection = core.keyguardBudgetProjection(
+                categoryId = categoryId,
+                scope = scopeFor(configuration.direction.ledgerDirection, configuration.timeAxis, now, categoryId),
+                axis = FluviKeyguardBudgetAxis.valueOf(configuration.timeAxis.name),
+                date = now,
+            )
             FluviKeyguardMaterialSceneTarget(
                 mode = configuration.mode,
                 timeAxis = configuration.timeAxis,
                 direction = configuration.direction,
                 categoryId = configuration.categoryId,
-                categoryColorId = category?.colorId,
-                remainingPercent = remaining,
-                projectionAvailable = category != null,
+                categoryColorId = projection.categoryColorId,
+                remainingPercent = projection.remainingPercent,
+                projectionAvailable = projection.projectionAvailable,
                 focusGeneration = configuration.generation,
+                coreRevision = projection.coreRevision,
             )
         } finally {
             core.close()
@@ -502,27 +486,9 @@ internal object FluviLockScreenCardCoordinator {
         axis: FluviLockScreenCardConfiguration.TimeAxis,
         now: LocalDate,
     ): Long? {
-        val selected = limits.filter {
-            it.key.direction == direction &&
-                (it.key.target as? FluviFinancialLimitTarget.Category)?.categoryId == categoryId
-        }
-        fun monthLimit(month: YearMonth): Long? {
-            selected.firstOrNull { it.key.period is FluviFinancialLimitPeriod.MonthOverride &&
-                (it.key.period as FluviFinancialLimitPeriod.MonthOverride).let { p -> p.year == month.year && p.month == month.monthValue }
-            }?.let { return it.amountScaled100 }
-            return selected.filter { it.key.period is FluviFinancialLimitPeriod.BaseMonthlyRevision }
-                .filter { (it.key.period as FluviFinancialLimitPeriod.BaseMonthlyRevision).let { p -> p.effectiveFromYear < month.year || p.effectiveFromYear == month.year && p.effectiveFromMonth <= month.monthValue } }
-                .maxWithOrNull(compareBy { (it.key.period as FluviFinancialLimitPeriod.BaseMonthlyRevision).effectiveFromYear * 12 + (it.key.period as FluviFinancialLimitPeriod.BaseMonthlyRevision).effectiveFromMonth })
-                ?.amountScaled100
-        }
-        return when (axis) {
-            FluviLockScreenCardConfiguration.TimeAxis.month -> monthLimit(YearMonth.from(now))
-            FluviLockScreenCardConfiguration.TimeAxis.day -> monthLimit(YearMonth.from(now))?.div(now.lengthOfMonth().toLong())
-            FluviLockScreenCardConfiguration.TimeAxis.year -> (1..12).mapNotNull { monthLimit(YearMonth.of(now.year, it)) }.takeIf { it.size == 12 }?.sum()
-            // SUM has no persisted independent limit truth. The app's current
-            // annual projection is the meaningful non-fabricated baseline.
-            FluviLockScreenCardConfiguration.TimeAxis.sum -> (1..12).mapNotNull { monthLimit(YearMonth.of(now.year, it)) }.takeIf { it.size == 12 }?.sum()
-        }
+        return resolveKeyguardCategoryLimit(
+            limits, direction, categoryId, FluviKeyguardBudgetAxis.valueOf(axis.name), now,
+        )
     }
 
     private fun previewContent(configuration: FluviLockScreenCardConfiguration) = FluviLockScreenCardContent(

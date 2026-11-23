@@ -1229,15 +1229,33 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                     "sceneTarget" -> {
-                        val focus = FluviKeyguardCardSettings.read(applicationContext).focus
+                        val initialSettings = FluviKeyguardCardSettings.read(applicationContext)
+                        val focus = initialSettings.focus
                         // This is the keyguard card's own focus.  It is never
                         // borrowed from an AppWidget host or the notification
                         // configuration, even while those surfaces exist.
                         queryScope.launch {
                             val target = FluviLockScreenCardCoordinator
                                 .materialSceneTarget(applicationContext, focus.asFinancialFocus())
+                            val currentCoreRevision = withContext(Dispatchers.IO) {
+                                fluviCore.query.currentCoreRevision()
+                            }
                             withContext(Dispatchers.Main.immediate) {
-                                result.success(target.toMap())
+                                val currentSettings = FluviKeyguardCardSettings.read(applicationContext)
+                                val unchanged = currentSettings.focus == initialSettings.focus &&
+                                    currentSettings.layoutRevision == initialSettings.layoutRevision &&
+                                    currentSettings.generation == initialSettings.generation &&
+                                    currentSettings.requested == initialSettings.requested &&
+                                    currentSettings.showFinancialDetails == initialSettings.showFinancialDetails
+                                // These are provenance observations, not visibility authority.
+                                // An enrolled publisher must recheck them against current state.
+                                result.success(target.toMap() + mapOf(
+                                    "r29SettingsCurrent" to unchanged,
+                                    "r29CurrentCoreRevision" to currentCoreRevision,
+                                    "r29LayoutRevision" to initialSettings.layoutRevision,
+                                    "r29PrivacyRevision" to initialSettings.generation,
+                                    "r29ShowFinancialDetails" to initialSettings.showFinancialDetails,
+                                ))
                             }
                         }
                     }

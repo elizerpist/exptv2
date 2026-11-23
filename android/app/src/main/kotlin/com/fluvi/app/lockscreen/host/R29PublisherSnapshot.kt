@@ -55,7 +55,8 @@ internal object R29PublisherSnapshot {
             !settings.focus.isValid || target.focusGeneration != settings.focus.generation ||
             target.mode != settings.focus.mode || target.timeAxis != settings.focus.timeAxis ||
             target.direction != settings.focus.direction || target.categoryId != settings.focus.categoryId ||
-            evidence.targetCoreRevision <= 0 || evidence.targetCoreRevision != evidence.visualCoreRevision ||
+            evidence.targetCoreRevision <= 0 || target.coreRevision != evidence.targetCoreRevision ||
+            evidence.targetCoreRevision != evidence.visualCoreRevision ||
             evidence.targetCoreRevision != evidence.currentCoreRevision ||
             evidence.visualFocusGeneration != settings.focus.generation ||
             evidence.visualLayoutRevision != settings.layoutRevision ||

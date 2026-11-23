@@ -14,6 +14,9 @@ internal class R29ResidentStore(
     private val renderer: R29HostRenderer,
     private val worker: Executor,
     private val main: Executor,
+    private val scheduleExpiry: (Runnable, Long) -> Unit = { _, _ -> },
+    private val cancelExpiry: (Runnable) -> Unit = {},
+    private val nowEpochMs: () -> Long = System::currentTimeMillis,
     private val onChanged: () -> Unit,
 ) {
     private val lock = Any()
@@ -23,6 +26,34 @@ internal class R29ResidentStore(
     private var attached = false
     private var latestSequence = 0L
     private var callback: ((String, Long) -> Unit)? = null
+    // One reusable timer covers static images too; replacements cancel it.
+    private val expiry = object : Runnable {
+        override fun run() {
+            val expired = synchronized(lock) {
+                val value = ready.get() ?: return@synchronized false
+                val now = nowEpochMs()
+                if (now < value.descriptor.validUntilEpochMs) {
+                    if (runCatching { scheduleExpiry(this, value.descriptor.validUntilEpochMs - now) }.isSuccess) {
+                        false
+                    } else {
+                        ready.set(null)
+                        reducer.reset()
+                        session = null
+                        attached = false
+                        callback = null
+                        true
+                    }
+                } else {
+                    reducer.current(now)
+                    ready.set(null)
+                    true
+                }
+            }
+            if (expired) onChanged()
+        }
+    }
+
+    private fun cancelExpiryLocked() { runCatching { cancelExpiry(expiry) } }
 
     fun beginSession(nonce: String, onReady: (String, Long) -> Unit): Boolean {
         val accepted = synchronized(lock) {
@@ -32,6 +63,7 @@ internal class R29ResidentStore(
             latestSequence = 0L
             callback = onReady
             ready.set(null)
+            cancelExpiryLocked()
             true
         }
         if (accepted) changed()
@@ -46,6 +78,7 @@ internal class R29ResidentStore(
             latestSequence = descriptor.sequence
             // Authenticated semantic replacement immediately revokes old FULL.
             ready.set(null)
+            cancelExpiryLocked()
             val error = R29Protocol.invalidReason(descriptor, nowEpochMs, actualParcelBytes)
             next = reducer.prepare(descriptor, nowEpochMs, actualParcelBytes)
             error == null
@@ -61,6 +94,7 @@ internal class R29ResidentStore(
             if (!reducer.invalidate(nonce, sequence)) return@synchronized false
             latestSequence = sequence
             ready.set(null)
+            cancelExpiryLocked()
             true
         }
         if (applied) changed()
@@ -76,6 +110,23 @@ internal class R29ResidentStore(
         }
     }
 
+    /** A dead callback is not a clean detach: even an adopted image loses authority. */
+    fun clientDied(nonce: String): Boolean {
+        val cleared = synchronized(lock) {
+            if (!attached || session != nonce) return@synchronized false
+            reducer.reset()
+            session = null
+            attached = false
+            latestSequence = 0L
+            callback = null
+            ready.set(null)
+            cancelExpiryLocked()
+            true
+        }
+        if (cleared) changed()
+        return cleared
+    }
+
     fun reset() {
         synchronized(lock) {
             reducer.reset()
@@ -84,6 +135,7 @@ internal class R29ResidentStore(
             latestSequence = 0L
             callback = null
             ready.set(null)
+            cancelExpiryLocked()
         }
         changed()
     }
@@ -95,6 +147,7 @@ internal class R29ResidentStore(
         if (eligible == null || eligible.session != value.descriptor.session ||
             eligible.sequence != value.descriptor.sequence) {
             ready.set(null)
+            cancelExpiryLocked()
             return@synchronized null
         }
         value
@@ -103,20 +156,36 @@ internal class R29ResidentStore(
     private fun enqueue(work: R29Descriptor) {
         worker.execute {
             renderer.prepare(work) { result ->
-                var next: R29Descriptor? = null
-                var notify: ((String, Long) -> Unit)? = null
-                synchronized(lock) {
-                    next = reducer.workerFinished(work.session, work.sequence)
-                    val output = result.getOrNull()
-                    if (output != null && reducer.adopt(work.session, work.sequence, System.currentTimeMillis())) {
-                        ready.set(output)
-                        if (session == work.session) notify = callback
-                    }
+                // Worker completion is only preparation, not display authority.
+                // A concurrent invalidate, detach or new session may win while
+                // the main owner is waiting to adopt the prepared object.
+                val next = synchronized(lock) {
+                    reducer.workerFinished(work.session, work.sequence)
                 }
-                if (notify != null) {
-                    changed()
-                    val captured = notify
-                    main.execute { runCatching { captured?.invoke(work.session, work.sequence) } }
+                val output = result.getOrNull()
+                if (output != null) main.execute {
+                    val adopted = synchronized(lock) {
+                        if (!attached || session != work.session || callback == null ||
+                            !reducer.adopt(work.session, work.sequence, nowEpochMs())) {
+                            false
+                        } else {
+                            ready.set(output)
+                            cancelExpiryLocked()
+                            val scheduled = runCatching {
+                                scheduleExpiry(expiry, (work.validUntilEpochMs - nowEpochMs()).coerceAtLeast(0))
+                            }.isSuccess
+                            if (!scheduled) {
+                                ready.set(null)
+                                false
+                            } else {
+                                // Serialize receipt delivery with invalidate and
+                                // detach. The service uses a one-way Binder call.
+                                runCatching { callback?.invoke(work.session, work.sequence) }
+                                true
+                            }
+                        }
+                    }
+                    if (adopted) onChanged()
                 }
                 next?.let(::enqueue)
             }
