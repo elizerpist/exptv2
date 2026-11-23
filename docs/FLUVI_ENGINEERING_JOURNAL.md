@@ -18284,3 +18284,112 @@ The missing product integration is an available and authorized **stock-device di
 | Physical 10 ms ceilings, fast withdrawal and acceptance | **NOT ESTABLISHED; PHYSICAL VALIDATION — PENDING, USER ONLY.** Appearance after physical wake, appearance relative to the first eligible clock frame, and disappearance on restriction remain separate endpoints; a finite physical measurement also cannot prove a universal bound. |
 
 The existing exact-source Dart SCIP manifests are [stock `b3847093`](https://github.com/elizerpist/exptv2/blob/b3847093bcc9a6aae80c329b8ad5f1844bab32c5/docs/codegraph/manifest.json) for `14e05315` and [reference `82afc7f6`](https://github.com/elizerpist/exptv2/blob/82afc7f6d50773f8fe4275ef162c4fd90bd3291b/docs/codegraph/manifest.json) for `e6df9043`. They cover Dart, not Kotlin or AOSP; the native and platform conclusions above were checked against the source, not inferred from SCIP. No graph regeneration is claimed for this journal-only entry. Source access was read-only except this append; private screenshots, logs and owner data were not published.
+
+## 2026-11-23 — R34. Stock APK implementation after the R33 capability report
+
+FLUVI_R34_STOCK_CACHED_ORB_BEGIN
+
+### 1. Start here — IMPLEMENTATION
+
+The owner's feedback is that the coding agent stopped without writing code. The previous start instruction made a working SystemUI integration a prerequisite for starting stock work. That was the reviewer's mistake. R33's capability report is complete. This new handoff authorizes a changed, ordinarily installable experimental Android APK. Implement the stock first-frame path below, beginning with the private poster and a failing normal-entry-point test. Continue through the reader change, integration, tests, signed phone artifact and report. The absent privileged host, unavailable original Drive access in a coding environment, and lack of a physical camera on CI are not preconditions. Preserve the owner's maximum of 10 ms as a physical acceptance criterion. No system image, privileged install, wallpaper replacement, host-widget substitution, phone flash or remote service is part of this task.
+
+### 2. Source and branches
+
+Coordination branch fix/orb-v4-latency-lockscreen, last reviewed report fe164f94a5e14f57428c7f44082938149c43ca1a. Use a separate application worktree/branch implement/r34-stock-cached-orb from the tested stock source 14e05315520ff3282348838804ff6e004c677d30 (implement/r32-first-frame, parent 5b18235f261df24dcee06cf3050e3e20411612fa). Resume a compatible existing R34 worktree if one exists and retain concurrent changes. Preferred handset opening comparator de807259cd370d18e422772ed0943b8d65be4bca. The coordination SHA and separate AOSP reference e6df9043 are not application build inputs.
+
+### 3. Preflight and existing artifacts
+
+Read the journal's project rule assets, the R24/R28/R32/R33 decisions, MILESTONE_COMMITS.md and docs/R32_FIRST_FRAME_REPORT.md on coordination. Use the stock tooling b3847093bcc9a6aae80c329b8ad5f1844bab32c5 for Dart navigation and its native inventory for paths. Verify source symbols directly in Kotlin. The capability assessment at fe164f94 is already the input. Start an application diff in this run. Preserve history and use a separate worktree to append results to coordination.
+
+### 4. Handset evidence
+
+The owner's R32 still visibly lagged. The Drive document Orb records LIGHT capture 2ba986ac-3f9f-4b74-ba9d-6175c2bf054e, Nothing A142, API 35, profile, ORB/orbOnly/FULL, FG and BG off. Six openings, four detailed episodes. Attempts 1/4/5/6, app wake to first paint authorization 923/474/295/332 ms. Worker entry to first post 5.489/7.145/5.191/8.490 ms. App wake to native reveal return 1428/520/314/365 ms. All four used a warmed program and DIRECT_MISS for the actual poster. The four overlapped reads saw SHOW_FULL then failed aggregate REVALIDATION. The export cannot identify the rejecting condition per attempt. Physical first/last pixels were unobserved. No repeat of this capture is needed to begin.
+
+### 5. Historical control and current privacy result
+
+R22.4 had a real bitmap hit: one hidden target bound at callback +43 ms, permission at +300, buffer at +305 and native reveal return at +321. Faster painting alone cannot account for the measured pre-authorization wait. R32's independent emulator panel 45194281850 observed calibrated FULL on white in a screenshot acquired after the REDACTED return. Black/stale-pressure cases included unclassified data. The screenshot interval gives neither an exposure duration nor a phone timestamp. Treat withdrawal as a protected regression, including both newly introduced and existing render owners.
+
+### 6. Cause register and falsifiers
+
+Confirmed: R32 ties first pixel production on the virgin FULL output to post-wake authority; target seal drops FULL posters; the R32 warm field denotes shader program readiness. Confirmed source behavior: inspection captures scene before framework inventory, while several walk-abort checks test broader authority. The narrowly scoped opening yield already exists. In R32, publishReadAheadSnapshotLocked can reconstruct a wrapper with the very same values while r32PositiveStillCurrentLocked tests reference identity. Reallocation alone can fail this conjunct; a real scene change must still invalidate even when values change back. Whether either condition dominated any specific handset sample is unproven. Binder delivery time, genuinely changing windows, final complete inspection, host bind, app scheduling and display composition can remain limiting. Keep them observable. A ready poster followed by a late grant constitutes a cache success and a late opening in the same trial.
+
+### 7. Impact and protected paths
+
+- FluviKeyguardCardService.onMaterialProfileChangedFromApplication and KeyguardCardWindow.prepareRetainedView/prepareR18: feed accepted settings, data and dimensions to detached preparation once they are coherent; re-evaluate on revision, profile, geometry and lifecycle changes. Check all creation/update sources including initial service connection.
+- material/KeyguardOrbSurfaceWorker.prepareAuthorized, posterKey, getOrMakePoster and revoke; KeyguardOrbR18Presenter and existing painter: separate reusable private picture ownership from one target's access/lease and from the live mutable painter. Keep normal revoke on every displayed output.
+- Service.inspectSurface/readSystemWindows/processInspectionQueue, KeyguardWindowSnapshotReader.read/visibleIds, KeyguardCardInspectionQueue, KeyguardFirstAuthorizedOrb and advanceR19First: one latest-scene reader while the target is provably empty. Preserve restrictions, lifecycle/freshness obligations and final one-use authority.
+- material/KeyguardOrbDirectOutput.kt contains KeyguardOrbPresentationLane. This lane owns native bind/reveal/retire. Both poster and live layers must share the same withdrawal owner, geometry, crop, color and input semantics. Do not create a second independently interactive window.
+- Limit the new DIRECT-specific policy to existing supported capability checks. R32's DIRECT check is API 35-specific. Keep other supported Android routes operational, use common private cache/blit logic where it fits their existing contracts, run compatibility checks, and report actual coverage. No manufacturer-specific selector. Keep dashboard, home widget, notification and OS sources outside the diff.
+
+### 8. Private cache before lock
+
+Prepare the actual configured transparent image of the orb on a worker at accepted profile/data/settings changes, service initialisation and legitimate idle invalidation/rearm. Reuse the real keyguard material/painter with current mode, scope/category, data, palette, geometry, density, labels where applicable, disclosure configuration and a defined continuation phase. Count as READY only after pixel production is complete. Use a bounded single latest desired job, one ready entry with lease-safe retirement, a monotonic generation and exact identity. Late A1 may never replace A2 after A/B/A updates. Persist no FULL pixels to disk. Readiness is permission to retain an app-private image in RAM; a separate current decision is required to expose it.
+
+Avoid deriving an always-changing animation-time key independently at lookup. Adopt the prepared image's phase and start the live animation from it; use a separately captured phase when required by existing continuity. Retire outputs and revoke reveal rights on every seal. An inactive image may survive an ordinary window withdrawal only while all original data-access/retention rules still allow it. Purge it on privacy/data-access revocation, user/account change, disable, relevant expiry, process/service disposal and memory pressure. Ordinary internal images have no WindowManager/SurfaceControl parent or attached surface; never pre-submit private pixels to an attached transparent or hidden display surface. No detached ticker, wake lock or continuous background service.
+
+### 9. One fresh scene at opening
+
+Only while owner, session and output match, grant is NONE, and no old FULL layer/ticket/show is outstanding, replace the obsolete positive A/B chain on that path with a single worker and at most one latest actually offered, compatible read. Bind the current scene generation immediately before the physical inventory. Hook the existing safe reader checkpoints before/after inventory, root, child calls and at Main receipt. If a genuinely newer scene/request has made that result unusable, release acquired objects and transfer the exact outstanding obligation to its real successor. Complete a blocking Android call already in flight. Do not start a second reader, lock across Binder, poll, or invent a positive. If the new request is not yet available, leave the registered obligation pending and schedule when actually offered without waiting on an obsolete positive's Main disposal. Preserve queue progress if a coroutine, worker or Main task is cancelled.
+
+Only this provably empty path may discard obsolete positive work. Forward already observed exclusions, system-off/unknown, user switch, disconnect, queued restrictive action and any prior owner requiring withdrawal through existing ordered restriction handling first. Carry the outstanding cache-clear/freshness obligation until the proper physical call establishes it. An ordinary equal-value publication should not invalidate the same reservation. Use a monotonic invalidation epoch and exact owner/lease, request and revision identity; a real intervening change/reversion remains stale. Reuse or replace the old overlap branch for these admissions, leaving no competing A/B owner. Fall back to existing restrictive handling if the empty-owner preconditions stop holding. A fresh positive still requires a complete unambiguous MAIN_KEYGUARD classification, every current system/authority/revision check and one final submission check. Count continuous churn, incomplete trees and delayed genuine evidence as misses. No timer-based show or reuse of prior-wake proof.
+
+### 10. Warm presentation and animation
+
+On a warm hit deliver the already prepared private image through the actual stock opening entry point. Prepare the app-private image, eligible empty host and independent current-scene read in parallel. Once the exact host is ready and a fresh FULL decision is available, submit the poster without first waiting for a live painter or making the owner wait for the first live worker post. Preserve the ordering of restrictions throughout any delay to that submit.
+
+On the supported DIRECT path use a dedicated non-interactive poster child in the existing owner, with a distinct live BufferQueue child. Bind the private composed buffer plus intended visibility/geometry on a single authorized SurfaceControl transaction. Do not call setBuffer on the layer that owns the live Surface producer. Prepare the compatible HardwareBuffer off the hot path, with COMPOSER_OVERLAY and GPU_SAMPLED_IMAGE usage plus render-target usage if required, alpha/color space/crop and completed producer fence. Do not assume any arbitrary hardware Bitmap buffer qualifies. Keep display/release-fence ownership and leases bounded, including on abort, replacement and dispose. At first valid live continuation atomically switch visibility from poster to live in the same owner; retain the poster until the actual correctly phased live buffer is ready. Static/reduced-motion mode may keep just the poster. If that buffer format/permission is unsupported, implement a real stock fallback that blits the prepared bitmap once via the existing authorized surface before starting the live scene. This fallback still implements private preparation and the revised reader; log its extra post separately. A cold/missing/stale image uses the existing safe normal render path and schedules the next prepare. Never pause the clock or hold the system screen to wait for Fluvi.
+
+Android public API reference: https://developer.android.com/reference/android/view/SurfaceControl.Transaction#setBuffer(android.view.SurfaceControl,android.hardware.HardwareBuffer,android.hardware.SyncFence,java.util.function.Consumer)
+
+### 11. Release and withdrawal races
+
+Own every displayed child and pending submit under one generation. Invalidate pending work on restriction; cancel unreached submits, order hide/unparent of both visible owners on the presentation lane, and prevent stale queued poster/live callbacks from restoring either child. Cover restriction between scalar admission, native submission and its receipt. Distinguish a command that was queued, submitted, committed or visibly withdrawn. Never claim to undo a previously submitted frame retroactively. Cache eviction must not invalidate buffers still leased by the compositor. Do not defer the restrictive action behind resource release, fence waiting or the live transition. Keep the existing fail-closed fallback when host/bind/disposal fails.
+
+### 12. Red controls first
+
+Parent controls: actual app producer cannot supply a ready-before-lock configured FULL poster to the warm opening (shader warm alone fails); hold a framework child-read in an eligible virgin-wake fixture then deliver two real invalidations; stale work must not grant or delay the newest stable successor behind obsolete positive Main work. The deterministic policy control must distinguish equal snapshot republish from real A/B/A invalidation. Exercise both the reader and service, in addition to deterministic unit tests. For a failed parent fixture, retain NOT REACHED and repair the fixture. Do not substitute injected positive decisions for a real privacy or visual pass.
+
+### 13. Candidate regression matrix
+
+| Case | Required observation |
+| --- | --- |
+| Actual configured first poster, paused live render worker, eligible host | Warm path displays recognizable correct data/palette/phase; no live painter/worker dependency for DIRECT poster, no fresh render on the blit fallback. Cold and failed preparation cover safe fallback. |
+| Delayed A1 after A2, same visual hash with newer data, size change, privacy change, disable | Stale buffers/reads/callbacks cannot publish, leak or blank a newer owner. Purge semantics tested. |
+| New ingress during inventory/root/child/Main, same-value publish, ABA reversion, repeated transient scenes | One reader, correct outstanding obligation and next current read, no obsolete admission, restriction wins, stable scene progresses and churn remains counted. |
+| Restriction during ready, admission, native submit, poster-to-live and rapid relock | No second visible owner or resurrected old material; correct session/child in receipts; no unauthorized touch interception. |
+| White and black contrasting backgrounds, shade/QS, PIN, unlock/biometric, occluding call/camera | Calibrated visual test can detect one-frame-late/partial FULL control on old owner and reports actual candidate outcome. Unknown or unreached stays unknown. |
+| Motion/static, trim/miss, service reconnect and other supported API routes | Correct first frame, next distinct motion where configured, no exposed private cache or detached churn, compatible ordinary path. |
+
+### 14. Diagnostics required in the same source change
+
+Add bounded, no-sensitive-data, per-attempt scalar evidence to the existing capture. Record route, owner/session/scene/asset generation, ready-before-lock/wake or explicit unknown, hit/miss/invalidation reason, prepare begin/READY, count and reason for aborted/superseded walks, first genuine positive and rejection conjunct(s), valid grant, ready host, actual poster source, submit/return/optional fence, first distinct motion and restriction/hide receipts. Record callback and producer times in their actual clock domains. Emit one stable summary even when raw events are evicted. No synchronous tracing/formatting under queue locks.
+
+### 15. Performance and phone test
+
+Owner goal is maximum 10 ms, inclusive. Report all trials, maximum, cold/miss count, warm/cold and route. Measure wake-callback to valid proof separately from proof to first poster submit, wake-callback to poster submit, first eligible system clock pixels to correct orb pixels, and restriction to last FULL pixels. Distinguish wake stimulus to correct orb from clock-relative delay and avoid using worker elapsed or native return as optical endpoints. Four standard demo lock/wake/unlock cycles on matched settings for owner testing after delivery, plus one rapid relock, shade and PIN case. Preserve exact samples and unknowns; stop real-data usage on a privacy failure. In automated AB/BA comparison use R32 as parent and de807259 as the perceived-opening comparator, matched setup, logs, and no claim of physical timing from an emulator. If independent optical footage exists, account for uncertainty and clock/scanline. Missing footage means physical validation pending; it does not delay producing the candidate. A finite device sample does not establish universal timing or process-suspended reveal.
+
+### 16. Execution order
+
+First commit a meaningful real stock-path code change with a regression control for the cache. Complete the single-reader supersession and production reveal integration in the same candidate before claiming it is testable as the repair. Run cheap checks and bounded targeted controls, correct recoverable defects, build and verify the exact diagnostic candidate, run independent qualification and publish results. A one-line guard change, a cache counter, shader-only change, modified documentation or repackaged R32 does not deliver this assignment.
+
+### 17. Build and verify
+
+Use the compatible existing Flutter/Android lane. From the app worktree run git diff --check, bash scripts/verify-fluvi-boundaries.sh, flutter pub get, flutter analyze --no-fatal-infos and the relevant Flutter bridge tests. From android run ./gradlew :app:generateKeyguardHeaderMaterial :app:compileDebugKotlin :app:compileDebugAndroidTestKotlin and the new named JVM suite plus adjacent existing R19/R21/R32/privacy/reader tests. Run the actual service/instrumented candidate on the established API35 device runner, using test selectors that were added and compiled in this candidate, independent visual panel scoring, and one compatibility control on an available other API or record its absence. Count executed tests, failed fixtures, XML and artifacts explicitly.
+
+### 18. Commit, graph and record
+
+Push application commits to the implementation branch, retain parent/child IDs, and link Why/Evidence/Changed/Validation/Known limitations/Physical validation. Refresh exact-candidate code graph and native inventory according to the established route; mark any missing coverage. Preserve all published measurements and append the results to the coordination journal without overwriting concurrent entries. Never use a graph or docs SHA in an APK.
+
+### 19. Deliver the testable APK
+
+For the changed exact source use FLUVI_BUILD_COMMIT=[full candidate SHA] bash scripts/build-human-diagnostic-apk.sh or the established exact-source orchestration/r18-phone-builder workflow pinned at 200aaebd1eaa79382feb977ba57996b0c72e2d28 with app_sha. Expected profile HUMAN_DIAGNOSTIC, package com.fluvi.app, demo-data phone testing, same upgrade signer. Verify embedded source SHA/diagnostic purpose, package/signature, successful adb install -r over signed R32 on a demo fixture, and full-byte anonymous download, SHA-256 and length at an immutable link. Run the full flutter test suite plus the full app/core JVM suite on the exact candidate, record counts and baseline qualifications, and run required final branch CI including ordinary fluvi-core.yml and appropriate native scopes r12_contract/r12_live/r12_static/r12_legacy/full; capture exact SHA and outcomes. Use the proven separate builder if an unrelated historical full gate or non-capable local runner blocks artifact production. Keep the test APK and its qualification independently labelled. If the new code has a confirmed privacy regression, repair and retest; a retained diagnostic artifact is for isolated demo data and cannot be presented as safe for actual finances. Report any genuinely unavailable runner/signing/artifact step, exact error, recovery attempted, source diff and accessible intermediate evidence; do not invent a successful delivery.
+
+### 20. Completion report
+
+Give the owner the APK URL, SHA/size, source branch and SHA, comparison APK(s), which path actually ran, measured cache readiness and acquisition/reveal intervals, before/after visual privacy results and the exact phone test. Report remaining blockers or outstanding gates with evidence. Keep source implementation, independently downloadable signed APK, automatic qualification and owner physical acceptance as four independent fields.
+
+### 21. Definition of done
+
+Implementation handoff result is changed working stock code, an exercised prepared-poster opening through the real entry point, a tested latest-scene acquisition with fail-closed withdrawal and a verifiable new diagnostic APK for the owner; unresolved items must remain explicit. Owner product acceptance still requires the correct visibly synchronized orb, safe disappearance and measured maximum 10 ms. A missing universal OS guarantee limits the product claim. It does not cancel stock implementation.
+
+FLUVI_R34_STOCK_CACHED_ORB_END
