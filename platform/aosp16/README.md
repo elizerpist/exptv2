@@ -30,8 +30,10 @@ actual SystemUI service signer, UID and clock-scene capability metadata before
 pre-lock enrollment. In this initial reference path enrollment is restricted
 to a fresh userdebug/eng installation, an unlocked first service, no previous
 local reservation/output and the revisioned Budget category projection.
-Unsupported stock phones and unsupported generations remain on their existing
-path. The application and this reference patch have not been run together on
+Unsupported stock phones and unsupported starting modes keep their existing
+path. After reference enrollment, a later unsupported generation is withheld;
+the current implementation does not prove a safe automatic return to stock.
+The application and this reference patch have not been run together on
 an Android 16 image; do not treat a successful connection or an offscreen
 receiver as evidence of primary-clock composition or privacy.
 
