@@ -1,4 +1,34 @@
-# R29 SystemUI reference: incomplete checkpoint
+# R38 SystemUI clock reference: incomplete, do not enable
+
+The R38 source adds `0002-r38-clock-root.patch` at the pinned Android 16
+`DefaultBlueprint` root. Its passive draw modifier preserves the existing six
+measurables and uses only the resident image plus SystemUI scene inputs. The
+reference store now has exact-session/sequence EMPTY bookkeeping and defers an
+EMPTY callback until an image-free clock-root draw and frame-commit callback.
+That callback is not a physical-display measurement.
+
+**This reference is still incomplete and must remain unenrolled.** The shipped
+app has no authenticated exclusive-owner handover into the host; pending
+asynchronous legacy output has not been proved drained. The patched SystemUI
+has not been Soong-built, booted, or exercised against actual transition and
+outgoing-layer frames. No first-clock-frame, animation-continuity, exclusion,
+or 10 ms result is established by source staging, a JVM test, or a commit
+callback. A real-device or matched-image test is required before enabling it.
+
+The two patch files and the renderer/store sources can be staged reproducibly
+with the existing command below. The stager checks both patches against the
+same AOSP parent and copies the clock-specific source from `clock/src`.
+`--allow-incomplete` is mandatory and does not assert safety or completion.
+
+The R38 reference checks the current renderer source digest; its only change
+from the older pinned profile is three R35 publication calls below the exact
+renderer prefix extracted by the stager. All shader and generator pins remain
+unchanged. The phone APK is built separately from the R38 application commit.
+
+## Earlier R29 bootstrap record
+
+The following historical description records the state before the R38 clock
+hook above; it does not override the incomplete R38 status and test limits.
 
 **Status: NOT an integrated R29 build.** The bootstrap patch below registers a
 reference-only service and stages its renderer assets, but it does not connect

@@ -101,6 +101,11 @@ internal class R29ResidentStore(
         return applied
     }
 
+    /** A newer publication or a replaced session must invalidate an EMPTY receipt. */
+    fun isCurrentEmpty(nonce: String, sequence: Long): Boolean = synchronized(lock) {
+        attached && session == nonce && latestSequence == sequence && ready.get() == null
+    }
+
     /** Only previously adopted output survives a clean publisher disconnect. */
     fun detach(nonce: String) = synchronized(lock) {
         if (nonce == session) {

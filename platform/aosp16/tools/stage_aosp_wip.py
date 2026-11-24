@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Check or stage the INCOMPLETE R29 host bootstrap on the pinned AOSP tree.
+"""Check or stage the INCOMPLETE R38 clock reference on the pinned AOSP tree.
 
-This does not provide the lockscreen scene integration or frame-level safety
-proof. --apply requires --allow-incomplete and a clean, committed Fluvi source.
+The clock hook is present, but exclusive app enrollment and frame-level safety
+proof are still incomplete. --apply requires --allow-incomplete and a clean,
+committed Fluvi source.
 """
 import argparse
 import hashlib
@@ -15,6 +16,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[3]
 UPSTREAM = "99b01a65cc4c104933788b3143285ab6bae65827"
 PATCH = ROOT / "platform/aosp16/patches/0001-r29-host-bootstrap-WIP.patch"
+CLOCK_PATCH = ROOT / "platform/aosp16/patches/0002-r38-clock-root.patch"
 
 
 def git(cwd, *args):
@@ -32,6 +34,7 @@ def run(base, assets, apply, allow_incomplete):
     if git(base, "status", "--porcelain", "--untracked-files=all"):
         raise ValueError("frameworks/base worktree is not clean")
     subprocess.run(["git", "-C", str(base), "apply", "--check", str(PATCH)], check=True)
+    subprocess.run(["git", "-C", str(base), "apply", "--check", str(CLOCK_PATCH)], check=True)
     source_head = git(ROOT, "rev-parse", "HEAD")
     source_dirty = bool(git(ROOT, "status", "--porcelain", "--untracked-files=no"))
     source_untracked = bool(git(ROOT, "ls-files", "--others", "--", "platform/aosp16"))
@@ -46,6 +49,7 @@ def run(base, assets, apply, allow_incomplete):
         for src, dest in ((stage / "src", base / "packages/SystemUI/src"),
                           (ROOT / "platform/aosp16/contract/src", base / "packages/SystemUI/src"),
                           (ROOT / "platform/aosp16/systemui/src", base / "packages/SystemUI/src"),
+                          (ROOT / "platform/aosp16/clock/src", base / "packages/SystemUI/src"),
                           (ROOT / "platform/aosp16/systemui/tests", base / "packages/SystemUI/tests/robolectric/src"),
                           (stage / "assets", base / "packages/SystemUI/fluvi_r29/assets")):
             for f in src.rglob("*"):
@@ -56,19 +60,21 @@ def run(base, assets, apply, allow_incomplete):
         for _, dest in entries:
             if dest.exists() or dest.is_symlink():
                 raise ValueError("refusing to overwrite " + str(dest))
-        receipt = {"status": "INCOMPLETE_HOST_BOOTSTRAP", "frameworksBase": UPSTREAM,
+        receipt = {"status": "INCOMPLETE_CLOCK_REFERENCE", "frameworksBase": UPSTREAM,
                    "fluviHead": source_head, "fluviTrackedDirty": source_dirty,
                    "fluviPlatformUntracked": source_untracked, "patchSha256": digest(PATCH), "rendererManifestSha256": digest(stage / "renderer-manifest.json"),
+                   "clockPatchSha256": digest(CLOCK_PATCH),
                    "staged": {str(d.relative_to(base)): digest(s) for s, d in sorted(entries, key=lambda x: str(x[1]))}}
         print(json.dumps({k: v for k, v in receipt.items() if k != "staged"}, sort_keys=True))
         print("stagedFiles=" + str(len(entries)))
         if not apply:
             return
         created = []
-        applied = False
+        applied = []
         try:
-            subprocess.run(["git", "-C", str(base), "apply", str(PATCH)], check=True)
-            applied = True
+            for patch in (PATCH, CLOCK_PATCH):
+                subprocess.run(["git", "-C", str(base), "apply", str(patch)], check=True)
+                applied.append(patch)
             for src, dest in entries:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 with src.open("rb") as input_file, dest.open("xb") as output_file:
@@ -79,12 +85,12 @@ def run(base, assets, apply, allow_incomplete):
                 created.append(receipt_path)
                 json.dump(receipt, file, indent=2, sort_keys=True)
                 file.write("\n")
-            print("hostBootstrapApplied=true; scene integration and safety gates remain missing")
+            print("clockReferenceApplied=true; enrollment and frame safety gates remain incomplete")
         except Exception:
             for path in reversed(created):
                 path.unlink(missing_ok=True)
-            if applied:
-                subprocess.run(["git", "-C", str(base), "apply", "--reverse", str(PATCH)], check=True)
+            for patch in reversed(applied):
+                subprocess.run(["git", "-C", str(base), "apply", "--reverse", str(patch)], check=True)
             raise
 
 

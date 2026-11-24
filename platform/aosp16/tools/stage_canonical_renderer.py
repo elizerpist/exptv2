@@ -13,7 +13,9 @@ import shutil
 import tempfile
 
 SOURCE_DIGESTS = {
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardMaterialProfile.kt": "e37c2c1133a64d0643101f2da853025d04079c9de59f6e4edffb5a924e0ae3b4",
+    # R35 added publication calls below the extracted profile declaration;
+    # its extracted prefix is byte-identical to the R29.1 renderer input.
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardMaterialProfile.kt": "a850424965185498559e71104d270b02d3262e088d48301bf240090f17ac67e9",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceMaterial.kt": "fff4b92322ea64808c08280584c7580bcec43d450b6721624d6e3b95b9b40c1f",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialView.kt": "b0997443f1a1e4fcd4f8b9131825111ad367b7c1a3537c314292eca95a7165ed",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardShaderArtifactStore.kt": "7daeea45f045bdbbb271a98a02c275786322a1e65cacc8935e10b22daa927b15",

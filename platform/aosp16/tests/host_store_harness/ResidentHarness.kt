@@ -31,11 +31,14 @@ fun main() {
         "first worker output was exposed before main/draw owner adoption"
     }
     check(store.invalidate(nonce, 2))
+    check(store.isCurrentEmpty(nonce, 2)) { "only the exact invalidation may await an empty-frame receipt" }
+    check(!store.isCurrentEmpty(nonce, 1))
     main.drain()
     check(received.isEmpty()) { "stale READY escaped after invalidation" }
     check(store.current(System.currentTimeMillis()) == null)
     val current = input(nonce, 3)
     check(store.prepare(current, System.currentTimeMillis(), 2048))
+    check(!store.isCurrentEmpty(nonce, 2)) { "a newer generation revokes the older empty receipt" }
     worker.drain()
     checkNotNull(renderer.pending).invoke(Result.success(R29PreparedOrb(current)))
     check(store.current(System.currentTimeMillis()) == null)
@@ -52,6 +55,7 @@ fun main() {
     check(store.current(System.currentTimeMillis()) == null)
     val replacementNonce = "fedcba9876543210fedcba9876543210"
     check(store.beginSession(replacementNonce) { _, seq -> received.add(seq) })
+    check(!store.isCurrentEmpty(nonce, 2)) { "an old session must not acquire an empty receipt" }
     val replacement = input(replacementNonce, 1)
     check(store.prepare(replacement, System.currentTimeMillis(), 2048))
     worker.drain()

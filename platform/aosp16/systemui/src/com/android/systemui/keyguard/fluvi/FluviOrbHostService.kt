@@ -20,6 +20,7 @@ import android.os.UserHandle
 import android.os.UserManager
 import android.util.DisplayMetrics
 import android.view.Display
+import android.view.View
 import android.provider.Settings
 import com.fluvi.r29.contract.R29Protocol
 import com.fluvi.r29.contract.R29PublisherIdentity
@@ -183,10 +184,12 @@ class FluviOrbHostService : Service() {
                     val nonce = data.readString() ?: throw SecurityException("R29 nonce missing")
                     val sequence = data.readLong()
                     if (data.dataAvail() != 0) throw SecurityException("R29 trailing data")
-                    // This partial source cannot acknowledge that the actual
-                    // composed host frame is empty. Fail closed until that
-                    // receipt is wired to real SystemUI traversal.
-                    runtime.store.invalidate(nonce, sequence)
+                    val callback = synchronized(connectionLock) {
+                        clientConnection?.takeIf { it.nonce == nonce }?.binder
+                    } ?: throw SecurityException("R29 current client missing")
+                    runtime.requestEmpty(nonce, sequence) {
+                        runCatching { sendCallback(callback, R29WireCodec.CALLBACK_EMPTY, nonce, sequence) }
+                    }
                 }
                 }
                 return true
@@ -213,8 +216,61 @@ internal class R29HostRuntime private constructor(context: Context) : ComponentC
             check(mainHandler.postDelayed(runnable, delay)) { "R29 expiry handler unavailable" }
         },
         cancelExpiry = { runnable -> mainHandler.removeCallbacks(runnable) },
-    ) { onChanged?.invoke() }
+    ) { notifyClockObservers() }
     @Volatile var onChanged: (() -> Unit)? = null
+    private val observerLock = Any()
+    private val clockObservers = LinkedHashMap<() -> Unit, View>()
+    private data class PendingEmpty(val nonce: String, val sequence: Long, val receipt: () -> Unit,
+                                    var registered: Boolean = false)
+    private var pendingEmpty: PendingEmpty? = null
+
+    fun addClockObserver(view: View, observer: () -> Unit) {
+        synchronized(observerLock) { clockObservers[observer] = view }
+    }
+
+    fun removeClockObserver(view: View, observer: () -> Unit) {
+        synchronized(observerLock) {
+            if (clockObservers[observer] === view) clockObservers.remove(observer)
+        }
+    }
+
+    private fun notifyClockObservers() {
+        onChanged?.invoke()
+        val callbacks = synchronized(observerLock) { clockObservers.keys.toList() }
+        callbacks.forEach { runCatching { it() } }
+    }
+
+    /** Invalidation is immediate. EMPTY remains pending until a real clock-root
+     * draw without the image and a matching frame-commit callback. */
+    fun requestEmpty(nonce: String, sequence: Long, receipt: () -> Unit): Boolean {
+        if (!store.invalidate(nonce, sequence)) return false
+        synchronized(observerLock) { pendingEmpty = PendingEmpty(nonce, sequence, receipt) }
+        mainHandler.post { notifyClockObservers() }
+        return true
+    }
+
+    fun onEmptyClockDraw(view: View, noOutgoingScene: Boolean) {
+        if (!noOutgoingScene || !view.isAttachedToWindow || !view.isHardwareAccelerated || !view.viewTreeObserver.isAlive) return
+        val pending = synchronized(observerLock) {
+            val value = pendingEmpty ?: return
+            if (value.registered || clockObservers.size != 1 || clockObservers.values.single() !== view ||
+                !store.isCurrentEmpty(value.nonce, value.sequence)) return
+            value.registered = true
+            value
+        }
+        val registered = runCatching {
+            view.viewTreeObserver.registerFrameCommitCallback {
+                val deliver = synchronized(observerLock) {
+                    if (pendingEmpty !== pending || !store.isCurrentEmpty(pending.nonce, pending.sequence)) false
+                    else { pendingEmpty = null; true }
+                }
+                if (deliver) pending.receipt()
+            }
+        }.isSuccess
+        if (!registered) synchronized(observerLock) {
+            if (pendingEmpty === pending) pending.registered = false
+        }
+    }
 
     private val revokeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) { store.reset() }
@@ -258,6 +314,7 @@ internal class R29HostRuntime private constructor(context: Context) : ComponentC
 
     companion object {
         @Volatile private var instance: R29HostRuntime? = null
+        fun peek(): R29HostRuntime? = instance
         fun get(context: Context): R29HostRuntime = instance ?: synchronized(this) {
             instance ?: R29HostRuntime(context).also { instance = it }
         }
