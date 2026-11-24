@@ -192,6 +192,8 @@ internal class KeyguardWindowSnapshotReader(
         val activeRootStrategyAtCall: (() -> KeyguardActiveRootStrategy)? = null,
         val knownOwnAtInventory: (() -> KeyguardOwnOverlayIdentity?)? = null,
         val strictOwnAttribution: Boolean = false,
+        /** Absent for every read which began before the existing reveal ACK. */
+        val r40Provenance: KeyguardR40ClockProvenance? = null,
         val onDecisiveSystemMarker: (() -> Unit)? = null,
         /** Both callbacks are absent on every non-opening route. The first is
          * a volatile scalar hint; the second claims a real successor only at
@@ -687,6 +689,15 @@ internal class KeyguardWindowSnapshotReader(
                     activeLayer?.let { window.layer.toLong() - it.toLong() }, "perWindow")
             }
             val rootPackage = root?.packageName?.toString()
+            // No identity extraction on the opening path: this object exists
+            // only for a separately started read after the exact reveal ACK.
+            val r40 = request.r40Provenance
+            if (r40 != null && rootPackage in SYSTEM_PACKAGES && root != null) {
+                val verified = rootPackage == "com.android.systemui" &&
+                    window.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
+                    runCatching { root.windowId == window.id }.getOrDefault(false)
+                r40.beginWindow(window.id, displayId(window), rootPackage, window.type, verified)
+            }
             val potentialOwn = window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY &&
                 (rootPackage == ownPackageName || root == null)
             if (request.strictOwnAttribution && potentialOwn) {
@@ -727,7 +738,7 @@ internal class KeyguardWindowSnapshotReader(
                     }
                 }
                 visibleIds(root, window.id, prefetch.takeIf { timing.activeRootAccepted }, authorityIsCurrent, timing,
-                    request.onDecisiveSystemMarker,
+                    request.onDecisiveSystemMarker, r40,
                     if (request.openingFirstIngressUptime != null) ::observeIngressCall else null,
                     request.openingChildBefore, request.openingChildReturned,
                     request.openingEligibleCheckpoint, request.openingYieldHint,
@@ -754,6 +765,7 @@ internal class KeyguardWindowSnapshotReader(
                     readsAfterInvalidation += it.readsAfterInvalidation
                 }
             } else null } finally {
+                if (r40 != null && rootPackage in SYSTEM_PACKAGES && root != null) r40.endWindow()
                 root?.recycle()
             }
             if (visible?.yieldedTo != null) {
@@ -784,6 +796,9 @@ internal class KeyguardWindowSnapshotReader(
             timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), yieldedTo = finalNext,
             yieldReason = KeyguardOpeningYieldReason.CLEAN_OPENING)
         val treeElapsed = SystemClock.uptimeMillis() - treeStartedAt
+        if (!unavailableRoot && !walkTruncated && !timing.ownAttributionAmbiguous) {
+            request.r40Provenance?.finish { id -> metadata.count { it.id == id && it.displayId == Display.DEFAULT_DISPLAY } == 1 }
+        }
         return Result(snapshots, unavailableRoot, walkTruncated, windowsReadMs, treeElapsed, visited,
             timing.snapshot(treeElapsed), false, readsAfterInvalidation, firstIncompleteReason = timing.firstIncompleteReason)
     }
@@ -795,6 +810,7 @@ internal class KeyguardWindowSnapshotReader(
         authorityIsCurrent: () -> Boolean,
         timing: Accumulator,
         onDecisiveSystemMarker: (() -> Unit)?,
+        r40Provenance: KeyguardR40ClockProvenance?,
         observeIngressCall: ((String, Long, Long) -> Unit)?,
         openingChildBefore: ((Int, Int) -> Unit)?,
         openingChildReturned: ((Int, Int, Boolean) -> Unit)?,
@@ -808,6 +824,7 @@ internal class KeyguardWindowSnapshotReader(
         var decisiveReported = false
         fun recordId(id: String) {
             ids.add(id)
+            if (r40Provenance != null) r40Provenance.marker(id)
             if (!decisiveReported && KeyguardSurfaceClassifier.isDecisiveExclusionMarker(id) && authorityIsCurrent()) {
                 decisiveReported = true
                 if (timing.captureOpening) timing.decisiveMarker = true

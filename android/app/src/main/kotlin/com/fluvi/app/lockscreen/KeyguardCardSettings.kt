@@ -1050,6 +1050,17 @@ internal object KeyguardCardDiagnostics {
         if (event.reason == "R19_PROOF_ACCEPTED") {
             event.requestId?.let { timeline.values.putIfAbsent("r26AcceptedRequest", it.toString()) }
         }
+        if (event.reason == "R40_ARMED" || event.reason == "R40_UNATTRIBUTED") {
+            val count = (timeline.values["r40Reads"]?.toIntOrNull() ?: 0).coerceAtMost(9998) + 1
+            timeline.values["r40Reads"] = count.toString()
+            if (event.reason == "R40_ARMED") timeline.values["r40Witness"] = "ARMED"
+            else timeline.values.putIfAbsent("r40Witness", "UNATTRIBUTED")
+            retainField("r40Window"); retainField("r40Request")
+        }
+        if (event.reason == "R40_REMOVAL_MATCH" || event.reason == "R40_REMOVAL_FALLBACK") {
+            val key = if (event.reason == "R40_REMOVAL_MATCH") "r40Match" else "r40Fallback"
+            timeline.values[key] = ((timeline.values[key]?.toIntOrNull() ?: 0).coerceAtMost(9998) + 1).toString()
+        }
         if (event.reason == "R26_SYSTEM_SEAL") {
             listOf("r26SystemRequest", "r26SystemReason", "r26SystemReceived", "r26SystemStart", "r26SystemEnd")
                 .forEach { retainField(it) }
@@ -3008,6 +3019,7 @@ internal object KeyguardCardDiagnostics {
         append(" warm=${d("r27WarmStatus")}/${d("r27WarmSelector")} warmNs=${d("r27WarmLoadNs")}/${d("r27WarmQueueNs")}/${d("r27WarmConstructorNs")} overlap=${d("r27WarmOverlap")}")
         append(" consumed=${d("r19ConsumedRequest")}@${d("R19_PROOF_CONSUMED")} showing=${v(showing)}/${v(show?.operationId)}")
         append(" reveal=${d("reveal:r18ApplyBegin")}/${d("reveal:r18ApplyEnd")}/${d("reveal:r18Commit")}/${d("reveal:r18LatchNs")}/${d("reveal:r18PresentNs")}/${d("reveal:r18PresentState")}")
+        append(" witness=${d("r40Witness")}/${d("r40Reads")}/${d("r40Window")}/${d("r40Request")} removal=${d("r40Match")}/${d("r40Fallback")}")
         append(" seal=${d("SEALED")}/${d("SEALED_REASON")} sample=${d("r26SystemRequest")}/${d("r26SystemReason")}@${d("r26SystemReceived")}/${d("r26SystemStart")}/${d("r26SystemEnd")}")
         append(" hide=${v(hide?.operationId)}/${v(hide?.requestId)}/${v(hide?.attachGeneration)} eventCallback=${v(cause?.eventTimeUptimeMs)}/${v(hide?.triggerReceivedAtUptimeMs)}")
         append(" localRemove=${v(hide?.localHideAppliedAtUptimeMs)}/${v(hide?.removeReturnAtUptimeMs)}")

@@ -83,6 +83,11 @@ internal object KeyguardSurfaceClassifier {
         "com.android.systemui:id/camera_preview",
     )
 
+    /** Used only by an eligible post-presentation witness during the existing walk. */
+    fun isMainMarker(id: String): Boolean = id in mainIds
+    fun isClockMarker(id: String): Boolean = id == "com.android.systemui:id/keyguard_clock_switch" ||
+        id == "com.android.systemui:id/keyguard_status_view"
+
     /** Same decisive predicates as the complete classifier, usable only for
      * a verified visible node in a primary SystemUI-owned window. */
     fun isDecisiveExclusionMarker(id: String): Boolean = id in credentialIds ||

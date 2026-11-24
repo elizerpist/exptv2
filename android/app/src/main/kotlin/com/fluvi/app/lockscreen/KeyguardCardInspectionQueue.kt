@@ -98,6 +98,8 @@ internal data class KeyguardInspectionAuthority(
 internal interface KeyguardInspectionProbeForTest {
     fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> = actual
     fun started(request: KeyguardCardInspectionRequest) {}
+    /** Called only by an already-presented owner's optional worker read. */
+    fun r40ProvenanceStarted(request: KeyguardCardInspectionRequest) {}
     /** Frozen choice for this physical read; does not grant presentation. */
     fun openingOrderSelected(request: KeyguardCardInspectionRequest, milestoneOrdered: Boolean) {}
     /** Observation only; callbacks run outside queueLock on the sampler/reader. */

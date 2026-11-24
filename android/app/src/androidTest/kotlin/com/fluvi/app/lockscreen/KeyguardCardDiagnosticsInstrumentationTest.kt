@@ -56,6 +56,11 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                     edge("R19_PROOF_CONSUMED", base + 4)
                     edge("REVEAL_RECEIPT", base + 6, mapOf("r18ApplyBegin" to base + 5,
                         "r18ApplyEnd" to base + 6, "r18Commit" to base + 7))
+                    if (wake != 6L) {
+                        edge(if (wake == 1L) "R40_UNATTRIBUTED" else "R40_ARMED", base + 7,
+                            mapOf("r40Window" to wake + 300, "r40Request" to request + 1))
+                        if (wake >= 7L) edge(if (wake == 8L) "R40_REMOVAL_MATCH" else "R40_REMOVAL_FALLBACK", base + 9)
+                    }
                     val show = KeyguardCardDiagnostics.newShowOperation(owner, attach, request)
                     KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", operation = show, observedUptimeMs = base + 8)
                     val hide = KeyguardCardDiagnostics.newHideOperation(owner, attach, base + 9, base + 10)
@@ -92,6 +97,14 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                     assertTrue(row, row.contains("warm=HIT/dualTide_plain warmNs=100/200/300 overlap=false"))
                     assertTrue(row, row.contains("consumed=${base + 7}@${base + 4} showing=${base + 7}/"))
                     assertTrue(row, row.contains("localRemove=${base + 12}/${base + 13}"))
+                    val witness = when (wake) {
+                        1L -> "witness=UNATTRIBUTED/1/301/${base + 8}"
+                        6L -> "witness=UNOBSERVED/UNOBSERVED/UNOBSERVED/UNOBSERVED"
+                        else -> "witness=ARMED/1/${wake + 300}/${base + 8}"
+                    }
+                    assertTrue(row, row.contains(witness))
+                    if (wake == 7L) assertTrue(row, row.contains("removal=UNOBSERVED/1"))
+                    if (wake == 8L) assertTrue(row, row.contains("removal=1/UNOBSERVED"))
                     assertTrue(row, row.contains(if (wake == 6L) "sample=UNOBSERVED/UNOBSERVED@" else
                         "sample=${wake + 700}/screenOff@${base + 9}/${base + 10}/${base + 11}"))
                     assertFalse(row, row.contains("9999/wrong"))
