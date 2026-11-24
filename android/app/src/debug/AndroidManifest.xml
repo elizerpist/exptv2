@@ -2,6 +2,19 @@
     <!-- Required by the Flutter tool to connect to the development VM service. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application>
+        <!-- Synthetic static ORB for an owner-selected lockscreen host trial. -->
+        <receiver
+            android:name=".widget.trial.FluviOrbLockscreenTrialProvider"
+            android:exported="true"
+            android:label="@string/fluvi_orb_lockscreen_trial_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="android.appwidget.action.APPWIDGET_OPTIONS_CHANGED" />
+                <action android:name="android.appwidget.action.APPWIDGET_RESTORED" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/fluvi_orb_lockscreen_trial_info" />
+        </receiver>
         <!-- Same-package, separate-process R35 demo fixture. No profile/release entry. -->
         <service android:name="com.fluvi.app.lockscreen.host.R35DebugResidentService"
             android:process=":r35_receiver" android:exported="false" />
