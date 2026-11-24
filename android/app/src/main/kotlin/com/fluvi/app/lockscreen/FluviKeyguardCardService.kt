@@ -2377,6 +2377,9 @@ class FluviKeyguardCardService : AccessibilityService() {
         val result: Inspection,
         val startedAt: Long,
         val finishedAt: Long,
+        // Frozen for the lifetime of this physical read. It selects queue
+        // ordering only; current scene and disclosure are still checked on Main.
+        val r38MilestoneOrdered: Boolean,
     )
 
     private sealed interface InspectionOutcome {
@@ -2445,6 +2448,9 @@ class FluviKeyguardCardService : AccessibilityService() {
     )
 
     private fun readInspection(request: KeyguardCardInspectionRequest): PhysicalReadOutcome {
+        val r38MilestoneOrdered = synchronized(queueLock) {
+            r34EmptyDirectLocked(request) != null || r37EarlyStampLocked(request) != null
+        }
         val concurrent = activeInspectionCount.incrementAndGet()
         recordMaximum(maximumConcurrentInspections, concurrent)
         val started = SystemClock.uptimeMillis()
@@ -2459,12 +2465,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.READ_START, request.id, request.attachGeneration)
         val result = try {
+            inspectionProbeForTest?.openingOrderSelected(request, r38MilestoneOrdered)
             inspectionProbeForTest?.started(request)
             traceKeyguard("INSPECTION_STARTED", request.trigger, request, observedUptimeMs = started,
                 fields = mapOf("queueMs" to (started - request.queuedAtUptimeMs),
                     "queuedAtUptimeMs" to request.queuedAtUptimeMs,
                     "authorityCurrentAtStart" to authorityIsCurrent(request)))
-            inspectSurface(request, started)
+            inspectSurface(request, started, r38MilestoneOrdered)
         } catch (failure: Throwable) {
             val cancelledAt = SystemClock.uptimeMillis()
             if (claimedOpening != null) synchronized(queueLock) {
@@ -2554,7 +2561,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         inspectionProbeForTest?.readCompleted(request, inspection.decision, inspection.surfaceReason,
             inspection.rootUnavailable, inspection.walkTruncated, inspection.abortedStale, started, finished)
-        return PhysicalReadOutcome.Completed(CompletedInspection(request, inspection, started, finished))
+        return PhysicalReadOutcome.Completed(CompletedInspection(request, inspection, started, finished, r38MilestoneOrdered))
     }
 
     private fun newInspectionHandoff(): InspectionHandoff {
@@ -2593,6 +2600,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             return bypass("SYSTEM_INELIGIBLE")
         if (result.freshnessRevision != route.freshnessRevision || result.r19ReadSceneSerial == null ||
             !inspectionFreshness.isEstablished(route.authority, route.freshnessRevision)) return bypass("FRESHNESS_OR_SCENE")
+        if (read.r38MilestoneOrdered) return bypass("DIRECT_ORDERED")
         if (!KeyguardOpeningRoutePolicy.useCompletedHandoff(route.backend)) return bypass("DIRECT_ORDERED")
         val ticket = R25Completed(read, handoff, route)
         if (pending != null) {
@@ -3144,7 +3152,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 continue
             }
             var read = (physical as PhysicalReadOutcome.Completed).read
-            val superseded = synchronized(queueLock) { r34SupersedeCompletedLocked(read) }
+            val superseded = if (read.r38MilestoneOrdered) null else
+                synchronized(queueLock) { r34SupersedeCompletedLocked(read) }
             if (superseded != null) {
                 traceCompletedInspection(read, null)
                 traceR34Superseded(read, superseded)
@@ -3186,7 +3195,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                     }
                 // The empty R34 owner has one physical reader and no competing
                 // R32 positive A/B Main owner.
-                val r32 = if (successor == null && r34EmptyDirectLocked(active) == null)
+                val r32 = if (!read.r38MilestoneOrdered && successor == null && r34EmptyDirectLocked(active) == null)
                     reserveR32SuccessorLocked(read, pending) else null
                 ReadAheadDecision(snapshot, successor ?: r32?.successor, pending?.id,
                     when {
@@ -3236,7 +3245,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 }
                 val lateSuperseded = withContext(Dispatchers.Main.immediate) {
                     r32AwaitApplyGateForTest(active)
-                    val latest = synchronized(queueLock) { r34SupersedeCompletedLocked(read) }
+                    val latest = if (read.r38MilestoneOrdered) null else
+                        synchronized(queueLock) { r34SupersedeCompletedLocked(read) }
                     if (latest == null) applyCompletedInspection(read, handoff)
                     latest
                 }
@@ -3589,7 +3599,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         val abortedStale: Boolean = false,
     )
 
-    private fun inspectSurface(request: KeyguardCardInspectionRequest, startedAt: Long): InspectionOutcome {
+    private fun inspectSurface(request: KeyguardCardInspectionRequest, startedAt: Long,
+                               r38MilestoneOrdered: Boolean): InspectionOutcome {
         // The settings/profile input is maintained on the service lifetime;
         // an inspection must not contend on preferences/JSON work at wake.
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)
@@ -3615,7 +3626,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 openingHandoff.readStarted(request, firstAuthorizedOrb.sceneSerial(), startedAt)
         }
         var sceneAtRead: Long? = null
-        val read = readSystemWindows(request) { sceneAtRead = it }
+        val read = readSystemWindows(request, r38MilestoneOrdered) { sceneAtRead = it }
         if (read.yieldedTo != null) return InspectionOutcome.Yielded(read.yieldedTo, read,
             requireNotNull(sceneAtRead), requireNotNull(read.yieldReason))
         if (read.abortedStale || !authorityIsCurrent(request)) {
@@ -3688,7 +3699,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         )
     }
 
-    private fun readSystemWindows(request: KeyguardCardInspectionRequest,
+    private fun readSystemWindows(request: KeyguardCardInspectionRequest, r38MilestoneOrdered: Boolean,
                                   onInventoryScene: (Long) -> Unit): SystemWindowsRead {
         // Resolve the outstanding requirement at acquisition, not when an
         // event happened to replace a timer/pending request. A successful
@@ -3717,8 +3728,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         val captureOpening = request.diagnosticContext?.captureId != null &&
             request.diagnosticContext.captureId == KeyguardCardDiagnostics.activeCaptureId()
         val (r34Eligible, r37EarlyStamp) = synchronized(queueLock) {
-            val adopted = r34EmptyDirectLocked(request) != null
-            adopted to if (adopted) null else r37EarlyStampLocked(request)
+            val adopted = !r38MilestoneOrdered && r34EmptyDirectLocked(request) != null
+            adopted to if (adopted || r38MilestoneOrdered) null else r37EarlyStampLocked(request)
         }
         val r37Eligible = r34Eligible || r37EarlyStamp != null
         var r37Boundary: String? = null
@@ -3730,7 +3741,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val yieldHandle = if (!r34Eligible && openingHandoff.openingRequestId == request.id) synchronized(queueLock) {
             openingHandoff.yieldHandle(request)
         } else null
-        val followHandle = if (!r34Eligible && openingHandoff.claimedRequestId == request.id) synchronized(queueLock) {
+        val followHandle = if (!r38MilestoneOrdered && !r34Eligible && openingHandoff.claimedRequestId == request.id) synchronized(queueLock) {
             openingHandoff.followHandle(request)
         } else null
         val ingressReader = if (captureOpening) synchronized(queueLock) { openingHandoff.ingressReader(request) } else null
@@ -3897,7 +3908,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                         } else openingHandoff.claim(
                             inspectionQueue, request, presentation.reservation, r18RouteRevision,
                             firstAuthorizedOrb.sceneSerial(),
-                            conditions.copy(noVisibleOrShowing = readAheadSnapshot?.detached == true && !readAheadShowInProgress),
+                            if (r38MilestoneOrdered) conditions else
+                                conditions.copy(noVisibleOrShowing = readAheadSnapshot?.detached == true && !readAheadShowInProgress),
                             checkpoint, at, visited, roots, children,
                             observationCaptureId = request.diagnosticContext?.captureId?.takeIf {
                                 it == KeyguardCardDiagnostics.activeCaptureId()
