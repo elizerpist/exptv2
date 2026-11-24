@@ -1,84 +1,77 @@
-name: R18 Phone Candidate Builder (orchestration only)
+name: R36 profile APK update install control
 on:
   workflow_dispatch:
     inputs:
-      app_sha:
-        description: Exact immutable R18 application source SHA.
-        type: string
-        required: true
       native_diagnostic:
-        description: Compatibility with the registered workflow dispatcher.
         type: boolean
         default: false
       native_scope:
-        description: Compatibility with the registered workflow dispatcher.
         type: string
         default: full
       run_nightly:
-        description: Compatibility with the registered workflow dispatcher.
         type: boolean
         default: false
       run_baseline_profile:
-        description: Compatibility with the registered workflow dispatcher.
         type: boolean
         default: false
 permissions:
   contents: read
 jobs:
-  r18-phone-candidate:
+  update:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      FLUVI_R18_APP_SHA: ${{ inputs.app_sha }}
+    timeout-minutes: 20
     steps:
-      - name: Require a full immutable source SHA
-        shell: bash
-        run: |
-          set -euo pipefail
-          [[ "$FLUVI_R18_APP_SHA" =~ ^[0-9a-f]{40}$ ]]
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ env.FLUVI_R18_APP_SHA }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
-      - uses: ./.github/actions/setup-fluvi-flutter
-      - name: Verify immutable application source
+      - name: Download and verify the exact signed public APKs
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$FLUVI_R18_APP_SHA"
-          test -z "$(git status --porcelain --untracked-files=no)"
-          mkdir -p "$RUNNER_TEMP/r18-phone"
-          printf 'application_sha=%s\norchestration_sha=%s\n' "$FLUVI_R18_APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r18-phone/source.txt"
-          java -version 2>&1 | head -3 > "$RUNNER_TEMP/r18-phone/java.txt"
-          flutter --version > "$RUNNER_TEMP/r18-phone/flutter.txt"
-      - name: Build Human profile using project script
-        shell: bash
-        run: |
-          set -euo pipefail
-          export FLUVI_BUILD_COMMIT="$FLUVI_R18_APP_SHA"
-          bash scripts/build-human-diagnostic-apk.sh 2>&1 | tee "$RUNNER_TEMP/r18-phone/build.log"
-          test -s build/app/outputs/flutter-apk/app-profile.apk
-          cp build/app/outputs/flutter-apk/app-profile.apk "$RUNNER_TEMP/r18-phone/app-profile-runner.apk"
-          unzip -tq "$RUNNER_TEMP/r18-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r18-phone/zip-check.txt"
-          sha256sum "$RUNNER_TEMP/r18-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r18-phone/runner-sha256.txt"
-          aapt_path=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name aapt -type f | sort -V | tail -1)
+          mkdir -p "$RUNNER_TEMP/r36-update"
+          cd "$RUNNER_TEMP/r36-update"
+          curl --fail --location --silent --show-error 'https://media.githubusercontent.com/media/elizerpist/exptv2/1070c3aff750ebf30f69c1bcb622901e0085ceae/fluvi_R32_HUMAN_14e05315520f.apk' -o old.apk
+          curl --fail --location --silent --show-error 'https://media.githubusercontent.com/media/elizerpist/exptv2/dbae068bc6e6a84bab08889669bf7c88a7137af5/fluvi_R36_HUMAN_a86046e2be25.apk' -o new.apk
+          printf '%s  %s\n' b51b1d57358f92d86be88a2fd66819dde3cf91e73faa6a636dd47a7cf6bee802 old.apk e074ee0e9d950c4447e5255544eed3ad9e2e74b43e2e1a14e39affbe77408c9c new.apk | sha256sum -c | tee hashes.txt
           signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
-          "$aapt_path" dump badging "$RUNNER_TEMP/r18-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r18-phone/badging.txt"
-          "$signer" verify --verbose --print-certs "$RUNNER_TEMP/r18-phone/app-profile-runner.apk" > "$RUNNER_TEMP/r18-phone/runner-signer.txt"
-      - name: Retain candidate binary and build evidence
+          "$signer" verify --print-certs old.apk > old-signer.txt
+          "$signer" verify --print-certs new.apk > new-signer.txt
+          for file in old-signer.txt new-signer.txt; do grep -F 'faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb' "$file"; done
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install R32, preserve sentinel, update and launch R36
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          profile: pixel_7
+          emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
+          script: |
+            set -euo pipefail
+            out="$RUNNER_TEMP/r36-update"
+            adb shell input keyevent KEYCODE_WAKEUP
+            adb shell wm dismiss-keyguard || true
+            adb install -r "$out/old.apk" > "$out/old-install.txt" 2>&1
+            adb shell am start -W -n com.fluvi.app/.MainActivity > "$out/old-launch.txt" 2>&1
+            grep -F 'Status: ok' "$out/old-launch.txt"
+            adb shell run-as com.fluvi.app sh -c 'printf R36_UPDATE_SENTINEL > files/r36_update_sentinel'
+            adb install -r "$out/new.apk" > "$out/new-install.txt" 2>&1
+            actual=$(adb shell run-as com.fluvi.app cat files/r36_update_sentinel | tr -d '\r')
+            test "$actual" = R36_UPDATE_SENTINEL
+            adb shell am force-stop com.fluvi.app
+            adb shell am start -W -n com.fluvi.app/.MainActivity > "$out/new-launch.txt" 2>&1
+            grep -F 'Status: ok' "$out/new-launch.txt"
+            printf '%s\n' 'UPDATE_INSTALL_PASS sentinel=preserved launch=ok API=35' > "$out/result.txt"
+      - name: Retain non-sensitive test evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r18-human-candidate-${{ github.run_id }}
-          path: ${{ runner.temp }}/r18-phone/
+          name: r36-profile-update-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r36-update/*.txt
           if-no-files-found: warn
-          compression-level: 0
           retention-days: 14
