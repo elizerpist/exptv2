@@ -50,10 +50,14 @@ def analyze(row):
               "eligibility": row.get("eligible", "UNOBSERVED"),
               "outcome": row.get("outcome", "UNOBSERVED"), "owner": row.get("owner", "UNOBSERVED"),
               "missing": [], "invalid": [], "segments_ns": {}, "total_ns": None,
+              "observed_total_ns": None,
               "screen_to_grant_ns": None, "under_300ms": None,
               "clock": "in_process_monotonic_ns", "physical_pixel": "UNOBSERVED"}
     if row.get("eligible") == "false":
-        result["coverage"] = "DENIED"
+        if row.get("outcome") == "SUCCESS":
+            result["invalid"].append("denied_attempt_has_successful_winner")
+        else:
+            result["coverage"] = "DENIED"
         return result
     if row.get("eligible") != "true":
         result["missing"].append("eligible")
@@ -83,6 +87,12 @@ def analyze(row):
     screen, grant = number(row, "screenNs"), values["grantNs"]
     if screen is not None and grant is not None:
         result["screen_to_grant_ns"] = grant - screen
+    if (values["wakeNs"] is not None and grant is not None and grant >= values["wakeNs"]
+            and row.get("outcome") == "SUCCESS" and owner and owner != "UNOBSERVED"
+            and row.get("grantOwner") == owner):
+        # This is a retained app-side observation, not a qualified complete
+        # partition, an optical measurement or a per-device budget verdict.
+        result["observed_total_ns"] = grant - values["wakeNs"]
     if not result["missing"] and not result["invalid"]:
         total = values["grantNs"] - values["wakeNs"]
         if sum(result["segments_ns"].values()) != total:
@@ -106,7 +116,14 @@ def main():
     duplicate_ids = sorted({result["attempt"] for result in results
                             if sum(other["attempt"] == result["attempt"] for other in results) > 1})
     samples = [result["total_ns"] for result in results if result["coverage"] == "COMPLETE"]
+    qualifying = [r for r in results if r["eligibility"] == "true"]
+    strict_verdict = "INCOMPLETE"
+    if any(r["under_300ms"] is False or (r["eligibility"] == "true" and r["outcome"] == "MISS") for r in results):
+        strict_verdict = "FAIL"
+    elif qualifying and not duplicate_ids and all(r["coverage"] in ("COMPLETE", "DENIED") for r in results):
+        strict_verdict = "PASS"
     summary = {"attempts": len(results), "coverage_counts": counts, "duplicate_attempt_ids": duplicate_ids,
+               "strict_verdict": strict_verdict,
                "under_300ms": sum(value < LIMIT_NS for value in samples),
                "at_or_above_300ms": sum(value >= LIMIT_NS for value in samples),
                "maximum_ns": max(samples) if samples else None,

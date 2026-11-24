@@ -46,6 +46,9 @@ internal data class KeyguardSystemGateRequest(
     val evaluationReceivedAt: Long = receivedAt,
     /** Optional diagnostic owner; it never changes sampler admission. */
     val diagnosticCaptureId: String? = null,
+    /** Capture-local provisional callback identities; never admission inputs. */
+    val r41WakeOrdinal: Long = 0,
+    val r41ScreenOrdinal: Long = 0,
 )
 
 /** Main owns this queue, including completion. The worker owns only read().
@@ -83,9 +86,16 @@ internal class KeyguardSystemStateSampler(
                     eventTime = previous.eventTime, retry = previous.retry, freshness = previous.freshness,
                     screenOnReceivedAt = previous.screenOnReceivedAt ?: request.screenOnReceivedAt,
                     completedInspectionId = previous.completedInspectionId,
-                    evaluationReason = previous.evaluationReason, evaluationReceivedAt = previous.evaluationReceivedAt)
+                    evaluationReason = previous.evaluationReason, evaluationReceivedAt = previous.evaluationReceivedAt,
+                    r41WakeOrdinal = if (previous.diagnosticCaptureId == request.diagnosticCaptureId) previous.r41WakeOrdinal else 0,
+                    r41ScreenOrdinal = if (previous.screenOnReceivedAt != null) {
+                        if (previous.diagnosticCaptureId == request.diagnosticCaptureId) previous.r41ScreenOrdinal else 0
+                    } else request.r41ScreenOrdinal)
             } else if (previous?.authority == request.authority) request.copy(
                 screenOnReceivedAt = previous.screenOnReceivedAt ?: request.screenOnReceivedAt,
+                r41ScreenOrdinal = if (previous.screenOnReceivedAt != null) {
+                    if (previous.diagnosticCaptureId == request.diagnosticCaptureId) previous.r41ScreenOrdinal else 0
+                } else request.r41ScreenOrdinal,
                 freshness = if (previous.freshness.requiresCacheClear && !request.freshness.requiresCacheClear)
                     previous.freshness else request.freshness,
             ) else request

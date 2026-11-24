@@ -5,6 +5,7 @@ package com.fluvi.app.lockscreen
 internal class KeyguardR41AttemptLedger {
     private val ids = LongArray(CAPACITY) { MISSING }
     private val times = LongArray(CAPACITY * PHASES) { MISSING }
+    private val tids = LongArray(CAPACITY * PHASES) { MISSING }
     private val grantReservation = LongArray(CAPACITY) { MISSING }
     private val grantOutput = LongArray(CAPACITY) { MISSING }
     private val winnerReservation = LongArray(CAPACITY) { MISSING }
@@ -12,16 +13,33 @@ internal class KeyguardR41AttemptLedger {
     private var count = 0
     var wakeNs: Long = MISSING; private set
     var screenNs: Long = MISSING; private set
+    var wakeTid: Long = MISSING; private set
+    var screenTid: Long = MISSING; private set
+    var wakeUptimeMs: Long = MISSING; private set
+    var wakeSource: Long = MISSING; private set
+    var wakeEventMs: Long = MISSING; private set
     var eligible: Int = -1; private set
     var omitted: Long = 0; private set
     var invalid: Long = 0; private set
     var orderedBypasses: Long = 0; private set
 
-    fun record(phase: String, request: Long?, atNs: Long, reservation: Long? = null, output: Long? = null) {
+    fun record(phase: String, request: Long?, atNs: Long, reservation: Long? = null, output: Long? = null,
+               tid: Long? = null, uptimeMs: Long? = null, source: Long? = null, eventTimeMs: Long? = null) {
         if (atNs == MISSING) { invalid++; return }
         when (phase) {
-            "WAKE" -> { wakeNs = once(wakeNs, atNs); return }
-            "SCREEN" -> { screenNs = once(screenNs, atNs); return }
+            "WAKE" -> {
+                wakeNs = once(wakeNs, atNs)
+                if (tid != null) wakeTid = once(wakeTid, tid)
+                if (uptimeMs != null) wakeUptimeMs = once(wakeUptimeMs, uptimeMs)
+                if (source != null) wakeSource = once(wakeSource, source)
+                if (eventTimeMs != null) wakeEventMs = once(wakeEventMs, eventTimeMs)
+                return
+            }
+            "SCREEN" -> {
+                screenNs = once(screenNs, atNs)
+                if (tid != null) screenTid = once(screenTid, tid)
+                return
+            }
             "ELIGIBLE" -> { if (eligible == 0) invalid++; eligible = 1; return }
             "DENIED" -> { if (eligible == 1) invalid++; eligible = 0; return }
         }
@@ -42,6 +60,7 @@ internal class KeyguardR41AttemptLedger {
         val index = slot * PHASES + column
         if (column == BYPASS && times[index] == MISSING) orderedBypasses++
         times[index] = once(times[index], atNs)
+        if (tid != null) tids[index] = once(tids[index], tid)
         if (column == GRANT || column == WINNER) {
             if (reservation == null || output == null || reservation < 0 || output < 0) {
                 invalid++
@@ -77,6 +96,7 @@ internal class KeyguardR41AttemptLedger {
             " outcome=$outcome owner=$owner readOwner=${if (matching && time(slot, READ_START) != MISSING && time(slot, READ_END) != MISSING) owner else "UNOBSERVED"}" +
             " dispatchOwner=${if (matching && time(slot, DISPATCH) != MISSING && time(slot, MAIN) != MISSING) owner else "UNOBSERVED"}" +
             " grantOwner=$owner request=${if (slot < 0) "UNOBSERVED" else ids[slot]} wakeNs=${value(wakeNs)} screenNs=${value(screenNs)}" +
+            " wakeTid=${value(wakeTid)} screenTid=${value(screenTid)} wakeUpMs=${value(wakeUptimeMs)} source=${value(wakeSource)} eventMs=${value(wakeEventMs)}" +
             " offerNs=${value(time(slot, OFFER))} workerNs=${value(time(slot, WORKER))} readStartNs=${value(time(slot, READ_START))} readEndNs=${value(time(slot, READ_END))}" +
             " dispatchNs=${value(time(slot, DISPATCH))} mainNs=${value(time(slot, MAIN))} grantNs=${value(time(slot, GRANT))}" +
             " winnerNs=${value(time(slot, WINNER))} cancelNs=${value(time(slot, CANCEL))} orderedBypassNs=${value(time(slot, BYPASS))}" +
@@ -88,14 +108,16 @@ internal class KeyguardR41AttemptLedger {
         " R41_REQ attempt=$attempt req=${ids[slot]} offerNs=${value(time(slot, OFFER))} workerNs=${value(time(slot, WORKER))} read=${value(time(slot, READ_START))}/${value(time(slot, READ_END))}" +
             " handoff=${value(time(slot, DISPATCH))}/${value(time(slot, MAIN))} grant=${value(time(slot, GRANT))}@${value(grantReservation[slot])}/${value(grantOutput[slot])}" +
             " winner=${value(time(slot, WINNER))}@${value(winnerReservation[slot])}/${value(winnerOutput[slot])} cancel=${value(time(slot, CANCEL))}" +
-            " orderedBypassNs=${value(time(slot, BYPASS))}\n"
+            " orderedBypassNs=${value(time(slot, BYPASS))} tids=${(0 until PHASES).joinToString("/") { value(tids[slot * PHASES + it]) }}\n"
     }
 
     fun snapshot(): KeyguardR41AttemptLedger = KeyguardR41AttemptLedger().also { copy ->
-        ids.copyInto(copy.ids); times.copyInto(copy.times)
+        ids.copyInto(copy.ids); times.copyInto(copy.times); tids.copyInto(copy.tids)
         grantReservation.copyInto(copy.grantReservation); grantOutput.copyInto(copy.grantOutput)
         winnerReservation.copyInto(copy.winnerReservation); winnerOutput.copyInto(copy.winnerOutput)
         copy.count = count; copy.wakeNs = wakeNs; copy.screenNs = screenNs; copy.eligible = eligible
+        copy.wakeTid = wakeTid; copy.screenTid = screenTid; copy.wakeUptimeMs = wakeUptimeMs
+        copy.wakeSource = wakeSource; copy.wakeEventMs = wakeEventMs
         copy.omitted = omitted; copy.invalid = invalid; copy.orderedBypasses = orderedBypasses
     }
 

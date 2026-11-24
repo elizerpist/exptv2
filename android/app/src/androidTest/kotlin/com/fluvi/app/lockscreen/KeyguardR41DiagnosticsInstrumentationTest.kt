@@ -2,6 +2,8 @@ package com.fluvi.app.lockscreen
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
+import java.util.UUID
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,6 +22,10 @@ class KeyguardR41DiagnosticsInstrumentationTest {
     @Test fun allAttemptsSurviveVerboseFullPressure() = exercise("FULL")
 
     private fun exercise(mode: String) {
+        val uuid = InstrumentationRegistry.getArguments().getString("runUuid")?.let(UUID::fromString)?.toString()
+            ?: UUID.randomUUID().toString()
+        val directory = File(context.filesDir, "keyguard-service-probe/r41/$uuid")
+        check(directory.mkdirs() || directory.isDirectory)
         KeyguardCardDiagnostics.startCapture(context, "r41-pressure", "profile", mode)
         repeat(11) { index ->
             val attempt = index + 1L
@@ -48,6 +54,7 @@ class KeyguardR41DiagnosticsInstrumentationTest {
             }
         }
         val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        File(directory, "$mode-frozen.txt").writeText(frozen, Charsets.UTF_8)
         assertTrue(frozen.toByteArray(Charsets.UTF_8).size <= 32_768)
         val rows = frozen.lineSequence().filter { it.startsWith(" R41_CORE ") }.toList()
         assertEquals("$mode must retain every scheduled compact attempt", 11, rows.size)

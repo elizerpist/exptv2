@@ -55,10 +55,21 @@ class R41AnalyzerTest(unittest.TestCase):
         for change in (dict(dropped="1"), dict(eligible="UNOBSERVED"), dict(coverage="INCOMPLETE")):
             self.assertEqual(analyzer.analyze(self.row(**change))["coverage"], "INCOMPLETE")
 
+    def test_incomplete_partition_can_still_report_a_labelled_observed_interval(self):
+        result = analyzer.analyze(self.row(coverage="INCOMPLETE", mainNs="UNOBSERVED"))
+        self.assertEqual(result["observed_total_ns"], 190)
+        self.assertIsNone(result["total_ns"])
+        self.assertIsNone(result["under_300ms"])
+
     def test_exactly_300ms_does_not_pass(self):
         result = analyzer.analyze(self.row(grantNs=str(100 + 300_000_000)))
         self.assertEqual(result["coverage"], "COMPLETE")
         self.assertFalse(result["under_300ms"])
+
+    def test_denial_cannot_also_be_a_success(self):
+        result = analyzer.analyze(self.row(eligible="false"))
+        self.assertEqual(result["coverage"], "INCOMPLETE")
+        self.assertIn("denied_attempt_has_successful_winner", result["invalid"])
 
     def test_every_compact_attempt_is_preserved(self):
         report = "\n".join(" R41_CORE attempt=%d eligible=UNOBSERVED" % i for i in range(1, 12))

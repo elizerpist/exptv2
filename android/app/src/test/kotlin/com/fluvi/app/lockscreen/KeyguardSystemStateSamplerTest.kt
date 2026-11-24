@@ -28,6 +28,33 @@ class KeyguardSystemStateSamplerTest {
         fun finish() { workers.removeFirst().invoke(); main.removeFirst().invoke() }
     }
 
+    @Test fun `coalescing keeps the matching capture's provisional wake and screen identities`() {
+        val f = Fixture(eligible)
+        f.sampler.offer(f.request(1))
+        f.sampler.offer(f.request(2).copy(wakeSource = "wake", screenOnReceivedAt = 20,
+            diagnosticCaptureId = "capture-a", r41WakeOrdinal = 11, r41ScreenOrdinal = 11))
+        f.sampler.offer(f.request(3, evaluate = false).copy(diagnosticCaptureId = "capture-a"))
+        f.finish(); f.finish()
+        val result = f.received.last().first
+        assertEquals("wake", result.wakeSource)
+        assertEquals(11L, result.r41WakeOrdinal)
+        assertEquals(11L, result.r41ScreenOrdinal)
+    }
+
+    @Test fun `capture rotation does not relabel the previous provisional identity`() {
+        val f = Fixture(eligible)
+        f.sampler.offer(f.request(1))
+        f.sampler.offer(f.request(2).copy(wakeSource = "wake", screenOnReceivedAt = 20,
+            diagnosticCaptureId = "capture-a", r41WakeOrdinal = 11, r41ScreenOrdinal = 11))
+        f.sampler.offer(f.request(3, evaluate = false).copy(diagnosticCaptureId = "capture-b"))
+        f.finish(); f.finish()
+        val result = f.received.last().first
+        assertEquals("wake", result.wakeSource)
+        assertEquals("capture-b", result.diagnosticCaptureId)
+        assertEquals(0L, result.r41WakeOrdinal)
+        assertEquals(0L, result.r41ScreenOrdinal)
+    }
+
     @Test fun `submission never executes the reader on the caller and burst does not starve active`() {
         val f = Fixture(eligible)
         f.sampler.offer(f.request(1))

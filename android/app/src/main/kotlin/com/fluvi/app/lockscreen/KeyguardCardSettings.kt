@@ -420,6 +420,14 @@ internal data class KeyguardDiagnosticContext(
     val originWakeEpoch: Long,
 )
 
+/** Constructed only by the diagnostic consumer from immutable scalar input. */
+internal data class KeyguardDeferredTimingEvent(
+    val stage: String,
+    val reason: String,
+    val uptimeMs: Long,
+    val fields: Map<String, Any?>,
+)
+
 /** The operation identity is deliberately distinct from a wake epoch. A
  * terminal hide invalidates the latter before its WindowManager callbacks
  * return, but all callbacks still belong to this one diagnostic operation. */
@@ -487,6 +495,8 @@ internal object KeyguardCardDiagnostics {
         val r41 = KeyguardR41RawLedger()
         var r41Flushed = 0 // diagnostic consumer only
         var r41PendingAtCut = 0L // diagnostic consumer only
+        val r41ReportsPending = AtomicLong()
+        val r41ReportsDropped = AtomicLong()
         // First attempt plus the bounded recent-attempt ring. Each slot holds
         // only the latest immutable scalar observation for that exact owner.
         val r22PostClaim = AtomicReferenceArray<KeyguardOpeningInspectionHandoff.PostClaimSnapshot?>(MAX_ATTEMPTS + 1)
@@ -860,6 +870,12 @@ internal object KeyguardCardDiagnostics {
 
     private data class PendingHideCommit(val operationId: Long, val attachment: Long?, val receivedAtUptimeMs: Long)
 
+    private data class R41ProvisionalRecord(
+        val ordinal: Long, val session: Long, val source: Long, val atNs: Long, val tid: Long,
+        val uptimeMs: Long, val eventTimeMs: Long?, var attempt: Long? = null,
+        var binding: String = "UNOBSERVED",
+    )
+
     private data class CausalSpineEvent(
         val semanticKey: String,
         val seq: Long,
@@ -895,6 +911,12 @@ internal object KeyguardCardDiagnostics {
         val startedWallMs: Long,
         val configuration: Map<String, String>,
         val captureMode: KeyguardDiagnosticCaptureMode,
+        val r41StartMonoBeforeNs: Long? = null,
+        val r41StartElapsedNs: Long? = null,
+        val r41StartMonoAfterNs: Long? = null,
+        var r41EndMonoBeforeNs: Long? = null,
+        var r41EndElapsedNs: Long? = null,
+        var r41EndMonoAfterNs: Long? = null,
         var state: String = "REC",
         // A frozen or expired capture must export the same immutable duration
         // on every subsequent read.  REC deliberately keeps a live duration.
@@ -912,6 +934,9 @@ internal object KeyguardCardDiagnostics {
         var r41RawOverflow: Long = 0,
         var r41RawPending: Long = 0,
         var r41RawLate: Long = 0,
+        var r41ReportsPending: Long = 0,
+        var r41ReportsDropped: Long = 0,
+        var r41ProvisionalEvicted: Long = 0,
         var hiddenNoopCount: Int = 0,
         var diagnosticDroppedRecords: Int = 0,
         var diagnosticQueueOverflow: Long = 0L,
@@ -934,6 +959,7 @@ internal object KeyguardCardDiagnostics {
         var firstAttempt: TimingAttempt? = null,
         val events: ArrayDeque<TimingEvent> = ArrayDeque(),
         val attempts: ArrayDeque<TimingAttempt> = ArrayDeque(),
+        val r41Receipts: ArrayDeque<R41ProvisionalRecord> = ArrayDeque(),
     )
 
     private data class RecoveredCapture(
@@ -1374,6 +1400,9 @@ internal object KeyguardCardDiagnostics {
         val id = UUID.randomUUID().toString()
         val nowUp = SystemClock.uptimeMillis()
         val nowElapsed = SystemClock.elapsedRealtime()
+        val r41MonoBefore = System.nanoTime()
+        val r41ElapsedNs = SystemClock.elapsedRealtimeNanos()
+        val r41MonoAfter = System.nanoTime()
         val captureMode = KeyguardDiagnosticCaptureMode.fromWire(mode)
         val created = TimingCapture(
             id = id,
@@ -1397,6 +1426,9 @@ internal object KeyguardCardDiagnostics {
                 "notificationTimeoutMs" to "0",
             ),
             captureMode = captureMode,
+            r41StartMonoBeforeNs = r41MonoBefore,
+            r41StartElapsedNs = r41ElapsedNs,
+            r41StartMonoAfterNs = r41MonoAfter,
             coldPreparation = coldPreparation?.let { it.copy(stages = LinkedHashMap(it.stages)) },
         )
         capture = created
@@ -1433,6 +1465,9 @@ internal object KeyguardCardDiagnostics {
             val active = capture
             if (active != null && active.state == "REC") {
                 flushR22PostClaim(active, token)
+                active.r41EndMonoBeforeNs = System.nanoTime()
+                active.r41EndElapsedNs = SystemClock.elapsedRealtimeNanos()
+                active.r41EndMonoAfterNs = System.nanoTime()
                 active.endedElapsedMs = SystemClock.elapsedRealtime()
                 active.state = "FROZEN"
                 appendLocked(active, "CAPTURE_FROZEN", "user")
@@ -1677,13 +1712,27 @@ internal object KeyguardCardDiagnostics {
             System.nanoTime(), Process.myTid().toLong(), ordinal, 0, SystemClock.uptimeMillis())
     }
 
-    fun r41Mark(phase: Int, owner: KeyguardDiagnosticContext?, request: Long? = null,
-                extra1: Long = 0, extra2: Long = 0, atNs: Long = Long.MIN_VALUE) {
+    fun r41Mark(phase: Int, owner: KeyguardDiagnosticContext?, request: Long = 0,
+                extra1: Long = 0, extra2: Long = 0, atNs: Long = Long.MIN_VALUE, tid: Long = 0) {
         val token = ingress ?: return
         if (owner == null || owner.captureId != token.id || owner.attemptId == null) return
-        token.r41.offer(phase, owner.attemptId, owner.serviceSession, owner.originWakeEpoch, request ?: 0,
-            if (atNs == Long.MIN_VALUE) System.nanoTime() else atNs, Process.myTid().toLong(),
+        token.r41.offer(phase, owner.attemptId, owner.serviceSession, owner.originWakeEpoch, request,
+            if (atNs == Long.MIN_VALUE) System.nanoTime() else atNs, if (tid > 0) tid else Process.myTid().toLong(),
             extra1, extra2, SystemClock.uptimeMillis())
+    }
+
+    fun r41ReserveReport(owner: KeyguardDiagnosticContext?): Boolean {
+        val token = ingress ?: return false
+        if (owner?.captureId != token.id) return false
+        token.r41ReportsPending.incrementAndGet()
+        return true
+    }
+
+    fun r41FinishReport(owner: KeyguardDiagnosticContext?, discarded: Boolean = false) {
+        val token = ingress ?: return
+        if (owner?.captureId != token.id) return
+        if (discarded) token.r41ReportsDropped.incrementAndGet()
+        token.r41ReportsPending.decrementAndGet()
     }
 
     private val LIGHT_REDUNDANT_STAGES = setOf("ACCESSIBILITY_EVENT", "WINDOWS_READ_FINISHED", "TREE_SCAN_FINISHED")
@@ -1747,6 +1796,43 @@ internal object KeyguardCardDiagnostics {
         active.captureLockWaitNs += lockAcquiredAtNs - lockRequestedAtNs
         active.captureLockHeldNs += heldNs
         }
+        }
+        val producerNs = SystemClock.elapsedRealtimeNanos() - producerStartedAtNs
+        token.producerTotalNs.addAndGet(producerNs)
+        token.producerMaxNs.updateAndGet { maxOf(it, producerNs) }
+    }
+
+    /** One bounded offer for a completed inspection's related reports. The
+     * builder runs on the existing consumer, before any later freeze barrier. */
+    fun captureEventBatch(
+        context: Context,
+        serviceSession: Long,
+        wakeEpoch: Long,
+        requestId: Long,
+        diagnosticContext: KeyguardDiagnosticContext?,
+        build: () -> List<KeyguardDeferredTimingEvent>,
+    ) {
+        val token = ingress ?: return
+        if (diagnosticContext?.captureId != token.id) return
+        val producerStartedAtNs = SystemClock.elapsedRealtimeNanos()
+        val observedElapsed = SystemClock.elapsedRealtime()
+        reduction.offer {
+            val lockRequestedAtNs = SystemClock.elapsedRealtimeNanos()
+            synchronized(captureLock) {
+                val lockAcquiredAtNs = SystemClock.elapsedRealtimeNanos()
+                val active = capture?.takeIf { it.id == token.id } ?: return@synchronized
+                if (active.state != "REC" || expireIfNeededLocked(context, active)) return@synchronized
+                for (event in build()) {
+                    if (token.mode == KeyguardDiagnosticCaptureMode.LIGHT && event.stage in LIGHT_REDUNDANT_STAGES) continue
+                    appendLocked(active, event.stage, event.reason, serviceSession = serviceSession,
+                        wakeEpoch = wakeEpoch, requestId = requestId, observedUptimeMs = event.uptimeMs,
+                        observedElapsedMs = observedElapsed, diagnosticContext = diagnosticContext,
+                        fields = captureTechnicalFields(event.stage, event.fields))
+                }
+                val finishedAtNs = SystemClock.elapsedRealtimeNanos()
+                active.captureLockWaitNs += lockAcquiredAtNs - lockRequestedAtNs
+                active.captureLockHeldNs += (finishedAtNs - lockAcquiredAtNs).coerceAtLeast(0L)
+            }
         }
         val producerNs = SystemClock.elapsedRealtimeNanos() - producerStartedAtNs
         token.producerTotalNs.addAndGet(producerNs)
@@ -1965,6 +2051,7 @@ internal object KeyguardCardDiagnostics {
                     atNs = fields["r41Ns"]?.toLongOrNull() ?: Long.MIN_VALUE,
                     reservation = fields["r41Reservation"]?.toLongOrNull(),
                     output = fields["r41Output"]?.toLongOrNull(),
+                    tid = fields["r41Tid"]?.toLongOrNull(),
                 )
                 "R13_FINANCIAL" -> {
                     val totals = attempt.r13Work ?: FinancialWorkSummary().also { attempt.r13Work = it }
@@ -2392,6 +2479,9 @@ internal object KeyguardCardDiagnostics {
     private fun expireIfNeededLocked(context: Context, active: TimingCapture): Boolean {
         if (SystemClock.elapsedRealtime() - active.startedElapsedMs <= ACTIVE_CAPTURE_MS) return false
         flushR22PostClaim(active, ingress)
+        active.r41EndMonoBeforeNs = System.nanoTime()
+        active.r41EndElapsedNs = SystemClock.elapsedRealtimeNanos()
+        active.r41EndMonoAfterNs = System.nanoTime()
         active.endedElapsedMs = SystemClock.elapsedRealtime()
         active.state = "EXPIRED"
         ingress?.takeIf { it.id == active.id }?.let {
@@ -2461,6 +2551,12 @@ internal object KeyguardCardDiagnostics {
             }
             if (record.phase == KeyguardR41RawLedger.PROVISIONAL) {
                 active.r41Provisional += 1
+                if (active.r41Receipts.size >= 512) {
+                    active.r41Receipts.removeFirst()
+                    active.r41ProvisionalEvicted += 1
+                }
+                active.r41Receipts.addLast(R41ProvisionalRecord(token.r41Flushed + 1L, record.session,
+                    record.extra1, record.atNs, record.tid, record.uptimeMs, record.extra2.takeIf { it > 0 }))
                 token.r41Flushed += 1
                 continue
             }
@@ -2485,7 +2581,17 @@ internal object KeyguardCardDiagnostics {
                     (record.phase == KeyguardR41RawLedger.BIND_SCREEN && source.extra1 != 1L)) {
                     active.r41RawUnmatched += 1
                 } else {
-                    attempt.r41.record(if (record.phase == KeyguardR41RawLedger.BIND_SCREEN) "SCREEN" else "WAKE", null, source.atNs)
+                    val receipt = active.r41Receipts.firstOrNull { it.ordinal == ordinal }
+                    if (receipt == null || (receipt.attempt != null && receipt.attempt != attempt.id)) {
+                        active.r41RawUnmatched += 1
+                    } else {
+                        receipt.attempt = attempt.id
+                        val kind = if (record.phase == KeyguardR41RawLedger.BIND_SCREEN) "SCREEN" else "WAKE"
+                        receipt.binding = if (receipt.binding == "UNOBSERVED" || receipt.binding == kind) kind else "WAKE_AND_SCREEN"
+                    }
+                    attempt.r41.record(if (record.phase == KeyguardR41RawLedger.BIND_SCREEN) "SCREEN" else "WAKE", null, source.atNs,
+                        tid = source.tid, uptimeMs = source.uptimeMs, source = source.extra1,
+                        eventTimeMs = source.extra2.takeIf { it > 0 })
                     active.r41Bindings += 1
                 }
             } else {
@@ -2507,6 +2613,7 @@ internal object KeyguardCardDiagnostics {
                 if (phase == null) active.r41RawUnmatched += 1 else attempt.r41.record(
                     phase, record.request.takeIf { it > 0 }, record.atNs,
                     record.extra1.takeIf { it > 0 }, record.extra2.takeIf { it > 0 },
+                    tid = record.tid,
                 )
             }
             token.r41Flushed += 1
@@ -2522,6 +2629,8 @@ internal object KeyguardCardDiagnostics {
         r41RawOverflow = r41Token?.r41?.overflow?.get() ?: active.r41RawOverflow,
         r41RawPending = r41Token?.let { maxOf(it.r41PendingAtCut, it.r41.inFlight()) } ?: active.r41RawPending,
         r41RawLate = r41Token?.r41?.late?.get() ?: active.r41RawLate,
+        r41ReportsPending = r41Token?.r41ReportsPending?.get() ?: active.r41ReportsPending,
+        r41ReportsDropped = r41Token?.r41ReportsDropped?.get() ?: active.r41ReportsDropped,
         diagnosticDroppedRecords = active.diagnosticDroppedRecords + (lastIngress?.takeIf { it.id == active.id }?.skippedRecords?.get()?.toInt() ?: 0),
         hiddenNoopCount = lastIngress?.takeIf { it.id == active.id }?.hiddenNoops?.get()?.toInt() ?: active.hiddenNoopCount,
         diagnosticProducerTotalNs = lastIngress?.takeIf { it.id == active.id }?.producerTotalNs?.get() ?: active.diagnosticProducerTotalNs,
@@ -2535,6 +2644,7 @@ internal object KeyguardCardDiagnostics {
         firstAttempt = active.firstAttempt?.let(::copyAttempt),
         events = ArrayDeque(active.events.map { it.copy(fields = it.fields.toMap()) }),
         attempts = ArrayDeque(active.attempts.map(::copyAttempt)),
+        r41Receipts = ArrayDeque(active.r41Receipts.map { it.copy() }),
         )
     }
 
@@ -2657,6 +2767,9 @@ internal object KeyguardCardDiagnostics {
             appendLine("startedAt=${SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date(active.startedWallMs))}")
             val durationEndElapsedMs = active.endedElapsedMs ?: SystemClock.elapsedRealtime()
             appendLine("durationElapsedMs=${durationEndElapsedMs - active.startedElapsedMs}")
+            appendLine("R41_CLOCK mono=System.nanoTime elapsed=SystemClock.elapsedRealtimeNanos " +
+                "start=${active.r41StartMonoBeforeNs ?: "UNOBSERVED"}/${active.r41StartElapsedNs ?: "UNOBSERVED"}/${active.r41StartMonoAfterNs ?: "UNOBSERVED"} " +
+                "end=${active.r41EndMonoBeforeNs ?: "UNOBSERVED"}/${active.r41EndElapsedNs ?: "UNOBSERVED"}/${active.r41EndMonoAfterNs ?: "UNOBSERVED"}")
             active.configuration.forEach { (key, value) -> appendLine("$key=$value") }
             appendLine("CLOCKS")
             appendLine("uptimeMs=monotonic_excludes_deep_sleep")
@@ -2712,7 +2825,9 @@ internal object KeyguardCardDiagnostics {
                 "retained=${retainedAttempts.size} evicted=${active.r41AttemptsEvicted} missing=$r41MissingAttempts " +
                 "queueOverflow=${active.diagnosticQueueOverflow} consumerFailures=${active.diagnosticConsumerFailures} " +
                 "provisional=${active.r41Provisional} bindings=${active.r41Bindings} rawOverflow=${active.r41RawOverflow} " +
+                "receiptEvicted=${active.r41ProvisionalEvicted} " +
                 "rawUnmatched=${active.r41RawUnmatched} rawPending=${active.r41RawPending} rawLate=${active.r41RawLate} " +
+                "reportsPending=${active.r41ReportsPending} reportsDropped=${active.r41ReportsDropped} " +
                 "coverage=INCOMPLETE clock=System.nanoTime physical=UNOBSERVED")
             val openingRows = retainedAttempts.map { it.r22Opening }
             val warmRows = retainedAttempts.flatMap { it.r18Generations.values }
@@ -2754,7 +2869,8 @@ internal object KeyguardCardDiagnostics {
         val r41Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
         val r41Loss = active.r41AttemptsEvicted + active.diagnosticQueueOverflow +
             active.diagnosticConsumerFailures + active.r41RawOverflow + active.r41RawUnmatched + active.r41RawPending +
-            active.r41RawLate + (active.r41AttemptsIssued - active.r41AttemptsStarted).coerceAtLeast(0)
+            active.r41RawLate + active.r41ReportsPending + active.r41ReportsDropped + active.r41ProvisionalEvicted +
+            (active.r41AttemptsIssued - active.r41AttemptsStarted).coerceAtLeast(0)
         r41Attempts.forEach { attempt ->
             select("a${attempt.id}:r41Core", attempt.r41.core(attempt.id, attempt.serviceSession, attempt.wakeEpoch, r41Loss), attempt.id)
         }
@@ -2780,6 +2896,12 @@ internal object KeyguardCardDiagnostics {
             attempt.r41.requestRows(attempt.id).forEachIndexed { index, row ->
                 select("a${attempt.id}:r41Req$index", row, attempt.id)
             }
+        }
+        active.r41Receipts.forEach { receipt ->
+            val row = " R41_RECEIPT id=${receipt.ordinal} session=${receipt.session} source=${receipt.source}" +
+                " ns=${receipt.atNs} tid=${receipt.tid} up=${receipt.uptimeMs} eventMs=${receipt.eventTimeMs ?: "UNOBSERVED"}" +
+                " attempt=${receipt.attempt ?: "UNOBSERVED"} binding=${receipt.binding}\n"
+            select("r41Receipt${receipt.ordinal}", row, receipt.attempt)
         }
         // Restriction decisions are independent of the rolling raw ring.
         // The same global export budget and omission accounting still apply.
