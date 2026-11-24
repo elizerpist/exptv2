@@ -55,9 +55,19 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
       methods=(allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure)
       ;;
+    all)
+      class=""
+      methods=(orderedDirectSkipsInapplicableR25Evaluation allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure)
+      ;;
     *) printf 'Unknown test scope: %s\n' "$TEST_SCOPE" >&2; exit 2;;
   esac
   for method in "${methods[@]}"; do
+    if [[ "$TEST_SCOPE" = all ]]; then
+      case "$method" in
+        ordered*) class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest;;
+        *) class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest;;
+      esac
+    fi
     uuid=$(cat /proc/sys/kernel/random/uuid)
     r37_uuids="$r37_uuids $uuid"
     printf '%s %s\n' "$method" "$uuid" >> "$out/trials.txt"
