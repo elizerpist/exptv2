@@ -86,6 +86,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val originalMain=AtomicLong(0); val originalExit=AtomicLong(0); val bStarted=AtomicLong(0); val bId=AtomicLong(0); val actualSuccessor=AtomicLong(0)
         val order=AtomicLong(0); val oldProofAtExit=AtomicLong(0); val maxReaders=AtomicInteger(0); val readers=AtomicInteger(0)
         val r25Posts=AtomicInteger(0); val earlyReveal=AtomicInteger(0); val records=Collections.synchronizedList(mutableListOf<String>())
+        val orderedReads=Collections.synchronizedSet(mutableSetOf<Long>())
         val originalCross=KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross
         var service:FluviKeyguardCardService?=null; var failure:Throwable?=null; var capture=false
         try {
@@ -132,6 +133,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             }
             instrumentation.runOnMainSync {
                 actual.inspectionProbeForTest=object:KeyguardInspectionProbeForTest {
+                    override fun openingOrderSelected(request:KeyguardCardInspectionRequest, milestoneOrdered:Boolean) {
+                        if(milestoneOrdered) orderedReads.add(request.id)
+                        records.add("ORDER_SELECTED id=${request.id} milestone=$milestoneOrdered")
+                    }
                     override fun started(request:KeyguardCardInspectionRequest) {
                         val count=readers.incrementAndGet(); maxReaders.updateAndGet { maxOf(it,count) }
                         val seq=order.incrementAndGet(); records.add("READ_START id=${request.id} seq=$seq")
@@ -188,6 +193,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             assertTrue("NOT REACHED: complete positive with real DIRECT snapshot",held.await(20,TimeUnit.SECONDS))
             val a=checkNotNull(candidate.get()); val original=checkNotNull(route.get())
             assertEquals("R18_DIRECT",original.backend)
+            assertTrue("the real DIRECT read must select the milestone order",orderedReads.contains(a.id))
             assertTrue(original.reservation>0 && original.host>0 && original.output>0)
             assertEquals("NOT REACHED: exact original route changed",original,currentRoute(a))
             if(pendingBefore) instrumentation.runOnMainSync { offerSuccessor() }
