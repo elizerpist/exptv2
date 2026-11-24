@@ -45,7 +45,7 @@ case "${1:-}" in
   bash scripts/prepare-keyguard-lower-environment.sh "$out/preflight"
   failed=0
   r37_uuids=""
-  methods=(r18PipelineEvidenceRemainsBoundedAndOwnedInLight r18PipelineEvidenceRemainsBoundedAndOwnedInFull)
+  methods=(r26ExactDirectEvidenceSurvivesLightAndFullPressure)
   for method in "${methods[@]}"; do
     uuid=$(cat /proc/sys/kernel/random/uuid)
     r37_uuids="$r37_uuids $uuid"

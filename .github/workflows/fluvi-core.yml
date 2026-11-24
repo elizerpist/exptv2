@@ -1,4 +1,4 @@
-name: R39 LIGHT and FULL bounded diagnostics
+name: R40 LIGHT and FULL priority diagnostics
 on:
   workflow_dispatch:
     inputs:
