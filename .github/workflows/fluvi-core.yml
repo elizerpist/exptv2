@@ -1,4 +1,4 @@
-name: R40 held post-presentation provenance and real unlock
+name: R41 ordered DIRECT real-service control
 on:
   workflow_dispatch:
     inputs:
