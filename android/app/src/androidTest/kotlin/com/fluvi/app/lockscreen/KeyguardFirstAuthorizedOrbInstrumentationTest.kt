@@ -238,12 +238,16 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
             }
             if (changeScene) {
                 assertTrue("real first FULL paint was not reached", paintEntered.await(20, TimeUnit.SECONDS))
+                // Fixed three-event ingress burst. The same order and source
+                // are used in both fixture arms; privacy decisions stay real.
                 instrumentation.runOnMainSync {
-                    val at = SystemClock.uptimeMillis()
-                    injectedAt.set(at)
-                    service.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
-                        AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, -1, Display.DEFAULT_DISPLAY, 0,
-                        "com.android.systemui", at))
+                    repeat(3) {
+                        val at = SystemClock.uptimeMillis()
+                        injectedAt.set(at)
+                        service.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
+                            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, -1, Display.DEFAULT_DISPLAY, 0,
+                            "com.android.systemui", at))
+                    }
                 }
                 assertTrue("new scene inspection did not start", secondRead.await(10, TimeUnit.SECONDS))
                 var visible = true
