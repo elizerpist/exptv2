@@ -54,11 +54,11 @@ case "${1:-}" in
       ;;
     pressure)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
-      methods=(allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure)
+      methods=(allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners)
       ;;
     all)
       class=""
-      methods=(orderedDirectSkipsInapplicableR25Evaluation allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure)
+      methods=(orderedDirectSkipsInapplicableR25Evaluation allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners)
       ;;
     *) printf 'Unknown test scope: %s\n' "$TEST_SCOPE" >&2; exit 2;;
   esac
