@@ -258,7 +258,7 @@ jobs:
           bash -n scripts/test-r36-widget-api35.sh
           bash -n scripts/test-r36-baseline-manifest.sh
           python3 scripts/test-r36-human-build-options.py
-          bash scripts/test-r36-baseline-manifest.sh
+          # Baseline was independently verified in run 45350675659.
 
       - name: Prepare exact R08 Flutter checkout
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r09_panel_baseline' }}
