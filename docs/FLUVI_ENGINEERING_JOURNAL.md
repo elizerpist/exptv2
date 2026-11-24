@@ -19471,3 +19471,100 @@ The three mandatory rule assets were extracted from the journal with original by
 **Reviewer decision for the coding agent.** Keep R39 for reproduction; do not promote the rejected binary. Use the existing exact R38 predecessor as the stock recovery control. Make one focused comparison before introducing another scheduler. Alternate exact 0905f0d6 and fd7112e4 under matched conditions; balance first and repeat wakes, record every attempt including missing DIRECT outcomes; keep capture OFF and LIGHT as separate blocks with matched FULL only to reproduce the owner's evidence. Use independent traces for queue wait/worker scheduling, framework calls, scene invalidation, grant and submit. Compare stock with the optional R39 evidence path enabled/disabled on an otherwise identical test candidate to isolate its effect. Preserve existing ordinary withdrawal and final current-privacy checks in both arms. Report event ages separately from local queue time. The R39 hypothesis is testable: a reproducible improvement with optional R39 work removed and the same triggering event sequence supports an app-side cost; unchanged pre-grant waits dominated by stale inspections point back to the shared R38 opening.
 
 For an app-side repair, remove avoidable work for the optional withdrawal witness from the critical positive path. Reuse already observed primitive window identity/evidence during the normal traversal; avoid duplicate scans/allocations or delay of the authorized first submit. Arm the negative-only witness separately for the exact still-current native owner when the evidence is valid. Changes, queued removals, relock or an ACK race must not revive it; ordinary fail-closed reconciliation remains active even before an optional witness is armed. Test removal before arm, after arm, during native apply and on a reused ID, without loosening any PIN/panel protection. Put a compact per-opening witness/match/fallback/seal summary in a retained compact record within the existing export cap and verify it under the owner's pressure shape. Evidence capture alone is not a handset speed fix. Do not ask the owner to repeat the same FULL capture. Requalify a changed stock path against R38 before presenting a new build as an improvement. Keep the refused build, recovery control, future experimental APK and actual physical acceptance distinct. Physical W→O maximum 10 ms and first forbidden-frame absence remain unmet by owner experience and unmeasured by this capture.
+
+
+## 2026-11-24 — R40 coding-agent handoff: restore R38 stock opening, move optional unlock work past reveal, deliver an R39-compatible update
+
+FLUVI_R40_STOCK_RECOVERY_BEGIN
+
+### 1. TITLE / TASK INTENT
+
+IMPLEMENTATION in elizerpist/exptv2. Deliver one new full Fluvi HUMAN profile APK that upgrades the owner's installed R39 in place. Restore the stock opening behavior of 0905f0d6 and implement the optional fast withdrawal only after actual presentation. Qualify W-SHOW, W-HIDE and continued W-LOCK-ANIM separately. Owner feedback is the final physical verdict.
+
+### 2. AUTHORITATIVE APPLICATION STATE
+
+Start or resume implement/r40-stock-recovery from 0905f0d6e81cba396663c6b09898171913c195a9, the stock behavior to recover. The owner rejected fd7112e4e52952caaee1f740526c87f10ddc7cb2; keep its source and binary as the regression comparator and the installed update predecessor. Use its diff selectively for withdrawal. d056c5d8467c5454d139bf12ef36ec7431a9ec51 is the earlier R38 phone comparator. Preserve any existing app worktree, other product changes, upgrades and the separate reference branch. The coordination branch fix/orb-v4-latency-lockscreen contains the full R39 rejection at 654b935d94630e4dec2b18e98fb66b4d322e1d1f. Do not build from the journal SHA.
+
+### 3. HARD PREFLIGHT
+
+Before execution, read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md, docs/FLUVI_ENGINEERING_JOURNAL.md, and relevant MILESTONE_COMMITS.md entries using the versions and access paths supplied in this handoff. Explicitly report missing material. The prompt writer owns the diagnosis and repair decision. Implement the specified contract, preserve exact evidence if source or tests contradict it, and continue independent work. Portable originals, including DEBUGGING_LOOP_VERY_IMPORTANT.txt, are embedded in the named blocks at 161f63675121302432be2026898bed07b23d7ded. Read the R38 acceptance correction, the two stock deliveries, R39 qualification and reviewer rejection. No new phone log, setup decision or connected owner device is needed to begin.
+
+### 4. PHYSICAL USER EVIDENCE
+
+The owner reports substantially more lag on R39. The target remains physical wake-button actuation on a locked, dark phone to the first visible correct configured ORB in at most 10 ms per eligible wake. During unlock, PIN or shade, the first restrictive frame must be clear of the private ORB. Preserve the existing ordinary animated orb, wallpaper, settings, data, geometry and gestures. R39 is not the accepted performance baseline.
+
+### 5. HANDSET LOG AUDIT
+
+R39 FULL b8a623fc-cde5-49aa-9a4e-ca3558217f38, Nothing A142/API 35: five warm openings, four detailed. Predecessor FULL b3448e77-d21f-4bc2-9ffb-cd039c30ff51: nine warm, four detailed. In R39 trial order 1/3/4/5: SCREEN_ON to grant 757/196/420/388 ms, native submit duration 8/2/1/2 ms, SCREEN_ON to native return 770/204/428/398 ms. Previous return times 419/106/191/285 ms. Retained medians 413 vs 238 ms, native submit median 2 ms in both. Earlier positive reads expired on SCENE_CHANGED in each detailed R39 trial. In the slowest opening an obsolete positive read took 212 ms, the winner spent 52 ms queued and 20 ms reading. Event-to-remove-return medians 174.5 vs 172 ms. All four detailed R39 hides sealed NO_MAIN_MARKER. Physical button/first ORB and actual last pixel were unobserved. Detailed rows were truncated in both independent sessions.
+
+### 6. COMMIT / AGENT-EVIDENCE AUDIT
+
+R39 preserved the R38 positive policy and added root identity checks, a second pass for unique clock-window attribution, evidence objects, grant/arm synchronization and diagnostics along paths shared with opening. New hide coverage has not been demonstrated on an ordinary phone unlock. A dialog fixture only proved genuine Android WINDOWS_CHANGE_REMOVED shape. The actual SystemUI-witness test did not reach the required visible owner. All four R39-specific timeline rows were omitted from the new phone export. The posted R39 diagnostic producer maximum of 40.35 ms has no proven overlap with a slow opening. Existing isolated privacy panel failures remain open. SystemUI reference dce225d8b219716510ebb94a5078fc8311fe0e8e is separate and was not boot-qualified.
+
+### 7. GRAPH AND IMPACT
+
+Use the exact R39 Dart manifest b8544ab0 and Kotlin inventory 5ddd2531, and compare the same production Kotlin source against 0905f0d6. The updated reference inventory is 49db09df. Dart indexing does not cover the native service. Inspect KeyguardWindowSnapshotReader, KeyguardSurfaceClassifier.classifyDetailed, FluviKeyguardCardService.inspectSurface and visibility application, the existing grant/submit/ACK/retire coordinator, KeyguardR39RemovalGate and the bounded exporter in KeyguardCardSettings. Trace production callers, including applied-before-ACK and rapid relock, before editing. Regenerate exact-source inventory for the final app.
+
+### 8. CURRENT SOURCE FACTS
+
+R39 adds optional per-window verification and clock provenance during classification, stores r39Evidence before reveal, timestamps the grant and tries to arm in nativeApplied. It also has a later complete-read rearm path for a presented generation. Existing external ingress invalidates the current scene, and ordinary restriction already seals the matching native owner before Main cleanup. On the hot path the exact R38 first-frame proof, grant and prepared poster work without the optional removal witness.
+
+### 9. PROVEN / UNPROVEN / MISSING
+
+The capture establishes a slower stock opening and a delay concentrated before grant. It does not establish how much R39-specific work, stale-read churn, platform calls or thread scheduling contributed. The four detailed withdrawals followed normal inspection. Missing arm/match rows are unknown, not zero. The following repair intentionally removes an optional dependency and tests its contribution; no predicted 175-ms saving, hard 10-ms guarantee or optical approval is justified.
+
+### 10. ROOT-CAUSE DECISION
+
+Keep R38's first-frame chain intact. Make disappearance of a specifically identified clock window an optional fast negative signal for a generation that is already on screen. Ordinarily an earlier classification can authorize showing and a later independent, natural classification can establish eligibility for fast withdrawal. Fast withdrawal must not be a prerequisite for showing, nor may it weaken the ordinary restriction path while unavailable.
+
+### 11. SCOPE
+
+Factory stock recovery only in this cycle. Use the real lockscreen card / orb-only entry. Retain all current settings, supported modes/scopes/categories, animation phase, reduced motion, normal fallback paths, privacy, update identity and stored data. Keep the existing reference work intact; its builder, OEM host and optical equipment are independent of stock delivery. No new wallpaper, app widget, user-facing switch, polling, second reader, relaxed proof or speculative scheduler. Keep the diagnostic compare switch in tests/build fixtures only.
+
+### 12. OWNERSHIP AND RACES
+
+Track exact user/display, immutable reservation, attachment/output/visibility generation, scene serial, authority and cutover to presented. Bind supplementary removal evidence only if a newly started, naturally occurring, complete secure read and its result both belong to that same already-presented generation. The usual scene check, monotonic event ordering and identity guard apply through arm. A read crossing the first native submission or a generation change cannot supply delayed evidence. Treat repeated numeric window IDs, equal/unknown event times and unmatched metadata conservatively. Every removal/ordinary invalidation before arm still reaches ordinary reconciliation and invalidates any pending evidence. A late read, ACK or animation callback cannot rearm a revoked generation. Compare and seal the captured owner atomically, then hide only that immutable native handle outside the lock. Keep one reader and finite witness storage. No Android nodes or complete trees retained for later replay.
+
+### 13. REQUIRED RED TESTS
+
+1. Arrange an otherwise normal eligible first opening in the production service path. Hold optional clock-window provenance evaluation deterministically. Under the test hook, identify which source actually requests it and when. The candidate must submit the correct prepared first ORB with zero calls to optional provenance during initial reads, grant and native submission. Use observable ordering, work counters and the correct image. If the parent fixture never reaches an eligible first exposure, report NOT REACHED; use a complementary deterministic structural control without calling it handset evidence.
+2. After a confirmed presented owner, allow an independent complete read and verify exact attributed removal can seal it before a held ordinary inspection. Hold a read before arm, deliver removal/restriction or change epoch, then release it: no late arm/reveal. Test immediately before submit, during apply, after apply before Main ACK, after arm, same-window PIN/shade, same-ID rapid relock, no later read and no-witness fallbacks. Normal privacy exclusion works in every unarmed gap. Unrelated/own events must not flicker the ORB. Verify sustained motion and final absence using independent synthetic frame inspection where available.
+3. Replay an export at the observed ~31.7 kB pressure with omitted r180 details. Confirm a compact status remains available per retained opening. Confirm capture OFF bypasses diagnostics and disabling capture does not alter security decisions.
+
+### 14. IMPLEMENTATION CONTRACT
+
+A. Fork the R38 first-opening code for recovery by using its existing implementation directly. Keep empty DIRECT, the complete current privacy proof, R38 ordered reads and final admission gates. On every read that can contribute to first visibility, use the R38 classifier path. There is no R39-only root identity extraction, secondary scan, allocation, queue lock, evidence formatting, arm attempt or wait in first admission, grant, native apply or first-frame acknowledgement. The poster is prepared on material/configuration change and the existing animation follows normally. Do not bypass stale, ambiguous or expired positives.
+
+B. Port only R39's gated withdrawal benefit. At read entry capture optional eligibility for the same already-presented owner; otherwise run the original path. Only an already required, complete, fresh read on that owner may establish verified unique non-own SystemUI clock-window provenance. Reuse scalars obtained during its traversal, avoiding extra Binder calls, repeat whole-tree scans, per-read constant-set construction and synchronous diagnostic work. At apply recheck authority, order, freshness, presentation and absence of intervening invalidation; then arm only the negative gate. A missing subsequent read or ambiguous marker disables the shortcut for that opening. Never create a read, timer or post-wake IPC just to get a witness. Preserve the genuine exact-removal predicate and normal fallback for every case, and report the fast path's actual coverage.
+
+C. Keep minimal counters in an existing priority compact row: eligible/already-presented read, armed/unattributed/no subsequent read where knowable, genuine removal match/fallback and actual seal reason. Keep ordinal IDs bounded. Preserve missing vs observed zero; do not insert allocations or synchronous logging in the initial display path for this purpose. Verify the retained row under pressure with recording on and verify capture off behavior.
+
+### 15. PERFORMANCE AND CAUSAL EXPERIMENT
+
+Run two distinct comparisons. First: unchanged signed/profile 0905f0d6, rejected fd7112 and final R40 under matched stock conditions. Second: counterbalanced, otherwise identical fixture builds of the R39 code with optional provenance collection/arming/capture enabled vs disabled, with all ordinary privacy/reconciliation and classifier outputs held constant. The disabled arm must actually bypass optional work; a logging-only flag is insufficient. Identify whether the intended code ran in each cell. Use fixed schedules for a reproducible event burst and natural unheld wakes separately. Balance cold-first and repeat wakes; preserve the complete denominator, fallbacks and misses, and compare like endpoints. Capture OFF and LIGHT separately; use matched FULL to reproduce the reported regression. For OFF use external tracing or the same independent observer on both sides. Record callback age, queue wait, obsolete/winning read durations, version invalidations, grant, native submit and motion, plus withdrawal trigger, seal and composed exclusion when available. Report medians and worst trials, not fabricated physical proxies. If the optional path cannot explain the difference, say so and locate the remaining measured wait. If local work repeatedly obstructs admission, remove only the identified work and remeasure. Preserve the safe recovery build while qualifying it.
+
+### 16. IMPLEMENTATION ORDER
+
+Preserve R38/R39 controls, add the narrow comparative fixtures, make the actual stock production change and prove the structural and safe-fallback cases. Commit the app SHA. Start the known exact-source HUMAN build as soon as focused compile/safety checks allow. Run independent matched performance and normal qualification alongside delivery. If later changes affect the app, rebuild and verify the final SHA. Missing physical footage or a reference-system runner cannot delay a safe experimental phone APK.
+
+### 17. VALIDATION
+
+Compile the app and run focused Kotlin, Flutter/core boundary, source-provenance, real-service, privacy and normal repository lanes. Keep same-device privacy controls on both white and black backgrounds and distinguish the known isolated-route failures from a newly unsafe candidate. Exercise lock/wake, rapid relock, unlock/PIN/shade, disabled overlay, recording off, stale data and owner restart. Use synthetic fixtures and demo data. Report PASS, FAIL or NOT REACHED with exact sources and outcomes. Keep a failed/unreached first exposure distinct from an observed absence after unlock. First-frame timing acceptance still requires synchronized physical button actuation and correct visible ORB pixels, with uncertainty; first restricted frame must exclude all FULL pixels. A trace or APK install cannot declare either accepted.
+
+### 18. COMMITS / COORDINATION
+
+Keep application changes, switching fixtures, build orchestration and the append-only journal identifiable. Work only in exptv2. Do not reset the rejected build or rewrite previous evidence. Record which R39 operations were removed from first admission and which remain after presentation. Record all outstanding safety and qualification issues; distinguish verified artifact delivery from working but unmeasured behavior.
+
+### 19. SIGN AND DELIVER THE ACTUAL PHONE APK
+
+Use the established exptv2 exact-source HUMAN profile path (precedent run 45433868387, update-control precedent 45436650928). The installed upgrade predecessor is the actual signed R39 from immutable artifact 0f6426f6a31c819d1e199564603b88b53d55927b, fluvi_R39_HUMAN_fd7112e4e529.apk, SHA-256 67dad10fc014970e2b10e812eab42a8b75ac88ba8b3875f6c41c08d288da9481. Preserve com.fluvi.app, compatible version/ABIs and update signer faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. Test R39 to R40 install -r on a disposable phone/emulator with a synthetic data sentinel, saved lockscreen selection, app resumed after update and real configured ORB exercised. No data wipe or downgrade. Publish the new signed file at the existing immutable direct-binary route. Independently GET the complete file and verify size, APK structure, package, version, signer, embedded application SHA and SHA-256. Stay with the build through normal recoverable failures; fix the cause and reverify.
+
+### 20. COMPLETION REPORT
+
+First line: direct, independently verified R40 download. Then source SHA, bytes/hash, successful update test, actual factory-route change, comparison data for all arms, and a short Hungarian test using the owner's existing animated ORB and synthetic data. Distinguish the restored opening, attribution coverage on natural unlock, any measured app-side savings, and the physical 10-ms/first-forbidden-frame result. Include evidence of negative cases and the known limitations. Any qualified matched regression is a failed performance result; keep working on the demonstrated cause or label the recovered APK experimental. Packaging is not a speed claim.
+
+### 21. DEFINITION OF DONE
+
+Deliver a changed, signed, update-tested, directly downloadable R40 stock APK. A plan, harness, optional switch alone, old binary, running CI job or app-private file does not close the phone assignment. Respect the current privacy contract and keep working through authorized recoverable blockers. If a hard external blocker remains, document its actual attempted recovery and incomplete scope. No repeat of the owner's previous FULL capture is required to produce the build. The owner validates the physical outcome.
+
+FLUVI_R40_STOCK_RECOVERY_END
