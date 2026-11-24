@@ -46,16 +46,28 @@ jobs:
           adb shell input keyevent KEYCODE_WAKEUP
           adb shell wm dismiss-keyguard || true
           adb install -r "$out/old.apk" > "$out/old-install.txt" 2>&1
-          adb shell am start -W -n com.fluvi.app/.MainActivity > "$out/old-launch.txt" 2>&1
-          grep -F 'Status: ok' "$out/old-launch.txt"
+          trap 'adb logcat -d -v threadtime > "$out/logcat.txt" 2>&1 || true; adb shell dumpsys activity activities > "$out/last-activities.txt" 2>&1 || true' EXIT
+          wait_for_app() {
+            label="$1"
+            adb shell am start -W -n com.fluvi.app/.MainActivity > "$out/${label}-launch.txt" 2>&1 || true
+            for ((attempt=0; attempt<60; attempt++)); do
+              adb shell dumpsys activity activities > "$out/${label}-activities.txt" 2>&1 || true
+              if grep -Ei '(mResumedActivity|topResumedActivity).*com\.fluvi\.app/\.MainActivity' "$out/${label}-activities.txt" >/dev/null && adb shell pidof com.fluvi.app >/dev/null 2>&1; then
+                printf '%s\n' "${label}_RESUMED" >> "$out/${label}-launch.txt"
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+          wait_for_app old
           adb shell run-as com.fluvi.app mkdir -p files
           printf '%s' R36_UPDATE_SENTINEL | adb shell run-as com.fluvi.app tee files/r36_update_sentinel >/dev/null
           adb install -r "$out/new.apk" > "$out/new-install.txt" 2>&1
           actual=$(adb shell run-as com.fluvi.app cat files/r36_update_sentinel | tr -d '\r')
           test "$actual" = R36_UPDATE_SENTINEL
           adb shell am force-stop com.fluvi.app
-          adb shell am start -W -n com.fluvi.app/.MainActivity > "$out/new-launch.txt" 2>&1
-          grep -F 'Status: ok' "$out/new-launch.txt"
+          wait_for_app new
           printf '%s\n' 'UPDATE_INSTALL_PASS sentinel=preserved launch=ok API=35' > "$out/result.txt"
           CONTROL
       - name: Enable KVM
