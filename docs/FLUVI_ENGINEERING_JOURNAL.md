@@ -19189,3 +19189,29 @@ First line: direct verified R38 APK download. Next: tested source, bytes, SHA-25
 The agent owns production change → signed build → in-place install test → verified downloadable bytes. A report, patch, green unit test, pending CI or an old binary does not complete the phone assignment. Keep delivering through every recoverable failure. If blocked on an external prerequisite, exhaust the established authorized alternatives, preserve work, name the exact failed prerequisite and mark delivery incomplete. A phone-testable R38 is a delivery milestone; its stock 10 ms verdict stays open until independently measured. Report the actual SystemUI change and its level of validation independently of that milestone.
 
 FLUVI_R38_CLOCK_SCENE_END
+
+
+## 2026-11-24 — R38 handset result and owner correction: physical wake-button actuation to visible ORB
+
+FLUVI_R38_BUTTON_TO_PIXEL_ADDENDUM_BEGIN
+
+**Owner decision and precedence.** The owner considers the tested R38 opening better than R37 but still visibly late. The maximum allowed is **10 ms from physically pressing the wake button to the first visible pixels of the correct configured animated ORB** on the normal main lockscreen. The R38 handoff used the first eligible clock as its time origin. Replace that acceptance rule in sections 4, 15, 20 and 21 with this one. Clock-to-ORB, first distinct motion and last FULL on restriction remain separate diagnostic and regression measures. Preserve this exact R38 as a phone comparator against further changes. The owner has accepted no 10 ms result.
+
+**Exact phone evidence.** Installed source d056c5d8467c5454d139bf12ef36ec7431a9ec51 on implement/r38-clock-scene, Nothing A142/API 35, buildMode=profile, LIGHT, capture f380031e-b90d-448f-8fe6-52888a1416e4, 2026-11-24 14:05 CET, ORB/orbOnly/FULL. This commit restores ordered first opening for the eligible still-empty DIRECT reservation and retains current disclosure checks, the prepared image and live animation. It is a factory-phone app-overlay result. Ten openings counted, ten warm hits. The export retains detailed timings for four. The private asset was ready 18.238 s before the first app wake in the report.
+
+| Opening | App wake callback to native submit start | SCREEN_ON callback to grant | Grant to submit start | Native submit duration | SCREEN_ON callback to native return |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 833 ms | 703 ms | 22 ms | 5 ms | 730 ms |
+| 8 | 115 ms | 44 ms | 8 ms | 1 ms | 53 ms |
+| 9 | 153 ms | 70 ms | 5 ms | 2 ms | 77 ms |
+| 10 | 334 ms | 222 ms | 6 ms | 1 ms | 229 ms |
+
+In opening 8 the first read confirmed MAIN and that same request (152) won. In opening 1 the first read returned HIDDEN_UNKNOWN/NO_MAIN_MARKER, the first accepted proof was at wake +758 ms and request 11 was consumed. The R37 four detailed SCREEN_ON-to-native-return samples were 570/229/231/249 ms. Both the two faster R38 openings and the slower recorded outlier matter. The sessions are unpaired and the six unexported openings lack individual durations. Physical button actuation and optical first clock/ORB are absent from the export. These software timings cannot measure their difference.
+
+**Coding-agent correction.** Keep W (physical switch actuation), L (first identifiable light from the waking display), C (first eligible main clock) and O (first correct on-screen ORB) distinguishable. The acceptance variable is O−W. Use W→L and W→C to characterize system/panel wake, and O−C for the app/host's alignment with the clock. Do not require L and C to coincide. Keep R38's stock recovery as the comparison build. The prepublished real clock-scene host can remove additional ORB lag once the lockscreen can appear. Its same-frame success alone does not meet the physical button requirement. The ordinary APK does not control the wake button to panel power-on path. AOSP Android 15 reference for the platform-managed screen-on sequence: https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android15-release/services/core/java/com/android/server/policy/PhoneWindowManager.java .
+
+**Verification.** Start with a locked phone and fully off display. Exercise AOD-to-main separately; preserve the user's actual settings and record depth of sleep, refresh mode and brightness for matched runs. Retain missed eligible openings and the slowest measured trial. When optical equipment is available, acquire a calibrated physical button actuation reference and the screen on a common timebase (e.g. a synchronized marker and a high-speed camera that resolves the configured ORB). Reference ordinary clock onset and first correct ORB pixels in appropriate regions. State uncertainty due to actuation marker, frame sampling, exposure and scanout. A camera image of a finger touching the case alone does not establish the precise switch time. Include a matched ORB-disabled normal wake as a system comparison. Only a trial with an O−W upper uncertainty bound ≤10 ms can pass timing; a lower bound >10 ms fails and an interval spanning 10 ms is indeterminate. Report the sample maximum; finite sampling does not prove a hardware-wide guarantee. If the tested display cannot present eligible lockscreen content within the budget, even same-frame inclusion cannot recover that time on that wake. No always-on visible solution or deliberately delayed clock substitutes for the screen-off test.
+
+Continue the previously assigned independent implementation, APK delivery and privacy work using the corrected metric. No new owner hardware, another copy of the same app log, or optical proof is a prerequisite for delivering an experimental phone build. Report physical button-to-ORB as unmeasured until external evidence exists. Do not relabel this tested commit or a changed build as physically compliant based on callback, native submit, simulator timings or first-frame membership.
+
+FLUVI_R38_BUTTON_TO_PIXEL_ADDENDUM_END
