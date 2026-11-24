@@ -310,9 +310,22 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                     identity != null
                 }
                 val visual = checkNotNull(offVisual)
-                val crop = visual.captureCrop("off-composited", checkNotNull(identity).bounds)
-                assertTrue("NOT REACHED: OFF crop did not match calibrated FULL", KeyguardR22VisualCalibration.compare(visual.a, crop).nearlyEqual())
                 File(dir, "off-native.txt").writeText("beforeApply=${offApplyStarted.get()} completionDispatched=${offCompletionAt.get()} clock=uptimeMs physical=UNOBSERVED\n")
+                // A submission callback does not mean its frame was already
+                // composed. Retain every ordered sample until actual match.
+                var matched = false
+                val samples = mutableListOf<String>()
+                repeat(24) { index ->
+                    if (!matched) {
+                        val crop = visual.captureCrop("off-composited-$index", checkNotNull(identity).bounds)
+                        val delta = KeyguardR22VisualCalibration.compare(visual.a, crop)
+                        samples += "index=$index delta=$delta"
+                        matched = delta.nearlyEqual()
+                        if (!matched) SystemClock.sleep(100)
+                    }
+                }
+                File(dir, "off-categories.txt").writeText(samples.joinToString("\n", postfix = "\n"))
+                assertTrue("NOT REACHED: OFF crops did not match calibrated FULL", matched)
             } else if (r21Negative != true) await("direct reveal receipt", 15_000) {
                 val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
                 text.lineSequence().any { it.startsWith(" R18_PIPELINE ") &&
