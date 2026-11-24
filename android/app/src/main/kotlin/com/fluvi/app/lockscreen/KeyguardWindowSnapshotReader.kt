@@ -689,7 +689,7 @@ internal class KeyguardWindowSnapshotReader(
             val rootPackage = root?.packageName?.toString()
             // AccessibilityNodeInfo.windowId is an already-returned scalar;
             // do not infer this identity from the active root or package name.
-            val verifiedRootWindow = rootPackage == "com.android.systemui" &&
+            val verifiedRootWindow = KeyguardR40FixtureSwitch.ENABLED && rootPackage == "com.android.systemui" &&
                 window.type == AccessibilityWindowInfo.TYPE_SYSTEM && root != null &&
                 runCatching { root.windowId == window.id }.getOrDefault(false)
             val potentialOwn = window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY &&

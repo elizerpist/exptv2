@@ -147,6 +147,8 @@ internal object KeyguardSurfaceClassifier {
             markers,
         )
         if (ids.any { it in mainIds }) {
+            if (!KeyguardR40FixtureSwitch.ENABLED)
+                return KeyguardSurfaceClassification(KeyguardSurface.MAIN_KEYGUARD, KeyguardSurfaceReason.MAIN_CONFIRMED, markers)
             // Do not infer a clock window from an active root, package alone,
             // or a carrier marker. The complete MAIN evidence must belong to
             // exactly one verified non-own SystemUI TYPE_SYSTEM clock window.

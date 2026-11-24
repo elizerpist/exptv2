@@ -123,7 +123,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 val epoch = maxOf(SystemClock.elapsedRealtimeNanos(), (savedMaterial.second["publisherEpoch"] as? Long ?: -1L) + 1L)
                 check(FluviKeyguardMaterialStore.publish(context, KeyguardR12ServiceTimingInstrumentationTest().materialProfile(), epoch))
             }
-            KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT")
+            KeyguardCardDiagnostics.startCapture(context, source, "debug", args.getString("r40Capture") ?: "LIGHT")
             captureStarted = true
             if (changeScene) KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock = { target ->
                 if (target.directOutput != null && target.full && held.compareAndSet(false, true)) {

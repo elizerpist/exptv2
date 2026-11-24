@@ -436,7 +436,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         var r25Retired: KeyguardOpeningPublication.Discarded<R25Completed>? = null
         synchronized(queueLock) {
             if (inspectionAuthority != current) {
-                r39RemovalGate.clear()
+                if (KeyguardR40FixtureSwitch.ENABLED) r39RemovalGate.clear()
                 r25Publication.waitingRequest()?.takeIf { !current.matches(it) }?.let {
                     r25Retired = r25Publication.discard(inspectionQueue, it)
                 }
@@ -801,7 +801,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val observedAt = callbackAt ?: SystemClock.uptimeMillis()
         synchronized(queueLock) {
             previous = firstAuthorizedOrb.current()
-            r39RemovalGate.clear()
+            if (KeyguardR40FixtureSwitch.ENABLED) r39RemovalGate.clear()
             scene = firstAuthorizedOrb.externalIngress()
             if (reason == "INGRESS" && ordinaryRecheck && meta != null) {
                 openingHandoff.externalInvalidation(scene, observedAt)
@@ -1197,12 +1197,12 @@ class FluviKeyguardCardService : AccessibilityService() {
                     stamp.dataRevision, full = true, completeMain = true, freshSystemEligible = true) else null
                 if (proof != null) {
                     owner.firstProof = proof
-                    owner.r39Evidence = scene?.let { currentScene ->
+                    owner.r39Evidence = if (KeyguardR40FixtureSwitch.ENABLED) scene?.let { currentScene ->
                         inspection.authorizingClockWindowId?.let { window ->
                             KeyguardR39WindowEvidence(window, Display.DEFAULT_DISPLAY, r39AppUid,
                                 request.id, currentScene, readFinishedAt)
                         }
-                    }
+                    } else null
                     r32MainSnapshot = null
                 }
                 proof to if (proof == null) firstAuthorizedOrb.offerRejection(request.id, scene, revision,
@@ -1345,6 +1345,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                           evidence: KeyguardR39WindowEvidence? = null,
                           meta: KeyguardAccessibilityEventMeta? = null, callbackAt: Long? = null,
                           identity: R18Identity = owner.identity) {
+        if (!KeyguardR40FixtureSwitch.ENABLED) return
         val context = owner.diagnosticContext ?: return
         if (context.captureId == null || !KeyguardCardDiagnostics.wantsEvent("R18_PIPELINE")) return
         val stamp = identity.token.stamp
@@ -1839,7 +1840,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         // The same queue lock protects the owner identity and irreversible seal.
         val isRemoval = meta.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED &&
             meta.windowChanges and AccessibilityEvent.WINDOWS_CHANGE_REMOVED != 0
-        if (isRemoval && frameworkEvent) {
+        if (KeyguardR40FixtureSwitch.ENABLED && isRemoval && frameworkEvent) {
             val capturedOwner = r18Active
             val sealed = synchronized(queueLock) {
                 val owner = r18Active
@@ -4444,7 +4445,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val staged = r18Active
         // A later, independently complete MAIN read may refresh a negative-only
         // witness for the same already-presented owner. It grants no reveal.
-        if (staged != null && overlay.isAttached && completeMain &&
+        if (KeyguardR40FixtureSwitch.ENABLED && staged != null && overlay.isAttached && completeMain &&
             decision == KeyguardCardVisibility.SHOW_FULL) {
             val window = inspection.authorizingClockWindowId
             val scene = inspection.r19ReadSceneSerial
@@ -4987,14 +4988,14 @@ class FluviKeyguardCardService : AccessibilityService() {
                 (directOwner.preparation.emptyAwaitingDisclosure &&
                     (continuation == null || continuation.requestId != proof || !firstAuthorizedOrb.isCurrent(continuation)))) return null
             val stamp = directToken.stamp
-            val grantAt = SystemClock.uptimeMillis()
+            val grantAt = if (KeyguardR40FixtureSwitch.ENABLED) SystemClock.uptimeMillis() else 0L
             val granted = synchronized(queueLock) {
                 val accepted = r18Active === directOwner && directOwner.identity.token === directToken &&
                     r18Coordinator.grant(directToken, inspectionAuthority, proof, completeMain = true,
                         finalSystemEligible = true, disclosedFull = presentation.full,
                         selectionRevision = stamp.selectionRevision, materialRevision = stamp.materialRevision,
                         dataRevision = stamp.dataRevision)
-                if (accepted) directOwner.r39GrantAt = grantAt
+                if (accepted && KeyguardR40FixtureSwitch.ENABLED) directOwner.r39GrantAt = grantAt
                 accepted
             }
             if (!granted) {
@@ -5148,7 +5149,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         }, nativeApplied = {
                             val at = SystemClock.uptimeMillis()
                             var r39Armed: KeyguardR39WindowEvidence? = null
-                            val ordinal = synchronized(queueLock) {
+                            val ordinal = if (!KeyguardR40FixtureSwitch.ENABLED) r18Coordinator.markNativeApplyReturned(permit) else synchronized(queueLock) {
                                 val applied = r18Coordinator.markNativeApplyReturned(permit)
                                 val evidence = directOwner.r39Evidence
                                 if (applied != null && r18Active === directOwner &&
@@ -5160,7 +5161,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                                 }
                                 applied
                             }
-                            if (ordinal != null) {
+                            if (KeyguardR40FixtureSwitch.ENABLED && ordinal != null) {
                                 if (r39Armed != null) recordR39(directOwner, "ARMED", at,
                                     evidence = r39Armed, identity = r39Identity)
                                 else recordR39(directOwner, "UNATTRIBUTED", at, identity = r39Identity)
