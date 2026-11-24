@@ -8,8 +8,10 @@ again by current local keyguard, bypass, disclosure, user, display, geometry and
 actual blueprint state. AOD and unrecognized transitions remain fail-closed.
 The parent has no ORB input region and the old child no longer draws an ORB.
 EMPTY is associated with the exact pending store generation, parent observer,
-and image-free draw, then requires the existing actual View frame-commit
-callback. Observer replacement or a newer ORB draw invalidates that receipt.
+and image-free draw, then requires a subsequent empty parent draw and a real,
+valid, signalled present fence from a transaction merged with the root draw.
+Missing, invalid or timed-out fences remain pending. Observer replacement, root
+reattachment or a newer ORB draw invalidates the receipt.
 
 This is a source candidate, not a verified first/last-frame implementation.
 Its AOSP pin, patch applicability, resident-store/scene-policy units and stager

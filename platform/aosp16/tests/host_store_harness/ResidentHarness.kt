@@ -28,6 +28,12 @@ fun main() {
     val idle = incoming.copy(idleLockscreen = true, wakingFromOff = false, fromAbsent = false, toLockscreen = false)
     check(R39ScenePolicy.allow(idle))
     check(!R39ScenePolicy.allow(idle.copy(noOverlays = false)))
+    val receipt = R39EmptyEvidence(true, true, true, true, true, true, true)
+    check(R39EmptyPolicy.mayAcknowledge(receipt))
+    listOf(receipt.copy(validFenceSignalled = false), receipt.copy(sameAttachedRoot = false),
+        receipt.copy(samePendingRequest = false), receipt.copy(nextEmptyDrawObserved = false),
+        receipt.copy(singleOriginalOwner = false), receipt.copy(noLaterOrbDraw = false),
+        receipt.copy(sameEmptyGeneration = false)).forEach { check(!R39EmptyPolicy.mayAcknowledge(it)) }
     val nonce = "0123456789abcdef0123456789abcdef"
     val worker = Queue(); val main = Queue(); val renderer = R29HostRenderer()
     val received = mutableListOf<Long>()

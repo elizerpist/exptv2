@@ -1,6 +1,8 @@
 package com.android.systemui.keyguard.fluvi
 
 import com.fluvi.r29.contract.R39SceneFacts
+import com.fluvi.r29.contract.R39EmptyEvidence
+import com.fluvi.r29.contract.R39EmptyPolicy
 import com.fluvi.r29.contract.R39ScenePolicy
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -22,5 +24,13 @@ class FluviR39ScenePolicyTest {
         assertTrue(R39ScenePolicy.allow(idle))
         assertFalse(R39ScenePolicy.allow(idle.copy(noOverlays = false)))
         assertFalse(R39ScenePolicy.allow(idle.copy(idleLockscreen = false)))
+    }
+    @Test fun emptyReceiptRejectsMissingFenceAndEveryStaleOwnerBoundary() {
+        val complete = R39EmptyEvidence(true, true, true, true, true, true, true)
+        assertTrue(R39EmptyPolicy.mayAcknowledge(complete))
+        listOf(complete.copy(validFenceSignalled = false), complete.copy(sameAttachedRoot = false),
+            complete.copy(samePendingRequest = false), complete.copy(nextEmptyDrawObserved = false),
+            complete.copy(singleOriginalOwner = false), complete.copy(noLaterOrbDraw = false),
+            complete.copy(sameEmptyGeneration = false)).forEach { assertFalse(R39EmptyPolicy.mayAcknowledge(it)) }
     }
 }

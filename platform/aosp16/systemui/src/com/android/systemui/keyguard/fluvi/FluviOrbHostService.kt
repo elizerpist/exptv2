@@ -21,13 +21,17 @@ import android.os.UserManager
 import android.util.DisplayMetrics
 import android.view.Display
 import android.view.View
+import android.view.SurfaceControl
 import android.provider.Settings
 import com.fluvi.r29.contract.R29Protocol
 import com.fluvi.r29.contract.R29PublisherIdentity
 import com.fluvi.r29.contract.R29WireCodec
+import com.fluvi.r29.contract.R39EmptyEvidence
+import com.fluvi.r29.contract.R39EmptyPolicy
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.TimeZone
+import java.time.Duration
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -223,7 +227,8 @@ internal class R29HostRuntime private constructor(context: Context) : ComponentC
     private val observerLock = Any()
     private val clockObservers = LinkedHashMap<() -> Unit, View>()
     private data class PendingEmpty(val nonce: String, val sequence: Long, val receipt: () -> Unit,
-                                    var registered: Boolean = false)
+                                    var registered: Boolean = false,
+                                    var nextEmptyDrawObserved: Boolean = false)
     private var pendingEmpty: PendingEmpty? = null
     // Changes only when a current owner draws an orb, not for repeated empty draws.
     private var ownerVisualEpoch = 0L
@@ -259,36 +264,85 @@ internal class R29HostRuntime private constructor(context: Context) : ComponentC
         return true
     }
 
-    /** Called by the single persistent parent, never by a disposable scene child. */
+    /** The single parent draws no ORB. A View commit alone is not evidence
+     * that SurfaceFlinger presented an empty frame. Merge a completed-listener
+     * into a subsequent root draw and require an actual valid signalled present
+     * fence. If any evidence is unavailable, ownership remains pending. */
     fun onOwnerDraw(view: View, observer: () -> Unit, orbDrawn: Boolean, noOutgoingScene: Boolean) {
         if (!view.isAttachedToWindow || !view.isHardwareAccelerated || !view.viewTreeObserver.isAlive) return
+        if (orbDrawn) {
+            synchronized(observerLock) {
+                if (clockObservers.size == 1 && clockObservers[observer] === view) ownerVisualEpoch += 1
+            }
+            return
+        }
+        val root = view.rootSurfaceControl ?: return
+        val windowToken = view.windowToken ?: return
         var visualEpoch = 0L
         val pending = synchronized(observerLock) {
             if (clockObservers.size != 1 || clockObservers[observer] !== view) return
-            if (orbDrawn) { ownerVisualEpoch += 1; return }
             if (!noOutgoingScene) return
             val value = pendingEmpty ?: return
-            if (value.registered || !store.isCurrentEmpty(value.nonce, value.sequence)) return
+            if (!store.isCurrentEmpty(value.nonce, value.sequence)) return
+            if (value.registered) {
+                value.nextEmptyDrawObserved = true
+                return
+            }
             value.registered = true
+            value.nextEmptyDrawObserved = false
             visualEpoch = ownerVisualEpoch
             value
         }
-        val registered = runCatching {
-            view.viewTreeObserver.registerFrameCommitCallback {
-                val deliver = synchronized(observerLock) {
-                    val valid = pendingEmpty === pending && clockObservers.size == 1 &&
-                        clockObservers[observer] === view && view.isAttachedToWindow &&
-                        ownerVisualEpoch == visualEpoch && store.isCurrentEmpty(pending.nonce, pending.sequence)
-                    if (valid) pendingEmpty = null
-                    else if (pendingEmpty === pending) pending.registered = false
-                    valid
+        fun leavePending() {
+            synchronized(observerLock) {
+                if (pendingEmpty === pending) {
+                    pending.registered = false
+                    pending.nextEmptyDrawObserved = false
                 }
-                if (deliver) pending.receipt()
             }
-        }.isSuccess
-        if (!registered) synchronized(observerLock) {
-            if (pendingEmpty === pending) pending.registered = false
         }
+        val registered = runCatching {
+            SurfaceControl.Transaction().use { transaction ->
+                transaction.addTransactionCompletedListener(main) { stats ->
+                    val fence = runCatching { stats.presentFence }.getOrNull()
+                    if (fence == null || !fence.isValid) {
+                        runCatching { fence?.close() }
+                        leavePending()
+                    } else {
+                        val queued = runCatching {
+                            worker.execute {
+                                val signalled = try {
+                                    fence.isValid && fence.await(Duration.ofSeconds(2)) && fence.isValid
+                                } catch (_: Throwable) { false } finally { runCatching { fence.close() } }
+                                main.execute {
+                                    val sameView = view.isAttachedToWindow && view.windowToken === windowToken &&
+                                        view.rootSurfaceControl === root
+                                    val deliver = synchronized(observerLock) {
+                                        val valid = R39EmptyPolicy.mayAcknowledge(R39EmptyEvidence(
+                                            validFenceSignalled = signalled, sameAttachedRoot = sameView,
+                                            samePendingRequest = pendingEmpty === pending,
+                                            nextEmptyDrawObserved = pending.nextEmptyDrawObserved,
+                                            singleOriginalOwner = clockObservers.size == 1 && clockObservers[observer] === view,
+                                            noLaterOrbDraw = ownerVisualEpoch == visualEpoch,
+                                            sameEmptyGeneration = store.isCurrentEmpty(pending.nonce, pending.sequence)))
+                                        if (valid) pendingEmpty = null
+                                        else if (pendingEmpty === pending) {
+                                            pending.registered = false
+                                            pending.nextEmptyDrawObserved = false
+                                        }
+                                        valid
+                                    }
+                                    if (deliver) pending.receipt()
+                                }
+                            }
+                        }.isSuccess
+                        if (!queued) { runCatching { fence.close() }; leavePending() }
+                    }
+                }
+                root.applyTransactionOnDraw(transaction)
+            }
+        }.getOrDefault(false)
+        if (registered) view.invalidate() else leavePending()
     }
 
     private val revokeReceiver = object : BroadcastReceiver() {
