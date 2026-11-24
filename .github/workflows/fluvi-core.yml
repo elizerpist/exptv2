@@ -1,7 +1,10 @@
-name: R37 exact-source service controls
+name: R37 exact-source safety controls
 on:
   workflow_dispatch:
     inputs:
+      safety_lane:
+        type: string
+        required: true
       app_sha:
         type: string
         required: true
@@ -33,6 +36,7 @@ jobs:
       APP_SHA: ${{ inputs.app_sha }}
       HARNESS_SHA: ${{ inputs.harness_sha }}
       BASELINE: ${{ inputs.baseline }}
+      SAFETY_LANE: ${{ inputs.safety_lane }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -97,7 +101,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r37-service-${{ inputs.baseline && 'baseline' || 'candidate' }}-${{ github.run_id }}
+          name: r37-safety-${{ inputs.safety_lane }}-${{ github.run_id }}
           path: ${{ runner.temp }}/r37-evidence/**
           if-no-files-found: warn
           retention-days: 14

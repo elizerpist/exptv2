@@ -38,7 +38,11 @@ PY
     for uuid in ${r37_uuids:-}; do
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r22/$uuid" > "$out/service-$uuid.tar" 2> "$out/service-$uuid.stderr" || true
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r19/$uuid" > "$out/visual-$uuid.tar" 2> "$out/visual-$uuid.stderr" || true
+      for probe in r25 r26; do
+        adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/$probe/$uuid" > "$out/$probe-$uuid.tar" 2> "$out/$probe-$uuid.stderr" || true
+      done
     done
+    adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-material-smoke > "$out/panel-evidence.tar" 2> "$out/panel-evidence.stderr" || true
   }
   trap collect EXIT
   { adb devices -l; adb shell getprop ro.build.version.sdk; adb shell getprop ro.product.cpu.abi; adb shell getprop ro.build.fingerprint; adb shell wm size; adb shell wm density; } > "$out/device.txt" 2>&1
@@ -50,14 +54,26 @@ PY
   bash scripts/prepare-keyguard-lower-environment.sh "$out/preflight"
   failed=0
   r37_uuids=""
-  methods=(r37ReturnedChildHandsOffToRealLatestOnOneReader stableInitialFullUsesOneVirginOutputWithoutReadinessRead r21ExclusionRetiresSubmittedOrbWithMainAckHeld)
-  if [[ "$BASELINE" == true ]]; then methods=(r37ReturnedChildHandsOffToRealLatestOnOneReader); fi
-  for method in "${methods[@]}"; do
+  case "$SAFETY_LANE" in
+    service) methods=(
+      com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest#r26VisibleDirectUnlockAndRapidRelock
+      com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest#r31RestrictiveIngressWhileSuccessorChildIsHeld
+      com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest#externalIngressWhileFirstPaintIsHeldCannotUseOldProof
+      com.fluvi.app.lockscreen.KeyguardR25ServiceInstrumentationTest#heldPositiveCannotShowAfterRealShadeWithCompositorSamples
+    ) ;;
+    panel) methods=(
+      com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r22_4BoundedResizedPrivacyStripWhite
+      com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest#r22_4BoundedResizedPrivacyStripBlack
+    ) ;;
+    *) echo "unknown lane: $SAFETY_LANE"; exit 2 ;;
+  esac
+  for testid in "${methods[@]}"; do
+    method=${testid#*#}
     uuid=$(cat /proc/sys/kernel/random/uuid)
     r37_uuids="$r37_uuids $uuid"
     printf '%s %s\n' "$method" "$uuid" >> "$out/trials.txt"
     rc=0
-    timeout -k 5s 260s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e harnessSha "$HARNESS_SHA" -e runUuid "$uuid" -e class "com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest#$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/$method.txt" 2>&1 || rc=$?
+    timeout -k 5s 260s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e harnessSha "$HARNESS_SHA" -e runUuid "$uuid" -e class "$testid" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/$method.txt" 2>&1 || rc=$?
     if (( rc != 0 )) || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then
       printf '%s FAIL exit=%s\n' "$method" "$rc" >> "$out/results.txt"; failed=1
     else printf '%s PASS\n' "$method" >> "$out/results.txt"; fi
