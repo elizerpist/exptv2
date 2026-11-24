@@ -1,6 +1,7 @@
 package com.fluvi.app.widget.trial
 
 import android.appwidget.AppWidgetHost
+import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.ComponentName
@@ -14,6 +15,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.FrameLayout
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.R
@@ -55,17 +57,20 @@ class FluviOrbLockscreenTrialInstrumentationTest {
             }
             assertTrue("framework did not bind the trial provider", manager.bindAppWidgetIdIfAllowed(id, component, options))
             assertEquals(component, manager.getAppWidgetInfo(id).provider)
+            lateinit var hostView: AppWidgetHostView
             instrumentation.runOnMainSync {
                 host.startListening()
-                val hostView = host.createView(activity, id, info)
-                activity.setContentView(hostView, ViewGroup.LayoutParams(192, 192))
+                hostView = host.createView(activity, id, info)
+                val frame = FrameLayout(activity).apply { setPadding(32, 192, 0, 0) }
+                frame.addView(hostView, FrameLayout.LayoutParams(192, 192))
+                activity.setContentView(frame, ViewGroup.LayoutParams(-1, -1))
             }
             val deadline = SystemClock.uptimeMillis() + 20_000
             var received: Bitmap? = null
             var lastState = "not inspected"
             while (SystemClock.uptimeMillis() < deadline && received == null) {
                 instrumentation.runOnMainSync {
-                    val image = activity.findViewById<ImageView>(R.id.fluvi_orb_lockscreen_trial_image)
+                    val image = hostView.findViewById<ImageView>(R.id.fluvi_orb_lockscreen_trial_image)
                     val drawable = image?.drawable
                     lastState = "image=${image?.javaClass?.name} drawable=${drawable?.javaClass?.name} size=${image?.width}x${image?.height}"
                     received = (drawable as? BitmapDrawable)?.bitmap
@@ -80,7 +85,7 @@ class FluviOrbLockscreenTrialInstrumentationTest {
                 val explicitDeadline = SystemClock.uptimeMillis() + 10_000
                 while (SystemClock.uptimeMillis() < explicitDeadline && received == null) {
                     instrumentation.runOnMainSync {
-                        val image = activity.findViewById<ImageView>(R.id.fluvi_orb_lockscreen_trial_image)
+                        val image = hostView.findViewById<ImageView>(R.id.fluvi_orb_lockscreen_trial_image)
                         lastState = "image=${image?.javaClass?.name} drawable=${image?.drawable?.javaClass?.name} size=${image?.width}x${image?.height}"
                         received = (image?.drawable as? BitmapDrawable)?.bitmap
                     }
@@ -96,8 +101,24 @@ class FluviOrbLockscreenTrialInstrumentationTest {
                 assertEquals("host image mismatch at $x,$y", reference.getPixel(x, y), actual.getPixel(x, y))
             }
             instrumentation.waitForIdleSync()
+            val pos = IntArray(2)
+            var imageWidth = 0
+            var imageHeight = 0
+            instrumentation.runOnMainSync {
+                val visible = requireNotNull(hostView.findViewById<ImageView>(R.id.fluvi_orb_lockscreen_trial_image))
+                visible.getLocationOnScreen(pos)
+                imageWidth = visible.width
+                imageHeight = visible.height
+            }
+            assertTrue(imageWidth > 0 && imageHeight > 0)
             val screen = requireNotNull(automation.takeScreenshot())
             try {
+                val x = pos[0] + imageWidth / 2
+                val y = pos[1] + imageHeight / 2
+                assertTrue(x in 0 until screen.width && y in 0 until screen.height)
+                val pixel = screen.getPixel(x, y)
+                assertTrue("center not visible blue-cyan: ${Integer.toHexString(pixel)}", Color.blue(pixel) > Color.red(pixel) + 35 && Color.green(pixel) > Color.red(pixel) + 35)
+                println("R36_COMPOSITED_CENTER x=$x y=$y pixel=${Integer.toHexString(pixel)}")
                 context.openFileOutput("r36-framework-host.png", Context.MODE_PRIVATE).use {
                     assertTrue(screen.compress(Bitmap.CompressFormat.PNG, 100, it))
                 }
