@@ -71,7 +71,7 @@ FILES
       tail -100 "$out/build.log"; exit 1
     fi
     if [[ "$arm" == candidate ]]; then
-      if ! (cd "$app/android" && ./gradlew :app:testDebugUnitTest \
+      if ! (cd "$app/android" && JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -Drobolectric.dependency.repo.url=https://maven-central.storage-download.googleapis.com/maven2" ./gradlew :app:testDebugUnitTest \
         --tests 'com.fluvi.app.lockscreen.host.R35*' \
         --tests 'com.fluvi.app.lockscreen.host.R29OwnershipTest' \
         --no-daemon --max-workers=3 --console=plain) > "$out/unit.log" 2>&1; then
