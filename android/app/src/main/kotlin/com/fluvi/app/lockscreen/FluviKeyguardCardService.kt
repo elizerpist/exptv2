@@ -2951,6 +2951,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     }
 
     private fun traceCompletedInspection(read: CompletedInspection, handoff: InspectionHandoff?) {
+        inspectionProbeForTest?.let { probe -> runCatching { probe.beforeOptionalInspectionReport(read.request) } }
         traceInspectionResult(read.request, read.result, read.startedAt, read.finishedAt)
         if (handoff != null) traceKeyguard("INSPECTION_MAIN_APPLY_POSTED", read.request.trigger,
             read.request, observedUptimeMs = handoff.requestedAt,
