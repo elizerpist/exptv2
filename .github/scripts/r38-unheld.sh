@@ -16,7 +16,7 @@ for spec in "${specs[@]}"; do
     adb install -r "$pair/test.apk" > "$trial/install-test.txt" 2>&1 || { echo "$spec FAIL install-test" >> "$out/results.txt"; failed=1; continue; }
   fi
   source_sha=$(cat "$pair/source.txt"); uuid=$(cat /proc/sys/kernel/random/uuid)
-  printf 'source=%s\nuuid=%s\ntrial=%s\nfixture=f3fb9694351158fd677240ed6e2a5b2e0bbfc8b7\n' "$source_sha" "$uuid" "$spec" > "$trial/identity.txt"
+  printf 'source=%s\nuuid=%s\ntrial=%s\nfixture=8e2cbb9858cf2d6b2ac58d2e7193603fee91e714\n' "$source_sha" "$uuid" "$spec" > "$trial/identity.txt"
   method=stableInitialFullUsesOneVirginOutputWithoutReadinessRead
   [[ "$label" = burst ]] && method=externalIngressWhileFirstPaintIsHeldCannotUseOldProof
   rc=0

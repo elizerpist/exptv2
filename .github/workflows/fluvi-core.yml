@@ -22,7 +22,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/checkout@v5
         with:
-          ref: f3fb9694351158fd677240ed6e2a5b2e0bbfc8b7
+          ref: 8e2cbb9858cf2d6b2ac58d2e7193603fee91e714
           path: __r40fixture
       - uses: actions/setup-java@v5
         with:
@@ -53,7 +53,7 @@ jobs:
           }
           GRADLE
           fixture="$GITHUB_WORKSPACE/__r40fixture"
-          test "$(git -C "$fixture" rev-parse HEAD)" = f3fb9694351158fd677240ed6e2a5b2e0bbfc8b7
+          test "$(git -C "$fixture" rev-parse HEAD)" = 8e2cbb9858cf2d6b2ac58d2e7193603fee91e714
           for file in FluviKeyguardCardService.kt KeyguardCardSurface.kt KeyguardWindowSnapshotReader.kt KeyguardR40FixtureSwitch.kt; do
             cp "$fixture/android/app/src/main/kotlin/com/fluvi/app/lockscreen/$file" "android/app/src/main/kotlin/com/fluvi/app/lockscreen/$file"
           done
