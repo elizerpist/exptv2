@@ -4,8 +4,8 @@ out="$RUNNER_TEMP/r38-isolated"
 adb devices -l > "$out/device.txt"
 adb shell getprop ro.build.fingerprint >> "$out/device.txt"
 failed=0
-methods=(isolatedOrbReadyFrameCannotSubmitAfterItsAttachmentIsRetired isolatedOrbStaleFirstCommitCannotUndoSameRootPrivacyOrSizeReplacement isolatedOrbRevocationDrainsLateSteadyPublication)
-for mode in r37 r38; do
+methods=(attachedOrbRestrictionPrecedesFailedLayout isolatedNeutralRecoveryAtCommittedResizedBounds oldUsesPreventSuccessorButCurrentOrbKeepsMoving r12StaticSurfaceMatchesFullAndNeutralReferenceOnRealPanel r22_4BoundedResizedPrivacyStripWhite r22_4BoundedResizedPrivacyStripBlack)
+for mode in r38 continuation; do
   adb install -r "$out/$mode/app.apk" > "$out/$mode/install-app.txt" 2>&1 || { echo "$mode FAIL install" >> "$out/results.txt"; failed=1; continue; }
   adb install -r "$out/$mode/test.apk" > "$out/$mode/install-test.txt" 2>&1 || { echo "$mode FAIL install-test" >> "$out/results.txt"; failed=1; continue; }
   for method in "${methods[@]}"; do
