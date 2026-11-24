@@ -43,6 +43,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     private lateinit var automation: UiAutomation
 
     @Test fun stableInitialFullUsesOneVirginOutputWithoutReadinessRead() = runService(false)
+    @Test fun r40HeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() = runService(false, null, true)
     @Test fun externalIngressWhileFirstPaintIsHeldCannotUseOldProof() = runService(true)
     @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
     @Test fun r21ExclusionRetiresSubmittedOrbWithMainAckHeld() = runService(false, true)
@@ -61,7 +62,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r22StableOpeningReadIsNotYielded() = KeyguardR22FirstInspectionFixture().run("stable")
     @Test fun r22UnstagedOpeningObservation() = KeyguardR22FirstInspectionFixture().run("natural")
 
-    private fun runService(changeScene: Boolean, r21Negative: Boolean? = null) {
+    private fun runService(changeScene: Boolean, r21Negative: Boolean? = null, r40: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -101,6 +102,12 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         val negativeFinished = CountDownLatch(1)
         val negativeResult = AtomicReference<String?>()
         val savedDispatcher = KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone
+        val savedCross = KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross
+        val r40Calls = java.util.concurrent.atomic.AtomicInteger()
+        val callsAtFirstCross = java.util.concurrent.atomic.AtomicInteger(-1)
+        val r40Started = CountDownLatch(1)
+        val r40Release = CountDownLatch(1)
+        var r40Visual: KeyguardR22VisualCalibration? = null
         var captureStarted = false
         var report: String? = null
         val errors = mutableListOf<String>()
@@ -123,6 +130,14 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 val epoch = maxOf(SystemClock.elapsedRealtimeNanos(), (savedMaterial.second["publisherEpoch"] as? Long ?: -1L) + 1L)
                 check(FluviKeyguardMaterialStore.publish(context, KeyguardR12ServiceTimingInstrumentationTest().materialProfile(), epoch))
             }
+            if (r40) {
+                r40Visual = KeyguardR22VisualCalibration(instrumentation, dir, automation).also { it.calibrate() }
+                KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
+                KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = { output ->
+                    callsAtFirstCross.compareAndSet(-1, r40Calls.get())
+                    savedCross?.invoke(output)
+                }
+            }
             KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT")
             captureStarted = true
             if (changeScene) KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock = { target ->
@@ -138,6 +153,14 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
             val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
             instrumentation.runOnMainSync {
                 service.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
+                    override fun r40ProvenanceStarted(request: KeyguardCardInspectionRequest) {
+                        if (r40) {
+                            r40Calls.incrementAndGet()
+                            reads.add("R40_OPTIONAL_STARTED id=${request.id} at=${SystemClock.uptimeMillis()}")
+                            r40Started.countDown()
+                            r40Release.await(20, TimeUnit.SECONDS)
+                        }
+                    }
                     override fun started(request: KeyguardCardInspectionRequest) {
                         reads.add("start id=${request.id} trigger=${request.trigger} wake=${request.wakeGeneration}")
                         if (request.id == injectedRequest.get() && request.id != 0L) secondRead.countDown()
@@ -264,6 +287,36 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 text.lineSequence().any { it.startsWith(" R18_PIPELINE ") &&
                     !it.contains("revealApply=UNOBSERVED/") && !it.contains("bufferReady=UNOBSERVED") }
             }
+            if (r40) {
+                assertEquals("first native boundary must precede any optional provenance work", 0, callsAtFirstCross.get())
+                var identity: KeyguardR22VisualIdentityForTest? = null
+                await("exact visible native owner with geometry", 8_000) {
+                    instrumentation.runOnMainSync { identity = service.r22VisualIdentityForTest() }
+                    identity != null
+                }
+                val visual = checkNotNull(r40Visual)
+                val crop = visual.captureCrop("r40-first-full", checkNotNull(identity).bounds)
+                assertTrue("NOT REACHED: compositor crop did not match the calibrated configured FULL orb",
+                    KeyguardR22VisualCalibration.compare(visual.a, crop).nearlyEqual())
+                if (r40Started.count > 0) instrumentation.runOnMainSync {
+                    val at = SystemClock.uptimeMillis()
+                    service.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
+                        AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, -1, Display.DEFAULT_DISPLAY, 0,
+                        "com.android.systemui", at))
+                }
+                assertTrue("NOT REACHED: subsequent real reader did not enter optional work", r40Started.await(10, TimeUnit.SECONDS))
+                // While the single reader remains held, unlock must still flow
+                // through the ordinary negative system/visibility owner.
+                shell("wm dismiss-keyguard")
+                await("unlock while optional read held", 10_000) { power.isInteractive && !keyguard.isKeyguardLocked }
+                await("ordinary privacy withdrawal while optional read held", 10_000) {
+                    var visible = true
+                    instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
+                    !visible
+                }
+                visual.captureCrop("r40-after-unlock", checkNotNull(identity).bounds)
+                r40Release.countDown()
+            }
             saveScreenshot(File(dir, "03-visible-unclassified.png"))
             report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
             File(dir, "capture.txt").writeText(checkNotNull(report))
@@ -293,6 +346,10 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         } catch (error: Throwable) {
             errors += "${error.javaClass.simpleName}:${error.message}"
         } finally {
+            r40Release.countDown()
+            KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = savedCross
+            KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = null
+            runCatching { r40Visual?.close() }
             KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = savedDispatcher
             acknowledgement.getAndSet(null)?.let { task -> Handler(Looper.getMainLooper()).post(task) }
             releasePaint.countDown()
