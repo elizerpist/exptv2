@@ -19,6 +19,7 @@ internal class KeyguardR41AttemptLedger {
     var wakeSource: Long = MISSING; private set
     var wakeEventMs: Long = MISSING; private set
     var eligible: Int = -1; private set
+    var systemEligible: Int = -1; private set
     var omitted: Long = 0; private set
     var invalid: Long = 0; private set
     var orderedBypasses: Long = 0; private set
@@ -57,6 +58,7 @@ internal class KeyguardR41AttemptLedger {
             }
             "ELIGIBLE" -> { if (eligible == 0) invalid++; eligible = 1; return }
             "DENIED" -> { if (eligible == 1) invalid++; eligible = 0; return }
+            "SYSTEM_ELIGIBLE" -> { systemEligible = 1; return }
         }
         val column = when (phase) {
             "OFFER" -> OFFER; "WORKER_START" -> WORKER; "READ_START" -> READ_START; "READ_END" -> READ_END
@@ -134,7 +136,7 @@ internal class KeyguardR41AttemptLedger {
         val owner = if (matching) "${grantReservation[slot]}/${grantOutput[slot]}/${ids[slot]}" else "UNOBSERVED"
         val outcome = if (matching) "SUCCESS" else if (slot >= 0 && time(slot, CANCEL) != MISSING) "CANCELLED" else "UNOBSERVED"
         val loss = captureLoss + omitted + invalid
-        return " R41_CORE attempt=$attempt session=$session wake=$wake eligible=${when (eligible) { 1 -> "true"; 0 -> "false"; else -> "UNOBSERVED" }}" +
+        return " R41_CORE attempt=$attempt session=$session wake=$wake systemEligible=${if (systemEligible == 1) "true" else "UNOBSERVED"} eligible=${when (eligible) { 1 -> "true"; 0 -> "false"; else -> "UNOBSERVED" }}" +
             " outcome=$outcome owner=$owner readOwner=${if (matching && time(slot, READ_START) != MISSING && time(slot, READ_END) != MISSING) owner else "UNOBSERVED"}" +
             " dispatchOwner=${if (matching && time(slot, DISPATCH) != MISSING && time(slot, MAIN) != MISSING) owner else "UNOBSERVED"}" +
             " grantOwner=$owner request=${if (slot < 0) "UNOBSERVED" else ids[slot]} wakeNs=${value(wakeNs)} screenNs=${value(screenNs)}" +
@@ -161,6 +163,7 @@ internal class KeyguardR41AttemptLedger {
         grantReservation.copyInto(copy.grantReservation); grantOutput.copyInto(copy.grantOutput)
         winnerReservation.copyInto(copy.winnerReservation); winnerOutput.copyInto(copy.winnerOutput)
         copy.count = count; copy.wakeNs = wakeNs; copy.screenNs = screenNs; copy.eligible = eligible
+        copy.systemEligible = systemEligible
         copy.wakeTid = wakeTid; copy.screenTid = screenTid; copy.wakeUptimeMs = wakeUptimeMs
         copy.wakeSource = wakeSource; copy.wakeEventMs = wakeEventMs
         copy.omitted = omitted; copy.invalid = invalid; copy.orderedBypasses = orderedBypasses

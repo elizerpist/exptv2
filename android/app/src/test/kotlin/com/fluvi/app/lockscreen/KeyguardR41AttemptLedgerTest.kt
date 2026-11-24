@@ -82,4 +82,13 @@ class KeyguardR41AttemptLedgerTest {
         assertTrue(ledger.requestRows(1).any { it.contains("req=1 ") })
         assertTrue(ledger.requestRows(1).any { it.contains("req=75 ") })
     }
+
+    @Test fun systemEligibilityAloneNeverCertifiesAnEligibleOpening() {
+        val ledger = KeyguardR41AttemptLedger()
+        ledger.record("SYSTEM_ELIGIBLE", null, 100)
+        val row = ledger.core(1, 1, 1, 0)
+        assertTrue(row, row.contains("systemEligible=true eligible=UNOBSERVED"))
+        ledger.record("ELIGIBLE", null, 200)
+        assertTrue(ledger.core(1, 1, 1, 0).contains("systemEligible=true eligible=true"))
+    }
 }

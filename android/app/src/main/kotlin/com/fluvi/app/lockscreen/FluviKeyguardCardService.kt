@@ -678,7 +678,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                     early.targetAuthority.wakeGeneration, early.source, early.receivedAt)
             }.getOrNull()
             KeyguardCardDiagnostics.r41Bind(early.diagnosticContext, sample.r41WakeOrdinal)
-            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.ELIGIBLE, early.diagnosticContext)
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.SYSTEM_ELIGIBLE, early.diagnosticContext)
         }
         val authority = early.targetAuthority
         val request = KeyguardCardInspectionRequest(
@@ -2267,7 +2267,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val wakeOrdinal = if (sampleRequest != null && sampleRequest.diagnosticCaptureId == currentDiagnosticAttempt?.captureId)
             sampleRequest.r41WakeOrdinal else if (r41CaptureId == currentDiagnosticAttempt?.captureId) r41Ordinal else 0
         KeyguardCardDiagnostics.r41Bind(currentDiagnosticAttempt, wakeOrdinal)
-        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.ELIGIBLE, currentDiagnosticAttempt)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.SYSTEM_ELIGIBLE, currentDiagnosticAttempt)
         if (source == "wake") {
             val screenOrdinal = if (sampleRequest != null && sampleRequest.diagnosticCaptureId == currentDiagnosticAttempt?.captureId)
                 sampleRequest.r41ScreenOrdinal else if (r41CaptureId == currentDiagnosticAttempt?.captureId) r41Ordinal else 0
@@ -4622,6 +4622,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         decisionObservedAt = boundary?.second ?: SystemClock.uptimeMillis()
         val completeMain = inspection.surfaceReason == KeyguardSurfaceReason.MAIN_CONFIRMED &&
             !inspection.rootUnavailable && !inspection.walkTruncated && !inspection.abortedStale
+        // A wake sampler can be eligible while a PIN or shade is present.
+        // Count an eligible opening only after this complete, current MAIN
+        // read and its actual policy/admission checks have returned positive.
+        if (completeMain && decision == KeyguardCardVisibility.SHOW_FULL && signals.systemStateAvailable)
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.ELIGIBLE, request.diagnosticContext)
         val mayDefer = recovery != null && !recovery.used && !overlay.isAttached && completeMain &&
             (decision == KeyguardCardVisibility.SHOW_FULL || decision == KeyguardCardVisibility.SHOW_DISCREET)
         if (recovery != null && boundary != null && KeyguardR14ReadmissionPolicy.shouldDefer(
