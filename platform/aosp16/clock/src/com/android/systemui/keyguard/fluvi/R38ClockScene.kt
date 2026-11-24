@@ -21,10 +21,13 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.compose.animation.scene.ObservableTransitionState
+import com.android.systemui.deviceentry.domain.interactor.DeviceEntryInteractor
+import com.android.systemui.keyguard.domain.interactor.KeyguardBlueprintInteractor
 import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor
 import com.android.systemui.keyguard.domain.interactor.KeyguardTransitionInteractor
 import com.android.systemui.keyguard.shared.model.KeyguardState
 import com.android.systemui.keyguard.shared.model.TransitionState
+import com.android.systemui.keyguard.ui.view.layout.blueprints.DefaultKeyguardBlueprint
 import com.android.systemui.scene.domain.interactor.SceneInteractor
 import com.android.systemui.scene.shared.flag.SceneContainerFlag
 import com.android.systemui.scene.shared.model.Scenes
@@ -34,18 +37,22 @@ import com.fluvi.r29.contract.R29Disclosure
 import com.fluvi.r29.contract.R29FrameInputs
 import com.fluvi.r29.contract.R29FramePolicy
 import com.fluvi.r29.contract.R29Motion
+import com.fluvi.r29.contract.R39SceneFacts
+import com.fluvi.r29.contract.R39ScenePolicy
 import javax.inject.Inject
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 
 /**
- * Passive clock-root drawing for the separately enrolled AOSP reference host.
+ * Passive persistent scene-parent drawing for the separately enrolled AOSP reference host.
  * This modifier does not add a measurable, input window, or Binder call. An
  * absent runtime, uncertain scene, stale asset or unknown geometry draws only
  * the clock. It is not a claim that SystemUI frames have reached the panel.
  */
 class R38ClockScene @Inject constructor(
     private val keyguard: KeyguardInteractor,
+    private val deviceEntry: DeviceEntryInteractor,
+    private val blueprint: KeyguardBlueprintInteractor,
     private val transitions: KeyguardTransitionInteractor,
     private val scenes: SceneInteractor,
     private val shade: ShadeInteractor,
@@ -54,7 +61,7 @@ class R38ClockScene @Inject constructor(
     private var lastVisible: R29PreparedOrb? = null
 
     @Composable
-    fun modifier(bypass: Boolean): Modifier {
+    fun modifier(): Modifier {
         // The runtime is created only by an already-enrolled pre-wake host
         // service; normal clock drawing never binds or initializes it.
         val runtime = R29HostRuntime.runtime.collectAsStateWithLifecycle().value ?: return Modifier
@@ -63,8 +70,8 @@ class R38ClockScene @Inject constructor(
         var origin by remember(view) { mutableStateOf<Offset?>(null) }
         val frame = remember(runtime) { mutableLongStateOf(0L) }
         val location = remember(view) { IntArray(2) }
-        DisposableEffect(runtime, view) {
-            val changed: () -> Unit = { revision++ }
+        val changed: () -> Unit = remember(runtime, view) { { revision++ } }
+        DisposableEffect(runtime, view, changed) {
             runtime.addClockObserver(view, changed)
             onDispose { runtime.removeClockObserver(view, changed) }
         }
@@ -73,6 +80,9 @@ class R38ClockScene @Inject constructor(
         val step by transitions.transitionState.collectAsStateWithLifecycle()
         val scene by scenes.transitionState.collectAsStateWithLifecycle()
         val overlays by scenes.currentOverlays.collectAsStateWithLifecycle()
+        val bypass by deviceEntry.isBypassEnabled.collectAsStateWithLifecycle()
+        val actualBlueprint by blueprint.blueprint.collectAsStateWithLifecycle()
+        val defaultBlueprint = actualBlueprint.id == DefaultKeyguardBlueprint.DEFAULT
         val shadeExpanded by shade.isAnyExpanded.collectAsStateWithLifecycle()
         val shadeInput by shade.isUserInteracting.collectAsStateWithLifecycle()
         val dozing by keyguard.isDozing.collectAsStateWithLifecycle()
@@ -84,8 +94,8 @@ class R38ClockScene @Inject constructor(
         @Suppress("DEPRECATION")
         val goingAway by keyguard.isKeyguardGoingAway.collectAsStateWithLifecycle()
         val observed = remember(step, scene, overlays, shadeExpanded, shadeInput, dozing, dreaming,
-            showing, occluded, goingAway, revision, bypass) {
-            currentStateAllows(bypass)
+            showing, occluded, goingAway, revision, bypass, defaultBlueprint) {
+            currentStateAllows(bypass, defaultBlueprint)
         }
         val ready = remember(runtime, revision) { runtime.store.current(System.currentTimeMillis()) }
         LaunchedEffect(ready, observed) {
@@ -102,10 +112,11 @@ class R38ClockScene @Inject constructor(
             val geometryKnown = offset != null && descriptor != null &&
                 view.display?.displayId == Display.DEFAULT_DISPLAY &&
                 root.width == descriptor.displayWidth && root.height == descriptor.displayHeight
-            val canDraw = prepared != null && descriptor != null && geometryKnown &&
+            val canDraw = runtime.isOnlyFrameOwner(view, changed) &&
+                prepared != null && descriptor != null && geometryKnown &&
                 descriptor.userId == 0 && descriptor.displayId == Display.DEFAULT_DISPLAY &&
                 descriptor.disclosure == R29Disclosure.FULL && descriptor.projectionCurrent &&
-                currentStateAllows(bypass)
+                currentStateAllows(bypass, defaultBlueprint)
             var drew = false
             if (canDraw && descriptor != null && offset != null && prepared != null) {
                 view.getLocationOnScreen(location)
@@ -130,21 +141,27 @@ class R38ClockScene @Inject constructor(
                 val transition = transitions.transitionState.value
                 val noOutgoingScene = transition.transitionState == TransitionState.FINISHED &&
                     (!SceneContainerFlag.isEnabled || scenes.transitionState.value is ObservableTransitionState.Idle)
-                runtime.onEmptyClockDraw(view, noOutgoingScene)
+                runtime.onOwnerDraw(view, changed, orbDrawn = false, noOutgoingScene = noOutgoingScene)
+            } else {
+                runtime.onOwnerDraw(view, changed, orbDrawn = true, noOutgoingScene = false)
             }
         }
     }
 
     /** All input sources must be local SystemUI state; no app query on wake. */
     @Suppress("DEPRECATION")
-    private fun currentStateAllows(bypass: Boolean): Boolean {
+    private fun currentStateAllows(bypass: Boolean, defaultBlueprint: Boolean): Boolean {
         val step = transitions.transitionState.value
         val scene = scenes.transitionState.value
-        val sceneAllows = if (!SceneContainerFlag.isEnabled) true else when (scene) {
-            is ObservableTransitionState.Idle -> scene.currentScene == Scenes.Lockscreen && scene.currentOverlays.isEmpty()
-            // Do not expose pixels while an outgoing PIN/shade/other scene
-            // may still be in the same composition. A future qualified latch
-            // may admit a particular transition only with frame evidence.
+        val sceneAllows = if (!SceneContainerFlag.isEnabled) false else when (scene) {
+            is ObservableTransitionState.Idle -> R39ScenePolicy.allow(R39SceneFacts(
+                idleLockscreen = scene.currentScene == Scenes.Lockscreen,
+                wakingFromOff = false, fromAbsent = false, toLockscreen = false,
+                noOverlays = scene.currentOverlays.isEmpty(), userDriven = false))
+            is ObservableTransitionState.Transition.ChangeScene -> R39ScenePolicy.allow(R39SceneFacts(
+                idleLockscreen = false, wakingFromOff = step.from == KeyguardState.OFF,
+                fromAbsent = scene.fromScene == Scenes.Gone, toLockscreen = scene.toScene == Scenes.Lockscreen,
+                noOverlays = scene.currentOverlays.isEmpty(), userDriven = scene.isInitiatedByUserInput))
             is ObservableTransitionState.Transition -> false
         }
         val fromAllowed = step.transitionState == TransitionState.FINISHED ||
@@ -152,9 +169,10 @@ class R38ClockScene @Inject constructor(
             step.from == KeyguardState.DOZING || step.from == KeyguardState.AOD
         return R29FramePolicy.allow(R29FrameInputs(
             inputsKnown = true,
-            ordinaryLockscreen = sceneAllows && step.to == KeyguardState.LOCKSCREEN && fromAllowed && !bypass,
+            ordinaryLockscreen = sceneAllows && step.to == KeyguardState.LOCKSCREEN && fromAllowed &&
+                !bypass && !deviceEntry.isBypassEnabled.value,
             primaryUser = userTracker.userId == 0,
-            defaultDisplay = true, defaultBlueprint = true, geometryValid = true,
+            defaultDisplay = true, defaultBlueprint = defaultBlueprint, geometryValid = true,
             policyAllowsFull = keyguard.isKeyguardShowing.value,
             currentReadyRevision = true,
             dozing = keyguard.isDozing.value, dreaming = keyguard.isDreaming.value,

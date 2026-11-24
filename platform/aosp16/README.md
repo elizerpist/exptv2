@@ -1,3 +1,24 @@
+# R39 persistent SceneContainer reference: source candidate, not frame-qualified
+
+The separate R39 patch removes the clock-child draw hook and injects one passive
+owner into the parent of `SceneTransitionLayout`, which persists while incoming
+and outgoing scenes are composed. Its only incoming transition candidate is a
+non-user-driven OFF/Gone-to-Lockscreen transition with no overlays, qualified
+again by current local keyguard, bypass, disclosure, user, display, geometry and
+actual blueprint state. AOD and unrecognized transitions remain fail-closed.
+The parent has no ORB input region and the old child no longer draws an ORB.
+EMPTY is associated with the exact pending store generation, parent observer,
+and image-free draw, then requires the existing actual View frame-commit
+callback. Observer replacement or a newer ORB draw invalidates that receipt.
+
+This is a source candidate, not a verified first/last-frame implementation.
+Its AOSP pin, patch applicability, resident-store/scene-policy units and stager
+are checked independently of the stock application. **Soong compilation,
+actual scene selection, boot, process-suspended first frame, outgoing texture,
+PIN/shade/unlock, physical timing and the 10 ms result are NOT RUN.** Enrollment
+must remain disabled until those tests and exclusive ownership are proven.
+No result from an offscreen receiver establishes a primary clock frame.
+
 # R38 SystemUI clock reference: incomplete, do not enable
 
 The R38 source adds `0002-r38-clock-root.patch` at the pinned Android 16

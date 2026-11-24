@@ -11,6 +11,7 @@ java -cp "$R29_KOTLIN_COMPILER_CP" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler \
   -no-stdlib -no-reflect -classpath "$R29_KOTLIN_STDLIB" -d "$tmpdir" \
   "$root/platform/aosp16/contract/src/com/fluvi/r29/contract/R29Protocol.kt" \
   "$root/platform/aosp16/contract/src/com/fluvi/r29/contract/R29HostReducer.kt" \
+  "$root/platform/aosp16/contract/src/com/fluvi/r29/contract/R39ScenePolicy.kt" \
   "$root/platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/R29ResidentStore.kt" \
   "$root/platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/R35HostMemoryPolicy.kt" \
   "$root/platform/aosp16/tests/host_store_harness/R29HostRendererStub.kt" \

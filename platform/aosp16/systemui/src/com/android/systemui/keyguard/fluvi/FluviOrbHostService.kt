@@ -225,15 +225,23 @@ internal class R29HostRuntime private constructor(context: Context) : ComponentC
     private data class PendingEmpty(val nonce: String, val sequence: Long, val receipt: () -> Unit,
                                     var registered: Boolean = false)
     private var pendingEmpty: PendingEmpty? = null
+    // Changes only when a current owner draws an orb, not for repeated empty draws.
+    private var ownerVisualEpoch = 0L
 
     fun addClockObserver(view: View, observer: () -> Unit) {
         synchronized(observerLock) { clockObservers[observer] = view }
+        notifyClockObservers()
     }
 
     fun removeClockObserver(view: View, observer: () -> Unit) {
         synchronized(observerLock) {
             if (clockObservers[observer] === view) clockObservers.remove(observer)
         }
+        notifyClockObservers()
+    }
+
+    fun isOnlyFrameOwner(view: View, observer: () -> Unit): Boolean = synchronized(observerLock) {
+        clockObservers.size == 1 && clockObservers[observer] === view
     }
 
     private fun notifyClockObservers() {
@@ -251,20 +259,29 @@ internal class R29HostRuntime private constructor(context: Context) : ComponentC
         return true
     }
 
-    fun onEmptyClockDraw(view: View, noOutgoingScene: Boolean) {
-        if (!noOutgoingScene || !view.isAttachedToWindow || !view.isHardwareAccelerated || !view.viewTreeObserver.isAlive) return
+    /** Called by the single persistent parent, never by a disposable scene child. */
+    fun onOwnerDraw(view: View, observer: () -> Unit, orbDrawn: Boolean, noOutgoingScene: Boolean) {
+        if (!view.isAttachedToWindow || !view.isHardwareAccelerated || !view.viewTreeObserver.isAlive) return
+        var visualEpoch = 0L
         val pending = synchronized(observerLock) {
+            if (clockObservers.size != 1 || clockObservers[observer] !== view) return
+            if (orbDrawn) { ownerVisualEpoch += 1; return }
+            if (!noOutgoingScene) return
             val value = pendingEmpty ?: return
-            if (value.registered || clockObservers.size != 1 || clockObservers.values.single() !== view ||
-                !store.isCurrentEmpty(value.nonce, value.sequence)) return
+            if (value.registered || !store.isCurrentEmpty(value.nonce, value.sequence)) return
             value.registered = true
+            visualEpoch = ownerVisualEpoch
             value
         }
         val registered = runCatching {
             view.viewTreeObserver.registerFrameCommitCallback {
                 val deliver = synchronized(observerLock) {
-                    if (pendingEmpty !== pending || !store.isCurrentEmpty(pending.nonce, pending.sequence)) false
-                    else { pendingEmpty = null; true }
+                    val valid = pendingEmpty === pending && clockObservers.size == 1 &&
+                        clockObservers[observer] === view && view.isAttachedToWindow &&
+                        ownerVisualEpoch == visualEpoch && store.isCurrentEmpty(pending.nonce, pending.sequence)
+                    if (valid) pendingEmpty = null
+                    else if (pendingEmpty === pending) pending.registered = false
+                    valid
                 }
                 if (deliver) pending.receipt()
             }

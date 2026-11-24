@@ -18,6 +18,16 @@ private fun input(nonce: String, sequence: Long): R29Descriptor {
         R29Disclosure.FULL, true, m)
 }
 fun main() {
+    val incoming = R39SceneFacts(false, true, true, true, true, false)
+    check(R39ScenePolicy.allow(incoming))
+    check(!R39ScenePolicy.allow(incoming.copy(wakingFromOff = false)))
+    check(!R39ScenePolicy.allow(incoming.copy(fromAbsent = false)))
+    check(!R39ScenePolicy.allow(incoming.copy(toLockscreen = false)))
+    check(!R39ScenePolicy.allow(incoming.copy(noOverlays = false)))
+    check(!R39ScenePolicy.allow(incoming.copy(userDriven = true)))
+    val idle = incoming.copy(idleLockscreen = true, wakingFromOff = false, fromAbsent = false, toLockscreen = false)
+    check(R39ScenePolicy.allow(idle))
+    check(!R39ScenePolicy.allow(idle.copy(noOverlays = false)))
     val nonce = "0123456789abcdef0123456789abcdef"
     val worker = Queue(); val main = Queue(); val renderer = R29HostRenderer()
     val received = mutableListOf<Long>()

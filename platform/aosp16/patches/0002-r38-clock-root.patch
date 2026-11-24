@@ -1,17 +1,28 @@
-diff --git a/packages/SystemUI/compose/features/src/com/android/systemui/keyguard/ui/composable/blueprint/DefaultBlueprint.kt b/packages/SystemUI/compose/features/src/com/android/systemui/keyguard/ui/composable/blueprint/DefaultBlueprint.kt
-index 590a74ee..701fe624 100644
---- a/packages/SystemUI/compose/features/src/com/android/systemui/keyguard/ui/composable/blueprint/DefaultBlueprint.kt
-+++ b/packages/SystemUI/compose/features/src/com/android/systemui/keyguard/ui/composable/blueprint/DefaultBlueprint.kt
-@@ -37,2 +37,3 @@ import com.android.systemui.compose.modifiers.sysuiResTag
- import com.android.systemui.keyguard.ui.composable.LockscreenLongPress
+--- a/packages/SystemUI/src/com/android/systemui/scene/ui/viewmodel/SceneContainerViewModel.kt
++++ b/packages/SystemUI/src/com/android/systemui/scene/ui/viewmodel/SceneContainerViewModel.kt
+@@ -32,6 +32,7 @@
+ import com.android.systemui.classifier.Classifier
+ import com.android.systemui.classifier.domain.interactor.FalsingInteractor
+ import com.android.systemui.keyguard.domain.interactor.KeyguardInteractor
 +import com.android.systemui.keyguard.fluvi.R38ClockScene
- import com.android.systemui.keyguard.ui.composable.section.AmbientIndicationSection
-@@ -66,2 +67,3 @@ constructor(
-     private val notificationSection: NotificationSection,
-+    private val fluviClockScene: R38ClockScene,
- ) : ComposableLockscreenSceneBlueprint {
-@@ -220,3 +222,3 @@ constructor(
-                 },
--                modifier = Modifier.fillMaxSize(),
-+                modifier = Modifier.fillMaxSize().then(fluviClockScene.modifier(isBypassEnabled)),
-             ) { measurables, constraints ->
+ import com.android.systemui.keyguard.ui.viewmodel.AodBurnInViewModel
+ import com.android.systemui.keyguard.ui.viewmodel.KeyguardClockViewModel
+ import com.android.systemui.keyguard.ui.viewmodel.LightRevealScrimViewModel
+@@ -73,6 +74,7 @@
+     keyguardInteractor: KeyguardInteractor,
+     val burnIn: AodBurnInViewModel,
+     val clock: KeyguardClockViewModel,
++    val fluviFrameOwner: R38ClockScene,
+     @Assisted view: View,
+     @Assisted private val motionEventHandlerReceiver: (MotionEventHandler?) -> Unit,
+ ) : ExclusiveActivatable() {
+--- a/packages/SystemUI/compose/features/src/com/android/systemui/scene/ui/composable/SceneContainer.kt
++++ b/packages/SystemUI/compose/features/src/com/android/systemui/scene/ui/composable/SceneContainer.kt
+@@ -202,6 +202,6 @@
+     Box(
+         modifier =
+-            Modifier.fillMaxSize().pointerInput(Unit) {
++            Modifier.fillMaxSize().then(viewModel.fluviFrameOwner.modifier()).pointerInput(Unit) {
+                 awaitEachGesture {
+                     awaitFirstDown(false)
+                     viewModel.onSceneContainerUserInputStarted()
