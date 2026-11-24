@@ -92,6 +92,34 @@ class KeyguardR41DiagnosticsInstrumentationTest {
         assertFalse(newReport, newReport.contains("grantNs=99000"))
     }
 
+    @Test fun burstOfPendingOffersPreservesWinningOwnerAndReportsLoss() {
+        KeyguardCardDiagnostics.startCapture(context, "r41-burst", "profile", "LIGHT")
+        val capture = checkNotNull(KeyguardCardDiagnostics.activeCaptureId())
+        val receipt = KeyguardCardDiagnostics.r41Provisional(capture, 1, 941, 1, 1_000L)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 941, 1, "wake", 1))
+        KeyguardCardDiagnostics.r41Bind(owner, receipt)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.ELIGIBLE, owner, atNs = 1_001L)
+        fun mark(phase: Int, request: Long, at: Long, reservation: Long = 0, output: Long = 0) {
+            KeyguardCardDiagnostics.r41Mark(phase, owner, request, reservation, output, atNs = at)
+        }
+        mark(KeyguardR41RawLedger.OFFER, 1, 2_000L)
+        mark(KeyguardR41RawLedger.WORKER, 1, 2_001L)
+        for (id in 2L..75L) mark(KeyguardR41RawLedger.OFFER, id, 2_001L + id)
+        mark(KeyguardR41RawLedger.WORKER, 75, 3_000L)
+        mark(KeyguardR41RawLedger.READ_START, 75, 3_100L)
+        mark(KeyguardR41RawLedger.READ_END, 75, 3_200L)
+        mark(KeyguardR41RawLedger.DISPATCH, 75, 3_300L)
+        mark(KeyguardR41RawLedger.MAIN, 75, 3_400L)
+        mark(KeyguardR41RawLedger.GRANT, 75, 3_500L, 4, 5)
+        mark(KeyguardR41RawLedger.WINNER, 75, 3_600L, 4, 5)
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        retain("pending-burst-frozen.txt", report)
+        val row = report.lineSequence().single { it.startsWith(" R41_CORE ") }
+        assertTrue(row, row.contains("outcome=SUCCESS") && row.contains("owner=4/5/75"))
+        assertTrue(row, row.contains("coverage=INCOMPLETE") && !row.contains("omitted=0"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+    }
+
     private fun exercise(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r41-pressure", "profile", mode)
         repeat(11) { index ->
