@@ -47,8 +47,13 @@ FILES
       if ! git -C "$root" cat-file -e "${r35_base}^{commit}" 2>/dev/null; then
         git -C "$root" fetch --no-tags --depth=1 origin "$r35_base"
       fi
-      git -C "$root" diff --exit-code "$r35_base" HEAD -- \
+      # This orchestration commit changes only this harness script. The APK
+      # production source is the exact continuation candidate, checked below.
+      candidate=0905f0d6e81cba396663c6b09898171913c195a9
+      git -C "$root" merge-base --is-ancestor "$candidate" HEAD
+      git -C "$root" diff --exit-code "$candidate" HEAD -- \
         android/app/src/main lib platform pubspec.yaml pubspec.lock
+      printf 'production_source=%s\n' "$candidate" >> "$out/identity.txt"
       git -C "$root" status --short --untracked-files=no > "$out/fixture-status.txt"
     fi
     sha256sum \
