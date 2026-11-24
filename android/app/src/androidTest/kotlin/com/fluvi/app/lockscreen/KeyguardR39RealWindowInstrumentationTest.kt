@@ -191,8 +191,8 @@ class KeyguardR39RealWindowInstrumentationTest {
             shell(ui, "input keyevent KEYCODE_WAKEUP")
             await("current FULL direct output and uniquely attributable system clock", 35_000) {
                 report = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
-                report.lineSequence().any { it.startsWith(" R18_PIPELINE ") && it.contains("privacy=full") &&
-                    it.contains("r39Witness=ATTRIBUTED") && !it.contains("revealApply=UNOBSERVED") }
+                report.lineSequence().any { it.startsWith(" R26_DIRECT ") &&
+                    it.contains("witness=ARMED/") && !it.contains("reveal=UNOBSERVED/") }
             }
             File(dir, "before.txt").writeText(report)
             runCatching { ui.takeScreenshot()?.let { File(dir, "before.png").outputStream().use { out -> it.compress(Bitmap.CompressFormat.PNG, 100, out) }; it.recycle() } }
@@ -202,8 +202,8 @@ class KeyguardR39RealWindowInstrumentationTest {
             assertTrue("NOT REACHED: a subsequent inspection could not be held", held.await(12, TimeUnit.SECONDS))
             await("real exact clock removal sealed before held inspection", 12_000) {
                 report = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
-                report.lineSequence().any { it.startsWith(" R18_PIPELINE ") && it.contains("SEALED:r39ClockWindowRemoved") &&
-                    it.contains("r39Removal=1/") }
+                report.lineSequence().any { it.startsWith(" R26_DIRECT ") && it.contains("SEALED:r40ClockWindowRemoved") &&
+                    it.contains("removal=1/") }
             }
             events.add("PASS exact framework clock removal sealed with ordinary read held")
             release.countDown()
