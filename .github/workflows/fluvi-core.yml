@@ -1,4 +1,4 @@
-name: R40 R39 provenance causal A-B LIGHT FULL
+name: R40 R39 provenance causal A-B capture OFF
 on:
   workflow_dispatch:
 permissions:
@@ -22,7 +22,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/checkout@v5
         with:
-          ref: aec2f7dca02501bed621abc32348dd19912542a5
+          ref: f3fb9694351158fd677240ed6e2a5b2e0bbfc8b7
           path: __r40fixture
       - uses: actions/setup-java@v5
         with:
@@ -53,7 +53,7 @@ jobs:
           }
           GRADLE
           fixture="$GITHUB_WORKSPACE/__r40fixture"
-          test "$(git -C "$fixture" rev-parse HEAD)" = aec2f7dca02501bed621abc32348dd19912542a5
+          test "$(git -C "$fixture" rev-parse HEAD)" = f3fb9694351158fd677240ed6e2a5b2e0bbfc8b7
           for file in FluviKeyguardCardService.kt KeyguardCardSurface.kt KeyguardWindowSnapshotReader.kt KeyguardR40FixtureSwitch.kt; do
             cp "$fixture/android/app/src/main/kotlin/com/fluvi/app/lockscreen/$file" "android/app/src/main/kotlin/com/fluvi/app/lockscreen/$file"
           done
@@ -73,7 +73,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r40-causal-pair-${{ matrix.name }}
+          name: r40-causal-off-pair-${{ matrix.name }}
           path: ${{ runner.temp }}/pair/
           if-no-files-found: warn
           compression-level: 0
@@ -91,7 +91,7 @@ jobs:
           packages: platform-tools
       - uses: actions/download-artifact@v4
         with:
-          pattern: r40-causal-pair-*
+          pattern: r40-causal-off-pair-*
           path: ${{ runner.temp }}/pairs
       - name: Sign the disposable emulator pairs with one test key
         shell: bash
@@ -101,7 +101,7 @@ jobs:
           keytool -genkeypair -keystore "$out/test.keystore" -storepass android -keypass android -alias androiddebugkey -dname 'CN=Disposable R38 Test' -keyalg RSA -validity 7 >/dev/null 2>&1
           signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
           for mode in enabled disabled; do
-            pair="$RUNNER_TEMP/pairs/r40-causal-pair-$mode"
+            pair="$RUNNER_TEMP/pairs/r40-causal-off-pair-$mode"
             mkdir -p "$out/$mode"
             cp "$pair/source.txt" "$out/$mode/source.txt"
             for apk in app test; do
@@ -128,7 +128,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r40-causal-results-${{ github.run_id }}
+          name: r40-causal-off-results-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r38-compare/**/*.txt
             ${{ runner.temp }}/r38-compare/**/*.tar

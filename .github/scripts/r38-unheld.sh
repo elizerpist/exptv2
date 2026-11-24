@@ -7,7 +7,7 @@ adb shell getprop ro.build.version.sdk >> "$out/device.txt"
 adb shell wm size >> "$out/device.txt"
 adb shell wm density >> "$out/device.txt"
 failed=0
-specs=(enabled:LIGHT:first enabled:LIGHT:repeat disabled:LIGHT:first disabled:LIGHT:repeat disabled:FULL:first disabled:FULL:repeat enabled:FULL:first enabled:FULL:repeat enabled:LIGHT:burst disabled:LIGHT:burst disabled:FULL:burst enabled:FULL:burst)
+specs=(enabled:OFF:first enabled:OFF:repeat disabled:OFF:first disabled:OFF:repeat disabled:OFF:alternate enabled:OFF:alternate enabled:OFF:burst disabled:OFF:burst)
 for spec in "${specs[@]}"; do
   IFS=: read -r mode capture label <<< "$spec"
   pair="$out/$mode"; trial="$out/$mode/$capture/$label"; mkdir -p "$trial"
@@ -16,7 +16,7 @@ for spec in "${specs[@]}"; do
     adb install -r "$pair/test.apk" > "$trial/install-test.txt" 2>&1 || { echo "$spec FAIL install-test" >> "$out/results.txt"; failed=1; continue; }
   fi
   source_sha=$(cat "$pair/source.txt"); uuid=$(cat /proc/sys/kernel/random/uuid)
-  printf 'source=%s\nuuid=%s\ntrial=%s\nfixture=aec2f7dca02501bed621abc32348dd19912542a5\n' "$source_sha" "$uuid" "$spec" > "$trial/identity.txt"
+  printf 'source=%s\nuuid=%s\ntrial=%s\nfixture=f3fb9694351158fd677240ed6e2a5b2e0bbfc8b7\n' "$source_sha" "$uuid" "$spec" > "$trial/identity.txt"
   method=stableInitialFullUsesOneVirginOutputWithoutReadinessRead
   [[ "$label" = burst ]] && method=externalIngressWhileFirstPaintIsHeldCannotUseOldProof
   rc=0
