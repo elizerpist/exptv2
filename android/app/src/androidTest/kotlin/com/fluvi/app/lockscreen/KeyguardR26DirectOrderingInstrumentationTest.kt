@@ -49,7 +49,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val source = requireNotNull(args.getString("sourceSha"))
         require(source.matches(Regex("[0-9a-f]{40}")))
         val uuid = UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
-        val name = if (pendingBefore) "pending" else "stable-later-offer"
+        val name = if (checkR41Bypass) "r41-pending" else if (pendingBefore) "pending" else "stable-later-offer"
         val dir = File(context.filesDir, "keyguard-service-probe/r26/$uuid/$name")
         check(dir.mkdirs())
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
@@ -201,11 +201,12 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 assertEquals("stale A revealed before B started",0,earlyReveal.get())
             }
             assertFalse("NOT REACHED: reader barrier timeout",workerTimeout.get())
-            if(checkR41Bypass) assertEquals("ordered DIRECT must not evaluate the inapplicable R25 route",0L,r25AtAExit.get())
+            assertEquals("ordered DIRECT must not evaluate the inapplicable R25 route",0L,r25AtAExit.get())
             var report=""
-            if(!checkR41Bypass) await("DIRECT_ORDERED diagnostic for the actual A") {
+            await("R41 bypass diagnostic for the actual A") {
                 report=KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
-                report.lineSequence().any { it.startsWith(" R25_CORE ") && it.contains("backend=R18_DIRECT") && it.contains("bypass=DIRECT_ORDERED/") && it.contains("original=${a.id}@") }
+                report.lineSequence().any { it.startsWith(" R41_REQ ") && it.contains("req=${a.id} ") &&
+                    it.contains("orderedBypassNs=") && !it.contains("orderedBypassNs=UNOBSERVED") }
             }
             File(dir,"capture.txt").writeText(report)
             records.add("PASS a=${a.id} b=${bId.get()} route=$original main=${originalMain.get()}/${originalExit.get()} bStart=${bStarted.get()} earlyReveal=${earlyReveal.get()}")

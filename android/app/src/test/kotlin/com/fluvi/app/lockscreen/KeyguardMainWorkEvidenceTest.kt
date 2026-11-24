@@ -4,6 +4,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeyguardMainWorkEvidenceTest {
+    @Test fun deferredFormattingUsesTheOriginalImmutableSnapshot() {
+        val evidence = KeyguardMainWorkEvidence()
+        evidence.resetSession(7, 23)
+        evidence.record(KeyguardMainWorkEvidence.SYSTEM_GATE, 91, 100, 180, 9)
+        val captured = evidence.snapshotOverlapping(120, 190)
+        evidence.resetSession(8, 24)
+        evidence.record(KeyguardMainWorkEvidence.INSPECTION_APPLY, 92, 120, 190, 12)
+
+        val fields = captured.diagnosticFields(70)
+        assertEquals(7L, fields["mainHandoffWorkSession"])
+        assertEquals(23L, fields["mainHandoffWorkThreadId"])
+        assertEquals(70L, fields["mainHandoffDurationNs"])
+        assertEquals("systemGate:91:100:180:9:60", fields["mainHandoffWorkSpan0"])
+        assertEquals("NONE", fields["mainHandoffWorkSpan1"])
+    }
+
     @Test fun preservesAbsoluteEndpointsCpuAndNestedScopesForTheActualGap() {
         val evidence = KeyguardMainWorkEvidence()
         evidence.resetSession(7, 23)

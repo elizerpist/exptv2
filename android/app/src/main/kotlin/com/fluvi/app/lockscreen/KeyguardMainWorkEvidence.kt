@@ -122,7 +122,29 @@ internal class KeyguardMainWorkEvidence {
         val overwrittenSpans: Long,
         val coverageIncomplete: Boolean,
         val invalidSpans: Long,
-    )
+    ) {
+        /** Called by the diagnostic reducer, never by the Main snapshot owner. */
+        fun diagnosticFields(durationNs: Long): Map<String, Any?> {
+            fun span(index: Int): String = spans.getOrNull(index)?.let { value ->
+                "${kindName(value.kind)}:${value.requestId}:" +
+                    "${value.startedNs}:${value.endedNs}:${value.cpuNs}:${value.overlapNs}"
+            } ?: "NONE"
+            return mapOf(
+                "mainHandoffEvidenceMode" to "ownedMainScopesOnly",
+                "mainHandoffClock" to "System.nanoTime",
+                "mainHandoffDurationNs" to durationNs,
+                "mainHandoffWorkSession" to serviceSession,
+                "mainHandoffWorkThreadId" to ownerThreadId,
+                "mainHandoffWorkOmitted" to omittedOverlapping,
+                "mainHandoffWorkEvicted" to overwrittenSpans,
+                "mainHandoffWorkCoverageIncomplete" to coverageIncomplete,
+                "mainHandoffWorkInvalid" to invalidSpans,
+                "mainHandoffWorkSpan0" to span(0),
+                "mainHandoffWorkSpan1" to span(1),
+                "mainHandoffWorkSpan2" to span(2),
+            )
+        }
+    }
 
     companion object {
         private const val CAPACITY = 32

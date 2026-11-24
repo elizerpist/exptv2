@@ -2513,22 +2513,31 @@ class FluviKeyguardCardService : AccessibilityService() {
             queueOffer.activeAfter, queueOffer.superseded?.request) }
         if (meta != null) inspectionProbeForTest?.ingressOffered(meta, request, queueOffer.previousPending,
             queueOffer.pendingAfter, startsWorker, frameworkEvent)
-        queueOffer.superseded?.let { old ->
-            recordR25("SUPERSEDED", old.request, queueOffer.start, old.value.route,
-                readEnd = old.value.read.finishedAt, reason = "OFFER_BEFORE_CLAIM")
-            r25RequestExclusionCheck(old.request.session)
-        }
+        // Exclusion is mandatory and stays ordered before the successor. The
+        // optional description of the superseded ticket may follow dispatch.
+        queueOffer.superseded?.let { old -> r25RequestExclusionCheck(old.request.session) }
         val recovery = r14Recovery
-        if (recovery?.used == true && queueOffer.previousPending != null && queueOffer.pendingAfter != null) {
+        val recoveryToReport = if (recovery?.used == true && queueOffer.previousPending != null && queueOffer.pendingAfter != null) {
             val next = recovery.copy(replacements = recovery.replacements + 1)
             r14Recovery = next
-            if (next.replacements <= 4) recordR14Recovery("REPLACED", next, request, queueOffer.pendingAfter,
-                displaced = queueOffer.previousPending.id)
+            next.takeIf { it.replacements <= 4 }
+        } else null
+        // The queue already selected the exact reader under queueLock. Do not
+        // make that independent work wait for optional producer reporting.
+        queueOffer.start?.let { actual -> inspectionScope.launch { processInspectionQueue(actual) } }
+        queueOffer.superseded?.let { old ->
+            recordR25("SUPERSEDED", old.request, queueOffer.start, old.value.route,
+                at = now, readEnd = old.value.read.finishedAt, reason = "OFFER_BEFORE_CLAIM")
+        }
+        recoveryToReport?.let { next ->
+            recordR14Recovery("REPLACED", next, request, queueOffer.pendingAfter,
+                displaced = queueOffer.previousPending?.id, observedAt = now)
         }
         traceKeyguard(
             if (startsWorker) "INSPECTION_QUEUED" else "INSPECTION_COALESCED",
             trigger,
             request,
+            observedUptimeMs = now,
             fields = mapOf(
                 "queuedAtUptimeMs" to now,
                 "triggerReceivedUptimeMs" to (request.triggerReceivedUptimeMs ?: "NA"),
@@ -2540,7 +2549,6 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "windowFreshness" to request.windowFreshness.name,
             ),
         )
-        queueOffer.start?.let { actual -> inspectionScope.launch { processInspectionQueue(actual) } }
         return request.id
     }
 
@@ -3407,6 +3415,11 @@ class FluviKeyguardCardService : AccessibilityService() {
                 continue
             }
             if (decision.successor == null || decision.snapshot == null) {
+                // This choice was frozen for the physical read. Every R25
+                // outcome for this ordered route is Stock, so preserve its
+                // existing Main application without rebuilding an R25 route.
+                // Negative/read-ahead reservations above remain unchanged.
+                if (!read.r38MilestoneOrdered) {
                 when (val opening = synchronized(queueLock) { r25CompleteLocked(read, handoff) }) {
                     is R25Completion.Promote -> {
                         traceCompletedInspection(read, null)
@@ -3432,6 +3445,10 @@ class FluviKeyguardCardService : AccessibilityService() {
                     is R25Completion.Stock -> if (read.result.decision == KeyguardCardVisibility.SHOW_FULL)
                         recordR25("BYPASS", active, opening.pending, opening.route, readEnd = read.finishedAt,
                             reason = opening.reason)
+                }
+                } else {
+                    KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.ORDERED_BYPASS,
+                        active.diagnosticContext, active.id)
                 }
                 val lateSuperseded = withContext(Dispatchers.Main.immediate) {
                     r32AwaitApplyGateForTest(active)
@@ -4324,7 +4341,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         // correlate Fluvi-owned spans; a missing or partial snapshot is not
         // evidence that the uncovered time belongs to GPU, Binder, or the
         // scheduler.
-        val mainHandoffEvidence = slowMainHandoffEvidenceFields(
+        val mainHandoffEvidence = slowMainHandoffEvidenceSnapshot(
             mainHandoffRequestedAtNs,
             mainApplyEnteredAtNs,
         )
@@ -4555,20 +4572,21 @@ class FluviKeyguardCardService : AccessibilityService() {
         )
         } finally {
             if (r18ProofRequestId == request.id) r18ProofRequestId = null
+            val decisionAt = decisionObservedAt
             traceKeyguard(
                 "INSPECTION_MAIN_APPLY_STARTED",
                 request.trigger,
                 request,
                 observedUptimeMs = mainApplyEnteredAt,
-                fields = mapOf(
+                deferredFields = { mapOf(
                     "inspectionFinishedAtUptimeMs" to inspectionFinishedAt,
                     "diagnosticPreparationFinishedAtUptimeMs" to diagnosticPreparationFinishedAt,
                     "mainHandoffRequestedAtUptimeMs" to mainHandoffRequestedAt,
                     "mainApplyEnteredAtUptimeMs" to mainApplyEnteredAt,
                     "inspectionFinishToHandoffMs" to (mainHandoffRequestedAt - inspectionFinishedAt),
                     "handoffToMainEntryMs" to (mainApplyEnteredAt - mainHandoffRequestedAt),
-                    "mainEntryToDecisionMs" to (decisionObservedAt?.let { it - mainApplyEnteredAt } ?: "NA"),
-                ) + mainHandoffEvidence,
+                    "mainEntryToDecisionMs" to (decisionAt?.let { it - mainApplyEnteredAt } ?: "NA"),
+                ) + (mainHandoffEvidence?.let { it.snapshot.diagnosticFields(it.durationNs) } ?: emptyMap()) },
             )
         }
         }
@@ -4580,29 +4598,16 @@ class FluviKeyguardCardService : AccessibilityService() {
      * nearby Uptime values remain the cross-event timeline clock.  CPU spans
      * are deliberately not summed because they may be nested.
      */
-    private fun slowMainHandoffEvidenceFields(fromNs: Long, toNs: Long): Map<String, Any?> {
-        if (!KeyguardCardDiagnostics.wantsFullEvidence() || toNs <= fromNs) return emptyMap()
+    private data class SlowMainHandoffSnapshot(
+        val durationNs: Long,
+        val snapshot: KeyguardMainWorkEvidence.Snapshot,
+    )
+
+    private fun slowMainHandoffEvidenceSnapshot(fromNs: Long, toNs: Long): SlowMainHandoffSnapshot? {
+        if (!KeyguardCardDiagnostics.wantsFullEvidence() || toNs <= fromNs) return null
         val durationNs = toNs - fromNs
-        if (durationNs < SLOW_MAIN_HANDOFF_EVIDENCE_NS) return emptyMap()
-        val snapshot = mainWorkEvidence.snapshotOverlapping(fromNs, toNs)
-        fun span(index: Int): String = snapshot.spans.getOrNull(index)?.let { value ->
-            "${KeyguardMainWorkEvidence.kindName(value.kind)}:${value.requestId}:" +
-                "${value.startedNs}:${value.endedNs}:${value.cpuNs}:${value.overlapNs}"
-        } ?: "NONE"
-        return mapOf(
-            "mainHandoffEvidenceMode" to "ownedMainScopesOnly",
-            "mainHandoffClock" to "System.nanoTime",
-            "mainHandoffDurationNs" to durationNs,
-            "mainHandoffWorkSession" to snapshot.serviceSession,
-            "mainHandoffWorkThreadId" to snapshot.ownerThreadId,
-            "mainHandoffWorkOmitted" to snapshot.omittedOverlapping,
-            "mainHandoffWorkEvicted" to snapshot.overwrittenSpans,
-            "mainHandoffWorkCoverageIncomplete" to snapshot.coverageIncomplete,
-            "mainHandoffWorkInvalid" to snapshot.invalidSpans,
-            "mainHandoffWorkSpan0" to span(0),
-            "mainHandoffWorkSpan1" to span(1),
-            "mainHandoffWorkSpan2" to span(2),
-        )
+        if (durationNs < SLOW_MAIN_HANDOFF_EVIDENCE_NS) return null
+        return SlowMainHandoffSnapshot(durationNs, mainWorkEvidence.snapshotOverlapping(fromNs, toNs))
     }
 
     /**
