@@ -1,4 +1,4 @@
-name: R38 unheld same-emulator comparison
+name: R38 and continuation unheld comparison
 on:
   workflow_dispatch:
 permissions:
@@ -11,12 +11,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: milestone
-            sha: de807259cd370d18e422772ed0943b8d65be4bca
-          - name: r37
-            sha: d2b1890a8c892a4ba3b3ec0ebe18279b4bb2b158
           - name: r38
             sha: d056c5d8467c5454d139bf12ef36ec7431a9ec51
+          - name: continuation
+            sha: 0905f0d6e81cba396663c6b09898171913c195a9
     steps:
       - uses: actions/checkout@v5
         with:
@@ -85,7 +83,7 @@ jobs:
           out="$RUNNER_TEMP/r38-compare"; mkdir -p "$out"
           keytool -genkeypair -keystore "$out/test.keystore" -storepass android -keypass android -alias androiddebugkey -dname 'CN=Disposable R38 Test' -keyalg RSA -validity 7 >/dev/null 2>&1
           signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
-          for mode in milestone r37 r38; do
+          for mode in r38 continuation; do
             pair="$RUNNER_TEMP/pairs/r38-unheld-pair-$mode"
             mkdir -p "$out/$mode"
             cp "$pair/source.txt" "$out/$mode/source.txt"
