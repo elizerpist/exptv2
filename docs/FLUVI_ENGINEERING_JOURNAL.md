@@ -18870,3 +18870,98 @@ The owner reports that they could not find the suggested setting and saw no pink
 The product target remains the normal configured animated ORB on a factory phone with at most 10 ms of visible clock-to-ORB delay. R36's separate synthetic widget did not change that ORB's opening. In the four retained samples the private image was ready before wake; SCREEN_ON to app-side disclosure grant alone took 331/378/335/291 ms. The hard target is still unmet. Pre-warming the same image, changing the widget marker or reporting a shorter submit call would not address this delay.
 
 Reviewer decision: close the widget-only line for this setup. No new APK or app code in this review. A possible confined stock optimization is to release the single reader earlier when a scan on a still-empty output is superseded, preserving restrictive evidence and requiring fresh complete proof for FULL. This is a best-effort optimization, not a qualifying plan for the owner's unchanged 10 ms ceiling. No verified factory first-frame display contract is currently available for this phone in the project's evidence. An OS integration would be a separately distributed product. Retain the distinction between those choices in any future coding-agent brief.
+
+## 2026-11-24 — R37 coding-agent handoff. Shorten the real animated ORB opening and deliver the handset APK
+
+FLUVI_R37_REAL_ORB_APK_BEGIN
+
+### 1. TITLE / TASK INTENT
+
+IMPLEMENTATION. Change the normal stock Android path for the familiar **configured, animated financial ORB** that the owner already uses. Deliver a directly downloadable, signed, installable Fluvi APK for their phone in this run. On a still-empty presentation with an obsolete inspection, release the single reader at the earliest safe returned Android call and give it to the latest genuine request. One complete current scan, one valid grant, the already prepared first image, then the normal animation. The owner has closed the separate widget experiment. No new widget, picker, demo orb, alternate screen, SystemUI installation or test-only feature substitutes for this change.
+
+### 2. AUTHORITATIVE APPLICATION STATE
+
+Work exclusively in elizerpist/exptv2. Coordination branch fix/orb-v4-latency-lockscreen, last reviewed commit 0cd6b401f75b06ad6b48df6bb4435e6f84644dc9. Create/resume implement/r37-real-orb-opening from 3a8c355caaccf1519d25edf042c2cf04dd7f9e38 (implement/r36-handset-apk). Its production code matches the installed R36 application a86046e2be25860a8ced6669315217ba3dcb3cbb; the subsequent diff contains instrumentation/collector changes. Faster owner-preferred opening comparator de807259cd370d18e422772ed0943b8d65be4bca. Make a changed application commit with release/profile behavior, rather than building a docs, fixture or orchestration SHA.
+
+### 3. HARD PREFLIGHT
+
+Read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM, DEBUGGING_LOOP_VERY_IMPORTANT, docs/FLUVI_ENGINEERING_JOURNAL.md and root MILESTONE_COMMITS.md. Portable rule assets are in the journal at 161f63675121302432be2026898bed07b23d7ded. Fetch relevant refs, check worktrees and verify parents and existing delivery method. Preserve concurrent work. Use the current source, the R34 closure, R36 handset evidence and the successful exptv2 HUMAN builder. Start implementation without another owner capture or a connected physical phone.
+
+### 4. PHYSICAL USER EVIDENCE
+
+Nothing A142, Android API 35, normal settings, animated ORB, FULL. The owner confirms the familiar ORB was late and did not see the synthetic trial. The current product target remains ≤10 ms perceptible clock-to-correct-ORB lag on ordinary wake. Implement by existing Android capability/route, not by manufacturer. The owner also needs reliable removal on restriction/unlock. Preserve the configured mode, time scope, category, palette, opacity, size, position, motion, interactions and privacy.
+
+### 5. DRIVE / HANDSET LOG AUDIT
+
+Latest supplied trace 1b028626-849d-4ec6-96ff-0126e7456247 came from the installed R36, not from the older Drive R32 capture. LIGHT retained attempts 1/6/7/8 of eight counted. R34_PRIVATE_COMPOSITOR_READY in all four, with the asset ready 8.809 seconds before the first app wake. SCREEN_ON → display grant: 331/378/335/291 ms. Grant → native submit begin: 10/7/5/10 ms. Native call: 4/3/15/2 ms. SCREEN_ON → native return: 345/388/355/303 ms. App wake → native return: 473/388/355/303 ms. Physical first/last pixels unobserved. All four detailed rows record transfers of stale positive results. In trial 8 a newer scene arrived during activeRoot; after the call returned at 1500635638 the old read ran until 1500635696, an observed 58 ms suffix. On R34 two analogous suffixes were 207 and 161 ms. These are opportunities to test, not promises of time saved.
+
+### 6. COMMIT / AGENT-EVIDENCE AUDIT
+
+Already exercised: private poster cache, inert/prebound output, shader warmup, A→B/B→C handoffs at selected child boundaries, overlapping a successor with previous Main application, synthetic widget publisher/receiver and static widget probe. The last two did not replace the screen-on path for the installed animated ORB. R34 has one-reader recovery after cancellation; preserve it. Earlier blanket changes to prefetch regressed on the phone. Restrictive-frame failures remain open, including the black privacy panel on the prior isolated route. An experimental delivery is for demo data while that defect remains open.
+
+### 7. GRAPH PROVENANCE AND IMPACT
+
+The exact installed source's tooling manifest is 39e11ee81aa6b33e56442d1bc5a214878752bf39; it covers Dart, not the Kotlin service. Review the actual code under android/app/src/main/kotlin/com/fluvi/app/lockscreen/. Primary files: FluviKeyguardCardService.kt (reserveR18WakeBeforeMain, startR18Stage, readSystemWindows, r34EmptyDirectLocked, r34SameEmptyOwnerLocked, r34ActualLatestLocked, r34SupersedeCompletedLocked, processInspectionQueue), KeyguardWindowSnapshotReader.kt (read and visibleIds), KeyguardR34LatestScenePolicy.kt and KeyguardCardInspectionQueue.kt. Use the actual presenter/first-authorized-ORB code to keep grants and obsolete-open cancellation separate. Avoid broad unrelated refactors.
+
+### 8. CURRENT SOURCE FACTS
+
+The first read can be reserved on the sampler before Main adopts the host. readSystemWindows fixes r34Eligible at entry; its later inventory callback can see an owner only for already eligible reads. On R36, trials 1 and 7 record an earlier original request in R22 than the first enrolled R34 read. That mismatch alone does not identify a failed predicate. Early transfer today depends on clean inventory, accepted active SystemUI root and select child checkpoints. Before active root it passes an unsafe boundary; the last returned child, fallback/per-window roots and final unwind can have no useful later checkpoint. The old positive may only be superseded after completion. Android calls already in flight cannot be treated as cancelled. KeyguardSurfaceClassifier prioritizes restrictive/unknown conditions over clock markers; a partial positive cannot authorize the financial image.
+
+### 9. PROVEN / UNPROVEN / MISSING
+
+The observed lag precedes the fast poster submit. Some of the work finishing after a new scene can be removed on stock Android. The start and duration of the winning full read, the host time and display composition can remain limiting; winning complete reads on the current phone report include 34 and 27 ms. The architecture below is an evidence-backed attempt to shorten the actual opening. It does not establish a universal or physical 10 ms result. An owner-visible APK is required to measure its effect. Keep sparse traces, misses and phone reports separate from fixture evidence.
+
+### 10. ROOT-CAUSE DECISION
+
+For eligible empty DIRECT openings use a single current physical reader with one replaceable genuine successor. Move **obsolete-work disposal** earlier; leave **positive permission** with the fresh, complete decision. Capture the initial reservation and generation before the first framework inventory, independent of whether Main has published the final R34 owner yet. Resolve that same reservation against the adopted owner later only if uninterrupted emptiness and identity can be established. This removes wasted traversal and Main-dispatch work for superseded reads. It does not manufacture authority from an old wake or merely appearing clock text. If evidence of continuous ownership is unavailable in a path, use the verified adopted-owner optimization there or keep the existing behavior.
+
+### 11. SCOPE LOCK / NO-TOUCH
+
+The change must execute by default through the existing **Fluvi-kártya a zárképernyőn → Csak orb** normal entry on the eligible route. Retain all currently supported compatibility routes, opt-out and reduced motion. No testing toggle required on the owner's phone. No changes to widget admission, AOSP, wallpaper, dashboard, financial DB or data seeding. No generic placeholder, deliberate clock delay, double overlay or always-visible financial buffer. Do not skip a new permission grant, soften an exclusion or trust a prior lock's FULL state for latency.
+
+### 12. LAYERS / BOUNDS / OWNERSHIP
+
+Use a small immutable reservation stamp or reuse the equivalent existing token, with original request, authority, owner/route identity, inventory scene and freshness. Proof of emptiness must cover any old visible owner, held submit/paint/grant, pending restriction and outstanding drain capable of displaying previous content. A newly allocated slot alone is insufficient. Capture/update scalar state under the existing queue lock. Keep Android calls, recycling, trace formatting and drawing outside it. Maintain one physical reader and one publishable result; avoid another queue or periodic retry. Never attach an original read to a different owner after a rapid relock, even when scalar values match.
+
+### 13. REQUIRED RED TESTS
+
+Use the real service, queue and reader hooks in an isolated Android test. (A) During actual active-root acquisition inject a genuine newer event, return the call while old descendants remain, and count further Android calls for that obsolete request. (B) Repeat at a per-window root, last child/leaf and on a read started before Main adopts the identical empty reservation. (C) Inject B then C and check the genuine latest request runs exactly once, with bounded single-reader concurrency. Count stale calls on the parent and candidate under the same schedule. Also test no pending offer, delayed offer, wrong generation/ABA, overlapping native retire, owner replacement, foreground transition, coroutine cancellation and shutdown. A timeout before a stale read or before a matching eventual winner is NOT REACHED, not proof of a fix. Use a test-only fixture overlay when comparing the parent and retain its original production code.
+
+### 14. IMPLEMENTATION CONTRACT
+
+1. Put the selected zero-disclosure opening under a single tracked scheduling path from its initial reservation. Preserve the before-inventory scene stamp across adoption. For exact-owner promotion, prove the same reservation/epochs, revisions and absence of outgoing or incoming private pixels over the interval. Leave unprovable cases on the established conservative path and record the reason in compact diagnostics.
+2. At a returned window inventory, active root, per-window root and each returned child (including final child/leaf), and before the next expensive framework access or final submission of a result, check whether continuing the read can still produce an applicable result. Keep the fast unchanged case inexpensive; a generation hint may avoid taking the lock. Revalidate under the authoritative queue lock before transferring. Treat already observed restrictive evidence, ambiguous ownership and outstanding freshness/clear obligations in their proper order. Wire the checks also where batch prefetch is unavailable. Release each node/root and unwind resources exactly once on the correct thread.
+3. Require a genuine newer compatible pending request with matching authority, current scene, default display and event provenance. Atomically retire obsolete work and claim the latest pending request. Only after the old physical reader unwinds may the new one enter Android. A stale early cancellation is its own typed result; do not let it publish FULL, produce an artificial restrictive transition or erase a real negative. If no eligible successor can be claimed, preserve progress with existing ordered handling; do not introduce a new timer, open-ended parking or synthetic proof. On a stream of actual changes stay hidden while a complete proof is unavailable; after it settles the latest full valid read must progress to display.
+4. Retain the already prepared poster, host preparation, final live state check, one-use proof, reveal/withdrawal ordering and animation continuation on the existing owner. A current, complete positive takes the existing normal path. Test shade, PIN, foreign occlusion and quick unlock arriving during unwind, after proof and before native submit. If no measurable saving exists, still deliver the safe changed diagnostic for handset testing with accurate results.
+
+### 15. PERFORMANCE GATE
+
+Count all test attempts and all eligible wakes, including misses. In LIGHT store bounded per-attempt data: source SHA, normal route, original read/scene, first real superseding offer, Android-call return and boundary, claim or precise fallback reason, obsolete post-boundary calls, latest reader start, full read end, proof/grant, poster submit/return, first motion and withdrawal. Preserve existing limits and omit sensitive content. Primary software outcomes: fewer obsolete Android calls, earlier start of the winning scan, earlier permission, earlier native submit on matched runs. Report per-attempt durations, maxima and any regression. They are distinct from clock-to-first-correct-visible-ORB ≤10 ms, which requires a physical observation at sufficient precision. Do not make a camera, an OEM widget or proof of the 10 ms ceiling a prerequisite for APK delivery.
+
+### 16. IMPLEMENTATION ORDER
+
+Create the meaningful production diff and regression controls, pass focused local checks, commit and push a pinned application SHA. Start the exact-SHA HUMAN build as soon as compile and core safety checks allow. Run the independent validation lanes in parallel with packaging. Remain responsible through build, signing, publication and verifying the downloaded bytes. Monitor runs to terminal status and repair recoverable Gradle/Maven, checkout, runner space, emulator, signing or upload failures within exptv2. If a correction changes application code, rebuild, republish and verify against the corrected SHA. Intermediate plans, test results, links to Actions jobs and promises to build later are progress updates only.
+
+### 17. VALIDATION
+
+Run diff/boundary checks, app/core unit regressions, Android compile, focused single-reader/recovery and exact service instrumentation, then the repository's normal independent qualification. Exercise the simplest user entry: enabled normal card, ORB/orbOnly, FULL demo material, lock, wake, unlock, rapid relock. Require cause-correlated original/obsolete/winning IDs and a visible ordinary ORB in the instrumented control. Preserve black/white privacy sample controls, pending submit reversal and process/owner replacement cases; report pending and known failures expressly. Use the validated exptv2 builder and APK upgrade control. Compare the actual installed R36 and R37 on the same emulator settings in alternating order if supported. No reversal of the user's settings or resetting the database to obtain a green test.
+
+### 18. COMMIT DISCIPLINE
+
+All source, tests, build jobs, signed artifacts and journal records stay in elizerpist/exptv2. Keep test harness changes identifiable. The new application SHA must include the normal service change; app binary must carry it and invoke it along an ordinary opening. Preserve the existing milestone and old APKs. Track any signing material according to its existing secure handling, outside commits. The reviewer only appends this handoff to the coordination journal.
+
+### 19. PUSH / BUILD / GRAPH REGENERATION
+
+Use the proven exptv2 orchestration/r36-phone-builder at adf5e319bf2cab92e8653e4e8024f3584833c054, workflow fluvi-core.yml, dispatch on the orchestration ref with app_sha=<full changed application SHA>. Precedent: successful R36 builder run 45351890685. Preserve the HUMAN profile script and default disabled demo-database seeding. Use the established handset signing/publication procedure; verify correct package com.fluvi.app and update signer SHA-256 faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. Test install -r over the actual signed R36 in a disposable test target, keep a sentinel and verify Activity resumed. If the same signer proves genuinely unavailable after using the existing authorized path, deliver a clearly labeled, separately installable **full Fluvi** HUMAN diagnostic built from the changed normal path; ensure distinct application ID/authorities, correct self-overlay attribution, Android service registration, side-by-side install and ordinary display exercised. Preserve the existing install/data and explicitly identify any limitations of such an alternate. No widget-only, debug instrumentation or repackaged old APK is a deliverable.
+
+Publish a direct stable exptv2 binary URL (same immutable LFS-media or verified release pattern as R36; for example a distinct fluvi_R37_HUMAN_<source>.apk). Download it independently in full, follow redirects, check HTTP status, byte count, APK/ZIP format, package, signer and SHA-256 against the signed output. A Git LFS text pointer, temporary CI ZIP or successful upload response alone fails delivery. Keep code graph/native inventory current and separate its identity from the app SHA. Preserve the usable download throughout qualification.
+
+### 20. COMPLETION REPORT
+
+First line: direct verified download link for the **new R37 APK**. Then source commit, byte count, hash, signing/update mode and one sentence describing the actual changed wake path. Give a three-step Hungarian phone test: install/update and open once; use the usual animated ORB on the main lockscreen with the same settings as R36 and demo content (no widget picker); lock/wake several times and rapidly unlock once, reporting appearance alongside the clock and disappearance. Provide the run/qualification links, route evidence and measured results with the 10 ms physical status stated separately. Append the same artifact identity and limits to this journal.
+
+### 21. DEFINITION OF DONE
+
+The coding agent's delivery condition is a **changed, signed, installable and independently downloadable normal animated-ORB APK** in the owner's hands, with exact identity and phone instructions. Do not end at a merge, checkpoint, CI failure, successful test, successful compile or local APK. Continue authorized recovery and finish package delivery. The owner performs the physical acceptance afterward. A failure to demonstrate a physical 10 ms ceiling is recorded as pending or failed as appropriate and does not delay the phone build. Do not ship a known new privacy bypass to satisfy delivery; fix or conservatively disable the unsafe subcase while retaining and exercising the safe production change.
+
+FLUVI_R37_REAL_ORB_APK_END
