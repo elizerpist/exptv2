@@ -1,4 +1,4 @@
-name: R38 and continuation isolated safety controls
+name: R39 and 0905 isolated safety controls
 on:
   workflow_dispatch:
 permissions:
@@ -16,7 +16,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 45411275095
+          run-id: 45434535915
           pattern: r38-unheld-pair-*
           path: ${{ runner.temp }}/pairs
       - name: Prepare same signed fixture pairs
@@ -53,7 +53,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r38-isolated-results-${{ github.run_id }}
+          name: r39-isolated-results-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r38-isolated/**/*.txt
             ${{ runner.temp }}/r38-isolated/**/*.png
