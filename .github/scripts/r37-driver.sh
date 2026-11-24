@@ -56,6 +56,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
       methods=(warmOrderedDirectSkipsInapplicableR25Evaluation)
       ;;
+    r40_safety)
+      class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
+      methods=(r40HeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock)
+      ;;
     pressure)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
       methods=(allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners)
