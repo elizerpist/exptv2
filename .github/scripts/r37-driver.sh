@@ -10,11 +10,11 @@ case "${1:-}" in
   test "$(git rev-parse HEAD)" = "$APP_SHA"
   test -z "$(git status --porcelain --untracked-files=no)"
   if [[ "$BASELINE" = true ]]; then
-    fixture="$GITHUB_WORKSPACE/harness/test/KeyguardR26DirectOrderingInstrumentationTest.kt"
+    fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR39RealWindowInstrumentationTest.kt"
     test -f "$fixture"
     test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
-    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt
-    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt > "$out/fixture.patch"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR39RealWindowInstrumentationTest.kt
+    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR39RealWindowInstrumentationTest.kt > "$out/fixture.patch"
     sha256sum "$fixture" > "$out/fixture.sha256"
   fi
   flutter pub get > "$out/pub-get.log" 2>&1
@@ -31,7 +31,7 @@ case "${1:-}" in
     adb logcat -b all -d -v monotonic > "$out/logcat.txt" 2>&1 || true
     adb shell dumpsys window > "$out/final-window.txt" 2>&1 || true
     for uuid in ${r37_uuids:-}; do
-      adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r26/$uuid" > "$out/service-$uuid.tar" 2> "$out/service-$uuid.stderr" || true
+      adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r39/$uuid" > "$out/r39-$uuid.tar" 2> "$out/r39-$uuid.stderr" || true
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r19/$uuid" > "$out/visual-$uuid.tar" 2> "$out/visual-$uuid.stderr" || true
     done
   }
@@ -45,13 +45,13 @@ case "${1:-}" in
   bash scripts/prepare-keyguard-lower-environment.sh "$out/preflight"
   failed=0
   r37_uuids=""
-  methods=(pendingDirectWaitsForOrderedMainThenStartsRealSuccessor stableDirectUsesOrderedMainAndLaterOfferWaits)
+  methods=(frameworkReportsAnActualDialogWindowRemoval visibleSystemClockRemovalSealsBeforeHeldInspection)
   for method in "${methods[@]}"; do
     uuid=$(cat /proc/sys/kernel/random/uuid)
     r37_uuids="$r37_uuids $uuid"
     printf '%s %s\n' "$method" "$uuid" >> "$out/trials.txt"
     rc=0
-    timeout -k 5s 260s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e harnessSha "$HARNESS_SHA" -e runUuid "$uuid" -e class "com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest#$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/$method.txt" 2>&1 || rc=$?
+    timeout -k 5s 260s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e harnessSha "$HARNESS_SHA" -e runUuid "$uuid" -e class "com.fluvi.app.lockscreen.KeyguardR39RealWindowInstrumentationTest#$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/$method.txt" 2>&1 || rc=$?
     if (( rc != 0 )) || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then
       printf '%s FAIL exit=%s\n' "$method" "$rc" >> "$out/results.txt"; failed=1
     else printf '%s PASS\n' "$method" >> "$out/results.txt"; fi
