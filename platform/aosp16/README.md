@@ -112,3 +112,8 @@ actual resident store using a fake renderer and explicit worker/Main queues.
 Set `R29_KOTLIN_COMPILER_CP` to a Kotlin compiler/runtime classpath and
 `R29_KOTLIN_STDLIB` to its stdlib jar. It is not a GPU, Binder, SystemUI or
 physical-frame test.
+
+The clock root observes process-local host availability, so a clock composition
+created before the pre-lock service is bound can observe the subsequently
+prepared runtime without initiating Binder discovery on wake. This wiring has
+not yet been built with Soong or observed in a booted SystemUI image.

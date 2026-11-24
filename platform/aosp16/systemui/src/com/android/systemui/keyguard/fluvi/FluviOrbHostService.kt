@@ -30,6 +30,8 @@ import java.security.SecureRandom
 import java.util.TimeZone
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Reference-only explicit service. This service authenticates every incoming
@@ -314,9 +316,15 @@ internal class R29HostRuntime private constructor(context: Context) : ComponentC
 
     companion object {
         @Volatile private var instance: R29HostRuntime? = null
-        fun peek(): R29HostRuntime? = instance
+        private val mutableRuntime = MutableStateFlow<R29HostRuntime?>(null)
+        val runtime: StateFlow<R29HostRuntime?> = mutableRuntime
         fun get(context: Context): R29HostRuntime = instance ?: synchronized(this) {
-            instance ?: R29HostRuntime(context).also { instance = it }
+            instance ?: R29HostRuntime(context).also {
+                instance = it
+                // The clock composition may already exist before enrollment.
+                // Wake never has to discover, bind or initialize the host.
+                mutableRuntime.value = it
+            }
         }
     }
 }

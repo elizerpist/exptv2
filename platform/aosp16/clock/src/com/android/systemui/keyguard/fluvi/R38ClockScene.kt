@@ -57,7 +57,7 @@ class R38ClockScene @Inject constructor(
     fun modifier(bypass: Boolean): Modifier {
         // The runtime is created only by an already-enrolled pre-wake host
         // service; normal clock drawing never binds or initializes it.
-        val runtime = R29HostRuntime.peek() ?: return Modifier
+        val runtime = R29HostRuntime.runtime.collectAsStateWithLifecycle().value ?: return Modifier
         val view = LocalView.current
         var revision by remember(runtime) { mutableIntStateOf(0) }
         var origin by remember(view) { mutableStateOf<Offset?>(null) }
