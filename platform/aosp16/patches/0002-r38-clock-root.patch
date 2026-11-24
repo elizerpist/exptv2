@@ -2,28 +2,16 @@ diff --git a/packages/SystemUI/compose/features/src/com/android/systemui/keyguar
 index 590a74ee..701fe624 100644
 --- a/packages/SystemUI/compose/features/src/com/android/systemui/keyguard/ui/composable/blueprint/DefaultBlueprint.kt
 +++ b/packages/SystemUI/compose/features/src/com/android/systemui/keyguard/ui/composable/blueprint/DefaultBlueprint.kt
-@@ -35,6 +35,7 @@ import com.android.compose.animation.scene.ContentScope
- import com.android.compose.modifiers.padding
- import com.android.systemui.compose.modifiers.sysuiResTag
+@@ -37,2 +37,3 @@ import com.android.systemui.compose.modifiers.sysuiResTag
  import com.android.systemui.keyguard.ui.composable.LockscreenLongPress
 +import com.android.systemui.keyguard.fluvi.R38ClockScene
  import com.android.systemui.keyguard.ui.composable.section.AmbientIndicationSection
- import com.android.systemui.keyguard.ui.composable.section.BottomAreaSection
- import com.android.systemui.keyguard.ui.composable.section.LockSection
-@@ -64,6 +65,7 @@ constructor(
-     private val settingsMenuSection: SettingsMenuSection,
-     private val topAreaSection: TopAreaSection,
+@@ -66,2 +67,3 @@ constructor(
      private val notificationSection: NotificationSection,
 +    private val fluviClockScene: R38ClockScene,
  ) : ComposableLockscreenSceneBlueprint {
- 
-     override val id: String = "default"
-@@ -218,7 +220,7 @@ constructor(
-                     }
-                     with(settingsMenuSection) { SettingsMenu(onSettingsMenuPlaced) }
+@@ -220,3 +222,3 @@ constructor(
                  },
 -                modifier = Modifier.fillMaxSize(),
 +                modifier = Modifier.fillMaxSize().then(fluviClockScene.modifier(isBypassEnabled)),
              ) { measurables, constraints ->
-                 check(measurables.size == 6) { "Expected 6 measurables, got: ${measurables.size}" }
-                 val aboveLockIconMeasurable = measurables[0]
