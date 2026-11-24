@@ -62,7 +62,7 @@ case "${1:-}" in
       ;;
     pressure)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
-      methods=(allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners)
+      methods=(allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners burstOfPendingOffersPreservesWinningOwnerAndReportsLoss)
       ;;
     all)
       class=""
