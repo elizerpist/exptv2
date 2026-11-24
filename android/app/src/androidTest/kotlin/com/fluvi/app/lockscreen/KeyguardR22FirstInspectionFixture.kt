@@ -45,8 +45,9 @@ internal class KeyguardR22FirstInspectionFixture {
     private lateinit var automation: UiAutomation
 
     fun run(scenario: String) {
-        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative", "r32_overlap", "r34_latest", "r37_after_child", "r37_adopted_child"))
-        val r37Late = scenario == "r37_adopted_child"
+        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative", "r32_overlap", "r34_latest", "r37_after_child", "r37_adopted_child", "r37_inventory"))
+        val r37Inventory = scenario == "r37_inventory"
+        val r37Late = scenario == "r37_adopted_child" || r37Inventory
         val r37 = scenario == "r37_after_child" || r37Late
         val r34 = scenario == "r34_latest" || r37
         val r31 = scenario == "r31_system" || scenario == "r31_ambiguous" || scenario == "r31_negative"
@@ -270,6 +271,27 @@ internal class KeyguardR22FirstInspectionFixture {
                             }
                         }
                     }
+                    override fun r37InventoryObserved(request: KeyguardCardInspectionRequest, clean: Boolean, windowId: Int?) {
+                        if (!r37Inventory || !entryArmed.get() || !clean || windowId == null || a.get() != null) return
+                        var current: KeyguardR22VisualIdentityForTest? = null
+                        repeat(20) {
+                            if (current?.openingRequestId != request.id || current?.winningRequestId != null) {
+                                instrumentation.runOnMainSync { current = service.r22VisualIdentityForTest() }
+                                if (current?.openingRequestId != request.id || current?.winningRequestId != null) Thread.sleep(50)
+                            }
+                        }
+                        val observed = current
+                        if (observed != null && observed.openingRequestId == request.id &&
+                            observed.winningRequestId == null && a.compareAndSet(null, request)) {
+                            reservation.set(observed.reservationId)
+                            aThread.set(Thread.currentThread().id)
+                            r37HeldWindow.set(windowId.toLong())
+                            firstChildHeld.set(true)
+                            records.add("R37_CLEAN_ORIGINAL_INVENTORY id=${request.id} reservation=${observed.reservationId} window=$windowId at=${SystemClock.uptimeMillis()}")
+                            entryStarted.countDown(); entered.countDown()
+                            if (!release.await(20, TimeUnit.SECONDS)) { childTimedOut.set(true); records.add("R37_INVENTORY_TIMEOUT") }
+                        }
+                    }
                     override fun openingChildBefore(request: KeyguardCardInspectionRequest, windowId: Int, index: Int) {
                         if (afterB.get() && request == a.get()) {
                             nextChild.set(true)
@@ -303,7 +325,7 @@ internal class KeyguardR22FirstInspectionFixture {
                         }
                     }
                     override fun openingEligibleCheckpoint(request: KeyguardCardInspectionRequest, windowId: Int, nextIndex: Int) {
-                        if (r37Late && entryArmed.get() && a.get() == null) {
+                        if (r37Late && !r37Inventory && entryArmed.get() && a.get() == null) {
                             var current: KeyguardR22VisualIdentityForTest? = null
                             instrumentation.runOnMainSync { current = service.r22VisualIdentityForTest() }
                             val observed = current
@@ -633,9 +655,12 @@ internal class KeyguardR22FirstInspectionFixture {
                 records.add("R34_EXPECTED_LATEST A=${original.id} latest=${latest.id} scene=${latest.r34SceneSerial}")
                 release.countDown()
                 assertTrue("NOT REACHED: original did not terminate at a safe child", completed.await(20, TimeUnit.SECONDS))
-                assertEquals("R34 obsolete reader did not transfer to the actual latest offer", latest.id, yieldedTo.get())
-                if (r37) assertEquals("NOT REACHED: returned visible child did not reach the R37 boundary",
-                    "AFTER_NODE", r37Boundary.get())
+                if (r37Inventory) {
+                    assertTrue("R37 did not claim the selected or a newer real pending request", yieldedTo.get() >= latest.id)
+                    b.set(yieldedTo.get())
+                } else assertEquals("R34 obsolete reader did not transfer to the actual latest offer", latest.id, yieldedTo.get())
+                if (r37) assertEquals("NOT REACHED: required R37 boundary was not observed",
+                    if (r37Inventory) "AFTER_WINDOWS" else "AFTER_NODE", r37Boundary.get())
                 assertTrue("NOT REACHED: real latest reader did not start", bStarted.await(15, TimeUnit.SECONDS))
                 assertEquals("R34 must use one physical reader", aThread.get(), bThread.get())
                 assertFalse("R34 acquired another original child after transfer", nextChild.get())
