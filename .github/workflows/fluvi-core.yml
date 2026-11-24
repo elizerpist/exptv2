@@ -1,4 +1,4 @@
-name: R39 and 0905 unheld comparison
+name: R40 R39 provenance causal A-B LIGHT FULL
 on:
   workflow_dispatch:
 permissions:
@@ -11,15 +11,19 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: r38
-            sha: 0905f0d6e81cba396663c6b09898171913c195a9
-          - name: continuation
+          - name: enabled
+            sha: fd7112e4e52952caaee1f740526c87f10ddc7cb2
+          - name: disabled
             sha: fd7112e4e52952caaee1f740526c87f10ddc7cb2
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ matrix.sha }}
           fetch-depth: 0
+      - uses: actions/checkout@v5
+        with:
+          ref: aec2f7dca02501bed621abc32348dd19912542a5
+          path: __r40fixture
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -36,6 +40,7 @@ jobs:
         shell: bash
         env:
           SOURCE_SHA: ${{ matrix.sha }}
+          R40_SWITCH: ${{ matrix.name }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
@@ -47,6 +52,18 @@ jobs:
             settings.dependencyResolutionManagement.repositories { maven { url = uri('https://maven-central.storage-download.googleapis.com/maven2') } }
           }
           GRADLE
+          fixture="$GITHUB_WORKSPACE/__r40fixture"
+          test "$(git -C "$fixture" rev-parse HEAD)" = aec2f7dca02501bed621abc32348dd19912542a5
+          for file in FluviKeyguardCardService.kt KeyguardCardSurface.kt KeyguardWindowSnapshotReader.kt KeyguardR40FixtureSwitch.kt; do
+            cp "$fixture/android/app/src/main/kotlin/com/fluvi/app/lockscreen/$file" "android/app/src/main/kotlin/com/fluvi/app/lockscreen/$file"
+          done
+          cp "$fixture/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/
+          if [[ "$R40_SWITCH" = disabled ]]; then
+            sed -i 's/const val ENABLED = true/const val ENABLED = false/' android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR40FixtureSwitch.kt
+          fi
+          cat android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR40FixtureSwitch.kt > "$RUNNER_TEMP/pair/switch.txt"
+          git diff -- android/app/src > "$RUNNER_TEMP/pair/fixture.patch"
+          sha256sum android/app/src/main/kotlin/com/fluvi/app/lockscreen/{FluviKeyguardCardService,KeyguardCardSurface,KeyguardWindowSnapshotReader,KeyguardR40FixtureSwitch}.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt > "$RUNNER_TEMP/pair/fixture-sha256.txt"
           flutter pub get > "$RUNNER_TEMP/pair/pub.log" 2>&1
           (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain) > "$RUNNER_TEMP/pair/build.log" 2>&1 || { tail -100 "$RUNNER_TEMP/pair/build.log"; exit 1; }
           cp build/app/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/pair/app.apk"
@@ -56,7 +73,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r38-unheld-pair-${{ matrix.name }}
+          name: r40-causal-pair-${{ matrix.name }}
           path: ${{ runner.temp }}/pair/
           if-no-files-found: warn
           compression-level: 0
@@ -64,7 +81,7 @@ jobs:
   compare:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@v5
         with:
@@ -74,7 +91,7 @@ jobs:
           packages: platform-tools
       - uses: actions/download-artifact@v4
         with:
-          pattern: r38-unheld-pair-*
+          pattern: r40-causal-pair-*
           path: ${{ runner.temp }}/pairs
       - name: Sign the disposable emulator pairs with one test key
         shell: bash
@@ -83,8 +100,8 @@ jobs:
           out="$RUNNER_TEMP/r38-compare"; mkdir -p "$out"
           keytool -genkeypair -keystore "$out/test.keystore" -storepass android -keypass android -alias androiddebugkey -dname 'CN=Disposable R38 Test' -keyalg RSA -validity 7 >/dev/null 2>&1
           signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
-          for mode in r38 continuation; do
-            pair="$RUNNER_TEMP/pairs/r38-unheld-pair-$mode"
+          for mode in enabled disabled; do
+            pair="$RUNNER_TEMP/pairs/r40-causal-pair-$mode"
             mkdir -p "$out/$mode"
             cp "$pair/source.txt" "$out/$mode/source.txt"
             for apk in app test; do
@@ -111,7 +128,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r38-unheld-results-${{ github.run_id }}
+          name: r40-causal-results-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r38-compare/**/*.txt
             ${{ runner.temp }}/r38-compare/**/*.tar
