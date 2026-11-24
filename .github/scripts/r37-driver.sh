@@ -9,6 +9,14 @@ case "${1:-}" in
  build)
   test "$(git rev-parse HEAD)" = "$APP_SHA"
   test -z "$(git status --porcelain --untracked-files=no)"
+  if [[ "$BASELINE" = true ]]; then
+    fixture="$GITHUB_WORKSPACE/harness/test/KeyguardR26DirectOrderingInstrumentationTest.kt"
+    test -f "$fixture"
+    test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt
+    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt > "$out/fixture.patch"
+    sha256sum "$fixture" > "$out/fixture.sha256"
+  fi
   flutter pub get > "$out/pub-get.log" 2>&1
   rc=0
   (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain) > "$out/build.log" 2>&1 || rc=$?
