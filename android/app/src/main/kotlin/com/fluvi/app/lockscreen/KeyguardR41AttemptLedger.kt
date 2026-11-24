@@ -68,8 +68,25 @@ internal class KeyguardR41AttemptLedger {
         if (request == null || request < 0) { invalid++; return }
         var slot = (0 until count).firstOrNull { ids[it] == request } ?: -1
         if (slot < 0) {
-            if (count == CAPACITY) { omitted++; return }
-            slot = count++
+            if (count < CAPACITY) {
+                slot = count++
+            } else {
+                // Never let a burst of replaced offers occupy every detail
+                // slot while an actual reader or winning grant goes missing.
+                // Slot zero preserves the first request. Any evicted detail is
+                // still reported as loss; it is not silently coalesced away.
+                val offerOnly = (1 until count).filter { candidate ->
+                    time(candidate, OFFER) != MISSING && (1 until PHASES).all { time(candidate, it) == MISSING }
+                }.minByOrNull { time(it, OFFER) }
+                val oldRead = if (column != OFFER && offerOnly == null) (1 until count).firstOrNull { candidate ->
+                    time(candidate, GRANT) == MISSING && time(candidate, WINNER) == MISSING &&
+                        time(candidate, CANCEL) == MISSING
+                } else null
+                slot = offerOnly ?: oldRead ?: -1
+                omitted++
+                if (slot < 0) return
+                clearSlot(slot)
+            }
             ids[slot] = request
         }
         val index = slot * PHASES + column
@@ -92,6 +109,16 @@ internal class KeyguardR41AttemptLedger {
     private fun once(previous: Long, next: Long): Long {
         if (previous != MISSING && previous != next) invalid++
         return if (previous == MISSING) next else previous
+    }
+
+    private fun clearSlot(slot: Int) {
+        ids[slot] = MISSING
+        for (phase in 0 until PHASES) {
+            times[slot * PHASES + phase] = MISSING
+            tids[slot * PHASES + phase] = MISSING
+        }
+        grantReservation[slot] = MISSING; grantOutput[slot] = MISSING
+        winnerReservation[slot] = MISSING; winnerOutput[slot] = MISSING
     }
 
     private fun time(slot: Int, phase: Int): Long = if (slot < 0) MISSING else times[slot * PHASES + phase]

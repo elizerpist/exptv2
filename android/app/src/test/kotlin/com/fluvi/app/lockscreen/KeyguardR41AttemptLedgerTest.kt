@@ -59,4 +59,27 @@ class KeyguardR41AttemptLedgerTest {
         ledger.record("ORDERED_SHADOW_OFFER", 7, 102, 10, 15)
         assertEquals(2L, frozen.shadowOffers)
     }
+
+    @Test fun pendingOfferBurstCannotEvictTheRealWinningRequest() {
+        val ledger = KeyguardR41AttemptLedger()
+        ledger.record("WAKE", null, 1)
+        ledger.record("ELIGIBLE", null, 2)
+        ledger.record("OFFER", 1, 10)
+        ledger.record("WORKER_START", 1, 11)
+        for (id in 2L..75L) ledger.record("OFFER", id, 10 + id)
+        ledger.record("WORKER_START", 75, 100)
+        ledger.record("READ_START", 75, 110)
+        ledger.record("READ_END", 75, 120)
+        ledger.record("DISPATCH", 75, 130)
+        ledger.record("MAIN", 75, 140)
+        ledger.record("GRANT", 75, 150, 4, 5)
+        ledger.record("WINNER", 75, 160, 4, 5)
+        val row = ledger.core(1, 1, 1, 0)
+        assertTrue(row, row.contains("owner=4/5/75"))
+        assertTrue(row, row.contains("outcome=SUCCESS"))
+        assertTrue(row, row.contains("coverage=INCOMPLETE"))
+        assertTrue("evicted offers must remain explicit", ledger.omitted > 0)
+        assertTrue(ledger.requestRows(1).any { it.contains("req=1 ") })
+        assertTrue(ledger.requestRows(1).any { it.contains("req=75 ") })
+    }
 }
