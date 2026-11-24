@@ -19000,3 +19000,21 @@ In https://github.com/elizerpist/exptv2/actions/runs/45373919433 (artifact `1491
 The independent isolated resized-privacy panel https://github.com/elizerpist/exptv2/actions/runs/45373924384 (artifact `14910188847`, raw frames retained with the action evidence) failed for both white and black backgrounds. White sample categories: FULL, UNCLASSIFIED, NEUTRAL_ANIMATED_A, NEUTRAL_ANIMATED_A, NEUTRAL_ANIMATED_A, NEUTRAL_ANIMATED_A. Black: FULL, NEUTRAL_BOOTSTRAP, UNCLASSIFIED, NEUTRAL_ANIMATED_A, NEUTRAL_ANIMATED_A, NEUTRAL_ANIMATED_A. This is the already open isolated-panel privacy class of failure; the R37 application diff does not change that panel renderer or panel test. It is not evidence of the physical DIRECT phone route. The owner was informed to use demo data only. Baseline panel reproduction is in progress.
 
 Normal workflow https://github.com/elizerpist/exptv2/actions/runs/45371716597 has passed `test-core` and `test-flutter`; its separate dashboard-profile job failed with `Bad state: Prepared vector asset atlas is not ready` and missing A-K report map. The native runtime job and same-emulator alternating wake comparison are still running. No physical 10 ms claim or full privacy pass is made.
+
+
+## 2026-11-24 — R37 alternating unheld emulator wakes and normal CI
+
+Run https://github.com/elizerpist/exptv2/actions/runs/45374893119 used one API 35 Pixel 7 x86_64 emulator with animation enabled and the same unheld ordinary service test, alternating three parent (`3a8c355...`) and three candidate (`d2b1890...`) debug/test pairs. Parent production differed only by a no-op test probe interface; the fixture overlay is recorded in artifact `14911386885`. There were no forced reader/paint barriers in these six trials. Results below retain the unsuccessful trials and actual winning fallback when recorded. Times are uptime milliseconds relative to wake callback; first post and direct `revealApply` return are application/transaction observations, not physical presentation.
+
+| Trial | Build | Initial read result / finish since wake | Winning outcome since wake | Test result |
+| --- | --- | --- | --- | --- |
+| 1 | R36 base | FOREIGN_ABOVE / 1231 ms | SURFACE_LIVE fallback first post 2721 ms | FAIL: direct receipt timed out |
+| 2 | R37 | FOREIGN_ABOVE / 554 ms | SURFACE_LIVE fallback first post 1813 ms | FAIL: direct receipt timed out |
+| 3 | R36 base | FOREIGN_ABOVE / 350 ms | no final submission retained | FAIL: service window timed out |
+| 4 | R37 | NO_WINDOWS / 114 ms | DIRECT reveal-apply return 1897 ms; winning FULL request 23 | PASS |
+| 5 | R36 base | NO_WINDOWS / 39 ms | DIRECT reveal-apply return 1400 ms; winning FULL request 18 | PASS |
+| 6 | R37 | NO_WINDOWS / 102 ms | DIRECT reveal-apply return 2040 ms; winning FULL request 28 | PASS |
+
+All six original reads finished without a recorded R37 transfer, so these trials do not establish the intended optimization or a 10 ms result. Emulator host add/graphics scheduling contributed substantial variable delays; one baseline and two candidate direct successes are insufficient to infer phone performance. Preserve the six individual captures, misses, traces and screenshots, rather than reducing these to a single percentile or claiming physical first-pixel time.
+
+The independent normal workflow https://github.com/elizerpist/exptv2/actions/runs/45371716597 finished FAILURE. `test-core` and `test-flutter` passed. Its native 138-test instrumentation suite recorded 13 failures, including both resized privacy strips and release/ownership controls; the separate real-service command recorded 2 failures, including a missing real platform release receipt for lease attachment 1/generation 2, slot 1/use 2. Native artifact `14910694046` preserves logs and test reports. The separate dashboard profile failed with `Prepared vector asset atlas is not ready`; artifact `14909689508`. The normal workflow Human job was gated by the native failure; the separately built, byte-verified update-compatible owner APK remains an experimental demo-data delivery, not a green qualified release.
