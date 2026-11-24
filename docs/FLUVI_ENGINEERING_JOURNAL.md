@@ -19076,3 +19076,21 @@ Core/app unit tests and curated Flutter tests passed. The normal workflow Human 
 The first two separate R37 service-control dispatches https://github.com/elizerpist/exptv2/actions/runs/45371668591 and https://github.com/elizerpist/exptv2/actions/runs/45371669273 failed in Flutter setup because the first orchestration invoked pub get outside the application checkout; corrected runs and their outcomes are retained above. The two animation-disabled safety builds https://github.com/elizerpist/exptv2/actions/runs/45373419177 and https://github.com/elizerpist/exptv2/actions/runs/45373414261 were cancelled when the route-precondition defect was identified; later animation-enabled runs are reported separately.
 
 No full proof is inferred from the unavailable active-root/per-window-root/leaf and privacy controls or the physical device.
+
+
+## 2026-11-24 — R37 handset regression on the configured animated ORB
+
+The owner reports a large visible delay on the main lockscreen. Attached profile LIGHT capture `ca2fa674-1bc6-4263-95ad-1ea8465ea891` identifies the delivered application source `d2b1890a8c892a4ba3b3ec0ebe18279b4bb2b158`, Nothing A142, API 35. All four opening records identify the prepared private poster (asset 2) and a warm hit. Preparation took 41 ms and ended 9,837 ms before the first observed app wake. These intervals use the same attempt's app uptime in milliseconds.
+
+| Opening | SCREEN_ON callback to display grant | Grant to submit start | Native submit call | SCREEN_ON callback to submit return | App wake callback to submit return |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 525 | 40 | 5 | 570 | 570 |
+| 2 | 225 | 3 | 1 | 229 | 366 |
+| 3 | 221 | 7 | 3 | 231 | 368 |
+| 4 | 242 | 6 | 1 | 249 | 260 |
+
+In the worst opening, Android's active-root read lasted 130 ms. An initial full classification was recorded 241 ms after the app wake. Window events superseded requests, and the first accepted current proof arrived at 504 ms. Fluvi granted display at 525 ms and the native submit returned at 570 ms. The private asset was already available throughout. Every opening recorded a final stale positive, with 3/2/3/2 supersessions. R37 shortens some obsolete reads when its handoff is eligible. It still requires a fresh complete classification of the main lockscreen. The compact export overwrites the last transfer reason, so this capture cannot establish how often the new boundary ran or attribute the worst wake specifically to that code.
+
+The four previously detailed R36 SCREEN_ON-to-return samples were 345/388/355/303 ms (other openings lacked detailed rows). The worst sampled return increased from 388 to 570 ms. Three R37 detailed samples were faster than all four R36 ones. For the earlier app-wake-to-return endpoint, R36 recorded 473/388/355/303 ms and the owner-preferred R29.1 milestone recorded 356/407/342/320 ms. These are separate sessions. The owner rejects R37 on perceived lag. The export marks physical clock/ORB onset and withdrawal unobserved. Native return times neither quantify optical regression nor certify privacy or a physical 10 ms bound.
+
+Reviewer decision: retain the preferred milestone as the opening comparator. Further work limited to rendering, cache speed or earlier cancellation on the current app-owned overlay has no demonstrated route to a consistent clock-to-correct-ORB maximum of 10 ms. The architectural opportunity is for the actual primary lockscreen host to hold the current private frame and animation phase before wake, compose it with the clock, and exclude it beginning with the first restricted frame. No suitable supported integration has been established for the tested factory firmware. A successful implementation would still require physical clock-relative validation with measurement uncertainty. The existing isolated-panel privacy issue remains open.
