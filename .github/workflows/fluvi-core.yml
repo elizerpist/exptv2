@@ -82,12 +82,34 @@ jobs:
               }
           }
           GRADLE
+      - name: Run exact-source Android JVM unit gates
+        if: ${{ inputs.test_scope == 'units' }}
+        shell: bash
+        working-directory: app
+        run: |
+          mkdir -p "$RUNNER_TEMP/r37-evidence"
+          git rev-parse HEAD > "$RUNNER_TEMP/r37-evidence/unit-source.txt"
+          test "$(git rev-parse HEAD)" = "$APP_SHA"
+          flutter pub get > "$RUNNER_TEMP/r37-evidence/unit-pub-get.log" 2>&1
+          rc=0
+          (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --continue --no-daemon --max-workers=3 --console=plain) > "$RUNNER_TEMP/r37-evidence/unit.log" 2>&1 || rc=$?
+          printf '%s\n' "$rc" > "$RUNNER_TEMP/r37-evidence/unit-exit.txt"
+          for path in build/app/test-results build/fluvi-core/test-results; do
+            if [[ -d "$path" ]]; then
+              mkdir -p "$RUNNER_TEMP/r37-evidence/$(dirname "$path")"
+              cp -a "$path" "$RUNNER_TEMP/r37-evidence/$path"
+            fi
+          done
+          tail -100 "$RUNNER_TEMP/r37-evidence/unit.log"
+          exit "$rc"
       - name: Enable KVM
+        if: ${{ inputs.test_scope != 'units' }}
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Compile and exercise real service on API 35
+        if: ${{ inputs.test_scope != 'units' }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
