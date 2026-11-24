@@ -62,14 +62,34 @@ class FluviOrbLockscreenTrialInstrumentationTest {
             }
             val deadline = SystemClock.uptimeMillis() + 20_000
             var received: Bitmap? = null
+            var lastState = "not inspected"
             while (SystemClock.uptimeMillis() < deadline && received == null) {
                 instrumentation.runOnMainSync {
                     val image = activity.findViewById<ImageView>(R.id.fluvi_orb_lockscreen_trial_image)
-                    received = (image?.drawable as? BitmapDrawable)?.bitmap
+                    val drawable = image?.drawable
+                    lastState = "image=${image?.javaClass?.name} drawable=${drawable?.javaClass?.name} size=${image?.width}x${image?.height}"
+                    received = (drawable as? BitmapDrawable)?.bitmap
                 }
                 if (received == null) Thread.sleep(50)
             }
-            val actual = requireNotNull(received) { "framework host never received the complete RemoteViews image" }
+            if (received == null) {
+                println("R36_DIAGNOSTIC naturalUpdateMissing=true $lastState ids=${manager.getAppWidgetIds(component).joinToString()}")
+                val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).setComponent(component)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(id))
+                context.sendBroadcast(intent)
+                val explicitDeadline = SystemClock.uptimeMillis() + 10_000
+                while (SystemClock.uptimeMillis() < explicitDeadline && received == null) {
+                    instrumentation.runOnMainSync {
+                        val image = activity.findViewById<ImageView>(R.id.fluvi_orb_lockscreen_trial_image)
+                        lastState = "image=${image?.javaClass?.name} drawable=${image?.drawable?.javaClass?.name} size=${image?.width}x${image?.height}"
+                        received = (image?.drawable as? BitmapDrawable)?.bitmap
+                    }
+                    if (received == null) Thread.sleep(50)
+                }
+                println("R36_DIAGNOSTIC explicitUpdateReceived=${received != null} $lastState")
+                throw AssertionError("Natural framework binding did not produce a matching bitmap; see R36_DIAGNOSTIC")
+            }
+            val actual = requireNotNull(received)
             assertEquals(reference.width, actual.width)
             assertEquals(reference.height, actual.height)
             for ((x, y) in listOf(0 to 0, 96 to 96, 177 to 14)) {
@@ -84,6 +104,12 @@ class FluviOrbLockscreenTrialInstrumentationTest {
             } finally { screen.recycle() }
             println("R36_FRAMEWORK_HOST bound=true category=KEYGUARD image=blue-cyan marker=magenta size=${actual.width}x${actual.height}")
         } finally {
+            try {
+                automation.takeScreenshot()?.let { screen ->
+                    try { context.openFileOutput("r36-framework-host.png", Context.MODE_PRIVATE).use { screen.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+                    finally { screen.recycle() }
+                }
+            } catch (_: Throwable) { }
             instrumentation.runOnMainSync { host.stopListening(); activity.finish() }
             host.deleteAppWidgetId(id)
             automation.dropShellPermissionIdentity()

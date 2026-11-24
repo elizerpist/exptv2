@@ -20,7 +20,7 @@ case "${1:-}" in
     ;;
   run)
     collect() {
-      adb logcat -b all -d -v monotonic 2>/dev/null | grep -E 'R36_FRAMEWORK_HOST|FATAL EXCEPTION|Process: com\.fluvi' > "$out/logcat.txt" || true
+      adb logcat -b all -d -v monotonic 2>/dev/null | grep -E 'R36_FRAMEWORK_HOST|R36_DIAGNOSTIC|AppWidget|RemoteViews|FATAL EXCEPTION|Process: com\.fluvi' > "$out/logcat.txt" || true
       adb exec-out run-as com.fluvi.app cat files/r36-framework-host.png > "$out/framework-host.png" 2> "$out/screenshot.stderr" || true
     }
     trap collect EXIT
