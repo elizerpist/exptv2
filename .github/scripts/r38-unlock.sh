@@ -5,7 +5,7 @@ adb devices -l > "$out/device.txt"
 adb shell getprop ro.build.fingerprint >> "$out/device.txt"
 failed=0
 methods=(r26VisibleDirectUnlockAndRapidRelock r21ExclusionRetiresSubmittedOrbWithMainAckHeld externalIngressWhileFirstPaintIsHeldCannotUseOldProof)
-for mode in r37 r38; do
+for mode in r38 continuation; do
   adb install -r "$out/$mode/app.apk" > "$out/$mode/install-app.txt" 2>&1 || { echo "$mode FAIL install" >> "$out/results.txt"; failed=1; continue; }
   adb install -r "$out/$mode/test.apk" > "$out/$mode/install-test.txt" 2>&1 || { echo "$mode FAIL install-test" >> "$out/results.txt"; failed=1; continue; }
   for method in "${methods[@]}"; do
