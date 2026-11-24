@@ -497,6 +497,7 @@ internal object KeyguardCardDiagnostics {
         var r41PendingAtCut = 0L // diagnostic consumer only
         val r41ReportsPending = AtomicLong()
         val r41ReportsDropped = AtomicLong()
+        val r41ProducerFailures = AtomicLong()
         // First attempt plus the bounded recent-attempt ring. Each slot holds
         // only the latest immutable scalar observation for that exact owner.
         val r22PostClaim = AtomicReferenceArray<KeyguardOpeningInspectionHandoff.PostClaimSnapshot?>(MAX_ATTEMPTS + 1)
@@ -876,6 +877,19 @@ internal object KeyguardCardDiagnostics {
         var binding: String = "UNOBSERVED",
     )
 
+    /** Consumer-owned sampler facts, keyed by the original session/request. */
+    private class R41SampleRecord(val session: Long, val wake: Long, val request: Long) {
+        val times = LongArray(10) { Long.MIN_VALUE }
+        val tids = LongArray(10) { Long.MIN_VALUE }
+        val receipts = LongArray(10)
+        val details = LongArray(10)
+        var invalid = 0L
+        fun copy(): R41SampleRecord = R41SampleRecord(session, wake, request).also {
+            times.copyInto(it.times); tids.copyInto(it.tids)
+            receipts.copyInto(it.receipts); details.copyInto(it.details); it.invalid = invalid
+        }
+    }
+
     private data class CausalSpineEvent(
         val semanticKey: String,
         val seq: Long,
@@ -937,6 +951,8 @@ internal object KeyguardCardDiagnostics {
         var r41ReportsPending: Long = 0,
         var r41ReportsDropped: Long = 0,
         var r41ProvisionalEvicted: Long = 0,
+        var r41SamplesEvicted: Long = 0,
+        var r41ProducerFailures: Long = 0,
         var hiddenNoopCount: Int = 0,
         var diagnosticDroppedRecords: Int = 0,
         var diagnosticQueueOverflow: Long = 0L,
@@ -960,6 +976,7 @@ internal object KeyguardCardDiagnostics {
         val events: ArrayDeque<TimingEvent> = ArrayDeque(),
         val attempts: ArrayDeque<TimingAttempt> = ArrayDeque(),
         val r41Receipts: ArrayDeque<R41ProvisionalRecord> = ArrayDeque(),
+        val r41Samples: LinkedHashMap<Pair<Long, Long>, R41SampleRecord> = LinkedHashMap(),
     )
 
     private data class RecoveredCapture(
@@ -1719,6 +1736,20 @@ internal object KeyguardCardDiagnostics {
         token.r41.offer(phase, owner.attemptId, owner.serviceSession, owner.originWakeEpoch, request,
             if (atNs == Long.MIN_VALUE) System.nanoTime() else atNs, if (tid > 0) tid else Process.myTid().toLong(),
             extra1, extra2, SystemClock.uptimeMillis())
+    }
+
+    /** The sampler can run before an attempt exists. Preserve its original
+     * receipt ordinal and capture; a later attempt never becomes authority. */
+    fun r41SamplerMark(phase: Int, request: KeyguardSystemGateRequest, detail: Long) {
+        val token = ingress ?: return
+        if (request.diagnosticCaptureId != token.id) return
+        try {
+            token.r41.offer(phase, 0, request.authority.serviceSession, request.authority.wakeGeneration,
+                request.id, System.nanoTime(), Process.myTid().toLong(), request.r41WakeOrdinal,
+                detail, SystemClock.uptimeMillis())
+        } catch (_: Exception) {
+            token.r41ProducerFailures.incrementAndGet()
+        }
     }
 
     fun r41ReserveReport(owner: KeyguardDiagnosticContext?): Boolean {
@@ -2560,6 +2591,32 @@ internal object KeyguardCardDiagnostics {
                 token.r41Flushed += 1
                 continue
             }
+            if (record.phase in KeyguardR41RawLedger.SAMPLE_OFFER..KeyguardR41RawLedger.SAMPLE_REJECT) {
+                if (record.request <= 0) {
+                    active.r41RawUnmatched += 1
+                } else {
+                    val key = record.session to record.request
+                    var sample = active.r41Samples[key]
+                    if (sample == null) {
+                        if (active.r41Samples.size >= 64) {
+                            active.r41Samples.remove(active.r41Samples.keys.first())
+                            active.r41SamplesEvicted += 1
+                        }
+                        sample = R41SampleRecord(record.session, record.wake, record.request)
+                        active.r41Samples[key] = sample
+                    }
+                    val index = record.phase - KeyguardR41RawLedger.SAMPLE_OFFER
+                    if (sample.wake != record.wake || sample.times[index] != Long.MIN_VALUE) sample.invalid += 1
+                    else {
+                        sample.times[index] = record.atNs
+                        sample.tids[index] = record.tid
+                        sample.receipts[index] = record.extra1
+                        sample.details[index] = record.extra2
+                    }
+                }
+                token.r41Flushed += 1
+                continue
+            }
             val attempt = active.attempts.lastOrNull { it.id == record.attempt }
                 ?: active.firstAttempt?.takeIf { it.id == record.attempt }
             if (attempt == null) {
@@ -2631,6 +2688,7 @@ internal object KeyguardCardDiagnostics {
         r41RawLate = r41Token?.r41?.late?.get() ?: active.r41RawLate,
         r41ReportsPending = r41Token?.r41ReportsPending?.get() ?: active.r41ReportsPending,
         r41ReportsDropped = r41Token?.r41ReportsDropped?.get() ?: active.r41ReportsDropped,
+        r41ProducerFailures = r41Token?.r41ProducerFailures?.get() ?: active.r41ProducerFailures,
         diagnosticDroppedRecords = active.diagnosticDroppedRecords + (lastIngress?.takeIf { it.id == active.id }?.skippedRecords?.get()?.toInt() ?: 0),
         hiddenNoopCount = lastIngress?.takeIf { it.id == active.id }?.hiddenNoops?.get()?.toInt() ?: active.hiddenNoopCount,
         diagnosticProducerTotalNs = lastIngress?.takeIf { it.id == active.id }?.producerTotalNs?.get() ?: active.diagnosticProducerTotalNs,
@@ -2645,6 +2703,7 @@ internal object KeyguardCardDiagnostics {
         events = ArrayDeque(active.events.map { it.copy(fields = it.fields.toMap()) }),
         attempts = ArrayDeque(active.attempts.map(::copyAttempt)),
         r41Receipts = ArrayDeque(active.r41Receipts.map { it.copy() }),
+        r41Samples = LinkedHashMap(active.r41Samples.mapValues { it.value.copy() }),
         )
     }
 
@@ -2826,6 +2885,8 @@ internal object KeyguardCardDiagnostics {
                 "queueOverflow=${active.diagnosticQueueOverflow} consumerFailures=${active.diagnosticConsumerFailures} " +
                 "provisional=${active.r41Provisional} bindings=${active.r41Bindings} rawOverflow=${active.r41RawOverflow} " +
                 "receiptEvicted=${active.r41ProvisionalEvicted} " +
+                "sampleEvicted=${active.r41SamplesEvicted} " +
+                "producerFailures=${active.r41ProducerFailures} " +
                 "rawUnmatched=${active.r41RawUnmatched} rawPending=${active.r41RawPending} rawLate=${active.r41RawLate} " +
                 "reportsPending=${active.r41ReportsPending} reportsDropped=${active.r41ReportsDropped} " +
                 "coverage=INCOMPLETE clock=System.nanoTime physical=UNOBSERVED")
@@ -2870,6 +2931,7 @@ internal object KeyguardCardDiagnostics {
         val r41Loss = active.r41AttemptsEvicted + active.diagnosticQueueOverflow +
             active.diagnosticConsumerFailures + active.r41RawOverflow + active.r41RawUnmatched + active.r41RawPending +
             active.r41RawLate + active.r41ReportsPending + active.r41ReportsDropped + active.r41ProvisionalEvicted +
+            active.r41SamplesEvicted + active.r41ProducerFailures + active.r41Samples.values.sumOf { it.invalid } +
             (active.r41AttemptsIssued - active.r41AttemptsStarted).coerceAtLeast(0)
         r41Attempts.forEach { attempt ->
             select("a${attempt.id}:r41Core", attempt.r41.core(attempt.id, attempt.serviceSession, attempt.wakeEpoch, r41Loss), attempt.id)
@@ -2902,6 +2964,18 @@ internal object KeyguardCardDiagnostics {
                 " ns=${receipt.atNs} tid=${receipt.tid} up=${receipt.uptimeMs} eventMs=${receipt.eventTimeMs ?: "UNOBSERVED"}" +
                 " attempt=${receipt.attempt ?: "UNOBSERVED"} binding=${receipt.binding}\n"
             select("r41Receipt${receipt.ordinal}", row, receipt.attempt)
+        }
+        active.r41Samples.values.forEach { sample ->
+            fun value(number: Long) = if (number == Long.MIN_VALUE) "UNOBSERVED" else number.toString()
+            val ordinal = sample.receipts[2].takeIf { it > 0 } ?: sample.receipts[0].takeIf { it > 0 }
+            val attempt = active.r41Receipts.firstOrNull { it.ordinal == ordinal }?.attempt
+            val row = " R41_SAMPLE session=${sample.session} wake=${sample.wake} sample=${sample.request}" +
+                " attempt=${attempt ?: "UNOBSERVED"} receipt=${ordinal ?: "UNOBSERVED"}" +
+                " times=${sample.times.joinToString("/") { value(it) }}" +
+                " tids=${sample.tids.joinToString("/") { value(it) }}" +
+                " replacement=${sample.details[1]} stateFlags=${sample.details[5]} reject=${sample.details[9]}" +
+                " invalid=${sample.invalid} order=offer/replaced/submit/worker/readStart/readEnd/dispatch/main/deliver/reject\n"
+            select("r41Sample${sample.session}_${sample.request}", row, attempt)
         }
         // Restriction decisions are independent of the rolling raw ring.
         // The same global export budget and omission accounting still apply.

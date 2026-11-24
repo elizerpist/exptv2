@@ -10,6 +10,7 @@ class KeyguardSystemStateSamplerTest {
         val workers = ArrayDeque<() -> Unit>()
         val main = ArrayDeque<() -> Unit>()
         val received = mutableListOf<Pair<KeyguardSystemGateRequest, KeyguardSystemState>>()
+        val traced = mutableListOf<Triple<Int, Long, Long>>()
         var reads = 0
         var fail = false
         val sampler = KeyguardSystemStateSampler(
@@ -21,11 +22,54 @@ class KeyguardSystemStateSamplerTest {
             } },
             worker = { workers.addLast(it) }, main = { main.addLast(it) },
             current = { authority }, receive = { request, value -> received += request to value },
+            trace = KeyguardSystemSamplerTrace { phase, request, detail -> traced += Triple(phase, request.id, detail) },
         )
         fun request(id: Long, evaluate: Boolean = true) = KeyguardSystemGateRequest(
             id, authority, "event:$id", id, id + 1, evaluate,
         )
         fun finish() { workers.removeFirst().invoke(); main.removeFirst().invoke() }
+    }
+
+    @Test fun `sampler traces actual dispatch, replacement and delivery without changing the result`() {
+        val f = Fixture(eligible)
+        f.sampler.offer(f.request(1).copy(diagnosticCaptureId = "capture", r41WakeOrdinal = 10))
+        f.sampler.offer(f.request(2).copy(diagnosticCaptureId = "capture", r41WakeOrdinal = 20))
+        f.sampler.offer(f.request(3).copy(diagnosticCaptureId = "capture", r41WakeOrdinal = 30))
+        f.finish(); f.finish()
+        assertEquals(listOf(1L, 3L), f.received.map { it.first.id })
+        assertTrue(f.traced.contains(Triple(KeyguardR41RawLedger.SAMPLE_REPLACED, 2L, 3L)))
+        for (id in listOf(1L, 3L)) {
+            val stages = f.traced.filter { it.second == id }.map { it.first }
+            assertEquals(listOf(KeyguardR41RawLedger.SAMPLE_OFFER, KeyguardR41RawLedger.SAMPLE_SUBMIT,
+                KeyguardR41RawLedger.SAMPLE_WORKER, KeyguardR41RawLedger.SAMPLE_READ_START,
+                KeyguardR41RawLedger.SAMPLE_READ_END, KeyguardR41RawLedger.SAMPLE_DISPATCH,
+                KeyguardR41RawLedger.SAMPLE_MAIN, KeyguardR41RawLedger.SAMPLE_DELIVER), stages)
+            assertTrue(f.traced.contains(Triple(KeyguardR41RawLedger.SAMPLE_READ_END, id, 5L)))
+        }
+    }
+
+    @Test fun `capture off does not call the sampler diagnostic producer`() {
+        val f = Fixture(eligible)
+        f.sampler.offer(f.request(1)); f.finish()
+        assertTrue(f.traced.isEmpty())
+        assertEquals(1L, f.received.single().first.id)
+    }
+
+    @Test fun `a throwing timing observer cannot suppress an acquired state`() {
+        val authority = KeyguardInspectionAuthority(1, 1, 1, 1, 1)
+        val workers = ArrayDeque<() -> Unit>()
+        val main = ArrayDeque<() -> Unit>()
+        val received = mutableListOf<Long>()
+        val sampler = KeyguardSystemStateSampler(
+            reader = { KeyguardSystemStateReader { eligible } },
+            worker = { workers.addLast(it) }, main = { main.addLast(it) },
+            current = { authority }, receive = { request, _ -> received.add(request.id) },
+            trace = KeyguardSystemSamplerTrace { _, _, _ -> error("injected diagnostic failure") },
+        )
+        sampler.offer(KeyguardSystemGateRequest(1, authority, "wake", 1, 1,
+            diagnosticCaptureId = "capture"))
+        workers.removeFirst().invoke(); main.removeFirst().invoke()
+        assertEquals(listOf(1L), received)
     }
 
     @Test fun `coalescing keeps the matching capture's provisional wake and screen identities`() {

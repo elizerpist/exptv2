@@ -215,6 +215,9 @@ class FluviKeyguardCardService : AccessibilityService() {
         current = { inspectionAuthority },
         receive = ::applySystemState,
         reserveBeforeMain = ::reserveR18WakeBeforeMain,
+        trace = KeyguardSystemSamplerTrace { phase, request, detail ->
+            KeyguardCardDiagnostics.r41SamplerMark(phase, request, detail)
+        },
     )
     private val mainWorkEvidence = KeyguardMainWorkEvidence()
     private val session = AtomicLong(0L)
@@ -315,6 +318,9 @@ class FluviKeyguardCardService : AccessibilityService() {
         var lastExpiredProof = 0L // Main, diagnostic coalescing only
         var lastR22WaitReason: String? = null // Main, bounded diagnostic coalescing only
         @Volatile var r21Binding: R21Binding? = null
+        // Diagnostic identity only. Written after a successful grant and read
+        // on withdrawal; never used to admit or retain a presentation.
+        @Volatile var r41GrantRequest = 0L
         // Published only after the original coordinator ACK. No witness is
         // acquired or armed during the first-show path.
         @Volatile var r40Acknowledged: R21Binding? = null
@@ -1325,9 +1331,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         val r41SealNs = if (owner.diagnosticContext?.captureId != null &&
             owner.diagnosticContext.captureId == KeyguardCardDiagnostics.activeCaptureId()) System.nanoTime() else Long.MIN_VALUE
         overlay.sealR18FromAnyThread(identity.preparation.attachment, identity.preparation.outputGeneration)
-        owner.r21Binding?.takeIf { it.token === token }?.let { binding ->
-            if (r41SealNs != Long.MIN_VALUE) KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.CANCEL,
-                binding.context, binding.r41ProofId ?: 0L, atNs = r41SealNs)
+        if (r41SealNs != Long.MIN_VALUE) {
+            val binding = owner.r21Binding?.takeIf { it.token === token }
+            val proof = binding?.r41ProofId ?: owner.r41GrantRequest
+            if (proof > 0) KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.CANCEL,
+                binding?.context ?: owner.diagnosticContext, proof, atNs = r41SealNs)
         }
         owner.r21Binding?.takeIf { it.token === token }?.let { binding -> runCatching {
             recordR21(binding, "SEAL", sealedAt, r18Coordinator.revealOrdinal(binding.reveal), "CANCELLED", reason, offered = requestId.takeUnless { it == Long.MAX_VALUE })
@@ -5139,8 +5147,12 @@ class FluviKeyguardCardService : AccessibilityService() {
                 failR18Stage(directOwner, "grantRejected")
                 return null
             }
-            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.GRANT, directOwner.diagnosticContext,
-                proof, directToken.id, stamp.outputGeneration)
+            if (directOwner.diagnosticContext?.captureId != null &&
+                directOwner.diagnosticContext.captureId == KeyguardCardDiagnostics.activeCaptureId()) {
+                directOwner.r41GrantRequest = proof
+                KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.GRANT, directOwner.diagnosticContext,
+                    proof, directToken.id, stamp.outputGeneration)
+            }
             recordR18(directOwner, "GRANT", proof = proof)
         }
         // `showOrUpdate` applies material only after a real content/layout
@@ -5172,7 +5184,12 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         if (directOwner != null && directToken != null) {
             if (result != KeyguardCardWindow.Result.ATTACHED) {
-                r18Coordinator.discardUnpublishedGrant(directToken)
+                if (r18Coordinator.discardUnpublishedGrant(directToken)) {
+                    val proof = directOwner.r41GrantRequest
+                    if (proof > 0) KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.CANCEL,
+                        directOwner.diagnosticContext, proof)
+                    directOwner.r41GrantRequest = 0L
+                }
                 if (result == KeyguardCardWindow.Result.FAILED) failR18Stage(directOwner, "inputActivationFailed")
                 return null
             }

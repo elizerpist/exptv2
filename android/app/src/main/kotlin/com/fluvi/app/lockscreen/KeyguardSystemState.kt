@@ -51,6 +51,11 @@ internal data class KeyguardSystemGateRequest(
     val r41ScreenOrdinal: Long = 0,
 )
 
+/** Capture-only sampler observations. They do not influence queue ownership. */
+internal fun interface KeyguardSystemSamplerTrace {
+    fun record(phase: Int, request: KeyguardSystemGateRequest, detail: Long)
+}
+
 /** Main owns this queue, including completion. The worker owns only read().
  * No lock is held during a platform call, and no replacement worker is started
  * while that call remains in flight. Cancellation revokes delivery, not IPC.
@@ -64,6 +69,7 @@ internal class KeyguardSystemStateSampler(
     // The result can reserve work but never grants presentation. The returned
     // starter runs only after the corresponding Main delivery was posted.
     private val reserveBeforeMain: (KeyguardSystemGateRequest, KeyguardSystemState) -> (() -> Unit)? = { _, _ -> null },
+    private val trace: KeyguardSystemSamplerTrace? = null,
 ) {
     private var active: KeyguardSystemGateRequest? = null
     private var pending: KeyguardSystemGateRequest? = null
@@ -75,8 +81,20 @@ internal class KeyguardSystemStateSampler(
     var maximumPending = 0; private set
     var rejected = 0L; private set
 
+    private fun observe(phase: Int, request: KeyguardSystemGateRequest, detail: Long = 0) {
+        if (request.diagnosticCaptureId != null) {
+            try { trace?.record(phase, request, detail) } catch (_: Exception) {
+                // A diagnostic observer cannot suppress the actual read or delivery.
+            }
+        }
+    }
+
     fun offer(request: KeyguardSystemGateRequest) {
-        if (disposed) return
+        observe(KeyguardR41RawLedger.SAMPLE_OFFER, request)
+        if (disposed) {
+            observe(KeyguardR41RawLedger.SAMPLE_REJECT, request, 1)
+            return
+        }
         if (active == null) start(request) else {
             // Latest gate request wins; its check must not erase an unserved
             // real event's separate causal identity/freshness obligation.
@@ -99,11 +117,16 @@ internal class KeyguardSystemStateSampler(
                 freshness = if (previous.freshness.requiresCacheClear && !request.freshness.requiresCacheClear)
                     previous.freshness else request.freshness,
             ) else request
+            previous?.let { observe(KeyguardR41RawLedger.SAMPLE_REPLACED, it, request.id) }
             maximumPending = 1
         }
     }
 
-    fun clearPending() { pending = null; revocation++ }
+    fun clearPending() {
+        pending?.let { observe(KeyguardR41RawLedger.SAMPLE_REJECT, it, 4) }
+        pending = null
+        revocation++
+    }
     fun dispose() { disposed = true; clearPending() }
 
     fun renewPending(renew: (KeyguardSystemGateRequest) -> KeyguardSystemGateRequest) {
@@ -116,17 +139,29 @@ internal class KeyguardSystemStateSampler(
         val readRevocation = revocation
         activeRevocation = readRevocation
         maximumActive = 1
+        observe(KeyguardR41RawLedger.SAMPLE_SUBMIT, request)
         worker {
+            observe(KeyguardR41RawLedger.SAMPLE_WORKER, request)
+            observe(KeyguardR41RawLedger.SAMPLE_READ_START, request)
             val state = runCatching { reader().read(KeyguardSystemReadPurpose.RECURRING) }
                 .getOrElse { KeyguardSystemState(-1L, -1L, available = false) }
+            observe(KeyguardR41RawLedger.SAMPLE_READ_END, request,
+                (if (state.eligible) 1L else 0L) or (if (state.excluded) 2L else 0L) or (if (state.available) 4L else 0L))
             val starter = if (!disposed && readRevocation == revocation && request.authority == current()) {
                 runCatching { reserveBeforeMain(request, state) }.getOrNull()
             } else null
+            observe(KeyguardR41RawLedger.SAMPLE_DISPATCH, request)
             main {
+                observe(KeyguardR41RawLedger.SAMPLE_MAIN, request)
                 try {
                     delivering = true
-                    if (!disposed && readRevocation == revocation && request.authority == current()) receive(request, state)
-                    else rejected++
+                    if (!disposed && readRevocation == revocation && request.authority == current()) {
+                        observe(KeyguardR41RawLedger.SAMPLE_DELIVER, request)
+                        receive(request, state)
+                    } else {
+                        observe(KeyguardR41RawLedger.SAMPLE_REJECT, request, 2)
+                        rejected++
+                    }
                 } finally {
                     delivering = false
                     active = null
@@ -136,7 +171,10 @@ internal class KeyguardSystemStateSampler(
                         // A pending event invalidated by attach/interaction needs
                         // a NEW acquisition, never a relabelled old result. The
                         // service supplies the renewed immutable request.
-                        if (next.authority == current()) start(next) else rejected++
+                        if (next.authority == current()) start(next) else {
+                            observe(KeyguardR41RawLedger.SAMPLE_REJECT, next, 3)
+                            rejected++
+                        }
                     }
                 }
             }
