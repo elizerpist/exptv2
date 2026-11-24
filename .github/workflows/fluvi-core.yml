@@ -69,12 +69,7 @@ jobs:
               settings.pluginManagement.repositories {
                   maven { name = 'MavenCentralStorageMirror'; url = uri('https://maven-central.storage-download.googleapis.com/maven2') }
               }
-          }
-          gradle.beforeProject { project ->
-              project.buildscript.repositories {
-                  maven { name = 'MavenCentralStorageMirror'; url = uri('https://maven-central.storage-download.googleapis.com/maven2') }
-              }
-              project.repositories {
+              settings.dependencyResolutionManagement.repositories {
                   maven { name = 'MavenCentralStorageMirror'; url = uri('https://maven-central.storage-download.googleapis.com/maven2') }
               }
           }
