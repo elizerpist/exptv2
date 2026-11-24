@@ -93,5 +93,6 @@ internal class KeyguardR41RawLedger(private val capacity: Int = 2048) {
         const val SAMPLE_MAIN = 27
         const val SAMPLE_DELIVER = 28
         const val SAMPLE_REJECT = 29
+        const val ORDERED_SHADOW_OFFER = 30
     }
 }

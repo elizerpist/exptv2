@@ -235,6 +235,14 @@ class FluviKeyguardCardService : AccessibilityService() {
     private val financialScope = CoroutineScope(serviceJob + financialDispatcher)
     private val queueLock = Any()
     private val inspectionQueue = KeyguardCardInspectionQueue()
+    /** Diagnostic-only receipt for a completed ordered positive waiting for
+     * Main. It contains no node, View, financial data or display authority. */
+    private data class R41ShadowReceipt(
+        val request: Long, val session: Long, val wake: Long, val visibility: Long,
+        val interaction: Long, val attachment: Long, val scene: Long,
+        val context: KeyguardDiagnosticContext,
+    )
+    @Volatile private var r41ShadowReceipt: R41ShadowReceipt? = null
     private val r25Publication = KeyguardOpeningPublication<R25Completed>()
     private val r25ExclusionPosted = AtomicBoolean(false)
     /** Test dispatch may hold a single Main continuation without blocking Main. */
@@ -2590,6 +2598,23 @@ class FluviKeyguardCardService : AccessibilityService() {
         // The queue already selected the exact reader under queueLock. Do not
         // make that independent work wait for optional producer reporting.
         queueOffer.start?.let { actual -> inspectionScope.launch { processInspectionQueue(actual) } }
+        // Shadow only: these four scalar facts do not evaluate all H2 vetoes,
+        // claim the mailbox, alter ordering or grant any presentation.
+        val shadow = r41ShadowReceipt
+        if (shadow != null && r41OfferNs != Long.MIN_VALUE && frameworkEvent && ingress?.externalSystemUi == true &&
+            shadow.context.captureId == request.diagnosticContext?.captureId) {
+            val original = queueOffer.activeAfter
+            var facts = 0L
+            if (original?.id == shadow.request && original.session == shadow.session &&
+                original.wakeGeneration == shadow.wake) facts = facts or 1L
+            if (queueOffer.pendingAfter?.id == request.id) facts = facts or 2L
+            if (externalScene != null && externalScene != shadow.scene) facts = facts or 4L
+            if (request.session == shadow.session && request.wakeGeneration == shadow.wake &&
+                request.visibilityEpoch == shadow.visibility && request.interactionEpoch == shadow.interaction &&
+                request.attachGeneration == shadow.attachment) facts = facts or 8L
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.ORDERED_SHADOW_OFFER,
+                shadow.context, shadow.request, request.id, facts, atNs = r41OfferNs)
+        }
         if (r41OfferNs != Long.MIN_VALUE) KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.OFFER,
             request.diagnosticContext, request.id, atNs = r41OfferNs)
         queueOffer.superseded?.let { old ->
@@ -3528,10 +3553,21 @@ class FluviKeyguardCardService : AccessibilityService() {
                         active.diagnosticContext, active.id)
                 }
                 val r41CaptureId = active.diagnosticContext?.captureId
-                val r41DispatchNs = if (r41CaptureId != null && r41CaptureId == KeyguardCardDiagnostics.activeCaptureId())
-                    System.nanoTime() else Long.MIN_VALUE
-                val r41DispatchTid = if (r41DispatchNs != Long.MIN_VALUE) android.os.Process.myTid().toLong() else 0L
-                val lateSuperseded = withContext(Dispatchers.Main.immediate) {
+                val r41CaptureEnabled = r41CaptureId != null && r41CaptureId == KeyguardCardDiagnostics.activeCaptureId()
+                val scene = read.result.r19ReadSceneSerial
+                if (r41CaptureEnabled && read.r38MilestoneOrdered && scene != null &&
+                    read.result.decision == KeyguardCardVisibility.SHOW_FULL &&
+                    read.result.surfaceReason == KeyguardSurfaceReason.MAIN_CONFIRMED &&
+                    !read.result.rootUnavailable && !read.result.walkTruncated && !read.result.abortedStale &&
+                    !read.result.windowTiming.ownAttributionAmbiguous) {
+                    r41ShadowReceipt = R41ShadowReceipt(active.id, active.session, active.wakeGeneration,
+                        active.visibilityEpoch, active.interactionEpoch, active.attachGeneration, scene,
+                        requireNotNull(active.diagnosticContext))
+                }
+                val r41DispatchTid = if (r41CaptureEnabled) android.os.Process.myTid().toLong() else 0L
+                val r41DispatchNs = if (r41CaptureEnabled) System.nanoTime() else Long.MIN_VALUE
+                val lateSuperseded = try { withContext(Dispatchers.Main.immediate) {
+                    if (r41ShadowReceipt?.request == active.id) r41ShadowReceipt = null
                     if (r41DispatchNs != Long.MIN_VALUE) {
                         val r41MainNs = System.nanoTime()
                         val r41MainTid = android.os.Process.myTid().toLong()
@@ -3545,6 +3581,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                         synchronized(queueLock) { r34SupersedeCompletedLocked(read) }
                     if (latest == null) applyCompletedInspection(read, handoff)
                     latest
+                } } finally {
+                    if (r41ShadowReceipt?.request == active.id) r41ShadowReceipt = null
                 }
                 if (lateSuperseded != null) {
                     traceCompletedInspection(read, null)

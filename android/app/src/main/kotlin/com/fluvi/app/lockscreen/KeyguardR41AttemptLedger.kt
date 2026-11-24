@@ -22,10 +22,25 @@ internal class KeyguardR41AttemptLedger {
     var omitted: Long = 0; private set
     var invalid: Long = 0; private set
     var orderedBypasses: Long = 0; private set
+    var shadowOffers: Long = 0; private set
+    var shadowPartialMatches: Long = 0; private set
+    private var shadowLastRequest: Long = MISSING
+    private var shadowLastFlags: Long = MISSING
 
     fun record(phase: String, request: Long?, atNs: Long, reservation: Long? = null, output: Long? = null,
                tid: Long? = null, uptimeMs: Long? = null, source: Long? = null, eventTimeMs: Long? = null) {
         if (atNs == MISSING) { invalid++; return }
+        if (phase == "ORDERED_SHADOW_OFFER") {
+            if (request == null || request <= 0 || reservation == null || reservation <= 0) {
+                invalid++
+            } else {
+                shadowOffers++
+                shadowLastRequest = reservation
+                shadowLastFlags = output ?: 0L
+                if (shadowLastFlags == 15L) shadowPartialMatches++
+            }
+            return
+        }
         when (phase) {
             "WAKE" -> {
                 wakeNs = once(wakeNs, atNs)
@@ -100,7 +115,10 @@ internal class KeyguardR41AttemptLedger {
             " offerNs=${value(time(slot, OFFER))} workerNs=${value(time(slot, WORKER))} readStartNs=${value(time(slot, READ_START))} readEndNs=${value(time(slot, READ_END))}" +
             " dispatchNs=${value(time(slot, DISPATCH))} mainNs=${value(time(slot, MAIN))} grantNs=${value(time(slot, GRANT))}" +
             " winnerNs=${value(time(slot, WINNER))} cancelNs=${value(time(slot, CANCEL))} orderedBypassNs=${value(time(slot, BYPASS))}" +
-            " orderedBypasses=$orderedBypasses requests=$count omitted=$omitted invalid=$invalid dropped=$loss" +
+            " orderedBypasses=$orderedBypasses h2ShadowOffers=$shadowOffers h2PartialMatches=$shadowPartialMatches" +
+            " h2LastRequest=${value(shadowLastRequest)} h2LastFlags=${value(shadowLastFlags)} h2Claims=0 h2Enabled=false" +
+            " h2ShadowCoverage=partialGuardsDispatchUnverified" +
+            " requests=$count omitted=$omitted invalid=$invalid dropped=$loss" +
             " coverage=INCOMPLETE clock=System.nanoTime physical=UNOBSERVED\n"
     }
 
@@ -119,6 +137,8 @@ internal class KeyguardR41AttemptLedger {
         copy.wakeTid = wakeTid; copy.screenTid = screenTid; copy.wakeUptimeMs = wakeUptimeMs
         copy.wakeSource = wakeSource; copy.wakeEventMs = wakeEventMs
         copy.omitted = omitted; copy.invalid = invalid; copy.orderedBypasses = orderedBypasses
+        copy.shadowOffers = shadowOffers; copy.shadowPartialMatches = shadowPartialMatches
+        copy.shadowLastRequest = shadowLastRequest; copy.shadowLastFlags = shadowLastFlags
     }
 
     companion object {

@@ -46,4 +46,17 @@ class KeyguardR41AttemptLedgerTest {
         assertTrue(frozen.core(1, 1, 1, 0).contains("omitted=1 invalid=1 dropped=2"))
         assertEquals(16, frozen.requestRows(1).size)
     }
+
+    @Test fun shadowMatchesDoNotClaimOrEnableTheH2Intervention() {
+        val ledger = KeyguardR41AttemptLedger()
+        ledger.record("ORDERED_SHADOW_OFFER", 7, 100, 8, 15)
+        ledger.record("ORDERED_SHADOW_OFFER", 7, 101, 9, 3)
+        val frozen = ledger.snapshot()
+        val row = frozen.core(1, 1, 1, 0)
+        assertTrue(row, row.contains("h2ShadowOffers=2 h2PartialMatches=1"))
+        assertTrue(row, row.contains("h2LastRequest=9 h2LastFlags=3 h2Claims=0 h2Enabled=false"))
+        assertTrue(row, row.contains("h2ShadowCoverage=partialGuardsDispatchUnverified"))
+        ledger.record("ORDERED_SHADOW_OFFER", 7, 102, 10, 15)
+        assertEquals(2L, frozen.shadowOffers)
+    }
 }

@@ -51,6 +51,7 @@ class KeyguardR41DiagnosticsInstrumentationTest {
             KeyguardCardDiagnostics.r41Mark(phase, old, request, reservation, output, atNs = at)
         }
         mark(KeyguardR41RawLedger.OFFER, 101, 11_000L)
+        mark(KeyguardR41RawLedger.ORDERED_SHADOW_OFFER, 101, 11_500L, 102, 15)
         mark(KeyguardR41RawLedger.GRANT, 101, 12_000L, 1001, 2001)
         mark(KeyguardR41RawLedger.CANCEL, 101, 13_000L)
         mark(KeyguardR41RawLedger.OFFER, 102, 14_000L)
@@ -67,6 +68,7 @@ class KeyguardR41DiagnosticsInstrumentationTest {
         assertTrue(row, row.contains("outcome=SUCCESS") && row.contains("owner=1002/2002/102"))
         assertTrue(row, row.contains("wakeNs=10000") && row.contains("screenNs=10000"))
         assertTrue(row, row.contains("grantNs=20000") && row.contains("winnerNs=21000"))
+        assertTrue(row, row.contains("h2ShadowOffers=1 h2PartialMatches=1") && row.contains("h2Enabled=false"))
         assertTrue(report, report.lineSequence().any {
             it.startsWith(" R41_SAMPLE ") && it.contains("sample=55 ") &&
                 it.contains("attempt=1 ") && it.contains("receipt=$receipt ") && it.contains("stateFlags=5 ")

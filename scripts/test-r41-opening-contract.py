@@ -15,10 +15,12 @@ assert offer.index(launch) < offer.index('traceKeyguard(\n            if (starts
     "optional queue reporting still precedes the committed reader launch"
 
 ordered = section("            if (decision.successor == null || decision.snapshot == null) {",
-                  "                val lateSuperseded = withContext(Dispatchers.Main.immediate)")
+                  "                val lateSuperseded =")
 assert "if (!read.r38MilestoneOrdered)" in ordered, \
     "ordered DIRECT still reconstructs the inapplicable R25 route"
 assert ordered.index("if (!read.r38MilestoneOrdered)") < ordered.index("r25CompleteLocked(read, handoff)")
+assert "withContext(Dispatchers.Main.immediate)" in source[source.index("                val lateSuperseded ="):], \
+    "ordered inspection must still hand off to Main"
 
 handoff = section("    private fun applyInspection(", "    /**\n     * UNKNOWN and OCCLUDED")
 assert "slowMainHandoffEvidenceSnapshot(" in handoff, "FULL snapshot must be captured at Main entry"

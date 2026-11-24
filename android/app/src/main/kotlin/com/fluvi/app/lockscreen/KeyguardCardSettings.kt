@@ -2665,6 +2665,7 @@ internal object KeyguardCardDiagnostics {
                     KeyguardR41RawLedger.ELIGIBLE -> "ELIGIBLE"
                     KeyguardR41RawLedger.DENIED -> "DENIED"
                     KeyguardR41RawLedger.ORDERED_BYPASS -> "ORDERED_BYPASS"
+                    KeyguardR41RawLedger.ORDERED_SHADOW_OFFER -> "ORDERED_SHADOW_OFFER"
                     else -> null
                 }
                 if (phase == null) active.r41RawUnmatched += 1 else attempt.r41.record(
