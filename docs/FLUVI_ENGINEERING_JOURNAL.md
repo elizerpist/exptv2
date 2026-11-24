@@ -18735,3 +18735,72 @@ The public [Android 15 CDD §3.8.2](https://source.android.com/docs/compatibilit
 `adb devices -l` returned no attached device. The owner previously identified a Nothing A142/API35 handset, but its current exact firmware and actual primary-lockscreen host were not observable in this environment. A search of available Nothing support documentation did not identify a compatible public primary-clock host contract; this is **not proof that no OEM-specific implementation exists**. No APK was installed, no physical frame was measured, and no real user data was displayed.
 
 **Result: STOCK PRIMARY HOST — NOT ESTABLISHED.** The missing capability is a supported, authenticated system-owned primary-lockscreen integration that can retain the correct configured ORB while Fluvi is suspended, compose it with the first eligible ordinary clock frame without delaying that clock, and omit it in the first PIN/shade/unlock restricted frame with correct ownership and privacy. A widget category flag or the test receiver does not establish that capability. In accordance with the continuation, no provider was relabelled, no production code was changed, no new APK/CI run was produced, and no 10 ms result was claimed. A suitable documented OEM contract or an on-device synthetic observation of the actual primary-screen binding is needed before selecting an adapter. The known R34 privacy-panel failure and physical acceptance remain open. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+## 2026-11-24 — R36 implementation prompt: deliver an installable Fluvi APK for the stock lockscreen trial
+
+FLUVI_R36_HANDSET_APK_BEGIN
+
+### 1. TITLE / TASK INTENT
+IMPLEMENTATION. The owner wants an actual APK to install on the factory phone and explicitly assigns implementation, signing and delivery to the coding agent. The reviewer supplies this design. Build a **full ordinary Fluvi HUMAN profile candidate** with an opt-in, synthetic 1×1 ORB widget that the owner can try in the actual primary-lockscreen picker. Deliver a directly downloadable signed APK in this task. The earlier instruction to wait for proof of a compatible factory host before producing any APK is superseded **for this handset trial**. Determining whether the host offers, binds and presents the prepared ORB is the reason to deliver the APK. Preserve the product acceptance target of at most 10 ms of visible delay.
+
+### 2. AUTHORITATIVE APPLICATION STATE
+Use only elizerpist/exptv2. Branch implement/r35-first-clock-frame at c1d1c552315618e24a224b8dae6ef26852e48d03. Runtime source is 1393e8c5023065f2930b67c9c4a95f78c8d1473c; the later changes repaired tests/CI. Start a separate handset-candidate branch from c1d1c552. R34 phone source e41485b4988112947d6c8884668d9008ce96224b and the owner-preferred opening milestone de807259cd370d18e422772ed0943b8d65be4bca remain comparators. The remote is the source of truth. No unpublished reviewer workspace files or local candidate commits are a dependency. If a matching draft exists where you run, verify its base and inspect its behavior before reusing any part.
+
+### 3. HARD PREFLIGHT
+Read the current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM, DEBUGGING_LOOP_VERY_IMPORTANT, docs/FLUVI_ENGINEERING_JOURNAL.md and root MILESTONE_COMMITS.md (portable rule asset blocks in journal commit 161f63675121302432be2026898bed07b23d7ded). Verify application and coordination refs, git status, existing worktrees and the phone build/signing path. Start the implementation on this run. No user device, documentation of an OEM host or completed timing measurement is required to build and hand over this opt-in trial.
+
+### 4. PHYSICAL USER EVIDENCE
+Owner sees roughly 300–500 ms and has requested a maximum visible delay of 10 ms. Prior evidence concerns the ordinary app-owned overlay on Nothing A142/API35. The owner should be able to install this candidate, identify the exact widget by name and preview, and try it without Android Studio, USB or ADB. Use Android capabilities across manufacturers. The known privacy-panel failure on the earlier overlay calls for synthetic phone testing.
+
+### 5. DRIVE LOG AUDIT
+R32 Drive capture 2ba986ac-3f9f-4b74-ba9d-6175c2bf054e and R34 handset capture 5ead899b-28dd-4a3a-b7e0-26216ecbdfd5 already locate the delay before the overlay grant. In four R34 rows the native call was 1–4 ms while app wake to native return was 185–729 ms. No repeat of these logs is needed for a build. The new measurement is whether a factory host can already hold the demo image when the clock appears, and what the owner actually sees.
+
+### 6. COMMIT / AGENT-EVIDENCE AUDIT
+Exptv2 comparison is complete: R34 control run 45343214350 and R35 candidate run 45343583422. R35 displayed two different synthetic ORBs and an empty frame on an offscreen receiver in a second process. The R35 stock capability review at 83c68bf8776e718d03b98d72bac2dd15ec296c7b found neither an established primary-host interface nor an attached handset. Preserve those results. The new phone trial exercises a different supported entry point with an actual installable artifact.
+
+### 7. GRAPH PROVENANCE AND IMPACT
+The R35 Dart tooling commit 23a5c71c8f6411b92e6a7354a11028b7edf54cf8 indexes 1393e8c5; it does not cover native Android. Use current native source/manifest/resources directly. Existing launcher provider metadata is android/app/src/main/res/xml/fluvi_orb_widget_info.xml. The financial snapshot metadata belongs to a different provider. Add a distinct, identifiable diagnostic widget receiver, resource and layout to the handset variant. Confirm the merged APK contains it; the earlier debug-only R35 receiver is absent from a normal profile build.
+
+### 8. CURRENT SOURCE FACTS
+The launcher ORB currently declares home_screen. R35's production publisher has no enrolled factory recipient. A full system widget update can supply prebuilt RemoteViews to a widget host; OS and user control whether and where it is added. A lockscreen category is a candidate declaration, not an attestation of where the pixels were shown. The test transport is the standard AppWidget provider on the device. There must be no requirement to install a Fluvi-specific SystemUI service, debug harness or a second APK.
+
+### 9. PROVEN / UNPROVEN / MISSING
+Cache/preparation and separate-process demo handover are proven only in their recorded configurations. Primary-picker listing, user selection, successful placement on the ordinary clock screen, first visible ORB, restricted-frame withdrawal and measured latency are independent results. A launcher widget, adjacent hub, editor preview, provider binding or synthetic host can qualify its own step only.
+
+### 10. ROOT-CAUSE / FORENSIC GATE
+Test the actual unresolved dependency: whether the factory host can own a prepublished representation before wake so Fluvi need not traverse accessibility windows at wake. A neutral synthetic trial is safe even if a host keeps displaying it on the PIN or shade. Do not expose the actual user's financial material while probing that behavior. An unavailable or unsuitable host on the chosen firmware is a valid phone outcome; it cannot be known by building the APK.
+
+### 11. SCOPE LOCK
+All source, CI, artifacts and reporting belong to elizerpist/exptv2. Keep the existing home widget, financial widget, user wallpaper, dashboard and normal overlay behavior intact. Give directions to toggle the existing overlay off during comparison so it cannot be mistaken for the new widget. Do not enable both as an automatic substitute, alter stored user settings at upgrade, flash the phone or change SystemUI. The Human trial must not require financial permissions, Accessibility or a foreground service for the new widget. Avoid replacing the requested Fluvi APK with a mock app or re-linking the old R34 binary.
+
+### 12. LAYERS / BOUNDS / OWNERSHIP
+Use a single dedicated AppWidgetProvider with a clear Hungarian picker label, for example **Fluvi ORB – zárképernyőpróba**, and a 1×1 transparent RemoteViews layout. Offer it to keyguard hosts using the documented category. If also available as a home-screen control, make that distinction explicit in the instructions. Prefer a Fluvi-rendered demo orb from the R35 fixture (candidate evidence artifact 14896768942 has the synthetic A/B images), or reproduce it using the existing renderer with fixed demo material and prepackage it. Crop to the artwork with transparent surround. Give the test artwork a distinct visual identity and show the owner its actual colors. The optional picker preview is independent of the delivered widget content.
+
+### 13. REQUIRED RED TESTS
+On c1d1c552 the dedicated trial provider is absent from the merged HUMAN profile manifest. Add a targeted binding/control through the real framework update path to prove the added provider supplies the known demo image on an assigned widget ID. Check installed profile metadata and visual content. Preserve existing provider identities and placement contracts. Mark simulated host results as simulated. Lack of the physical handset must not postpone the signed artifact.
+
+### 14. IMPLEMENTATION CONTRACT
+Prepare the fixed image before locking. Send a complete RemoteViews update at registration/binding or configuration and suitable lifecycle updates, with no periodic timer or wake receiver required to reveal the prepared image. The host retains the last delivered state. Make it possible for the user to find the trial and recognize its image after install, including after opening Fluvi once. Avoid requiring a pre-existing financial database or changing system settings. If recording diagnostics, keep only non-sensitive provider update/binding facts; an update callback or reported host category cannot establish appearance.
+
+### 15. PERFORMANCE GATE
+Score first ordinary clock pixels to first *correct* visible trial ORB, maximum 10 ms inclusive. Separate initial discoverability and placement from display timing. Count loops where the clock appears and the ORB is missing or late. Keep wake stimulus→ORB, animation if measured, and PIN/shade/unlock disappearance separate. Manual inspection detects obvious lag; a precise claim requires measurements with uncertainty bounds sufficient for 10 ms. Never delay the clock. A static demo isolates first appearance and does not qualify full live-animation parity or financial privacy.
+
+### 16. IMPLEMENTATION ORDER
+Implement and commit the provider/assets. Verify merged profile content and exercise the provider against a framework host where available. Immediately start the pinned exptv2 phone builder and continue through signing, obtaining the APK, publication and download verification. Run independent tests alongside the build. If a recoverable runner or source failure occurs, fix and retry in exptv2. Once an installable artifact is qualified as a diagnostic build, deliver it even when the handset observation is pending.
+
+### 17. VALIDATION
+Confirm package ID, version, signer and required ABI/Android support. Build and inspect the exact artifact, check with apksigner and aapt/apkanalyzer and verify the additional widget label/provider appears in the HUMAN package. Install/update on a compatible Android test target if available. Record what was tested on an emulator and what remains for the user. Test normal launch after install plus the widget control where a host exists. Ensure an existing Fluvi installation/user data are not placed at risk by the test instructions.
+
+### 18. COMMIT DISCIPLINE
+Keep app source, build/tooling and downloadable binary identities separate and pinned. The coding agent owns code commits, binary signing, build, publication and execution report. Append evidence to the common journal on fix/orb-v4-latency-lockscreen. Keep short checkpoints if a lengthy build is in progress. No unrelated workflow, repository or project changes.
+
+### 19. PUSH / BUILD / GRAPH REGENERATION
+Use the existing exptv2 phone diagnostic builder or equivalent established exptv2 build lane with an exact application SHA and scripts/build-human-diagnostic-apk.sh. A CI-signed intermediate is not automatically update-compatible. Verify its signer against the installed series (R34 certificate SHA-256 faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb); use the authorized existing phone signing process. If that signer is genuinely unavailable, build the **same Fluvi candidate** as a clearly labelled, separately installable diagnostic variant with its own application ID and signer, verify any authorities/provider component IDs and native assumptions, and label it as side-by-side. Never tell the owner to uninstall Fluvi or erase data. Refresh applicable exact-source graph/native inventory under the established workflow; do not conflate graph SHA with app SHA. Publish the real .apk with a directly downloadable exptv2 release asset or verified binary URL, not a workflow page, ZIP, LFS pointer or expired link.
+
+### 20. COMPLETION REPORT
+First line: direct signed APK download. Include source SHA, APK byte count, SHA-256, signing/install mode, and a successful re-download with matching bytes. Follow with three phone steps: (1) install, open once, identify the new test by name/color and turn off the old overlay for this trial if enabled; (2) look specifically in the phone's **primary lockscreen** widget picker and place the demo if offered; (3) lock/wake several times and report whether it appears with the clock, only after swiping, late, or not at all; check PIN/shade/unlock with only demo content. The owner can report “not listed” without enabling the old overlay. If the phone cannot place it, record that result with firmware/host context without generalizing to every device.
+
+### 21. DEFINITION OF DONE
+Delivery for this assignment is a changed, verified, directly downloadable installable Fluvi diagnostic APK plus brief handset instructions. Device admission and optical ≤10 ms are subsequent validation outcomes, separately reported. An artifactless source checkpoint or a capability report does not complete this assignment. If a true external blocker prevents delivery after the authorized build/signing alternatives, name the exact failed operation and retained evidence; do not claim a phone fix.
+
+FLUVI_R36_HANDSET_APK_END
