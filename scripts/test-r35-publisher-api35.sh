@@ -47,8 +47,17 @@ FILES
       if ! git -C "$root" cat-file -e "${r35_base}^{commit}" 2>/dev/null; then
         git -C "$root" fetch --no-tags --depth=1 origin "$r35_base"
       fi
-      git -C "$root" diff --exit-code "$r35_base" HEAD -- \
+      # This orchestration commit changes only this harness script. The APK
+      # production source is the exact continuation candidate, checked below.
+      candidate=fd7112e4e52952caaee1f740526c87f10ddc7cb2
+      # Runner checkout is shallow. Fetch the exact source tree before the
+      # production-file comparison; ancestry is not available in this clone.
+      if ! git -C "$root" cat-file -e "${candidate}^{commit}" 2>/dev/null; then
+        git -C "$root" fetch --no-tags --depth=1 origin "$candidate"
+      fi
+      git -C "$root" diff --exit-code "$candidate" HEAD -- \
         android/app/src/main lib platform pubspec.yaml pubspec.lock
+      printf 'production_source=%s\n' "$candidate" >> "$out/identity.txt"
       git -C "$root" status --short --untracked-files=no > "$out/fixture-status.txt"
     fi
     sha256sum \
@@ -62,7 +71,7 @@ FILES
       tail -100 "$out/build.log"; exit 1
     fi
     if [[ "$arm" == candidate ]]; then
-      if ! (cd "$app/android" && ./gradlew :app:testDebugUnitTest \
+      if ! (cd "$app/android" && JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -Drobolectric.dependency.repo.url=https://maven-central.storage-download.googleapis.com/maven2" ./gradlew :app:testDebugUnitTest \
         --tests 'com.fluvi.app.lockscreen.host.R35*' \
         --tests 'com.fluvi.app.lockscreen.host.R29OwnershipTest' \
         --no-daemon --max-workers=3 --console=plain) > "$out/unit.log" 2>&1; then
