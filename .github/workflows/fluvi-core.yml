@@ -83,14 +83,18 @@ jobs:
           wait_for_app old
           adb shell run-as com.fluvi.app mkdir -p files
           printf '%s' R37_TO_R38_UPDATE_SENTINEL | adb shell run-as com.fluvi.app tee files/r38_update_sentinel >/dev/null
+          adb shell am force-stop com.fluvi.app
+          # Configure the existing normal entry using synthetic demo settings in
+          # this disposable emulator; the update below must preserve them.
+          adb shell run-as com.fluvi.app mkdir -p shared_prefs
+          printf '%s' '<?xml version="1.0" encoding="utf-8" standalone="yes"?><map><boolean name="requested" value="true"/><boolean name="details" value="true"/><string name="presentationMode">orb</string><string name="animationMode">orbOnly</string><long name="generation" value="1"/></map>' | adb shell run-as com.fluvi.app tee shared_prefs/fluvi_native_keyguard_card.xml >/dev/null
           adb install -r "$out/new.apk" > "$out/new-install.txt" 2>&1
           actual=$(adb shell run-as com.fluvi.app cat files/r38_update_sentinel | tr -d '\r')
           test "$actual" = R37_TO_R38_UPDATE_SENTINEL
           adb shell am force-stop com.fluvi.app
-          # Configure the existing normal entry using synthetic demo settings in
-          # this disposable emulator; these are preserved by the update above.
-          adb shell run-as com.fluvi.app mkdir -p shared_prefs
-          printf '%s' '<?xml version="1.0" encoding="utf-8" standalone="yes"?><map><boolean name="requested" value="true"/><boolean name="details" value="true"/><string name="presentationMode">orb</string><string name="animationMode">orbOnly</string><long name="generation" value="1"/></map>' | adb shell run-as com.fluvi.app tee shared_prefs/fluvi_native_keyguard_card.xml >/dev/null
+          adb shell run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$out/preserved-orb-settings.txt"
+          grep -q 'name="requested" value="true"' "$out/preserved-orb-settings.txt"
+          grep -q '<string name="presentationMode">orb</string>' "$out/preserved-orb-settings.txt"
           wait_for_app new
           adb shell settings put secure enabled_accessibility_services com.fluvi.app/.lockscreen.FluviKeyguardCardService
           adb shell settings put secure accessibility_enabled 1
