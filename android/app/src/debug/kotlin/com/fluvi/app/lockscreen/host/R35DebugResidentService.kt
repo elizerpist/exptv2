@@ -15,7 +15,6 @@ import android.os.Looper
 import android.os.Parcel
 import android.os.Process
 import com.android.systemui.keyguard.fluvi.R29HostRenderer
-import com.android.systemui.keyguard.fluvi.R29PreparedOrb
 import com.android.systemui.keyguard.fluvi.R29ResidentStore
 import com.fluvi.r29.contract.R29Protocol
 import com.fluvi.r29.contract.R29WireCodec
@@ -37,7 +36,7 @@ internal class R35DebugResidentService : Service() {
     private val worker = Executors.newSingleThreadExecutor { task -> Thread(task, "r35-test-render") }
     private lateinit var store: R29ResidentStore
     private lateinit var images: ImageReader
-    private val pending = ArrayDeque<Frame>()
+    private val frames = R35FrameSequencer<Frame>()
     private var connectedNonce: String? = null
     private var callback: IBinder? = null
     private var death: IBinder.DeathRecipient? = null
@@ -57,8 +56,10 @@ internal class R35DebugResidentService : Service() {
         images = ImageReader.newInstance(SIZE, SIZE, PixelFormat.RGBA_8888, 4,
             HardwareBuffer.USAGE_GPU_COLOR_OUTPUT or HardwareBuffer.USAGE_CPU_READ_OFTEN)
         images.setOnImageAvailableListener({ reader ->
+            if (destroyed) return@setOnImageAvailableListener
             val image = reader.acquireNextImage() ?: return@setOnImageAvailableListener
-            val frame = if (pending.isEmpty()) null else pending.removeFirst()
+            // One post awaits a buffer; skipped updates cannot shift later identities.
+            val frame = frames.received()
             try {
                 if (frame == null) return@setOnImageAvailableListener
                 val plane = image.planes[0]
@@ -108,14 +109,17 @@ internal class R35DebugResidentService : Service() {
                         }
                     }
                 }
-            } finally { image.close() }
+            } finally {
+                image.close()
+                submitNextFrame()
+            }
         }, handler)
         store = R29ResidentStore(R29HostRenderer(applicationContext, worker), worker, main,
             scheduleExpiry = { task, delay -> check(handler.postDelayed(task, delay)) },
             cancelExpiry = { task -> handler.removeCallbacks(task) }) {
             if (!destroyed) {
                 val ready = store.current(System.currentTimeMillis())
-                draw(ready, Frame(ready?.descriptor?.session, ready?.descriptor?.sequence ?: 0L, false, null))
+                enqueueFrame(Frame(ready?.descriptor?.session, ready?.descriptor?.sequence ?: 0L, false, null))
             }
         }
     }
@@ -199,7 +203,7 @@ internal class R35DebugResidentService : Service() {
                             code == R29WireCodec.TRANSACTION_OWNERSHIP) {
                             emptyPending = true
                             val target = callback
-                            handler.post { draw(null, Frame(nonce, sequence, true, target)) }
+                            handler.post { enqueueFrame(Frame(nonce, sequence, true, target)) }
                         }
                     }
                 }
@@ -225,7 +229,7 @@ internal class R35DebugResidentService : Service() {
                     if (data.dataAvail() != 0) throw SecurityException("R35 draw probe")
                     handler.post {
                         val ready = store.current(System.currentTimeMillis())
-                        draw(ready, Frame(ready?.descriptor?.session, ready?.descriptor?.sequence ?: 0L, false, null))
+                        enqueueFrame(Frame(ready?.descriptor?.session, ready?.descriptor?.sequence ?: 0L, false, null))
                     }
                     reply?.writeNoException()
                 }
@@ -234,20 +238,48 @@ internal class R35DebugResidentService : Service() {
         }
     }
 
-    /** Main-thread-only: a submitted frame is correlated with its acquired buffer. */
-    private fun draw(orb: R29PreparedOrb?, frame: Frame) {
+    /** Main-thread-only: never have two unacquired posts with ambiguous identity. */
+    private fun enqueueFrame(frame: Frame) {
         if (destroyed) return
-        val canvas = images.surface.lockHardwareCanvas()
-        try {
-            canvas.drawColor(Color.rgb(19, 23, 29))
-            orb?.draw(canvas, 0f, 0f, System.nanoTime())
-            pending.addLast(frame)
-        } finally { images.surface.unlockCanvasAndPost(canvas) }
+        frames.enqueue(frame)
+        submitNextFrame()
+    }
+
+    private fun submitNextFrame() {
+        if (destroyed) return
+        while (true) {
+            val frame = frames.begin() ?: return
+            val ready = store.current(System.currentTimeMillis())
+            val current = when {
+                frame.empty -> synchronized(this) {
+                    emptyPending && connectedNonce == frame.nonce && callback === frame.callback &&
+                        frame.callback != null && store.current(System.currentTimeMillis()) == null
+                }
+                frame.nonce == null -> frame.sequence == 0L && ready == null
+                else -> ready != null && ready.descriptor.session == frame.nonce && ready.descriptor.sequence == frame.sequence
+            }
+            if (!current) {
+                frames.discard(frame)
+                continue
+            }
+            try {
+                val canvas = images.surface.lockHardwareCanvas()
+                try {
+                    canvas.drawColor(Color.rgb(19, 23, 29))
+                    if (!frame.empty) ready?.draw(canvas, 0f, 0f, System.nanoTime())
+                } finally { images.surface.unlockCanvasAndPost(canvas) }
+            } catch (failure: Throwable) {
+                frames.discard(frame)
+                throw failure
+            }
+            return
+        }
     }
 
     override fun onDestroy() {
         destroyed = true
         synchronized(this) { clearConnection(); store.reset() }
+        frames.clear()
         images.close()
         worker.shutdown()
         super.onDestroy()

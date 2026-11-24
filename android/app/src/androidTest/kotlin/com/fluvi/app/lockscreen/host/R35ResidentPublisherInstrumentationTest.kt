@@ -126,7 +126,24 @@ class R35ResidentPublisherInstrumentationTest {
             println("R35_DEMO_A sequence=${a.second} receiverPid=${imageA.pid} changedPixels=${imageA.pixels} sha256=${imageA.digest}")
             assertNotEquals("receiver must be a separate process", Process.myPid(), imageA.pid)
             publishProfile(context, 2, listOf(0xfff1414b.toInt(), 0xffe4c048.toInt()))
-            val b = requireNotNull(ready.poll(35, TimeUnit.SECONDS)) { "B never reached independently prepared READY" }
+            val storedB = requireNotNull(FluviKeyguardMaterialStore.read(context))
+            assertEquals("r35-instrumentation", storedB.publisherSession)
+            assertEquals(2L, storedB.publisherRevision)
+            println("R35_DEMO_B_ATTEMPT storedRevision=${storedB.publisherRevision}")
+            val nextReady = ready.poll(35, TimeUnit.SECONDS)
+            if (nextReady == null && InstrumentationRegistry.getArguments().getString("r35ParentFixture") == "true") {
+                // A useful parent RED requires a live receiver still showing
+                // the same acknowledged A after the real B store accepted it.
+                assertTrue("receiver died before B could be checked", binder.pingBinder())
+                val afterB = requireNotNull(probe(binder))
+                assertEquals(imageA.pid, afterB.pid)
+                assertEquals(a.first, afterB.nonce)
+                assertEquals(a.second, afterB.sequence)
+                assertEquals(imageA.digest, afterB.digest)
+                assertTrue(afterB.pixels > 0)
+                println("R35_PARENT_B_NO_READY storedRevision=2 receiverPid=${afterB.pid} retainedSequence=${afterB.sequence} changedPixels=${afterB.pixels} sha256=${afterB.digest}")
+            }
+            val b = requireNotNull(nextReady) { "B never reached independently prepared READY" }
             assertEquals(a.first, b.first)
             assertTrue(b.second > a.second)
             val imageB = waitForProbe(binder) { it.nonce == b.first && it.sequence == b.second && it.pixels > 0 }
