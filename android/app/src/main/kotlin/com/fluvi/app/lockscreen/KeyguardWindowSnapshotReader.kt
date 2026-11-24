@@ -687,6 +687,11 @@ internal class KeyguardWindowSnapshotReader(
                     activeLayer?.let { window.layer.toLong() - it.toLong() }, "perWindow")
             }
             val rootPackage = root?.packageName?.toString()
+            // AccessibilityNodeInfo.windowId is an already-returned scalar;
+            // do not infer this identity from the active root or package name.
+            val verifiedRootWindow = rootPackage == "com.android.systemui" &&
+                window.type == AccessibilityWindowInfo.TYPE_SYSTEM && root != null &&
+                runCatching { root.windowId == window.id }.getOrDefault(false)
             val potentialOwn = window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY &&
                 (rootPackage == ownPackageName || root == null)
             if (request.strictOwnAttribution && potentialOwn) {
@@ -769,6 +774,7 @@ internal class KeyguardWindowSnapshotReader(
             snapshots += KeyguardWindowSnapshot(
                 windowId = window.id, packageName = rootPackage, type = window.type, layer = window.layer,
                 displayId = displayId(window), ownOverlay = own, visibleViewIds = visible?.ids.orEmpty(),
+                verifiedRootWindow = verifiedRootWindow,
             )
         }
         activeRoot?.recycle()

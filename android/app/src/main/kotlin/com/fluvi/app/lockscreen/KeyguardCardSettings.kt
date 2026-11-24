@@ -1043,6 +1043,27 @@ internal object KeyguardCardDiagnostics {
         }
         listOf("r18SampleStart", "r18SampleEnd", "r18Reservation", "r18AlignUptime", "r18AlignNano",
             "r18AlignUncertaintyNs", "r19Intent", "r19Poster", "r34AssetGeneration", "r34PrepareStart", "r34Ready").forEach { retainField(it) }
+        if (event.reason.startsWith("R39_")) {
+            when (event.reason) {
+                "R39_ARMED", "R39_REARMED" -> {
+                    timeline.values["r39Witness"] = "ATTRIBUTED"
+                    listOf("r39Window", "r39Request", "r39ReadEnd").forEach { field ->
+                        event.fields[field]?.takeIf { it != "UNOBSERVED" }?.let { timeline.values[field] = it }
+                    }
+                    timeline.values["r39ArmAt"] = event.uptimeMs.toString()
+                }
+                "R39_UNATTRIBUTED" -> timeline.values.putIfAbsent("r39Witness", "UNATTRIBUTED")
+                "R39_REMOVAL_MATCH", "R39_REMOVAL_FALLBACK" -> {
+                    val countKey = if (event.reason == "R39_REMOVAL_MATCH") "r39Matched" else "r39Fallback"
+                    timeline.values[countKey] = ((timeline.values[countKey]?.toIntOrNull() ?: 0) + 1)
+                        .coerceAtMost(9999).toString()
+                    if (event.reason == "R39_REMOVAL_MATCH") {
+                        timeline.values["r39SealAt"] = event.uptimeMs.toString()
+                        listOf("r39EventAt", "r39CallbackAt", "r39CallbackToSeal").forEach { retainField(it) }
+                    }
+                }
+            }
+        }
         if (event.reason == "WAKE_ADOPTED") {
             event.requestId?.let { timeline.values.putIfAbsent("r19ReservedRequest", it.toString()) }
         }
@@ -2678,6 +2699,8 @@ internal object KeyguardCardDiagnostics {
                         append(" firstMethod=${value("r20Method")} firstTicket=${value("r20Ticket")} firstFailure=${value("r20Failure")}")
                         append(" firstNs=${value("r20EntryNs")}/${value("r20PainterStartNs")}/${value("r20PainterEndNs")}/${value("r20ConfigureEndNs")}/${value("r20LockBeginNs")}/${value("r20LockReturnNs")}/${value("r20DrawEndNs")}/${value("r20PostReturnNs")} firstNsClock=monotonic")
                         append(" paint=${value("R19_PAINT_REQUEST")}/${value("R19_PAINT_ENTER")} poster=${value("r19Poster")}@${value("R19_POSTER")} activeStart=${motion?.activeStartedAtUptimeMs ?: "UNOBSERVED"} firstMotion=${motion?.firstDistinctUptimeMs ?: "UNOBSERVED"} activePosts=${motion?.activeSubmissions ?: "UNOBSERVED"} gaps=${motion?.retainedGaps ?: "UNOBSERVED"}/${motion?.p95GapNs ?: "UNOBSERVED"}/${motion?.worstGapNs ?: "UNOBSERVED"}/${motion?.gapsOver50Ms ?: "UNOBSERVED"}")
+                        append(" r39Witness=${value("r39Witness")} r39Window=${value("r39Window")} r39Request=${value("r39Request")} r39ReadEnd=${value("r39ReadEnd")} r39Arm=${value("r39ArmAt")}")
+                        append(" r39Removal=${value("r39Matched")}/${value("r39Fallback")} r39EventCallbackSeal=${value("r39EventAt")}/${value("r39CallbackAt")}/${value("r39SealAt")} r39CallbackToSealMs=${value("r39CallbackToSeal")}")
                         appendLine(" backend=R18_DIRECT_ATTEMPT omittedGenerations=${attempt.r18GenerationOmitted} physicalFirstPixel=UNOBSERVED physicalLastPixel=UNOBSERVED")
                     }
                     select("a${attempt.id}:r18$index", text, attempt.id)

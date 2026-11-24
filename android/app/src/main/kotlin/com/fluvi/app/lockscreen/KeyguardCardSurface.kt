@@ -29,6 +29,8 @@ internal data class KeyguardSurfaceClassification(
     val reason: KeyguardSurfaceReason,
     /** Counts only classifier marker categories, never screen text. */
     val markers: KeyguardSurfaceMarkers = KeyguardSurfaceMarkers(),
+    /** Optional negative-only provenance; never an independent show grant. */
+    val authorizingClockWindowId: Int? = null,
 )
 
 internal data class KeyguardSurfaceMarkers(
@@ -48,6 +50,8 @@ internal data class KeyguardWindowSnapshot(
     val ownOverlay: Boolean = false,
     val visibleViewIds: Set<String> = emptySet(),
     val windowId: Int = -1,
+    /** Root's actual window ID matched this inventory entry. */
+    val verifiedRootWindow: Boolean = false,
 )
 
 internal object KeyguardSurfaceClassifier {
@@ -142,7 +146,24 @@ internal object KeyguardSurfaceClassifier {
             KeyguardSurfaceReason.WALK_TRUNCATED,
             markers,
         )
-        if (ids.any { it in mainIds }) return KeyguardSurfaceClassification(KeyguardSurface.MAIN_KEYGUARD, KeyguardSurfaceReason.MAIN_CONFIRMED, markers)
+        if (ids.any { it in mainIds }) {
+            // Do not infer a clock window from an active root, package alone,
+            // or a carrier marker. The complete MAIN evidence must belong to
+            // exactly one verified non-own SystemUI TYPE_SYSTEM clock window.
+            val sources = system.filter { candidate -> candidate.visibleViewIds.any { it in mainIds } }
+            val source = sources.singleOrNull()
+            val clockMarkers = setOf("com.android.systemui:id/keyguard_clock_switch",
+                "com.android.systemui:id/keyguard_status_view")
+            val clockId = source?.takeIf { candidate ->
+                candidate.windowId >= 0 && candidate.verifiedRootWindow &&
+                    candidate.packageName == SYSTEM_UI &&
+                    candidate.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_SYSTEM &&
+                    candidate.visibleViewIds.any { it in clockMarkers } &&
+                    windows.count { it.displayId == primaryDisplayId && it.windowId == candidate.windowId } == 1
+            }?.windowId
+            return KeyguardSurfaceClassification(KeyguardSurface.MAIN_KEYGUARD,
+                KeyguardSurfaceReason.MAIN_CONFIRMED, markers, clockId)
+        }
         return KeyguardSurfaceClassification(
             KeyguardSurface.UNKNOWN,
             KeyguardSurfaceReason.NO_MAIN_MARKER,

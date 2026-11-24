@@ -539,6 +539,11 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "r18", operation = show,
                 observedUptimeMs = base + 5)
             edge("INPUT_ARMED", base + 6); edge("REVEAL_QUEUED", base + 7)
+            edge("R39_ARMED", base + 11, extra = mapOf("r39Window" to 123, "r39Request" to base + 77,
+                "r39ReadEnd" to base + 4))
+            edge("R39_REMOVAL_FALLBACK", base + 17)
+            edge("R39_REMOVAL_MATCH", base + 20, extra = mapOf("r39EventAt" to base + 15,
+                "r39CallbackAt" to base + 18, "r39CallbackToSeal" to 2))
             // Receipt delivery may be out of order; it must not overwrite the
             // observed apply endpoints or synthesize a pixel presentation.
             edge("REVEAL_RECEIPT", base + 12, extra = mapOf("r18Commit" to base + 12))
@@ -566,6 +571,8 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("revealApply=10008/10010 revealCommit=10012"))
         assertTrue(report.contains("seal=10020/SEALED:window retireApply=10021/10022 retireCommit=10023"))
         assertTrue(report.contains("physicalFirstPixel=UNOBSERVED physicalLastPixel=UNOBSERVED"))
+        assertTrue(report.contains("r39Witness=ATTRIBUTED r39Window=123 r39Request=10077 r39ReadEnd=10004 r39Arm=10011"))
+        assertTrue(report.contains("r39Removal=1/1 r39EventCallbackSeal=10015/10018/10020 r39CallbackToSealMs=2"))
         assertTrue(report.contains("omittedCriticalRecordIds="))
         KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", "REVEAL_RECEIPT", diagnosticContext = oldOwner,
             fields = mapOf("r18Host" to 1, "r18Output" to 20, "r18Commit" to 99999))

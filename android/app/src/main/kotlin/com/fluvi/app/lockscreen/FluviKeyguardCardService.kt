@@ -308,6 +308,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         var bound = false
         @Volatile var output: Any? = null
         var firstProof: KeyguardFirstAuthorizedOrb.Proof? = null // Main
+        var r39Evidence: KeyguardR39WindowEvidence? = null // queueLock
+        var r39GrantAt: Long = 0L // queueLock
         var paintRequested = false // Main; this exact virgin target only
         var lastReconciledScene = -1L // Main, at most once per scene
         var lastExpiredProof = 0L // Main, diagnostic coalescing only
@@ -326,6 +328,8 @@ class FluviKeyguardCardService : AccessibilityService() {
     }
     private val r18Coordinator = KeyguardOrbPresentationCoordinator(queueLock)
     private val firstAuthorizedOrb = KeyguardFirstAuthorizedOrb(queueLock)
+    private val r39RemovalGate = KeyguardR39RemovalGate(queueLock, r18Coordinator)
+    private val r39AppUid = android.os.Process.myUid()
     private val r19JoinPosted = AtomicBoolean(false)
     private val r18DrainBindings = arrayOfNulls<R18DrainBinding>(2) // queueLock
     private var r18RouteSnapshot: R18RouteSnapshot? = null // queueLock
@@ -432,6 +436,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         var r25Retired: KeyguardOpeningPublication.Discarded<R25Completed>? = null
         synchronized(queueLock) {
             if (inspectionAuthority != current) {
+                r39RemovalGate.clear()
                 r25Publication.waitingRequest()?.takeIf { !current.matches(it) }?.let {
                     r25Retired = r25Publication.discard(inspectionQueue, it)
                 }
@@ -796,6 +801,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val observedAt = callbackAt ?: SystemClock.uptimeMillis()
         synchronized(queueLock) {
             previous = firstAuthorizedOrb.current()
+            r39RemovalGate.clear()
             scene = firstAuthorizedOrb.externalIngress()
             if (reason == "INGRESS" && ordinaryRecheck && meta != null) {
                 openingHandoff.externalInvalidation(scene, observedAt)
@@ -1191,6 +1197,12 @@ class FluviKeyguardCardService : AccessibilityService() {
                     stamp.dataRevision, full = true, completeMain = true, freshSystemEligible = true) else null
                 if (proof != null) {
                     owner.firstProof = proof
+                    owner.r39Evidence = scene?.let { currentScene ->
+                        inspection.authorizingClockWindowId?.let { window ->
+                            KeyguardR39WindowEvidence(window, Display.DEFAULT_DISPLAY, r39AppUid,
+                                request.id, currentScene, readFinishedAt)
+                        }
+                    }
                     r32MainSnapshot = null
                 }
                 proof to if (proof == null) firstAuthorizedOrb.offerRejection(request.id, scene, revision,
@@ -1283,15 +1295,27 @@ class FluviKeyguardCardService : AccessibilityService() {
         val identity = owner.identity
         val token = identity.token
         val sealed = synchronized(queueLock) {
-            val accepted = r18Coordinator.seal(token, authority, requestId, true) != null
-            if (accepted) openingHandoff.invalidate()
+            val accepted = r18Active === owner && owner.identity === identity &&
+                r18Coordinator.seal(token, authority, requestId, true) != null
+            if (accepted) {
+                openingHandoff.invalidate()
+                firstAuthorizedOrb.invalidate()
+                r39RemovalGate.clearFor(token)
+            }
             accepted
         }
         if (!sealed) return null
-        firstAuthorizedOrb.invalidate()
+        finishR18Seal(owner, identity, reason, requestId, SystemClock.uptimeMillis(), systemRequest, systemState)
+        return owner
+    }
+
+    /** Exact owner was already sealed under queueLock; native work stays outside it. */
+    private fun finishR18Seal(owner: R18Active, identity: R18Identity, reason: String, requestId: Long,
+                              sealedAt: Long, systemRequest: KeyguardSystemGateRequest? = null,
+                              systemState: KeyguardSystemState? = null) {
+        val token = identity.token
         // Capture this boundary before the compositor can process its queued
         // hide. Diagnostic delivery can occur later on a different thread.
-        val sealedAt = SystemClock.uptimeMillis()
         overlay.sealR18FromAnyThread(identity.preparation.attachment, identity.preparation.outputGeneration)
         owner.r21Binding?.takeIf { it.token === token }?.let { binding -> runCatching {
             recordR21(binding, "SEAL", sealedAt, r18Coordinator.revealOrdinal(binding.reveal), "CANCELLED", reason, offered = requestId.takeUnless { it == Long.MAX_VALUE })
@@ -1315,7 +1339,31 @@ class FluviKeyguardCardService : AccessibilityService() {
                     "r26SystemReceived" to systemRequest.receivedAt,
                     "r26SystemStart" to systemState.startedAt, "r26SystemEnd" to systemState.finishedAt) }) }
         }
-        return owner
+    }
+
+    private fun recordR39(owner: R18Active, phase: String, at: Long,
+                          evidence: KeyguardR39WindowEvidence? = null,
+                          meta: KeyguardAccessibilityEventMeta? = null, callbackAt: Long? = null,
+                          identity: R18Identity = owner.identity) {
+        val context = owner.diagnosticContext ?: return
+        if (context.captureId == null || !KeyguardCardDiagnostics.wantsEvent("R18_PIPELINE")) return
+        val stamp = identity.token.stamp
+        runCatching {
+            KeyguardCardDiagnostics.captureEvent(this, "R18_PIPELINE", "R39_$phase",
+                serviceSession = stamp.authority.serviceSession, wakeEpoch = stamp.authority.wakeGeneration,
+                requestId = evidence?.requestId ?: stamp.firstRequestId,
+                attachGeneration = identity.preparation.attachment, observedUptimeMs = at,
+                diagnosticContext = context, deferredFields = { mapOf(
+                    "r18Host" to stamp.hostGeneration, "r18Output" to identity.preparation.outputGeneration,
+                    "r18ReservationId" to identity.token.id, "r18Privacy" to if (stamp.full) "full" else "discreet",
+                    "r39Window" to (evidence?.windowId ?: meta?.windowId ?: "UNOBSERVED"),
+                    "r39Request" to (evidence?.requestId ?: "UNOBSERVED"),
+                    "r39ReadEnd" to (evidence?.readFinishedAt ?: "UNOBSERVED"),
+                    "r39EventAt" to (meta?.eventTimeUptimeMs ?: "UNOBSERVED"),
+                    "r39CallbackAt" to (callbackAt ?: "UNOBSERVED"),
+                    "r39CallbackToSeal" to (callbackAt?.let { (at - it).coerceAtLeast(0L) } ?: "UNOBSERVED"),
+                ) })
+        }
     }
 
     private fun finishR18AfterWindow(owner: R18Active?) {
@@ -1787,6 +1835,33 @@ class FluviKeyguardCardService : AccessibilityService() {
         val own = ::overlay.isInitialized && overlay.isOwnAccessibilityWindow(meta.windowId, meta.displayId)
         val r14Origin = KeyguardR14IngressClassifier.classify(meta, own)
         val action = KeyguardCardEventGate.decide(meta, own)
+        // The negative-only witness is checked before ordinary reconciliation.
+        // The same queue lock protects the owner identity and irreversible seal.
+        val isRemoval = meta.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED &&
+            meta.windowChanges and AccessibilityEvent.WINDOWS_CHANGE_REMOVED != 0
+        if (isRemoval && frameworkEvent) {
+            val capturedOwner = r18Active
+            val sealed = synchronized(queueLock) {
+                val owner = r18Active
+                val identity = owner?.identity
+                val withdrawal = r39RemovalGate.remove(meta, callbackReceivedAt, true, own,
+                    identity?.token, inspectionAuthority, r39AppUid)
+                if (owner != null && identity != null && withdrawal?.reservation === identity.token &&
+                    r18Active === owner && owner.identity === identity) {
+                    openingHandoff.invalidate()
+                    firstAuthorizedOrb.invalidate()
+                    owner to identity
+                } else null
+            }
+            if (sealed != null) {
+                val sealedAt = SystemClock.uptimeMillis()
+                finishR18Seal(sealed.first, sealed.second, "r39ClockWindowRemoved", Long.MAX_VALUE, sealedAt)
+                recordR39(sealed.first, "REMOVAL_MATCH", sealedAt, meta = meta,
+                    callbackAt = callbackReceivedAt, identity = sealed.second)
+            } else if (capturedOwner != null) {
+                recordR39(capturedOwner, "REMOVAL_FALLBACK", callbackReceivedAt, meta = meta, callbackAt = callbackReceivedAt)
+            }
+        }
         // Invalidate before sampler, queue, diagnostics or coalescing. Only a
         // positively identified exact current own window is exempt.
         val invalidation = if (!own && (meta.displayId == Display.DEFAULT_DISPLAY || meta.displayId < 0))
@@ -3606,6 +3681,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val r34ReadOwner: R32DirectSnapshot? = null,
         val r34InventoryAt: Long? = null,
         val r34PausedForOffer: Boolean = false,
+        val authorizingClockWindowId: Int? = null,
     )
 
     /** A missing Budget category is a user-visible configuration state, not a
@@ -3773,6 +3849,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             r19ReadSceneSerial = sceneAtRead,
             r34ReadOwner = read.r34ReadOwner,
             r34InventoryAt = read.r34InventoryAt,
+            authorizingClockWindowId = classification.authorizingClockWindowId,
         ))
     }
 
@@ -4365,6 +4442,31 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (decision == KeyguardCardVisibility.SHOW_FULL || decision == KeyguardCardVisibility.SHOW_DISCREET)
             inspectionProbeForTest?.positiveApplyAttempt(request, decision)
         val staged = r18Active
+        // A later, independently complete MAIN read may refresh a negative-only
+        // witness for the same already-presented owner. It grants no reveal.
+        if (staged != null && overlay.isAttached && completeMain &&
+            decision == KeyguardCardVisibility.SHOW_FULL) {
+            val window = inspection.authorizingClockWindowId
+            val scene = inspection.r19ReadSceneSerial
+            val revision = inspection.freshnessRevision
+            val binding = staged.r21Binding
+            if (window != null && scene != null && revision != null && binding != null) {
+                val evidence = KeyguardR39WindowEvidence(window, Display.DEFAULT_DISPLAY, r39AppUid,
+                    request.id, scene, inspectionFinishedAt)
+                val identity = staged.identity
+                val armed = synchronized(queueLock) {
+                    val newer = listOfNotNull(inspectionQueue.activeRequest(), inspectionQueue.pendingRequest())
+                        .any { inspectionAuthority.matches(it) && it.id > request.id }
+                    r18Active === staged && staged.identity === identity && binding.token === identity.token &&
+                        inspectionAuthority.matches(request) && !newer && firstAuthorizedOrb.sceneSerial() == scene &&
+                        inspectionFreshness.isEstablished(inspectionAuthority, revision) &&
+                        r39RemovalGate.armPresented(evidence, binding.reveal, inspectionAuthority,
+                            scene, r39AppUid, staged.r39GrantAt)
+                }
+                if (armed) recordR39(staged, "REARMED", SystemClock.uptimeMillis(),
+                    evidence = evidence, identity = identity)
+            }
+        }
         if (staged != null && !overlay.isAttached &&
             (decision == KeyguardCardVisibility.SHOW_DISCREET || decision == KeyguardCardVisibility.SHOW_FULL)) {
             if (!prepareR18Decision(staged, request, inspection, decision, settings,
@@ -4885,10 +4987,17 @@ class FluviKeyguardCardService : AccessibilityService() {
                 (directOwner.preparation.emptyAwaitingDisclosure &&
                     (continuation == null || continuation.requestId != proof || !firstAuthorizedOrb.isCurrent(continuation)))) return null
             val stamp = directToken.stamp
-            if (!r18Coordinator.grant(directToken, inspectionAuthority, proof, completeMain = true,
-                    finalSystemEligible = true, disclosedFull = presentation.full,
-                    selectionRevision = stamp.selectionRevision, materialRevision = stamp.materialRevision,
-                    dataRevision = stamp.dataRevision)) {
+            val grantAt = SystemClock.uptimeMillis()
+            val granted = synchronized(queueLock) {
+                val accepted = r18Active === directOwner && directOwner.identity.token === directToken &&
+                    r18Coordinator.grant(directToken, inspectionAuthority, proof, completeMain = true,
+                        finalSystemEligible = true, disclosedFull = presentation.full,
+                        selectionRevision = stamp.selectionRevision, materialRevision = stamp.materialRevision,
+                        dataRevision = stamp.dataRevision)
+                if (accepted) directOwner.r39GrantAt = grantAt
+                accepted
+            }
+            if (!granted) {
                 failR18Stage(directOwner, "grantRejected")
                 return null
             }
@@ -5023,6 +5132,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         (directOwner.output as? com.fluvi.app.lockscreen.material.KeyguardOrbDirectOutput)?.childId,
                         directOwner.diagnosticContext, permit)
                     directOwner.r21Binding = binding
+                    val r39Identity = directOwner.identity
                     overlay.revealR18(directOwner.preparation,
                         boundary = {
                             val crossed: Boolean
@@ -5037,7 +5147,24 @@ class FluviKeyguardCardService : AccessibilityService() {
                             crossed
                         }, nativeApplied = {
                             val at = SystemClock.uptimeMillis()
-                            val ordinal = r18Coordinator.markNativeApplyReturned(permit)
+                            var r39Armed: KeyguardR39WindowEvidence? = null
+                            val ordinal = synchronized(queueLock) {
+                                val applied = r18Coordinator.markNativeApplyReturned(permit)
+                                val evidence = directOwner.r39Evidence
+                                if (applied != null && r18Active === directOwner &&
+                                    directOwner.identity.token === directToken && continuation != null &&
+                                    firstAuthorizedOrb.isCurrent(continuation) && evidence != null &&
+                                    r39RemovalGate.arm(evidence, permit, inspectionAuthority,
+                                        firstAuthorizedOrb.sceneSerial(), r39AppUid, directOwner.r39GrantAt)) {
+                                    r39Armed = evidence
+                                }
+                                applied
+                            }
+                            if (ordinal != null) {
+                                if (r39Armed != null) recordR39(directOwner, "ARMED", at,
+                                    evidence = r39Armed, identity = r39Identity)
+                                else recordR39(directOwner, "UNATTRIBUTED", at, identity = r39Identity)
+                            }
                             runCatching { recordR21(binding, "NATIVE_APPLY", at, ordinal, "APPLIED",
                                 if (ordinal != null) "ACCEPTED" else "STALE") }
                             ordinal != null
