@@ -43,14 +43,25 @@ jobs:
           cat > "$RUNNER_TEMP/r36-update/control.sh" <<'CONTROL'
           set -euo pipefail
           out="$RUNNER_TEMP/r36-update"
+          for ((bootwait=0; bootwait<45; bootwait++)); do
+            [[ "$(adb shell getprop init.svc.bootanim | tr -d '\r')" = stopped ]] && break
+            sleep 1
+          done
+          sleep 15
           adb shell input keyevent KEYCODE_WAKEUP
           adb shell wm dismiss-keyguard || true
           adb install -r "$out/old.apk" > "$out/old-install.txt" 2>&1
           trap 'adb logcat -d -v threadtime > "$out/logcat.txt" 2>&1 || true; adb shell dumpsys activity activities > "$out/last-activities.txt" 2>&1 || true' EXIT
           wait_for_app() {
             label="$1"
-            adb shell am start -W -n com.fluvi.app/.MainActivity > "$out/${label}-launch.txt" 2>&1 || true
-            for ((attempt=0; attempt<60; attempt++)); do
+            launches=0
+            : > "$out/${label}-launch.txt"
+            for ((attempt=0; attempt<90; attempt++)); do
+              if (( launches < 3 )) && { (( attempt == 0 )) || { (( attempt % 10 == 0 )) && ! adb shell pidof com.fluvi.app >/dev/null 2>&1; }; }; then
+                launches=$((launches+1))
+                printf 'LAUNCH_ATTEMPT=%s\n' "$launches" >> "$out/${label}-launch.txt"
+                adb shell am start -W -n com.fluvi.app/.MainActivity >> "$out/${label}-launch.txt" 2>&1 || true
+              fi
               adb shell dumpsys activity activities > "$out/${label}-activities.txt" 2>&1 || true
               if grep -Ei '(mResumedActivity|topResumedActivity).*com\.fluvi\.app/\.MainActivity' "$out/${label}-activities.txt" >/dev/null && adb shell pidof com.fluvi.app >/dev/null 2>&1; then
                 printf '%s\n' "${label}_RESUMED" >> "$out/${label}-launch.txt"
@@ -79,6 +90,7 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
+          disable-animations: false
           target: default
           arch: x86_64
           profile: pixel_7
