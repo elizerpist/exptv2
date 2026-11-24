@@ -3076,6 +3076,7 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     private fun traceCompletedInspection(read: CompletedInspection, handoff: InspectionHandoff?,
                                          readAhead: ReadAheadDecision? = null) {
+        inspectionProbeForTest?.let { probe -> runCatching { probe.beforeOptionalInspectionReport(read.request) } }
         traceInspectionResult(read.request, read.result, read.startedAt, read.finishedAt, handoff, readAhead)
     }
 

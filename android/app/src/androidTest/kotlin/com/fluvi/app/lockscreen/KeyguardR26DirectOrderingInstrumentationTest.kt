@@ -40,9 +40,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun stableDirectUsesOrderedMainAndLaterOfferWaits() = exercise(false)
     @Test fun orderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true)
     @Test fun warmOrderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true, warmup = true)
+    @Test fun readyWorkDoesNotWaitForDiagnosticPublication() = exercise(true, true, warmup = true, checkReport = true)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
-    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false) {
+    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -50,7 +51,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val source = requireNotNull(args.getString("sourceSha"))
         require(source.matches(Regex("[0-9a-f]{40}")))
         val uuid = UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
-        val name = if (warmup) "r41-warm-pending" else if (checkR41Bypass) "r41-pending" else if (pendingBefore) "pending" else "stable-later-offer"
+        val name = if (checkReport) "r41-report" else if (warmup) "r41-warm-pending" else if (checkR41Bypass) "r41-pending" else if (pendingBefore) "pending" else "stable-later-offer"
         val dir = File(context.filesDir, "keyguard-service-probe/r26/$uuid/$name")
         check(dir.mkdirs())
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
@@ -85,6 +86,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val armed=AtomicBoolean(false); val candidate=AtomicReference<KeyguardCardInspectionRequest?>()
         val route=AtomicReference<Route?>(); val held=CountDownLatch(1); val release=CountDownLatch(1)
         val workerTimeout=AtomicBoolean(false); val done=CountDownLatch(1); val successorStarted=CountDownLatch(1)
+        val reportHeld=CountDownLatch(1); val reportRelease=CountDownLatch(1); val reportTimeout=AtomicBoolean(false)
         val originalMain=AtomicLong(0); val originalExit=AtomicLong(0); val bStarted=AtomicLong(0); val bId=AtomicLong(0)
         val r25Evaluations=AtomicLong(0); val r25AtAExit=AtomicLong(-1)
         val order=AtomicLong(0); val oldProofAtExit=AtomicLong(0); val maxReaders=AtomicInteger(0); val readers=AtomicInteger(0)
@@ -163,6 +165,13 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                     override fun beforeApply(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility) {
                         if(request.id==candidate.get()?.id) { originalMain.set(order.incrementAndGet()); records.add("A_MAIN id=${request.id} seq=${originalMain.get()}") }
                     }
+                    override fun beforeOptionalInspectionReport(request:KeyguardCardInspectionRequest) {
+                        if (checkReport && request.id == candidate.get()?.id) {
+                            records.add("A_OPTIONAL_REPORT_HELD id=${request.id}")
+                            reportHeld.countDown()
+                            if (!reportRelease.await(20,TimeUnit.SECONDS)) reportTimeout.set(true)
+                        }
+                    }
                     override fun afterApply(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility) {
                         if(request.id!=candidate.get()?.id) return
                         r25AtAExit.set(r25Evaluations.get())
@@ -216,7 +225,16 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             release.countDown()
             assertTrue("NOT REACHED: A did not complete ordered Main",done.await(20,TimeUnit.SECONDS))
             assertTrue("NOT REACHED: later B was not queued",bId.get()>a.id)
-            assertTrue("NOT REACHED: B did not start",successorStarted.await(20,TimeUnit.SECONDS))
+            if (checkReport) {
+                if (!successorStarted.await(8,TimeUnit.SECONDS)) {
+                    assertTrue("NOT REACHED: A optional report boundary", reportHeld.await(2,TimeUnit.SECONDS))
+                    fail("B did not start while A optional reporting was held")
+                }
+                assertTrue("NOT REACHED: A optional report boundary", reportHeld.await(10,TimeUnit.SECONDS))
+                assertFalse("NOT REACHED: optional report barrier timed out", reportTimeout.get())
+                records.add("B_STARTED_BEFORE_A_REPORT_RELEASE")
+                reportRelease.countDown()
+            } else assertTrue("NOT REACHED: B did not start",successorStarted.await(20,TimeUnit.SECONDS))
             assertTrue("B started before A completed Main",originalMain.get()>0 && originalExit.get()>originalMain.get() && bStarted.get()>originalExit.get())
             assertEquals("the physical reader must remain single-owner",1,maxReaders.get())
             assertEquals("DIRECT A must not post an R25 completed-positive notice",0,r25Posts.get())
@@ -236,7 +254,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             records.add("PASS a=${a.id} b=${bId.get()} route=$original main=${originalMain.get()}/${originalExit.get()} bStart=${bStarted.get()} earlyReveal=${earlyReveal.get()}")
         } catch(t:Throwable) { failure=t; records.add("FAIL ${t.javaClass.simpleName}:${t.message}") }
         finally {
-            release.countDown(); KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross=originalCross
+            release.countDown(); reportRelease.countDown(); KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross=originalCross
             runCatching { instrumentation.runOnMainSync { service?.inspectionProbeForTest=null; service?.r25MainDispatchForTest=null; service?.r41R25EvaluationsForTest=null } }
             if(capture) runCatching { File(dir,"frozen.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"] as String) }
             runCatching {

@@ -139,6 +139,8 @@ internal interface KeyguardInspectionProbeForTest {
         reason: String, snapshot: KeyguardReadAheadSnapshot?, currentFreshnessRevision: Long?,
         outstandingFreshness: KeyguardWindowFreshness?, negativeFreshnessRevision: Long?) {}
     fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
+    /** Test-only optional report boundary; never called while queueLock is held. */
+    fun beforeOptionalInspectionReport(request: KeyguardCardInspectionRequest) {}
 }
 
 internal data class KeyguardR22VisualIdentityForTest(
