@@ -1,4 +1,4 @@
-name: R38 isolated renderer baseline comparison
+name: R38 visible unlock and stale proof comparison
 on:
   workflow_dispatch:
 permissions:
@@ -7,7 +7,7 @@ permissions:
 jobs:
   compare:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: android-actions/setup-android@v3
@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          out="$RUNNER_TEMP/r38-isolated"; mkdir -p "$out"
+          out="$RUNNER_TEMP/r38-unlock"; mkdir -p "$out"
           keytool -genkeypair -keystore "$out/test.keystore" -storepass android -keypass android -alias androiddebugkey -dname 'CN=Disposable R38 Test' -keyalg RSA -validity 7 >/dev/null 2>&1
           signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
           for mode in r37 r38; do
@@ -40,7 +40,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Compare identical isolated controls on API 35
+      - name: Compare visible unlock and stale proof on API 35
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -49,14 +49,15 @@ jobs:
           arch: x86_64
           profile: pixel_7
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: bash "$GITHUB_WORKSPACE/.github/scripts/r38-isolated.sh"
+          script: bash "$GITHUB_WORKSPACE/.github/scripts/r38-unlock.sh"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r38-isolated-results-${{ github.run_id }}
+          name: r38-unlock-results-${{ github.run_id }}
           path: |
-            ${{ runner.temp }}/r38-isolated/**/*.txt
-            ${{ runner.temp }}/r38-isolated/**/*.png
-            ${{ runner.temp }}/r38-isolated/*.txt
+            ${{ runner.temp }}/r38-unlock/**/*.txt
+            ${{ runner.temp }}/r38-unlock/**/*.png
+            ${{ runner.temp }}/r38-unlock/**/*.tar
+            ${{ runner.temp }}/r38-unlock/*.txt
           if-no-files-found: warn
           retention-days: 14
