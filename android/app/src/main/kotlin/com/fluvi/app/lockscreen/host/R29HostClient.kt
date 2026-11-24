@@ -7,10 +7,12 @@ import android.content.ServiceConnection
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.os.Parcel
 import android.os.Process
 import android.os.UserHandle
+import android.provider.Settings
 import com.fluvi.r29.contract.R29Descriptor
 import com.fluvi.r29.contract.R29Protocol
 import com.fluvi.r29.contract.R29WireCodec
@@ -62,7 +64,7 @@ internal class R29HostClient(
     /** Resolves the explicit system component and compares its current platform signer and UID. */
     private fun trustedHostUid(): Int? = runCatching {
         val pm = application.packageManager
-        val service = pm.getServiceInfo(component, 0)
+        val service = pm.getServiceInfo(component, PackageManager.GET_META_DATA)
         val app = service.applicationInfo ?: return@runCatching null
         val packages = pm.getPackagesForUid(app.uid)?.toList() ?: return@runCatching null
         if (testHost != null) {
@@ -72,11 +74,26 @@ internal class R29HostClient(
                 pm.checkSignatures(application.packageName, service.packageName) == PackageManager.SIGNATURE_MATCH &&
                 UserHandle.getUserHandleForUid(app.uid) == UserHandle.getUserHandleForUid(0)) app.uid else null
         }
-        if (!service.exported || service.packageName != "com.android.systemui" ||
+        if ((Build.TYPE != "userdebug" && Build.TYPE != "eng") ||
+            Settings.Secure.getInt(application.contentResolver, "fluvi_r29_demo_enrolled", 0) != 1 ||
+            service.metaData?.getInt("com.fluvi.reference.CLOCK_SCENE_VERSION", 0) != 1 ||
+            !service.exported || service.packageName != "com.android.systemui" ||
             app.flags and ApplicationInfo.FLAG_SYSTEM == 0 || packages != listOf("com.android.systemui") ||
             pm.checkSignatures("android", "com.android.systemui") != PackageManager.SIGNATURE_MATCH ||
             UserHandle.getUserHandleForUid(app.uid) != UserHandle.getUserHandleForUid(0)) null else app.uid
     }.getOrNull()
+
+    /** Pre-lock discovery only. Failure never suppresses the stock owner. */
+    fun probePrimaryHost(callback: (Boolean) -> Unit) {
+        try {
+            worker.execute {
+                val supported = trustedHostUid() != null
+                main.execute { callback(supported) }
+            }
+        } catch (_: java.util.concurrent.RejectedExecutionException) {
+            main.execute { callback(false) }
+        }
+    }
 
     /** Call only after the old owner drain for this exact durable epoch. */
     fun connect(value: Long) {

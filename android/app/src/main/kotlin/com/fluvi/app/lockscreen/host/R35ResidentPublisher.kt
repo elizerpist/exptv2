@@ -74,6 +74,9 @@ internal class R35ResidentPublisher(
     /** Does not perform or assert the required legacy-owner drain. */
     fun connectAfterDrain(epoch: Long) { client.connect(epoch) }
 
+    /** Does not change ownership and must not be called as a wake-time probe. */
+    fun probePrimaryHost(callback: (Boolean) -> Unit) { client.probePrimaryHost(callback) }
+
     override fun onSession(nonce: String, epoch: Long) {
         if (!ownership.isCurrentHost(epoch) || !R35MaterialPublication.install(ownership, epoch, nonce, this)) {
             client.close()

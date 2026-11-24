@@ -15,6 +15,10 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.fluvi.app.MainActivity
+import com.fluvi.app.lockscreen.host.R29Ownership
+import com.fluvi.app.lockscreen.host.R29OwnershipStore
+import com.fluvi.app.lockscreen.host.R35ResidentPublisher
+import com.fluvi.app.lockscreen.host.R38ReferenceAdmission
 import com.fluvi.app.runtime.FluviFinancialCardPresenter
 import com.fluvi.app.runtime.FluviLockScreenCardContent
 import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
@@ -50,6 +54,88 @@ import kotlinx.coroutines.withContext
  */
 class FluviKeyguardCardService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
+    // Retail builds never probe a host. The reference-only owner is loaded
+    // before any local admission, including after a process restart.
+    @Volatile private var referenceOwnership: R29Ownership? = null
+    private var referencePublisher: R35ResidentPublisher? = null
+    private var referenceFirstFreshService = false
+    private var referenceLocalPresentationAttempted = false
+    private var referenceServiceSerial = 0L
+
+    private fun localPresentationAllowed(): Boolean = referenceOwnership?.appMayShow() != false
+
+    /** A prior process may have left native work behind. Only a genuinely
+     * fresh reference installation's first service can assert no prior owner. */
+    private fun initializeReferenceOwnership() {
+        if (Build.TYPE != "userdebug" && Build.TYPE != "eng") return
+        val ownership = R29Ownership(R29OwnershipStore(applicationContext))
+        referenceOwnership = ownership
+        referenceServiceSerial += 1
+        if (!ownership.appMayShow()) return
+        referenceFirstFreshService = runCatching {
+            val prefs = getSharedPreferences("fluvi_r38_reference_admission", Context.MODE_PRIVATE)
+            val unseen = !prefs.contains("serviceStarted")
+            @Suppress("DEPRECATION") val info = packageManager.getPackageInfo(packageName, 0)
+            val fresh = info.firstInstallTime == info.lastUpdateTime
+            val saved = prefs.edit().putBoolean("serviceStarted", true).commit()
+            unseen && fresh && saved
+        }.getOrDefault(false)
+    }
+
+    /** Main-owned check; all native borrowers are checked by exact ownership. */
+    private fun referenceOldOwnerAbsent(): Boolean {
+        if (!::overlay.isInitialized || overlay.isAttached || referenceLocalPresentationAttempted || r18Active != null)
+            return false
+        return synchronized(queueLock) {
+            val state = r18Coordinator.snapshot()
+            r18ProvisionalWake == null && state.reservation == null && state.activeOutputs == 0 &&
+                r18DrainBindings.all { it == null || it.drained }
+        }
+    }
+
+    /** The reference host is discovered while unlocked, never by a wake path. */
+    private fun startReferenceEnrollmentIfEligible() {
+        val owner = referenceOwnership ?: return
+        if (!referenceFirstFreshService || !owner.appMayShow() || referencePublisher != null) return
+        val settings = lastSettings ?: return
+        // Other modes have no revisioned FULL projection in the current bridge.
+        if (!settings.requested || settings.presentationMode != KeyguardCardPresentationMode.ORB ||
+            settings.focus.mode.name != "budget" || settings.focus.categoryId.isNullOrBlank()) return
+        val serial = referenceServiceSerial
+        lateinit var publisher: R35ResidentPublisher
+        publisher = R35ResidentPublisher(applicationContext, owner,
+            java.util.concurrent.Executor { task -> mainHandler.post(task) },
+            object : R35ResidentPublisher.Listener {
+                override fun onReady(session: String, sequence: Long) = Unit
+                override fun onUnavailable() = Unit
+                override fun onEmpty(session: String, sequence: Long, epoch: Long) {
+                    if (serial != referenceServiceSerial || !serviceJob.isActive) publisher.close()
+                }
+            })
+        referencePublisher = publisher
+        publisher.probePrimaryHost { verified ->
+            if (!serviceJob.isActive || serial != referenceServiceSerial || referencePublisher !== publisher) return@probePrimaryHost
+            if (!verified) {
+                referencePublisher = null
+                publisher.close()
+                return@probePrimaryHost
+            }
+            val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+            val power = getSystemService(android.os.PowerManager::class.java)
+            val unlocked = keyguard != null && power != null && !keyguard.isKeyguardLocked && power.isInteractive
+            val noOld = referenceOldOwnerAbsent()
+            val evidence = R38ReferenceAdmission.Evidence(
+                trustedHost = true, firstServiceOnFreshInstall = referenceFirstFreshService,
+                unlocked = unlocked, noLocalPresentation = noOld,
+                noReservation = noOld, noOwnedOutput = noOld,
+            )
+            val epoch = R38ReferenceAdmission(owner).begin(evidence) {
+                keyguard?.isKeyguardLocked == false && power?.isInteractive == true && referenceOldOwnerAbsent()
+            }
+            if (epoch != null) publisher.connectAfterDrain(epoch)
+            else { referencePublisher = null; publisher.close() }
+        }
+    }
     private val platformSystemStateReader by lazy { AndroidKeyguardSystemStateReader(this) }
     @Volatile internal var systemStateReaderOverride: KeyguardSystemStateReader? = null
     /** Optional instrumentation seam. It orders a negative acquisition/result;
@@ -531,6 +617,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     private fun reserveR18WakeBeforeMain(
         sample: KeyguardSystemGateRequest, state: KeyguardSystemState,
     ): (() -> Unit)? {
+        if (!localPresentationAllowed()) return null
         if (state.excluded) {
             synchronized(queueLock) { openingHandoff.invalidate() }
             sealR18(sample.authority, Long.MAX_VALUE, "systemSample", sample, state)
@@ -541,6 +628,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val queuedAt = SystemClock.uptimeMillis()
         val requestId = nextInspectionId.incrementAndGet()
         val early = synchronized(queueLock) {
+            if (!localPresentationAllowed()) return@synchronized null
             val route = r18RouteSnapshot ?: return@synchronized null
             if (!r18RouteEnabled || r18WakeOpen || r18ProvisionalWake != null ||
                 inspectionAuthority != sample.authority) return@synchronized null
@@ -653,6 +741,14 @@ class FluviKeyguardCardService : AccessibilityService() {
                               prep: KeyguardCardWindow.R18Preparation, settings: KeyguardCardSettings,
                               context: KeyguardDiagnosticContext?, sample: KeyguardSystemState? = null,
                               reservedAt: Long? = null) {
+        if (!localPresentationAllowed()) {
+            synchronized(queueLock) {
+                openingHandoff.invalidate()
+                if (r18Coordinator.seal(token, token.stamp.authority, Long.MAX_VALUE, true) != null)
+                    r18Coordinator.retired(token)
+            }
+            return
+        }
         val owner = R18Active(token, prep, context)
         r18Active = owner
         synchronized(queueLock) { publishReadAheadSnapshotLocked() }
@@ -1138,7 +1234,7 @@ class FluviKeyguardCardService : AccessibilityService() {
      * asynchronous readiness; the old visible grant is never revived. */
     private fun tryStartR18Readmission(request: KeyguardCardInspectionRequest,
                                        inspection: Inspection, settings: KeyguardCardSettings): Boolean {
-        if (r18Active != null || overlay.isAttached || r18FallbackWake == wakeEpoch ||
+        if (!localPresentationAllowed() || r18Active != null || overlay.isAttached || r18FallbackWake == wakeEpoch ||
             inspection.surfaceReason != KeyguardSurfaceReason.MAIN_CONFIRMED || inspection.rootUnavailable ||
             inspection.walkTruncated || inspection.abortedStale) return false
         val previous = r18Coordinator.snapshot()
@@ -1473,6 +1569,7 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        initializeReferenceOwnership()
         session.incrementAndGet()
         mainWorkEvidence.resetSession(session.get(), android.os.Process.myTid().toLong())
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "SERVICE_CONNECTED")
@@ -1648,6 +1745,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "ROOT_PREPARE_END")
         KeyguardCardDiagnostics.record(this, "KG|SERVICE_CONNECTED", "connected", false)
         traceKeyguard("SERVICE_CONNECTED", "connected")
+        startReferenceEnrollmentIfEligible()
         beginOrJoinWakeCycle("connected")
     }
 
@@ -4775,6 +4873,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         causingInspectionRequestId: Long?,
         scope: com.fluvi.app.runtime.FluviFinancialOrbWork.Scope?,
     ): KeyguardDiagnosticOperation? {
+        if (!localPresentationAllowed()) return null
+        if (referenceOwnership != null) referenceLocalPresentationAttempted = true
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext).also { lastSettings = it }
         val directOwner = r18Active?.takeIf { !overlay.isAttached }
         val directToken = directOwner?.token
@@ -4930,7 +5030,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                             synchronized(queueLock) {
                                 val currentProof = if (directOwner.preparation.emptyAwaitingDisclosure)
                                     continuation != null && firstAuthorizedOrb.isCurrent(continuation) else true
-                                crossed = currentProof && r18Coordinator.crossSubmitBoundary(permit)
+                                crossed = localPresentationAllowed() && currentProof && r18Coordinator.crossSubmitBoundary(permit)
                                 ordinal = if (crossed) r18Coordinator.revealOrdinal(permit) else null
                             }
                             if (crossed) runCatching { recordR21(binding, "CROSS", SystemClock.uptimeMillis(), ordinal, "CROSSED", "ACCEPTED") }
@@ -4945,7 +5045,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                             synchronized(queueLock) {
                                 val currentProof = if (directOwner.preparation.emptyAwaitingDisclosure)
                                     continuation != null && firstAuthorizedOrb.isCurrent(continuation) else true
-                                currentProof && r18Coordinator.isCrossedCurrent(permit)
+                                localPresentationAllowed() && currentProof && r18Coordinator.isCrossedCurrent(permit)
                             }
                         }, done = { success ->
                             if (r18Active !== directOwner || directOwner.token !== directToken) return@revealR18
@@ -5660,6 +5760,14 @@ class FluviKeyguardCardService : AccessibilityService() {
     }
 
     private fun cleanup(reason: String) {
+        referenceServiceSerial += 1
+        referencePublisher?.let { publisher ->
+            // Withdraw the host before a clean detach. If no matching empty
+            // receipt arrives, durable suppression remains in force.
+            publisher.onInputsChanging()
+            if (!publisher.requestEmpty()) publisher.close()
+        }
+        referencePublisher = null
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.CLEANUP_ENTER, attachment = overlayAttachGeneration)
         traceKeyguard(if (reason == "destroy") "SERVICE_DESTROYED" else "SERVICE_UNBOUND", reason)
         hideImmediately(reason)
