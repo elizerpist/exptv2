@@ -12,6 +12,9 @@ internal class KeyguardR41RawLedger(private val capacity: Int = 2048) {
     private val state = AtomicLong()
     val overflow = AtomicLong()
     val late = AtomicLong()
+    val offerWallNs = AtomicLong()
+    val offerMaxWallNs = AtomicLong()
+    val offerTimingInvalid = AtomicLong()
 
     init { require(capacity > 0) }
 
@@ -20,9 +23,10 @@ internal class KeyguardR41RawLedger(private val capacity: Int = 2048) {
               atNs: Long, tid: Long, extra1: Long = 0, extra2: Long = 0,
               uptimeMs: Long = 0): Long {
         require(phase > 0)
+        val startedNs = System.nanoTime()
         while (true) {
             val value = state.get()
-            if (value < 0) { late.incrementAndGet(); return 0 }
+            if (value < 0) { late.incrementAndGet(); recordOfferWall(startedNs); return 0 }
             if (state.compareAndSet(value, value + 1)) break
         }
         try {
@@ -35,7 +39,19 @@ internal class KeyguardR41RawLedger(private val capacity: Int = 2048) {
             data.set(base, phase.toLong()) // release/publish after every scalar
             return index + 1
         } finally {
+            recordOfferWall(startedNs)
             state.decrementAndGet()
+        }
+    }
+
+    /** Sum of mailbox-call wall durations, never an elapsed or CPU total. */
+    private fun recordOfferWall(startedNs: Long) {
+        val elapsed = System.nanoTime() - startedNs
+        if (elapsed < 0) { offerTimingInvalid.incrementAndGet(); return }
+        offerWallNs.addAndGet(elapsed)
+        while (true) {
+            val previous = offerMaxWallNs.get()
+            if (elapsed <= previous || offerMaxWallNs.compareAndSet(previous, elapsed)) return
         }
     }
 

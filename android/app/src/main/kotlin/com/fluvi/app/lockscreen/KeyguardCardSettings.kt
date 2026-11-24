@@ -953,6 +953,9 @@ internal object KeyguardCardDiagnostics {
         var r41ProvisionalEvicted: Long = 0,
         var r41SamplesEvicted: Long = 0,
         var r41ProducerFailures: Long = 0,
+        var r41MailboxWallNs: Long = 0,
+        var r41MailboxMaxWallNs: Long = 0,
+        var r41MailboxTimingInvalid: Long = 0,
         var hiddenNoopCount: Int = 0,
         var diagnosticDroppedRecords: Int = 0,
         var diagnosticQueueOverflow: Long = 0L,
@@ -2690,6 +2693,9 @@ internal object KeyguardCardDiagnostics {
         r41ReportsPending = r41Token?.r41ReportsPending?.get() ?: active.r41ReportsPending,
         r41ReportsDropped = r41Token?.r41ReportsDropped?.get() ?: active.r41ReportsDropped,
         r41ProducerFailures = r41Token?.r41ProducerFailures?.get() ?: active.r41ProducerFailures,
+        r41MailboxWallNs = r41Token?.r41?.offerWallNs?.get() ?: active.r41MailboxWallNs,
+        r41MailboxMaxWallNs = r41Token?.r41?.offerMaxWallNs?.get() ?: active.r41MailboxMaxWallNs,
+        r41MailboxTimingInvalid = r41Token?.r41?.offerTimingInvalid?.get() ?: active.r41MailboxTimingInvalid,
         diagnosticDroppedRecords = active.diagnosticDroppedRecords + (lastIngress?.takeIf { it.id == active.id }?.skippedRecords?.get()?.toInt() ?: 0),
         hiddenNoopCount = lastIngress?.takeIf { it.id == active.id }?.hiddenNoops?.get()?.toInt() ?: active.hiddenNoopCount,
         diagnosticProducerTotalNs = lastIngress?.takeIf { it.id == active.id }?.producerTotalNs?.get() ?: active.diagnosticProducerTotalNs,
@@ -2875,6 +2881,9 @@ internal object KeyguardCardDiagnostics {
             appendLine("captureLockHeldNs=${active.captureLockHeldNs}")
             appendLine("diagnosticProducerTotalNs=${active.diagnosticProducerTotalNs}")
             appendLine("diagnosticProducerMaxNs=${active.diagnosticProducerMaxNs}")
+            appendLine("R41_DIAGNOSTIC_COST mailboxOfferWallTotalNs=${active.r41MailboxWallNs} " +
+                "mailboxOfferWallMaxNs=${active.r41MailboxMaxWallNs} invalid=${active.r41MailboxTimingInvalid} " +
+                "scope=mailboxOfferOnly wallSumIsNotElapsed=true producerCpuNs=UNOBSERVED")
             appendLine("legacyDiagnosticProducerTotalNs=${active.legacyDiagnosticProducerTotalNs}")
             appendLine("legacyWriteCount=${active.legacyWriteCount}")
             appendLine("checkpointCount=${active.checkpointCount}")
@@ -2932,7 +2941,8 @@ internal object KeyguardCardDiagnostics {
         val r41Loss = active.r41AttemptsEvicted + active.diagnosticQueueOverflow +
             active.diagnosticConsumerFailures + active.r41RawOverflow + active.r41RawUnmatched + active.r41RawPending +
             active.r41RawLate + active.r41ReportsPending + active.r41ReportsDropped + active.r41ProvisionalEvicted +
-            active.r41SamplesEvicted + active.r41ProducerFailures + active.r41Samples.values.sumOf { it.invalid } +
+            active.r41SamplesEvicted + active.r41ProducerFailures + active.r41MailboxTimingInvalid +
+            active.r41Samples.values.sumOf { it.invalid } +
             (active.r41AttemptsIssued - active.r41AttemptsStarted).coerceAtLeast(0)
         r41Attempts.forEach { attempt ->
             select("a${attempt.id}:r41Core", attempt.r41.core(attempt.id, attempt.serviceSession, attempt.wakeEpoch, r41Loss), attempt.id)

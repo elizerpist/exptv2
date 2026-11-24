@@ -17,6 +17,8 @@ class KeyguardR41RawLedgerTest {
         assertEquals(100L, first.atNs)
         assertEquals(7L, first.extra2)
         assertEquals(12L, checkNotNull(ledger.read(1)).request)
+        assertEquals(0L, ledger.offerTimingInvalid.get())
+        assertTrue(ledger.offerWallNs.get() >= ledger.offerMaxWallNs.get())
         assertEquals(0L, ledger.cut())
         assertEquals(0L, ledger.offer(KeyguardR41RawLedger.MAIN, 1, 3, 4, 12, 120, 11))
         assertEquals(1L, ledger.late.get())
