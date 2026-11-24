@@ -19267,3 +19267,15 @@ Using independently built exact app/debug-test pairs on the same API35 emulator,
 The separate visible-withdrawal/stale-proof comparison https://github.com/elizerpist/exptv2/actions/runs/45412731192 also completed **FAIL** (artifact 14930581385): all six targeted tests failed or did not reach their preconditions. Both R38 and continuation `r26VisibleDirectUnlockAndRapidRelock` did not reach a direct reveal acknowledgement; both `r21ExclusionRetiresSubmittedOrbWithMainAckHeld` did not reach a real shade/credential decision. Continuation `externalIngressWhileFirstPaintIsHeldCannotUseOldProof` did not reach its first FULL paint. The R38 case asserted `old proof enabled the service while first paint was held`; preserve that actual failure separately from an unreached precondition. Neither visible unlock latency nor first forbidden pixel is verified by this run. Raw per-trial captures, fallbacks and failures are retained.
 
 An independent same-device comparison of six isolated safety controls for both sources was dispatched as https://github.com/elizerpist/exptv2/actions/runs/45412728331; its result was still pending at this checkpoint.
+
+
+## 2026-11-24 — R38 versus resident continuation: isolated privacy controls
+
+The independent same-API35-emulator comparison https://github.com/elizerpist/exptv2/actions/runs/45412728331 finished **FAIL**, with source-specific artifacts and synthetic screenshots retained in artifact 14931255620. It used the exact R38 and continuation app/test pairs built for https://github.com/elizerpist/exptv2/actions/runs/45411275095. Each version passed 3/6 selected controls: `attachedOrbRestrictionPrecedesFailedLayout`, `oldUsesPreventSuccessorButCurrentOrbKeepsMoving`, and `r12StaticSurfaceMatchesFullAndNeutralReferenceOnRealPanel`. Each failed `isolatedNeutralRecoveryAtCommittedResizedBounds`, `r22_4BoundedResizedPrivacyStripWhite`, and `r22_4BoundedResizedPrivacyStripBlack`.
+
+The exact immediate classifications on the original assertions were:
+
+* R38 black: FULL, NEUTRAL_ANIMATED_A ×5; white: FULL, UNCLASSIFIED, NEUTRAL_ANIMATED_A ×4.
+* Continuation black: FULL, UNCLASSIFIED, NEUTRAL_ANIMATED_A ×4; white: SAFE_STANDBY, UNCLASSIFIED, NEUTRAL_ANIMATED_A ×4.
+
+These synthetic panel tests concern the existing isolated route and are not measurements of the owner's phone. The classifications do not establish the physical last-pixel time, but the failures keep privacy and fast withdrawal unqualified. No failed run or sample was discarded. The same-device targeted results limit an inference that the four extra failures in the candidate's full-suite run were newly caused by the application change; they do not erase either full-suite failure or establish that every user mode is safe. Demo-data-only phone evaluation remains appropriate. Physical W → O ≤10 ms on every wake, SystemUI first-clock behavior with the publisher suspended, and first restrictive-frame exclusion all remain **NOT VERIFIED**.
