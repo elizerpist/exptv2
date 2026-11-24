@@ -45,8 +45,9 @@ internal class KeyguardR22FirstInspectionFixture {
     private lateinit var automation: UiAutomation
 
     fun run(scenario: String) {
-        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative", "r32_overlap", "r34_latest", "r37_after_child"))
-        val r37 = scenario == "r37_after_child"
+        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative", "r32_overlap", "r34_latest", "r37_after_child", "r37_adopted_child"))
+        val r37Late = scenario == "r37_adopted_child"
+        val r37 = scenario == "r37_after_child" || r37Late
         val r34 = scenario == "r34_latest" || r37
         val r31 = scenario == "r31_system" || scenario == "r31_ambiguous" || scenario == "r31_negative"
         val r32 = scenario == "r32_overlap"
@@ -84,6 +85,7 @@ internal class KeyguardR22FirstInspectionFixture {
         val firstChildHeld = AtomicBoolean(false)
         val firstChildObserved = AtomicBoolean(false)
         val independentWindowId = AtomicLong(-1L)
+        val r37HeldWindow = AtomicLong(-1L)
         val entryTimedOut = AtomicBoolean(false)
         val childTimedOut = AtomicBoolean(false)
         val bEntryTimedOut = AtomicBoolean(false)
@@ -241,7 +243,7 @@ internal class KeyguardR22FirstInspectionFixture {
                 service.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
                     override fun openingReserved(request: KeyguardCardInspectionRequest, reservationId: Long, armed: Boolean) {
                         records.add("RESERVED id=${request.id} wake=${request.wakeGeneration} reservation=$reservationId armed=$armed at=${SystemClock.uptimeMillis()}")
-                        if (entryArmed.get() && armed && a.compareAndSet(null, request)) reservation.set(reservationId)
+                        if (!r37Late && entryArmed.get() && armed && a.compareAndSet(null, request)) reservation.set(reservationId)
                     }
                     override fun started(request: KeyguardCardInspectionRequest) {
                         records.add("START id=${request.id} wake=${request.wakeGeneration} at=${SystemClock.uptimeMillis()} thread=${Thread.currentThread().id}")
@@ -280,8 +282,9 @@ internal class KeyguardR22FirstInspectionFixture {
                             // R37 holds an actual returned child before its
                             // markers are consumed; the candidate must inspect
                             // those markers before handing off to the latest event.
-                            if (r37 && windowId.toLong() == independentWindowId.get() &&
+                            if (r37 && (r37Late || windowId.toLong() == independentWindowId.get()) &&
                                 firstChildHeld.compareAndSet(false, true)) {
+                                r37HeldWindow.set(windowId.toLong())
                                 records.add("R37_RETURNED_CHILD_HELD id=${request.id} window=$windowId index=$index at=${SystemClock.uptimeMillis()}")
                                 entered.countDown()
                                 if (!release.await(20, TimeUnit.SECONDS)) {
@@ -300,6 +303,18 @@ internal class KeyguardR22FirstInspectionFixture {
                         }
                     }
                     override fun openingEligibleCheckpoint(request: KeyguardCardInspectionRequest, windowId: Int, nextIndex: Int) {
+                        if (r37Late && entryArmed.get() && a.get() == null) {
+                            var current: KeyguardR22VisualIdentityForTest? = null
+                            instrumentation.runOnMainSync { current = service.r22VisualIdentityForTest() }
+                            val observed = current
+                            if (observed != null && observed.openingRequestId == request.id &&
+                                observed.winningRequestId == null && a.compareAndSet(null, request)) {
+                                reservation.set(observed.reservationId)
+                                aThread.set(Thread.currentThread().id)
+                                records.add("R37_ADOPTED_ORIGINAL id=${request.id} reservation=${observed.reservationId} window=$windowId at=${SystemClock.uptimeMillis()}")
+                                entryStarted.countDown()
+                            }
+                        }
                         if ((r31 || (r34 && !r37) || scenario in setOf("positive", "negative", "stable")) && request == a.get() &&
                             firstChildObserved.get() && windowId.toLong() == independentWindowId.get() &&
                             firstChildHeld.compareAndSet(false, true)) {
@@ -591,6 +606,8 @@ internal class KeyguardR22FirstInspectionFixture {
             releaseEntry.countDown()
             assertTrue("NOT REACHED: original opening reached no clean eligible post-marker checkpoint", entered.await(20, TimeUnit.SECONDS))
             assertFalse("NOT REACHED: original A child barrier expired", childTimedOut.get())
+            if (r37Late) assertEquals("NOT REACHED: held child is not the independently observed SystemUI window",
+                independentWindowId.get(), r37HeldWindow.get())
             if (scenario == "stable") {
                 var pending: KeyguardCardInspectionRequest? = null
                 instrumentation.runOnMainSync { pending = service.inspectionStateForTest().pending }

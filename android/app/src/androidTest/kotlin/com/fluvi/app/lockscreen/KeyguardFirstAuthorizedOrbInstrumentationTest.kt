@@ -50,6 +50,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r32ObsoleteDirectOverlapsPhysicalSuccessor() = KeyguardR22FirstInspectionFixture().run("r32_overlap")
     @Test fun r34RealIngressesReplaceObsoleteOpeningOnOneReader() = KeyguardR22FirstInspectionFixture().run("r34_latest")
     @Test fun r37ReturnedChildHandsOffToRealLatestOnOneReader() = KeyguardR22FirstInspectionFixture().run("r37_after_child")
+    @Test fun r37AdoptedOriginalChildTransfersToRealLatest() = KeyguardR22FirstInspectionFixture().run("r37_adopted_child")
 
     @Test fun r31ActualSuccessorTransfersToSystemUiIngress() = KeyguardR22FirstInspectionFixture().run("r31_system")
     @Test fun r31ActualSuccessorTransfersToAmbiguousIngress() = KeyguardR22FirstInspectionFixture().run("r31_ambiguous")
