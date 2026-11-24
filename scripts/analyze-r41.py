@@ -18,10 +18,10 @@ SEGMENTS = ("ingress_to_offer", "inspection_queue", "worker_entry_to_read", "fra
             "read_end_to_dispatch", "dispatch_call_to_runnable_start", "main_entry_to_grant")
 
 
-def parse_report(report):
+def parse_records(report, marker):
     rows = []
     for line in report.splitlines():
-        if not line.startswith(" R41_CORE "):
+        if not line.startswith(" " + marker + " "):
             continue
         row = {}
         duplicate = False
@@ -37,6 +37,10 @@ def parse_report(report):
     return rows
 
 
+def parse_report(report):
+    return parse_records(report, "R41_CORE")
+
+
 def number(row, key):
     try:
         result = int(row[key])
@@ -46,7 +50,8 @@ def number(row, key):
 
 
 def analyze(row):
-    result = {"attempt": row.get("attempt", "UNOBSERVED"), "coverage": "INCOMPLETE",
+    result = {"attempt": row.get("attempt", "UNOBSERVED"), "session": row.get("session", "UNOBSERVED"),
+              "coverage": "INCOMPLETE",
               "eligibility": row.get("eligible", "UNOBSERVED"),
               "outcome": row.get("outcome", "UNOBSERVED"), "owner": row.get("owner", "UNOBSERVED"),
               "missing": [], "invalid": [], "segments_ns": {}, "total_ns": None,
@@ -56,8 +61,10 @@ def analyze(row):
     if row.get("eligible") == "false":
         if row.get("outcome") == "SUCCESS":
             result["invalid"].append("denied_attempt_has_successful_winner")
-        else:
+        elif row.get("outcome") == "DENIED" and row.get("coverage") == "COMPLETE" and row.get("dropped") == "0" and "parseError" not in row:
             result["coverage"] = "DENIED"
+        else:
+            result["missing"].append("complete_loss_free_denial")
         return result
     if row.get("eligible") != "true":
         result["missing"].append("eligible")
@@ -104,6 +111,33 @@ def analyze(row):
     return result
 
 
+def analyze_sampler(row):
+    names = ("offer", "replaced", "submit", "worker", "read_start", "read_end", "dispatch", "main", "deliver", "reject")
+    raw_times = row.get("times", "").split("/")
+    raw_tids = row.get("tids", "").split("/")
+    invalid = []
+    if len(raw_times) != len(names) or len(raw_tids) != len(names) or "parseError" in row:
+        invalid.append("malformed_sampler_row")
+    if row.get("invalid", "0") != "0":
+        invalid.append("sampler_producer_reported_invalid")
+    times = {name: number({name: value}, name) for name, value in zip(names, raw_times)}
+    tids = {name: number({name: value}, name) for name, value in zip(names, raw_tids)}
+    intervals = {}
+    for left, right in (("offer", "submit"), ("submit", "worker"), ("worker", "read_start"),
+                        ("read_start", "read_end"), ("read_end", "dispatch"), ("dispatch", "main")):
+        start, end = times.get(left), times.get(right)
+        if start is not None and end is not None:
+            if end < start:
+                invalid.append(f"{left}>{right}")
+            else:
+                intervals[left + "_to_" + right] = end - start
+    return {"sample": row.get("sample", "UNOBSERVED"), "receipt": row.get("receipt", "UNOBSERVED"),
+            "times_ns": times, "tids": tids, "intervals_ns": intervals,
+            "state_flags": row.get("stateFlags", "UNOBSERVED") if times.get("read_end") is not None else "UNOBSERVED",
+            "replacement": row.get("replacement", "UNOBSERVED"), "reject": row.get("reject", "UNOBSERVED"),
+            "invalid": invalid, "coverage": "OBSERVED_BRACKETS_ONLY"}
+
+
 def summarize(results):
     counts = {}
     for result in results:
@@ -131,10 +165,26 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("report", type=Path)
     args = parser.parse_args()
-    rows = parse_report(args.report.read_text(encoding="utf-8-sig"))
+    report = args.report.read_text(encoding="utf-8-sig")
+    rows = parse_report(report)
     results = [analyze(row) for row in rows]
+    unattributed = []
+    for sample in parse_records(report, "R41_SAMPLE"):
+        matches = [result for result in results if result["attempt"] == sample.get("attempt") and
+                   result["session"] == sample.get("session")]
+        lane = analyze_sampler(sample)
+        if len(matches) == 1:
+            matches[0].setdefault("sampler_lanes", []).append(lane)
+            if lane["invalid"]:
+                matches[0]["invalid"].extend("sampler:" + issue for issue in lane["invalid"])
+                matches[0]["coverage"] = "INCOMPLETE"
+                matches[0]["total_ns"] = None
+                matches[0]["under_300ms"] = None
+        else:
+            unattributed.append(lane)
     summary = summarize(results)
-    print(json.dumps({"summary": summary, "attempts": results}, indent=2))
+    summary["unattributed_sampler_rows"] = len(unattributed)
+    print(json.dumps({"summary": summary, "attempts": results, "unattributed_sampler_rows": unattributed}, indent=2))
     return 0 if summary["strict_verdict"] == "PASS" else 1
 
 

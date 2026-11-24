@@ -74,12 +74,30 @@ class R41AnalyzerTest(unittest.TestCase):
     def test_aggregate_requires_eligible_complete_sub_300ms_trials(self):
         denied = analyzer.analyze(self.row(eligible="false", outcome="DENIED"))
         self.assertEqual(analyzer.summarize([denied])["strict_verdict"], "INCOMPLETE")
+        incomplete_denial = analyzer.analyze(self.row(eligible="false", outcome="DENIED", coverage="INCOMPLETE"))
+        self.assertEqual(incomplete_denial["coverage"], "INCOMPLETE")
         successful = analyzer.analyze(self.row())
         self.assertEqual(analyzer.summarize([successful])["strict_verdict"], "PASS")
         at_limit = analyzer.analyze(self.row(grantNs=str(100 + 300_000_000)))
         self.assertEqual(analyzer.summarize([at_limit])["strict_verdict"], "FAIL")
         incomplete = analyzer.analyze(self.row(coverage="INCOMPLETE"))
         self.assertEqual(analyzer.summarize([incomplete])["strict_verdict"], "INCOMPLETE")
+
+    def test_sampler_dispatch_bracket_is_separate_and_missing_is_not_zero(self):
+        row = dict(sample="5", receipt="2", times="10/UNOBSERVED/20/30/35/45/50/70/75/UNOBSERVED",
+                   tids="1/UNOBSERVED/1/2/2/2/2/1/1/UNOBSERVED", stateFlags="5")
+        lane = analyzer.analyze_sampler(row)
+        self.assertEqual(lane["intervals_ns"]["dispatch_to_main"], 20)
+        self.assertIsNone(lane["times_ns"]["replaced"])
+        self.assertEqual(lane["coverage"], "OBSERVED_BRACKETS_ONLY")
+        self.assertFalse(lane["invalid"])
+
+    def test_negative_sampler_interval_is_invalid_not_clamped(self):
+        row = dict(times="10/UNOBSERVED/20/30/35/45/70/50/75/UNOBSERVED",
+                   tids="1/UNOBSERVED/1/2/2/2/2/1/1/UNOBSERVED")
+        lane = analyzer.analyze_sampler(row)
+        self.assertIn("dispatch>main", lane["invalid"])
+        self.assertNotIn("dispatch_to_main", lane["intervals_ns"])
 
     def test_every_compact_attempt_is_preserved(self):
         report = "\n".join(" R41_CORE attempt=%d eligible=UNOBSERVED" % i for i in range(1, 12))
