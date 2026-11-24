@@ -15,6 +15,15 @@ outgoing-layer frames. No first-clock-frame, animation-continuity, exclusion,
 or 10 ms result is established by source staging, a JVM test, or a commit
 callback. A real-device or matched-image test is required before enabling it.
 
+The missing app connection is concrete: production has no caller of
+`R35ResidentPublisher.connectAfterDrain`, and `R29Ownership.appMayShow` is not
+wired into both existing app admission and final native submission. Binding a
+host without those guards could leave two owners of private pixels. The current
+revisioned Flutter evidence explicitly qualifies only Budget's category-color
+projection; Mind and Balance lack equivalent scope/revision provenance and
+therefore cannot be advertised as FULL host generations. The reference must
+fail closed for them until the real producers carry that provenance.
+
 The two patch files and the renderer/store sources can be staged reproducibly
 with the existing command below. The stager checks both patches against the
 same AOSP parent and copies the clock-specific source from `clock/src`.
