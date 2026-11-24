@@ -66,6 +66,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
         require(source.matches(Regex("[0-9a-f]{40}")))
+        val captureMode = args.getString("r40Capture") ?: "LIGHT"
+        val offControl = captureMode == "OFF"
         val run = args.getString("runUuid")?.let { UUID.fromString(it).toString() } ?: UUID.randomUUID().toString()
         val specimen = if (r21Negative == null) { if (changeScene) "changed" else "stable" }
             else if (r21Negative) "r21-negative" else "r21-positive"
@@ -101,6 +103,12 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         val negativeFinished = CountDownLatch(1)
         val negativeResult = AtomicReference<String?>()
         val savedDispatcher = KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone
+        val savedBeforeApply = KeyguardOrbSurfaceWorkerTestHooks.beforeRevealApply
+        val savedFixedTime = KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime
+        val offApplyStarted = AtomicLong(0L)
+        val offCompletionAt = AtomicLong(0L)
+        val offCompletion = CountDownLatch(1)
+        var offVisual: KeyguardR22VisualCalibration? = null
         var captureStarted = false
         var report: String? = null
         val errors = mutableListOf<String>()
@@ -123,8 +131,27 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 val epoch = maxOf(SystemClock.elapsedRealtimeNanos(), (savedMaterial.second["publisherEpoch"] as? Long ?: -1L) + 1L)
                 check(FluviKeyguardMaterialStore.publish(context, KeyguardR12ServiceTimingInstrumentationTest().materialProfile(), epoch))
             }
-            KeyguardCardDiagnostics.startCapture(context, source, "debug", args.getString("r40Capture") ?: "LIGHT")
-            captureStarted = true
+            if (offControl) {
+                KeyguardCardDiagnostics.clearCapture(context)
+                offVisual = KeyguardR22VisualCalibration(instrumentation, dir, automation).also { it.calibrate() }
+                shell("input keyevent KEYCODE_HOME")
+                await("calibration Activity removed before OFF wake", 12_000) {
+                    !shell("dumpsys window windows").contains("KeyguardMaterialTestActivity")
+                }
+                KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
+                KeyguardOrbSurfaceWorkerTestHooks.beforeRevealApply = { output ->
+                    offApplyStarted.compareAndSet(0L, SystemClock.uptimeMillis())
+                    savedBeforeApply?.invoke(output)
+                }
+                KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = { task ->
+                    offCompletionAt.compareAndSet(0L, SystemClock.uptimeMillis())
+                    offCompletion.countDown()
+                    Handler(Looper.getMainLooper()).post(task)
+                }
+            } else {
+                KeyguardCardDiagnostics.startCapture(context, source, "debug", captureMode)
+                captureStarted = true
+            }
             if (changeScene) KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock = { target ->
                 if (target.directOutput != null && target.full && held.compareAndSet(false, true)) {
                     paintEntered.countDown()
@@ -141,6 +168,17 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                     override fun started(request: KeyguardCardInspectionRequest) {
                         reads.add("start id=${request.id} trigger=${request.trigger} wake=${request.wakeGeneration}")
                         if (request.id == injectedRequest.get() && request.id != 0L) secondRead.countDown()
+                    }
+                    override fun ingress(meta: KeyguardAccessibilityEventMeta, receivedAt: Long,
+                        action: KeyguardEventAction, frameworkEvent: Boolean) {
+                        if (offControl) reads.add("ingress event=${meta.eventTimeUptimeMs} received=$receivedAt action=$action framework=$frameworkEvent")
+                    }
+                    override fun queueOffered(request: KeyguardCardInspectionRequest, previous: KeyguardCardInspectionRequest?,
+                        pending: KeyguardCardInspectionRequest?, startsWorker: Boolean) {
+                        if (offControl) reads.add("queue id=${request.id} at=${request.queuedAtUptimeMs} starts=$startsWorker")
+                    }
+                    override fun beforeApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
+                        if (offControl) reads.add("apply id=${request.id} decision=$decision at=${SystemClock.uptimeMillis()}")
                     }
                     override fun ingressOffered(meta: KeyguardAccessibilityEventMeta, request: KeyguardCardInspectionRequest,
                         previous: KeyguardCardInspectionRequest?, pending: KeyguardCardInspectionRequest?,
@@ -263,12 +301,25 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
             }
             // A WindowManager attach is insufficient. Wait for the actual
             // output's own native apply receipt, under the same attempt.
-            if (r21Negative != true) await("direct reveal receipt", 15_000) {
+            if (r21Negative != true && offControl) {
+                assertTrue("NOT REACHED: OFF direct completion callback", offCompletion.await(15, TimeUnit.SECONDS))
+                assertTrue("NOT REACHED: OFF native apply was not entered", offApplyStarted.get() > 0L)
+                var identity: KeyguardR22VisualIdentityForTest? = null
+                await("OFF exact native owner", 8_000) {
+                    instrumentation.runOnMainSync { identity = service.r22VisualIdentityForTest() }
+                    identity != null
+                }
+                val visual = checkNotNull(offVisual)
+                val crop = visual.captureCrop("off-composited", checkNotNull(identity).bounds)
+                assertTrue("NOT REACHED: OFF crop did not match calibrated FULL", KeyguardR22VisualCalibration.compare(visual.a, crop).nearlyEqual())
+                File(dir, "off-native.txt").writeText("beforeApply=${offApplyStarted.get()} completionDispatched=${offCompletionAt.get()} clock=uptimeMs physical=UNOBSERVED\n")
+            } else if (r21Negative != true) await("direct reveal receipt", 15_000) {
                 val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
                 text.lineSequence().any { it.startsWith(" R18_PIPELINE ") &&
                     !it.contains("revealApply=UNOBSERVED/") && !it.contains("bufferReady=UNOBSERVED") }
             }
             saveScreenshot(File(dir, "03-visible-unclassified.png"))
+            if (!offControl) {
             report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
             File(dir, "capture.txt").writeText(checkNotNull(report))
             // A stock baseline is RED only after its real direct output and
@@ -294,9 +345,13 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 assertTrue("old proof was consumed after external ingress", consumed > initial)
                 assertTrue("consumed proof predates the injected event's real request", consumed >= injectedRequest.get())
             }
+            }
         } catch (error: Throwable) {
             errors += "${error.javaClass.simpleName}:${error.message}"
         } finally {
+            KeyguardOrbSurfaceWorkerTestHooks.beforeRevealApply = savedBeforeApply
+            KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = savedFixedTime
+            runCatching { offVisual?.close() }
             KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = savedDispatcher
             acknowledgement.getAndSet(null)?.let { task -> Handler(Looper.getMainLooper()).post(task) }
             releasePaint.countDown()
