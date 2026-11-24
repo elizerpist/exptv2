@@ -39,9 +39,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun pendingDirectWaitsForOrderedMainThenStartsRealSuccessor() = exercise(true)
     @Test fun stableDirectUsesOrderedMainAndLaterOfferWaits() = exercise(false)
     @Test fun orderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true)
+    @Test fun warmOrderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true, warmup = true)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
-    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false) {
+    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -49,7 +50,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val source = requireNotNull(args.getString("sourceSha"))
         require(source.matches(Regex("[0-9a-f]{40}")))
         val uuid = UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
-        val name = if (checkR41Bypass) "r41-pending" else if (pendingBefore) "pending" else "stable-later-offer"
+        val name = if (warmup) "r41-warm-pending" else if (checkR41Bypass) "r41-pending" else if (pendingBefore) "pending" else "stable-later-offer"
         val dir = File(context.filesDir, "keyguard-service-probe/r26/$uuid/$name")
         check(dir.mkdirs())
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
@@ -176,7 +177,29 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                     Handler(Looper.getMainLooper()).post(task)
                 }
             }
+            if (warmup) {
+                // Independent warm-up: retain the real initial fallback or
+                // first output, then start a separate unmodified locked wake.
+                // This never substitutes a synthetic positive classification.
+                shell("input keyevent KEYCODE_SLEEP")
+                await("warm-up sleeping") { !power.isInteractive && keyguard.isKeyguardLocked }
+                shell("input keyevent KEYCODE_WAKEUP")
+                var warmReport = ""
+                await("warm-up real first output") {
+                    warmReport = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                    power.isInteractive && keyguard.isKeyguardLocked && warmReport.lineSequence().any {
+                        it.startsWith(" R21_CORE ") && it.contains(" winner=") && !it.contains(" winner=UNOBSERVED")
+                    }
+                }
+                File(dir, "warm-up.txt").writeText(warmReport)
+                records.add("WARM_UP_FIRST_OUTPUT_RECORDED")
+            }
             shell("input keyevent KEYCODE_SLEEP"); await("device sleeping") { !power.isInteractive && keyguard.isKeyguardLocked }
+            if (warmup) await("warm-up owner withdrawn") {
+                var visible = true
+                instrumentation.runOnMainSync { visible = actual.renderModeStatus().visible }
+                !visible
+            }
             armed.set(true); shell("input keyevent KEYCODE_WAKEUP")
             assertTrue("NOT REACHED: complete positive with real DIRECT snapshot",held.await(20,TimeUnit.SECONDS))
             val a=checkNotNull(candidate.get()); val original=checkNotNull(route.get())
