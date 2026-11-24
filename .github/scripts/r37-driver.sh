@@ -21,6 +21,11 @@ PY
     git diff --name-status > "$out/baseline-fixture-diff.txt"
   else
     test -z "$(git status --porcelain --untracked-files=no)"
+    cp "$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/
+    cp "$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/
+    git diff --name-status > "$out/candidate-fixture-diff.txt"
+    test "$(git diff --name-only | wc -l)" = 2
+    test -z "$(git diff --name-only -- android/app/src/main)"
   fi
   flutter pub get > "$out/pub-get.log" 2>&1
   rc=0
@@ -50,8 +55,7 @@ PY
   bash scripts/prepare-keyguard-lower-environment.sh "$out/preflight"
   failed=0
   r37_uuids=""
-  methods=(r37ReturnedChildHandsOffToRealLatestOnOneReader stableInitialFullUsesOneVirginOutputWithoutReadinessRead r21ExclusionRetiresSubmittedOrbWithMainAckHeld)
-  if [[ "$BASELINE" == true ]]; then methods=(r37ReturnedChildHandsOffToRealLatestOnOneReader); fi
+  methods=(r37AdoptedOriginalChildTransfersToRealLatest)
   for method in "${methods[@]}"; do
     uuid=$(cat /proc/sys/kernel/random/uuid)
     r37_uuids="$r37_uuids $uuid"

@@ -1,4 +1,4 @@
-name: R37 exact-source service controls
+name: R37 retained-owner service controls
 on:
   workflow_dispatch:
     inputs:
@@ -44,7 +44,6 @@ jobs:
           path: app
           fetch-depth: 0
       - uses: actions/checkout@v5
-        if: ${{ inputs.baseline }}
         with:
           ref: ${{ env.HARNESS_SHA }}
           path: harness
@@ -98,7 +97,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r37-service-${{ inputs.baseline && 'baseline' || 'candidate' }}-${{ github.run_id }}
+          name: r37-adopted-${{ inputs.baseline && 'baseline' || 'candidate' }}-${{ github.run_id }}
           path: ${{ runner.temp }}/r37-evidence/**
           if-no-files-found: warn
           retention-days: 14
