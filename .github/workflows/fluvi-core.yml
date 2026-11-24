@@ -1,4 +1,4 @@
-name: R38 milestone ordered DIRECT controls
+name: R39 LIGHT and FULL bounded diagnostics
 on:
   workflow_dispatch:
     inputs:
@@ -98,7 +98,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r38-ordered-${{ github.run_id }}
+          name: r39-diagnostics-${{ github.run_id }}
           path: ${{ runner.temp }}/r37-evidence/**
           if-no-files-found: warn
           retention-days: 14
