@@ -27,6 +27,8 @@ PY
     test "$(git diff --name-only | wc -l)" = 2
     test -z "$(git diff --name-only -- android/app/src/main)"
   fi
+  python3 "$GITHUB_WORKSPACE/harness/.github/scripts/r37-inventory-probe.py"
+  git diff --name-status > "$out/inventory-probe-diff.txt"
   flutter pub get > "$out/pub-get.log" 2>&1
   rc=0
   (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain) > "$out/build.log" 2>&1 || rc=$?
@@ -55,7 +57,7 @@ PY
   bash scripts/prepare-keyguard-lower-environment.sh "$out/preflight"
   failed=0
   r37_uuids=""
-  methods=(r37AdoptedOriginalChildTransfersToRealLatest)
+  methods=(r37CleanOriginalInventoryTransfersToRealLatest)
   for method in "${methods[@]}"; do
     uuid=$(cat /proc/sys/kernel/random/uuid)
     r37_uuids="$r37_uuids $uuid"
