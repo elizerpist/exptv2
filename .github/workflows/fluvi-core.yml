@@ -1,93 +1,33 @@
-name: R38 unheld same-emulator comparison
+name: R38 isolated renderer baseline comparison
 on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 35
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: milestone
-            sha: de807259cd370d18e422772ed0943b8d65be4bca
-          - name: r37
-            sha: d2b1890a8c892a4ba3b3ec0ebe18279b4bb2b158
-          - name: r38
-            sha: d056c5d8467c5454d139bf12ef36ec7431a9ec51
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ matrix.sha }}
-          fetch-depth: 0
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.41.4'
-          channel: stable
-          cache: true
-      - name: Compile exact source and retain APK pair
-        shell: bash
-        env:
-          SOURCE_SHA: ${{ matrix.sha }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          test -z "$(git status --porcelain --untracked-files=no)"
-          mkdir -p "$RUNNER_TEMP/pair" "$HOME/.gradle/init.d"
-          cat > "$HOME/.gradle/init.d/r38-mirror.gradle" <<'GRADLE'
-          gradle.beforeSettings { settings ->
-            settings.pluginManagement.repositories { maven { url = uri('https://maven-central.storage-download.googleapis.com/maven2') }; gradlePluginPortal(); google() }
-            settings.dependencyResolutionManagement.repositories { maven { url = uri('https://maven-central.storage-download.googleapis.com/maven2') } }
-          }
-          GRADLE
-          flutter pub get > "$RUNNER_TEMP/pair/pub.log" 2>&1
-          (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain) > "$RUNNER_TEMP/pair/build.log" 2>&1 || { tail -100 "$RUNNER_TEMP/pair/build.log"; exit 1; }
-          cp build/app/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/pair/app.apk"
-          cp build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk "$RUNNER_TEMP/pair/test.apk"
-          printf '%s\n' "$SOURCE_SHA" > "$RUNNER_TEMP/pair/source.txt"
-          sha256sum "$RUNNER_TEMP/pair/"*.apk > "$RUNNER_TEMP/pair/pair.sha256"
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: r38-unheld-pair-${{ matrix.name }}
-          path: ${{ runner.temp }}/pair/
-          if-no-files-found: warn
-          compression-level: 0
-          retention-days: 14
   compare:
-    needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.sha }}
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
       - uses: actions/download-artifact@v4
         with:
+          github-token: ${{ github.token }}
+          run-id: 45399927170
           pattern: r38-unheld-pair-*
           path: ${{ runner.temp }}/pairs
-      - name: Sign the disposable emulator pairs with one test key
+      - name: Prepare same signed fixture pairs
         shell: bash
         run: |
           set -euo pipefail
-          out="$RUNNER_TEMP/r38-compare"; mkdir -p "$out"
+          out="$RUNNER_TEMP/r38-isolated"; mkdir -p "$out"
           keytool -genkeypair -keystore "$out/test.keystore" -storepass android -keypass android -alias androiddebugkey -dname 'CN=Disposable R38 Test' -keyalg RSA -validity 7 >/dev/null 2>&1
           signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
-          for mode in milestone r37 r38; do
-            pair="$RUNNER_TEMP/pairs/r38-unheld-pair-$mode"
-            mkdir -p "$out/$mode"
+          for mode in r37 r38; do
+            pair="$RUNNER_TEMP/pairs/r38-unheld-pair-$mode"; mkdir -p "$out/$mode"
             cp "$pair/source.txt" "$out/$mode/source.txt"
             for apk in app test; do
               "$signer" sign --ks "$out/test.keystore" --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out "$out/$mode/$apk.apk" "$pair/$apk.apk"
@@ -100,7 +40,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Real unheld wake trials on one API 35 emulator
+      - name: Compare identical isolated controls on API 35
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -109,13 +49,14 @@ jobs:
           arch: x86_64
           profile: pixel_7
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: bash "$GITHUB_WORKSPACE/.github/scripts/r38-unheld.sh"
+          script: bash "$GITHUB_WORKSPACE/.github/scripts/r38-isolated.sh"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r38-unheld-results-${{ github.run_id }}
+          name: r38-isolated-results-${{ github.run_id }}
           path: |
-            ${{ runner.temp }}/r38-compare/**/*.txt
-            ${{ runner.temp }}/r38-compare/**/*.tar
+            ${{ runner.temp }}/r38-isolated/**/*.txt
+            ${{ runner.temp }}/r38-isolated/**/*.png
+            ${{ runner.temp }}/r38-isolated/*.txt
           if-no-files-found: warn
           retention-days: 14
