@@ -187,8 +187,9 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 var warmReport = ""
                 await("warm-up real first output") {
                     warmReport = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                    val postedAndMoving = Regex(" winner=(?!R18_DIRECT_ATTEMPT/)[A-Z0-9_]+/[0-9]+/[0-9]+(?: |$)")
                     power.isInteractive && keyguard.isKeyguardLocked && warmReport.lineSequence().any {
-                        it.startsWith(" R21_CORE ") && it.contains(" winner=") && !it.contains(" winner=UNOBSERVED")
+                        it.startsWith(" R21_CORE ") && postedAndMoving.containsMatchIn(it)
                     }
                 }
                 File(dir, "warm-up.txt").writeText(warmReport)
