@@ -24,6 +24,21 @@ projection; Mind and Balance lack equivalent scope/revision provenance and
 therefore cannot be advertised as FULL host generations. The reference must
 fail closed for them until the real producers carry that provenance.
 
+The separate application continuation `0905f0d6e81cba396663c6b09898171913c195a9`
+adds a narrowly guarded production caller of that publisher. It checks the
+actual SystemUI service signer, UID and clock-scene capability metadata before
+pre-lock enrollment. In this initial reference path enrollment is restricted
+to a fresh userdebug/eng installation, an unlocked first service, no previous
+local reservation/output and the revisioned Budget category projection.
+Unsupported stock phones and unsupported generations remain on their existing
+path. The application and this reference patch have not been run together on
+an Android 16 image; do not treat a successful connection or an offscreen
+receiver as evidence of primary-clock composition or privacy.
+
+The manifest patch advertises `com.fluvi.reference.CLOCK_SCENE_VERSION=1` for
+this reference service. It is an identity/capability check, not evidence that
+any frame passed, and does not authorize stock-device enrollment.
+
 The two patch files and the renderer/store sources can be staged reproducibly
 with the existing command below. The stager checks both patches against the
 same AOSP parent and copies the clock-specific source from `clock/src`.

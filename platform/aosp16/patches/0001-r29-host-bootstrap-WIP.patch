@@ -2,22 +2,20 @@ diff --git a/packages/SystemUI/Android.bp b/packages/SystemUI/Android.bp
 index 2b17ae48..9ba9088d 100644
 --- a/packages/SystemUI/Android.bp
 +++ b/packages/SystemUI/Android.bp
-@@ -1002,4 +1002,6 @@ systemui_optimized_java_defaults {
- android_app {
+@@ -1003,2 +1003,4 @@ android_app {
      name: "SystemUI",
 +    // R29 generated canonical effect programs are staged from the pinned Fluvi source.
 +    asset_dirs: ["fluvi_r29/assets"],
      defaults: [
-         "platform_app_defaults",
 diff --git a/packages/SystemUI/AndroidManifest.xml b/packages/SystemUI/AndroidManifest.xml
-index f628a420..16360b79 100644
+index f628a420..fcee6547 100644
 --- a/packages/SystemUI/AndroidManifest.xml
 +++ b/packages/SystemUI/AndroidManifest.xml
-@@ -430,4 +430,7 @@
-              TODO: Should have an android:permission attribute
+@@ -431,2 +431,7 @@
               -->
 +        <!-- R29 reference only; every Binder transaction checks signer, UID and enrollment. -->
 +        <service android:name=".keyguard.fluvi.FluviOrbHostService"
-+            android:exported="true" />
++            android:exported="true">
++            <meta-data android:name="com.fluvi.reference.CLOCK_SCENE_VERSION" android:value="1" />
++        </service>
          <service android:name="SystemUIService"
-             android:exported="true"
