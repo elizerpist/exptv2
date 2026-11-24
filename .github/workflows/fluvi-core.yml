@@ -1,4 +1,4 @@
-name: R38 and continuation visible unlock and stale proof
+name: R39 and 0905 visible unlock and stale proof
 on:
   workflow_dispatch:
 permissions:
@@ -16,7 +16,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 45411275095
+          run-id: 45434535915
           pattern: r38-unheld-pair-*
           path: ${{ runner.temp }}/pairs
       - name: Prepare same signed fixture pairs
@@ -53,7 +53,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r38-unlock-results-${{ github.run_id }}
+          name: r39-unlock-results-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r38-unlock/**/*.txt
             ${{ runner.temp }}/r38-unlock/**/*.png
