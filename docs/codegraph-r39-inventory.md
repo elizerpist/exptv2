@@ -2,7 +2,7 @@
 
 Stock application: `fd7112e4e52952caaee1f740526c87f10ddc7cb2`.
 Graph manifest: `b8544ab092c6148613188ca5f3ab9f15612c946f:docs/codegraph/manifest.json`.
-SCIP-Dart 1.6.2 covers Dart only; the Kotlin entries below are direct source navigation, not SCIP edges or runtime observations. Native submit/commit is not a physical pixel. The SystemUI source is independently pinned at `47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9`.
+SCIP-Dart 1.6.2 covers Dart only; the Kotlin entries below are direct source navigation, not SCIP edges or runtime observations. Native submit/commit is not a physical pixel. The SystemUI source is independently pinned at `dce225d8b219716510ebb94a5078fc8311fe0e8e`.
 
 ```text
 fd7112e4e52952caaee1f740526c87f10ddc7cb2:android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt:331:    private val r39RemovalGate = KeyguardR39RemovalGate(queueLock, r18Coordinator)
@@ -46,46 +46,58 @@ fd7112e4e52952caaee1f740526c87f10ddc7cb2:android/app/src/main/kotlin/com/fluvi/a
 fd7112e4e52952caaee1f740526c87f10ddc7cb2:android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfacePresenter.kt:132:    fun sealR18() { direct?.seal() }
 fd7112e4e52952caaee1f740526c87f10ddc7cb2:android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfacePresenter.kt:133:    fun sealR18(attachment: Long, generation: Long) { direct?.sealMatching(attachment, generation) }
 
-SystemUI reference callers and generation gate:
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:41:import com.fluvi.r29.contract.R39ScenePolicy
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:52:class R38ClockScene @Inject constructor(
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:64:    fun modifier(): Modifier {
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:115:            val canDraw = runtime.isOnlyFrameOwner(view, changed) &&
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:144:                runtime.onOwnerDraw(view, changed, orbDrawn = false, noOutgoingScene = noOutgoingScene)
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:146:                runtime.onOwnerDraw(view, changed, orbDrawn = true, noOutgoingScene = false)
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:153:    private fun currentStateAllows(bypass: Boolean, defaultBlueprint: Boolean): Boolean {
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:157:            is ObservableTransitionState.Idle -> R39ScenePolicy.allow(R39SceneFacts(
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:161:            is ObservableTransitionState.Transition.ChangeScene -> R39ScenePolicy.allow(R39SceneFacts(
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/contract/src/com/fluvi/r29/contract/R39ScenePolicy.kt:13:object R39ScenePolicy {
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/patches/0002-r38-clock-root.patch:15:+    val fluviFrameOwner: R38ClockScene,
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/patches/0002-r38-clock-root.patch:25:+            Modifier.fillMaxSize().then(viewModel.fluviFrameOwner.modifier()).pointerInput(Unit) {
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:229:    private var ownerVisualEpoch = 0L
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:243:    fun isOnlyFrameOwner(view: View, observer: () -> Unit): Boolean = synchronized(observerLock) {
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:263:    fun onOwnerDraw(view: View, observer: () -> Unit, orbDrawn: Boolean, noOutgoingScene: Boolean) {
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:268:            if (orbDrawn) { ownerVisualEpoch += 1; return }
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:271:            if (value.registered || !store.isCurrentEmpty(value.nonce, value.sequence)) return
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:273:            visualEpoch = ownerVisualEpoch
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:281:                        ownerVisualEpoch == visualEpoch && store.isCurrentEmpty(pending.nonce, pending.sequence)
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/R29ResidentStore.kt:105:    fun isCurrentEmpty(nonce: String, sequence: Long): Boolean = synchronized(lock) {
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:4:import com.fluvi.r29.contract.R39ScenePolicy
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:10:class FluviR39ScenePolicyTest {
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:14:        assertTrue(R39ScenePolicy.allow(incoming))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:17:            incoming.copy(userDriven = true)).forEach { assertFalse(R39ScenePolicy.allow(it)) }
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:22:        assertTrue(R39ScenePolicy.allow(idle))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:23:        assertFalse(R39ScenePolicy.allow(idle.copy(noOverlays = false)))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:24:        assertFalse(R39ScenePolicy.allow(idle.copy(idleLockscreen = false)))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:22:    check(R39ScenePolicy.allow(incoming))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:23:    check(!R39ScenePolicy.allow(incoming.copy(wakingFromOff = false)))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:24:    check(!R39ScenePolicy.allow(incoming.copy(fromAbsent = false)))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:25:    check(!R39ScenePolicy.allow(incoming.copy(toLockscreen = false)))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:26:    check(!R39ScenePolicy.allow(incoming.copy(noOverlays = false)))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:27:    check(!R39ScenePolicy.allow(incoming.copy(userDriven = true)))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:29:    check(R39ScenePolicy.allow(idle))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:30:    check(!R39ScenePolicy.allow(idle.copy(noOverlays = false)))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:44:    check(store.isCurrentEmpty(nonce, 2)) { "only the exact invalidation may await an empty-frame receipt" }
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:45:    check(!store.isCurrentEmpty(nonce, 1))
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:51:    check(!store.isCurrentEmpty(nonce, 2)) { "a newer generation revokes the older empty receipt" }
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:68:    check(!store.isCurrentEmpty(nonce, 2)) { "an old session must not acquire an empty receipt" }
-47acc9a2992cf3a98f9c51082f14fe4e7d0cbef9:platform/aosp16/tests/host_store_harness/run.sh:14:  "$root/platform/aosp16/contract/src/com/fluvi/r29/contract/R39ScenePolicy.kt" \
+SystemUI reference callers, generation and fence gate:
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:41:import com.fluvi.r29.contract.R39ScenePolicy
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:52:class R38ClockScene @Inject constructor(
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:64:    fun modifier(): Modifier {
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:115:            val canDraw = runtime.isOnlyFrameOwner(view, changed) &&
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:144:                runtime.onOwnerDraw(view, changed, orbDrawn = false, noOutgoingScene = noOutgoingScene)
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:146:                runtime.onOwnerDraw(view, changed, orbDrawn = true, noOutgoingScene = false)
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:153:    private fun currentStateAllows(bypass: Boolean, defaultBlueprint: Boolean): Boolean {
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:157:            is ObservableTransitionState.Idle -> R39ScenePolicy.allow(R39SceneFacts(
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/clock/src/com/android/systemui/keyguard/fluvi/R38ClockScene.kt:161:            is ObservableTransitionState.Transition.ChangeScene -> R39ScenePolicy.allow(R39SceneFacts(
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/contract/src/com/fluvi/r29/contract/R39ScenePolicy.kt:13:object R39ScenePolicy {
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/contract/src/com/fluvi/r29/contract/R39ScenePolicy.kt:31:object R39EmptyPolicy {
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/patches/0002-r38-clock-root.patch:15:+    val fluviFrameOwner: R38ClockScene,
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/patches/0002-r38-clock-root.patch:25:+            Modifier.fillMaxSize().then(viewModel.fluviFrameOwner.modifier()).pointerInput(Unit) {
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:30:import com.fluvi.r29.contract.R39EmptyPolicy
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:234:    private var ownerVisualEpoch = 0L
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:248:    fun isOnlyFrameOwner(view: View, observer: () -> Unit): Boolean = synchronized(observerLock) {
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:271:    fun onOwnerDraw(view: View, observer: () -> Unit, orbDrawn: Boolean, noOutgoingScene: Boolean) {
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:275:                if (clockObservers.size == 1 && clockObservers[observer] === view) ownerVisualEpoch += 1
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:286:            if (!store.isCurrentEmpty(value.nonce, value.sequence)) return
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:293:            visualEpoch = ownerVisualEpoch
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:306:                transaction.addTransactionCompletedListener(main) { stats ->
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:307:                    val fence = runCatching { stats.presentFence }.getOrNull()
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:321:                                        val valid = R39EmptyPolicy.mayAcknowledge(R39EmptyEvidence(
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:326:                                            noLaterOrbDraw = ownerVisualEpoch == visualEpoch,
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:327:                                            sameEmptyGeneration = store.isCurrentEmpty(pending.nonce, pending.sequence)))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/FluviOrbHostService.kt:342:                root.applyTransactionOnDraw(transaction)
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/src/com/android/systemui/keyguard/fluvi/R29ResidentStore.kt:105:    fun isCurrentEmpty(nonce: String, sequence: Long): Boolean = synchronized(lock) {
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:5:import com.fluvi.r29.contract.R39EmptyPolicy
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:6:import com.fluvi.r29.contract.R39ScenePolicy
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:12:class FluviR39ScenePolicyTest {
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:16:        assertTrue(R39ScenePolicy.allow(incoming))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:19:            incoming.copy(userDriven = true)).forEach { assertFalse(R39ScenePolicy.allow(it)) }
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:24:        assertTrue(R39ScenePolicy.allow(idle))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:25:        assertFalse(R39ScenePolicy.allow(idle.copy(noOverlays = false)))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:26:        assertFalse(R39ScenePolicy.allow(idle.copy(idleLockscreen = false)))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:30:        assertTrue(R39EmptyPolicy.mayAcknowledge(complete))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/systemui/tests/com/android/systemui/keyguard/fluvi/FluviR39ScenePolicyTest.kt:34:            complete.copy(sameEmptyGeneration = false)).forEach { assertFalse(R39EmptyPolicy.mayAcknowledge(it)) }
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:22:    check(R39ScenePolicy.allow(incoming))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:23:    check(!R39ScenePolicy.allow(incoming.copy(wakingFromOff = false)))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:24:    check(!R39ScenePolicy.allow(incoming.copy(fromAbsent = false)))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:25:    check(!R39ScenePolicy.allow(incoming.copy(toLockscreen = false)))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:26:    check(!R39ScenePolicy.allow(incoming.copy(noOverlays = false)))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:27:    check(!R39ScenePolicy.allow(incoming.copy(userDriven = true)))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:29:    check(R39ScenePolicy.allow(idle))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:30:    check(!R39ScenePolicy.allow(idle.copy(noOverlays = false)))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:32:    check(R39EmptyPolicy.mayAcknowledge(receipt))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:36:        receipt.copy(sameEmptyGeneration = false)).forEach { check(!R39EmptyPolicy.mayAcknowledge(it)) }
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:50:    check(store.isCurrentEmpty(nonce, 2)) { "only the exact invalidation may await an empty-frame receipt" }
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:51:    check(!store.isCurrentEmpty(nonce, 1))
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:57:    check(!store.isCurrentEmpty(nonce, 2)) { "a newer generation revokes the older empty receipt" }
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/ResidentHarness.kt:74:    check(!store.isCurrentEmpty(nonce, 2)) { "an old session must not acquire an empty receipt" }
+dce225d8b219716510ebb94a5078fc8311fe0e8e:platform/aosp16/tests/host_store_harness/run.sh:14:  "$root/platform/aosp16/contract/src/com/fluvi/r29/contract/R39ScenePolicy.kt" \
 
 ```
