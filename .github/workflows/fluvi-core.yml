@@ -96,9 +96,11 @@ jobs:
           grep -q 'name="requested" value="true"' "$out/preserved-orb-settings.txt"
           grep -q '<string name="presentationMode">orb</string>' "$out/preserved-orb-settings.txt"
           wait_for_app new
+          printf '%s\n' 'UPDATE_INSTALL_PASS sentinel=preserved orbSettings=preserved launch=ok API=35' > "$out/upgrade-result.txt"
           adb shell settings put secure enabled_accessibility_services com.fluvi.app/.lockscreen.FluviKeyguardCardService
           adb shell settings put secure accessibility_enabled 1
           adb shell input keyevent KEYCODE_HOME
+          adb shell locksettings set-disabled false
           sleep 15
           adb shell input keyevent KEYCODE_SLEEP
           sleep 3
@@ -106,9 +108,10 @@ jobs:
           sleep 5
           adb shell dumpsys accessibility > "$out/orb-accessibility.txt"
           adb shell dumpsys window windows > "$out/orb-windows.txt"
+          adb shell dumpsys window policy > "$out/orb-policy.txt"
           adb shell screencap -p /sdcard/r38-orb.png
           adb pull /sdcard/r38-orb.png "$out/orb.png" >/dev/null
-          grep -F 'com.fluvi.app/.lockscreen.FluviKeyguardCardService' "$out/orb-accessibility.txt" >/dev/null
+          grep -F 'com.fluvi.app/com.fluvi.app.lockscreen.FluviKeyguardCardService' "$out/orb-accessibility.txt" >/dev/null
           printf '%s\n' 'UPDATE_INSTALL_PASS sentinel=preserved launch=ok accessibility=connected ORB_pixels=UNVERIFIED API=35' > "$out/result.txt"
           CONTROL
       - name: Enable KVM
@@ -133,5 +136,6 @@ jobs:
           name: r38-profile-update-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r36-update/*.txt
+            ${{ runner.temp }}/r36-update/*.png
           if-no-files-found: warn
           retention-days: 14
