@@ -1,4 +1,4 @@
-name: R39 and 0905 unheld comparison
+name: R40 R38 R39 unheld LIGHT comparison
 on:
   workflow_dispatch:
 permissions:
@@ -13,8 +13,10 @@ jobs:
         include:
           - name: r38
             sha: 0905f0d6e81cba396663c6b09898171913c195a9
-          - name: continuation
+          - name: r39
             sha: fd7112e4e52952caaee1f740526c87f10ddc7cb2
+          - name: r40
+            sha: 11b4a67a08f402968bd55ff62f63f0494227d0a9
     steps:
       - uses: actions/checkout@v5
         with:
@@ -64,7 +66,7 @@ jobs:
   compare:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v5
         with:
@@ -83,7 +85,7 @@ jobs:
           out="$RUNNER_TEMP/r38-compare"; mkdir -p "$out"
           keytool -genkeypair -keystore "$out/test.keystore" -storepass android -keypass android -alias androiddebugkey -dname 'CN=Disposable R38 Test' -keyalg RSA -validity 7 >/dev/null 2>&1
           signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
-          for mode in r38 continuation; do
+          for mode in r38 r39 r40; do
             pair="$RUNNER_TEMP/pairs/r38-unheld-pair-$mode"
             mkdir -p "$out/$mode"
             cp "$pair/source.txt" "$out/$mode/source.txt"

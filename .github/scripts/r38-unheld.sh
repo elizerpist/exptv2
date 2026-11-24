@@ -7,7 +7,7 @@ adb shell getprop ro.build.version.sdk >> "$out/device.txt"
 adb shell wm size >> "$out/device.txt"
 adb shell wm density >> "$out/device.txt"
 failed=0
-for spec in r38:cold-device r38:repeat continuation:cold-device continuation:repeat r38:alternate continuation:alternate; do
+for spec in r38:first r38:repeat r39:first r39:repeat r40:first r40:repeat r40:alternate r39:alternate r38:alternate; do
   mode=${spec%%:*}; label=${spec#*:}; pair="$out/$mode"; trial="$out/$mode/$label"
   mkdir -p "$trial"
   if [[ "$label" != repeat ]]; then
