@@ -20,8 +20,9 @@ case "${1:-}" in
     ;;
   run)
     collect() {
-      adb logcat -b all -d -v monotonic 2>/dev/null | grep -E 'R36_FRAMEWORK_HOST|R36_DIAGNOSTIC|AppWidget|RemoteViews|FATAL EXCEPTION|Process: com\.fluvi' > "$out/logcat.txt" || true
+      adb logcat -b all -d -v monotonic 2>/dev/null | grep -E 'R36_FRAMEWORK_HOST|R36_DIAGNOSTIC|R36_FRAME_SAMPLE|AppWidget|RemoteViews|FATAL EXCEPTION|Process: com\.fluvi' > "$out/logcat.txt" || true
       adb exec-out run-as com.fluvi.app cat files/r36-framework-host.png > "$out/framework-host.png" 2> "$out/screenshot.stderr" || true
+      adb exec-out run-as com.fluvi.app cat files/r36-framework-first.png > "$out/framework-first.png" 2> "$out/first-screenshot.stderr" || true
     }
     trap collect EXIT
     { adb devices -l; adb shell getprop ro.build.version.sdk; adb shell getprop ro.product.cpu.abi; adb shell getprop ro.build.fingerprint; adb shell wm size; adb shell wm density; } > "$out/device.txt" 2>&1

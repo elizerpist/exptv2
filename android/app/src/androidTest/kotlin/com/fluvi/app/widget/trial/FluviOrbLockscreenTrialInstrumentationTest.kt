@@ -111,18 +111,35 @@ class FluviOrbLockscreenTrialInstrumentationTest {
                 imageHeight = visible.height
             }
             assertTrue(imageWidth > 0 && imageHeight > 0)
-            val screen = requireNotNull(automation.takeScreenshot())
-            try {
-                val x = pos[0] + imageWidth / 2
-                val y = pos[1] + imageHeight / 2
+            val x = pos[0] + imageWidth / 2
+            val y = pos[1] + imageHeight / 2
+            val frameDeadline = SystemClock.uptimeMillis() + 5_000
+            var composited: Bitmap? = null
+            var samples = 0
+            while (SystemClock.uptimeMillis() < frameDeadline && composited == null) {
+                val screen = requireNotNull(automation.takeScreenshot())
                 assertTrue(x in 0 until screen.width && y in 0 until screen.height)
                 val pixel = screen.getPixel(x, y)
-                assertTrue("center not visible blue-cyan: ${Integer.toHexString(pixel)}", Color.blue(pixel) > Color.red(pixel) + 35 && Color.green(pixel) > Color.red(pixel) + 35)
-                println("R36_COMPOSITED_CENTER x=$x y=$y pixel=${Integer.toHexString(pixel)}")
-                context.openFileOutput("r36-framework-host.png", Context.MODE_PRIVATE).use {
-                    assertTrue(screen.compress(Bitmap.CompressFormat.PNG, 100, it))
+                println("R36_FRAME_SAMPLE index=$samples x=$x y=$y pixel=${Integer.toHexString(pixel)}")
+                if (samples == 0) {
+                    context.openFileOutput("r36-framework-first.png", Context.MODE_PRIVATE).use {
+                        assertTrue(screen.compress(Bitmap.CompressFormat.PNG, 100, it))
+                    }
                 }
-            } finally { screen.recycle() }
+                samples++
+                if (Color.blue(pixel) > Color.red(pixel) + 35 && Color.green(pixel) > Color.red(pixel) + 35) {
+                    composited = screen
+                } else {
+                    screen.recycle()
+                    Thread.sleep(50)
+                }
+            }
+            val visible = requireNotNull(composited) { "No blue-cyan compositor pixel at $x,$y after $samples screenshots" }
+            try {
+                context.openFileOutput("r36-framework-host.png", Context.MODE_PRIVATE).use {
+                    assertTrue(visible.compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+            } finally { visible.recycle() }
             println("R36_FRAMEWORK_HOST bound=true category=KEYGUARD image=blue-cyan marker=magenta size=${actual.width}x${actual.height}")
         } finally {
             try {
