@@ -201,6 +201,9 @@ internal class KeyguardWindowSnapshotReader(
         val followOnOpening: Boolean = false,
         /** R34 transfers only from the actual accepted SystemUI root. */
         val r34ExactSystemRoot: Boolean = false,
+        /** R37 is a scheduling-only cancellation of an obsolete empty read. */
+        val r37YieldHint: (() -> Boolean)? = null,
+        val claimR37Yield: ((String, Boolean, Int, Int, Int) -> KeyguardCardInspectionRequest?)? = null,
         val beforeWindowsAcquisition: (() -> Unit)? = null,
         val openingFirstIngressUptime: (() -> Long)? = null,
         val openingChildBefore: ((Int, Int) -> Unit)? = null,
@@ -531,6 +534,32 @@ internal class KeyguardWindowSnapshotReader(
                     timing.rootCount + timing.activeRootCount, timing.childCount)
             }.getOrNull()
         }
+        // R37 discards work only for an empty owner and a genuine successor.
+        // Even without batch prefetch, exclude any ambiguous/foreign inventory.
+        val r37CleanInventory = request.claimR37Yield != null &&
+            KeyguardWindowSnapshotReaderPolicy.cleanOpeningInventory(
+                true, metadata, observedOwn, request.attachGeneration, activeCandidate,
+            )
+        fun maybeR37(checkpoint: String, safe: Boolean, visited: Int): KeyguardCardInspectionRequest? {
+            if (!safe || !r37CleanInventory || !freshnessBoundaryEstablished ||
+                (request.strictOwnAttribution && request.knownOwnAtInventory?.invoke() != observedOwn) ||
+                request.r37YieldHint?.invoke() != true) return null
+            return runCatching { request.claimR37Yield?.invoke(checkpoint, true, visited,
+                timing.rootCount + timing.activeRootCount, timing.childCount) }.getOrNull()
+        }
+        fun r37SafeRoot(root: AccessibilityNodeInfo, windowId: Int): Boolean = runCatching {
+            root.windowId == windowId && windowId == activeCandidate?.id &&
+                root.packageName?.toString() == "com.android.systemui" &&
+                (!root.isVisibleToUser ||
+                    (root.viewIdResourceName?.let { KeyguardSurfaceClassifier.isDecisiveExclusionMarker(it) } != true &&
+                        root.className?.toString()?.contains("BouncerContent") != true))
+        }.getOrDefault(false)
+        val afterWindows = maybeR37("AFTER_WINDOWS", true, 0)
+        if (afterWindows != null) return Result(emptyList(), false, false, windowsReadMs,
+            SystemClock.uptimeMillis() - treeStartedAt, 0,
+            timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), yieldedTo = afterWindows,
+            yieldReason = KeyguardOpeningYieldReason.CLEAN_OPENING)
+
         // A TYPE_SYSTEM inventory entry does not identify its package. Before
         // the root is returned, a foreign system window is still unresolved;
         // report the checkpoint but keep the ordinary read in that case.
@@ -570,6 +599,18 @@ internal class KeyguardWindowSnapshotReader(
                 timing.activeRootAccepted = true
                 timing.acceptedChildPrefetchFlags = prefetch
                 activeWindowId = candidate.id
+                // Inspect the returned root's own exclusion markers before
+                // abandoning this read. No node is retained after transfer.
+                val next = if (request.r37YieldHint?.invoke() == true)
+                    returned?.let { maybeR37("AFTER_ACTIVE_ROOT", r37SafeRoot(it, candidate.id), 0) } else null
+                if (next != null) {
+                    returned?.recycle()
+                    activeRoot = null
+                    return Result(emptyList(), false, false, windowsReadMs,
+                        SystemClock.uptimeMillis() - treeStartedAt, 0,
+                        timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), yieldedTo = next,
+                        yieldReason = KeyguardOpeningYieldReason.CLEAN_OPENING)
+                }
             } else {
                 timing.fallbackReason = when {
                     !authorityIsCurrent() -> "authorityStaleAfterActiveRoot"
@@ -656,6 +697,17 @@ internal class KeyguardWindowSnapshotReader(
             }
             val own = !request.strictOwnAttribution && rootPackage == ownPackageName &&
                 window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
+            val rootNext = if (request.r37YieldHint?.invoke() == true && root != null &&
+                !unavailableRoot && !walkTruncated && !timing.ownAttributionAmbiguous)
+                maybeR37("AFTER_WINDOW_ROOT", r37SafeRoot(root, window.id), visited) else null
+            if (rootNext != null) {
+                root?.recycle()
+                activeRoot?.recycle()
+                return Result(emptyList(), false, false, windowsReadMs,
+                    SystemClock.uptimeMillis() - treeStartedAt, visited,
+                    timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), yieldedTo = rootNext,
+                    yieldReason = KeyguardOpeningYieldReason.CLEAN_OPENING)
+            }
             val visible = try { if (rootPackage in SYSTEM_PACKAGES && root != null) {
                 val installed = request.openingYieldHint != null && request.claimOpeningYield != null &&
                     canBatch && timing.activeRootAccepted && !unavailableRoot && !walkTruncated &&
@@ -690,7 +742,11 @@ internal class KeyguardWindowSnapshotReader(
                                     count <= 1 || timing.childCount == 0)) null
                             else maybeYield(kind, reason, exactSystemRoot && cleanOpeningInventory(), visited + count)
                         } else null
-                    } else null, if (installed) request.pauseOpeningAfterYieldAttempt else null).also {
+                    } else null, if (installed) request.pauseOpeningAfterYieldAttempt else null,
+                    if (request.claimR37Yield != null && r37SafeRoot(root, window.id) &&
+                        !unavailableRoot && !walkTruncated && !timing.ownAttributionAmbiguous) {
+                        { count -> maybeR37("AFTER_NODE", true, visited + count) }
+                    } else null).also {
                     if (timing.firstIncompleteReason == null) timing.firstIncompleteReason = it.firstIncompleteReason
                     if (it.yieldReason != null) timing.openingYieldReason = it.yieldReason
                     walkTruncated = walkTruncated || it.truncated
@@ -716,6 +772,17 @@ internal class KeyguardWindowSnapshotReader(
             )
         }
         activeRoot?.recycle()
+        val finalNext = if (request.r37YieldHint?.invoke() == true) {
+            val hasRestrictiveMarker = snapshots.any { snap -> snap.visibleViewIds.any {
+                KeyguardSurfaceClassifier.isDecisiveExclusionMarker(it)
+            } }
+            maybeR37("BEFORE_RESULT", !unavailableRoot && !walkTruncated &&
+                !timing.ownAttributionAmbiguous && !hasRestrictiveMarker, visited)
+        } else null
+        if (finalNext != null) return Result(emptyList(), false, false, windowsReadMs,
+            SystemClock.uptimeMillis() - treeStartedAt, visited,
+            timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), yieldedTo = finalNext,
+            yieldReason = KeyguardOpeningYieldReason.CLEAN_OPENING)
         val treeElapsed = SystemClock.uptimeMillis() - treeStartedAt
         return Result(snapshots, unavailableRoot, walkTruncated, windowsReadMs, treeElapsed, visited,
             timing.snapshot(treeElapsed), false, readsAfterInvalidation, firstIncompleteReason = timing.firstIncompleteReason)
@@ -735,6 +802,7 @@ internal class KeyguardWindowSnapshotReader(
         openingYieldHint: (() -> Boolean)?,
         tryOpeningYield: ((String, KeyguardOpeningYieldReason, Int) -> KeyguardCardInspectionRequest?)?,
         pauseOpeningAfterYieldAttempt: (() -> Boolean)?,
+        tryR37AfterNode: ((Int) -> KeyguardCardInspectionRequest?)?,
     ): VisibleIds {
         val ids = linkedSetOf<String>()
         var decisiveReported = false
@@ -774,6 +842,12 @@ internal class KeyguardWindowSnapshotReader(
                 if (!node.isVisibleToUser) return
                 node.viewIdResourceName?.let(::recordId)
                 node.className?.toString()?.takeIf { it.contains("BouncerContent") }?.let { recordId("element:BouncerContent") }
+                // The returned node's own restrictive markers must be read
+                // first, including when this is the final child or a leaf.
+                if (!decisiveReported && !truncated && tryR37AfterNode != null) {
+                    yieldedTo = tryR37AfterNode(visited)
+                    if (yieldedTo != null) { yieldReason = KeyguardOpeningYieldReason.CLEAN_OPENING; return }
+                }
                 for (index in 0 until node.childCount) {
                     if (!authorityIsCurrent()) { aborted = true; return }
                     // The returned node and its exclusion markers were

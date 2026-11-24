@@ -45,8 +45,9 @@ internal class KeyguardR22FirstInspectionFixture {
     private lateinit var automation: UiAutomation
 
     fun run(scenario: String) {
-        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative", "r32_overlap", "r34_latest"))
-        val r34 = scenario == "r34_latest"
+        require(scenario in setOf("positive", "negative", "stable", "natural", "automation", "r31_system", "r31_ambiguous", "r31_negative", "r32_overlap", "r34_latest", "r37_after_child"))
+        val r37 = scenario == "r37_after_child"
+        val r34 = scenario == "r34_latest" || r37
         val r31 = scenario == "r31_system" || scenario == "r31_ambiguous" || scenario == "r31_negative"
         val r32 = scenario == "r32_overlap"
         val negativeScene = scenario == "negative" || scenario == "r31_negative"
@@ -96,6 +97,7 @@ internal class KeyguardR22FirstInspectionFixture {
         val r34RealOffers = CountDownLatch(2)
         val r34ObservedOffer = AtomicLong(0L)
         val r34WinningRequest = AtomicLong(0L)
+        val r37Boundary = AtomicReference<String?>()
         val r32MainHeld = CountDownLatch(1)
         val r32ResumeMain = AtomicReference<Runnable?>()
         val r32LatestPending = AtomicLong(0L)
@@ -275,6 +277,17 @@ internal class KeyguardR22FirstInspectionFixture {
                     override fun openingChildReturned(request: KeyguardCardInspectionRequest, windowId: Int, index: Int, present: Boolean) {
                         if (present && request == a.get() && firstChildObserved.compareAndSet(false, true)) {
                             records.add("A_FIRST_CHILD_RETURN id=${request.id} wake=${request.wakeGeneration} window=$windowId index=$index at=${SystemClock.uptimeMillis()}")
+                            // R37 holds an actual returned child before its
+                            // markers are consumed; the candidate must inspect
+                            // those markers before handing off to the latest event.
+                            if (r37 && windowId.toLong() == independentWindowId.get() &&
+                                firstChildHeld.compareAndSet(false, true)) {
+                                records.add("R37_RETURNED_CHILD_HELD id=${request.id} window=$windowId index=$index at=${SystemClock.uptimeMillis()}")
+                                entered.countDown()
+                                if (!release.await(20, TimeUnit.SECONDS)) {
+                                    childTimedOut.set(true); records.add("R37_CHILD_TIMEOUT")
+                                }
+                            }
                             // Preserve the historical non-suppressing handle
                             // witness; controlled cases use the later eligible checkpoint.
                             if (scenario == "automation") {
@@ -287,7 +300,7 @@ internal class KeyguardR22FirstInspectionFixture {
                         }
                     }
                     override fun openingEligibleCheckpoint(request: KeyguardCardInspectionRequest, windowId: Int, nextIndex: Int) {
-                        if ((r31 || r34 || scenario in setOf("positive", "negative", "stable")) && request == a.get() &&
+                        if ((r31 || (r34 && !r37) || scenario in setOf("positive", "negative", "stable")) && request == a.get() &&
                             firstChildObserved.get() && windowId.toLong() == independentWindowId.get() &&
                             firstChildHeld.compareAndSet(false, true)) {
                             records.add("A_ELIGIBLE_CHECKPOINT id=${request.id} window=$windowId next=$nextIndex at=${SystemClock.uptimeMillis()}")
@@ -302,6 +315,13 @@ internal class KeyguardR22FirstInspectionFixture {
                             if (previous == null || snapshot.ordinal > previous.ordinal) snapshot else previous
                         }
                         records.add("POST_CLAIM ordinal=${snapshot.ordinal} first=${snapshot.first?.id} latest=${snapshot.latest?.id} offers=${snapshot.offers} replacements=${snapshot.replacements}")
+                    }
+                    override fun r37BoundaryClaimed(request: KeyguardCardInspectionRequest,
+                        successor: KeyguardCardInspectionRequest, boundary: String, at: Long) {
+                        if (request == a.get()) {
+                            r37Boundary.set(boundary)
+                            records.add("R37_CLAIM A=${request.id} next=${successor.id} boundary=$boundary at=$at")
+                        }
                     }
                     override fun yielded(request: KeyguardCardInspectionRequest, successor: KeyguardCardInspectionRequest,
                         startedAt: Long, finishedAt: Long, visited: Int) {
@@ -597,6 +617,8 @@ internal class KeyguardR22FirstInspectionFixture {
                 release.countDown()
                 assertTrue("NOT REACHED: original did not terminate at a safe child", completed.await(20, TimeUnit.SECONDS))
                 assertEquals("R34 obsolete reader did not transfer to the actual latest offer", latest.id, yieldedTo.get())
+                if (r37) assertEquals("NOT REACHED: returned visible child did not reach the R37 boundary",
+                    "AFTER_NODE", r37Boundary.get())
                 assertTrue("NOT REACHED: real latest reader did not start", bStarted.await(15, TimeUnit.SECONDS))
                 assertEquals("R34 must use one physical reader", aThread.get(), bThread.get())
                 assertFalse("R34 acquired another original child after transfer", nextChild.get())

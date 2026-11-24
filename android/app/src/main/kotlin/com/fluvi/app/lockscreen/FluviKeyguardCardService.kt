@@ -2498,7 +2498,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         if (result is InspectionOutcome.Yielded) {
             recordR34Read(request, result.partial.r34ReadOwner, "TRANSFER", started, finished,
-                result.partial.r34InventoryAt, result.sceneAtRead, result.successor.id, "SAFE_CHILD")
+                result.partial.r34InventoryAt, result.sceneAtRead, result.successor.id,
+                result.partial.r37Boundary?.let { "R37_${it}@${result.partial.r37ClaimAt}" } ?: "SAFE_CHILD")
             if (claimedOpening != null) synchronized(queueLock) {
                 openingHandoff.successorFinished(request, finished, "YIELDED_TO_C")
                 openingHandoff.followReadFinished(request, finished, result.partial.timing.ingressCallEnd, "YIELDED_TO_C")
@@ -2804,6 +2805,43 @@ class FluviKeyguardCardService : AccessibilityService() {
             r25Publication.claimedRequest() != null || r18DrainBindings.any { it != null && !it.drained && it.token !== token }
         ) return null
         return published
+    }
+
+    /** Capture only a genuinely empty, unpublished reservation before the
+     * first inventory. This cannot authorize presentation. */
+    private fun r37EarlyStampLocked(request: KeyguardCardInspectionRequest): KeyguardR37ReservationStamp? {
+        val early = r18ProvisionalWake ?: return null
+        val ahead = readAheadSnapshot ?: return null
+        val route = r18RouteSnapshot ?: return null
+        val state = r18Coordinator.snapshot()
+        if (Build.VERSION.SDK_INT != 35 || !r18RouteEnabled || r18Active != null ||
+            early.firstRequestId != request.id || !early.targetAuthority.matches(request) ||
+            inspectionAuthority != early.previousAuthority || ahead.authority != early.previousAuthority ||
+            early.routeRevision != r18RouteRevision || route.preparation != early.preparation ||
+            !early.preparation.full || !early.preparation.emptyAwaitingDisclosure ||
+            !ahead.detached || ahead.showInProgress || readAheadShowInProgress || r14Recovery != null ||
+            !inspectionQueue.canPublishCompleted(request) || state.reservation !== early.token || state.adopted ||
+            state.host != KeyguardOrbPresentationCoordinator.Host.NONE || state.imageReady ||
+            state.proofRequestId != null || state.grant != KeyguardOrbPresentationCoordinator.Grant.NONE ||
+            firstAuthorizedOrb.current() != null || r25Publication.waitingRequest() != null ||
+            r25Publication.claimedRequest() != null || r18DrainBindings.any { it != null && !it.drained }
+        ) return null
+        return KeyguardR37ReservationStamp(early.token, request.id, early.targetAuthority,
+            readAheadStateRevision, early.routeRevision)
+    }
+
+    /** Resolve the exact pre-inventory reservation only after Main adopts it.
+     * A changed revision, relock, replacement or outstanding pixel owner
+     * leaves the original conservative path in charge. */
+    private fun r37AdoptedOwnerLocked(request: KeyguardCardInspectionRequest,
+                                      stamp: KeyguardR37ReservationStamp?): R32DirectSnapshot? {
+        stamp ?: return null
+        val owner = r34EmptyDirectLocked(request) ?: return null
+        val active = r18Active ?: return null
+        if (r18ProvisionalWake != null || active.token !== stamp.token ||
+            !KeyguardR37Ownership.sameAdoption(stamp, owner.reservation, request.id,
+                inspectionAuthority, readAheadStateRevision, r18RouteRevision)) return null
+        return owner
     }
 
     private fun r34SameEmptyOwnerLocked(request: KeyguardCardInspectionRequest,
@@ -3491,6 +3529,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         val r34ReadOwner: R32DirectSnapshot? = null,
         val r34InventoryAt: Long? = null,
         val r34PausedForOffer: Boolean = false,
+        val r37Boundary: String? = null,
+        val r37ClaimAt: Long? = null,
     )
 
     /** Technical-only operation timing. It measures API call duration, not
@@ -3676,7 +3716,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         val captureOpening = request.diagnosticContext?.captureId != null &&
             request.diagnosticContext.captureId == KeyguardCardDiagnostics.activeCaptureId()
-        val r34Eligible = synchronized(queueLock) { r34EmptyDirectLocked(request) != null }
+        val (r34Eligible, r37EarlyStamp) = synchronized(queueLock) {
+            val adopted = r34EmptyDirectLocked(request) != null
+            adopted to if (adopted) null else r37EarlyStampLocked(request)
+        }
+        val r37Eligible = r34Eligible || r37EarlyStamp != null
+        var r37Boundary: String? = null
+        var r37ClaimAt: Long? = null
         var r34ReadOwner: R32DirectSnapshot? = null
         var r34ReadScene: Long? = null
         var r34InventoryAt: Long? = null
@@ -3705,14 +3751,49 @@ class FluviKeyguardCardService : AccessibilityService() {
                 },
                 followOnOpening = followHandle != null,
                 r34ExactSystemRoot = r34Eligible,
+                r37YieldHint = if (r37Eligible) {
+                    { r34ReadScene?.let { firstAuthorizedOrb.sceneHint() > it } == true }
+                } else null,
+                claimR37Yield = if (r37Eligible) { { boundary, freshnessSafe, visited, roots, children ->
+                    val at = SystemClock.uptimeMillis()
+                    val claimed = synchronized(queueLock) {
+                        val owner = r34ReadOwner ?: r37AdoptedOwnerLocked(request, r37EarlyStamp)
+                            ?.also { r34ReadOwner = it }
+                        if (owner == null) return@synchronized null
+                        val scene = firstAuthorizedOrb.sceneSerial()
+                        val pending = inspectionQueue.pendingRequest()
+                        val action = KeyguardR34LatestScenePolicy.decide(
+                            r34ReadScene, scene, r34SameEmptyOwnerLocked(request, owner),
+                            safeBoundary = freshnessSafe, restrictiveEvidence = false,
+                            pendingScene = pending?.r34SceneSerial,
+                            genuineCompatiblePending = r34ActualLatestLocked(request, pending, scene))
+                        // No new parking or synthetic request: without the
+                        // genuine latest offer the original read continues.
+                        if (action != KeyguardR34LatestScenePolicy.Action.TRANSFER) return@synchronized null
+                        val successor = inspectionQueue.handoffOpening(request, requireNotNull(pending))
+                        if (successor != null) {
+                            r37Boundary = "$boundary:$visited/$roots/$children"
+                            r37ClaimAt = at
+                            openingHandoff.invalidate()
+                        }
+                        successor
+                    }
+                    if (claimed != null) runCatching {
+                        inspectionProbeForTest?.r37BoundaryClaimed(request, claimed, boundary, at)
+                    }
+                    claimed
+                } } else null,
                 beforeWindowsAcquisition = {
                     synchronized(queueLock) {
                         val scene = firstAuthorizedOrb.sceneSerial()
                         onInventoryScene(scene)
-                        if (r34Eligible) {
-                            r34ReadOwner = r34EmptyDirectLocked(request)
+                        if (r37Eligible) {
+                            r34ReadOwner = if (r34Eligible) r34EmptyDirectLocked(request)
+                                else r37AdoptedOwnerLocked(request, r37EarlyStamp)
+                            // Capture the original scene before inventory even
+                            // when the exact reservation is not yet adopted.
                             r34ReadScene = scene
-                            if (r34ReadOwner != null) r34InventoryAt = SystemClock.uptimeMillis()
+                            r34InventoryAt = SystemClock.uptimeMillis()
                         }
                         if (followHandle != null)
                             openingHandoff.followReadStarted(inspectionQueue, request,
@@ -3861,6 +3942,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             r34ReadOwner = r34ReadOwner,
             r34InventoryAt = r34InventoryAt,
             r34PausedForOffer = r34PausedForOffer && result.abortedStale,
+            r37Boundary = r37Boundary,
+            r37ClaimAt = r37ClaimAt,
         )
     }
 

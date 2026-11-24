@@ -106,6 +106,9 @@ internal interface KeyguardInspectionProbeForTest {
     fun postClaimObserved(snapshot: KeyguardOpeningInspectionHandoff.PostClaimSnapshot) {}
     fun yielded(request: KeyguardCardInspectionRequest, successor: KeyguardCardInspectionRequest,
         startedAt: Long, finishedAt: Long, visited: Int) {}
+    /** Test-only observation, after the queue lock has been released. */
+    fun r37BoundaryClaimed(request: KeyguardCardInspectionRequest, successor: KeyguardCardInspectionRequest,
+        boundary: String, at: Long) {}
     /** The physical read has completed; this callback runs on the reader,
      * before its Main handoff. A test may hold this worker without blocking
      * the event-ingress thread. The classifier and authority are unchanged. */
