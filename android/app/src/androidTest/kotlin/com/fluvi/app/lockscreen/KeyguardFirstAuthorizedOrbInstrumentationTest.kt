@@ -132,6 +132,14 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
             }
             if (r40) {
                 r40Visual = KeyguardR22VisualCalibration(instrumentation, dir, automation).also { it.calibrate() }
+                // The first trial showed the calibration Activity's actual
+                // window persisted until the sleep/wake transition. Wait for
+                // its platform removal; never substitute an app decision.
+                shell("input keyevent KEYCODE_HOME")
+                await("calibration Activity window removed before service wake", 12_000) {
+                    !shell("dumpsys window windows").contains("KeyguardMaterialTestActivity")
+                }
+                File(dir, "r40-before-service-windows.txt").writeText(shell("dumpsys window windows"))
                 KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
                 KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = { output ->
                     callsAtFirstCross.compareAndSet(-1, r40Calls.get())
