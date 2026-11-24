@@ -1,4 +1,4 @@
-name: R38 and continuation unheld comparison
+name: R39 and 0905 unheld comparison
 on:
   workflow_dispatch:
 permissions:
@@ -12,9 +12,9 @@ jobs:
       matrix:
         include:
           - name: r38
-            sha: d056c5d8467c5454d139bf12ef36ec7431a9ec51
-          - name: continuation
             sha: 0905f0d6e81cba396663c6b09898171913c195a9
+          - name: continuation
+            sha: fd7112e4e52952caaee1f740526c87f10ddc7cb2
     steps:
       - uses: actions/checkout@v5
         with:
