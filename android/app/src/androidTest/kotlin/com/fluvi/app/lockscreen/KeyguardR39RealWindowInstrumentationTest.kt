@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Dialog
 import android.app.KeyguardManager
 import android.app.UiAutomation
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -61,6 +62,10 @@ class KeyguardR39RealWindowInstrumentationTest {
         var dialog: Dialog? = null
         var activity: android.app.Activity? = null
         try {
+            ui.serviceInfo = ui.serviceInfo.apply {
+                flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                eventTypes = eventTypes or AccessibilityEvent.TYPE_WINDOWS_CHANGED
+            }
             ui.setOnAccessibilityEventListener { event ->
                 if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED) {
                     val s = Sample(event.windowId, event.displayId, event.windowChanges, event.eventTime)
@@ -70,6 +75,9 @@ class KeyguardR39RealWindowInstrumentationTest {
             activity = instrumentation.startActivitySync(Intent(context, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             val current = checkNotNull(activity)
+            instrumentation.waitForIdleSync()
+            val beforeIds = ui.windows.map { it.id }.toSet()
+            events.add("BEFORE windows=" + ui.windows.joinToString { "${it.id}:${it.type}:${it.title}" })
             instrumentation.runOnMainSync {
                 dialog = Dialog(current).apply {
                     setContentView(TextView(current).apply { text = "R39 event fixture"; setTextColor(Color.WHITE) })
@@ -79,9 +87,13 @@ class KeyguardR39RealWindowInstrumentationTest {
             }
             var windowId = -1
             await("independent app dialog appears in framework window inventory") {
-                val matching = ui.windows.filter { it.title?.toString() == "FluviR39IndependentWindow" }
+                val windows = ui.windows
+                val matching = windows.filter { it.id !in beforeIds &&
+                    it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION &&
+                    it.root?.packageName?.toString() == context.packageName }
                 if (matching.size == 1) { windowId = matching.single().id; true } else false
             }
+            events.add("AFTER windows=" + ui.windows.joinToString { "${it.id}:${it.type}:${it.title}" })
             val observedId = windowId
             await("framework ADDED for exact test dialog") {
                 synchronized(samples) { samples.any { it.id == observedId && it.display == Display.DEFAULT_DISPLAY &&
@@ -170,6 +182,10 @@ class KeyguardR39RealWindowInstrumentationTest {
                     }
                 }
             }
+            // Preflight may leave the fixture Activity above the lockscreen.
+            // Move it home without changing any privacy or visibility policy.
+            shell(ui, "input keyevent KEYCODE_HOME")
+            SystemClock.sleep(2000)
             shell(ui, "input keyevent KEYCODE_SLEEP")
             await("dark locked fixture") { !power.isInteractive && keyguard.isKeyguardLocked }
             shell(ui, "input keyevent KEYCODE_WAKEUP")
