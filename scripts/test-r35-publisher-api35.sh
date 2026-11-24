@@ -42,6 +42,11 @@ FILES
       (cd "$app" && flutter pub get) > "$out/pub-get.log" 2>&1
       git -C "$app" status --short > "$out/fixture-status.txt"
     else
+      # actions/checkout defaults to a shallow clone; fetch only the exact
+      # comparison commit when it is not already available.
+      if ! git -C "$root" cat-file -e "${r35_base}^{commit}" 2>/dev/null; then
+        git -C "$root" fetch --no-tags --depth=1 origin "$r35_base"
+      fi
       git -C "$root" diff --exit-code "$r35_base" HEAD -- \
         android/app/src/main lib platform pubspec.yaml pubspec.lock
       git -C "$root" status --short --untracked-files=no > "$out/fixture-status.txt"
