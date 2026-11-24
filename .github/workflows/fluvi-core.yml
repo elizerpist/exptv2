@@ -1,4 +1,4 @@
-name: R39 and 0905 visible unlock and stale proof
+name: R40 three-way visible unlock and stale proof
 on:
   workflow_dispatch:
 permissions:
@@ -7,7 +7,7 @@ permissions:
 jobs:
   compare:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@v5
       - uses: android-actions/setup-android@v3
@@ -16,7 +16,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
-          run-id: 45434535915
+          run-id: 45460282386
           pattern: r38-unheld-pair-*
           path: ${{ runner.temp }}/pairs
       - name: Prepare same signed fixture pairs
@@ -26,7 +26,7 @@ jobs:
           out="$RUNNER_TEMP/r38-unlock"; mkdir -p "$out"
           keytool -genkeypair -keystore "$out/test.keystore" -storepass android -keypass android -alias androiddebugkey -dname 'CN=Disposable R38 Test' -keyalg RSA -validity 7 >/dev/null 2>&1
           signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
-          for mode in r38 continuation; do
+          for mode in r38 r39 r40; do
             pair="$RUNNER_TEMP/pairs/r38-unheld-pair-$mode"; mkdir -p "$out/$mode"
             cp "$pair/source.txt" "$out/$mode/source.txt"
             for apk in app test; do
@@ -53,7 +53,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r39-unlock-results-${{ github.run_id }}
+          name: r40-unlock-results-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r38-unlock/**/*.txt
             ${{ runner.temp }}/r38-unlock/**/*.png
