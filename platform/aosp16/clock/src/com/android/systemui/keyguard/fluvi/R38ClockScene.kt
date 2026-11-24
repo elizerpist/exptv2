@@ -87,7 +87,7 @@ class R38ClockScene @Inject constructor(
             showing, occluded, goingAway, revision, bypass) {
             currentStateAllows(bypass)
         }
-        val ready = remember(revision) { runtime.store.current(System.currentTimeMillis()) }
+        val ready = remember(runtime, revision) { runtime.store.current(System.currentTimeMillis()) }
         LaunchedEffect(ready, observed) {
             if (ready != null && ready.descriptor.motion == R29Motion.LIVE && observed) {
                 while (currentCoroutineContext().isActive) withFrameNanos { frame.longValue = it }
@@ -142,8 +142,10 @@ class R38ClockScene @Inject constructor(
         val scene = scenes.transitionState.value
         val sceneAllows = if (!SceneContainerFlag.isEnabled) true else when (scene) {
             is ObservableTransitionState.Idle -> scene.currentScene == Scenes.Lockscreen && scene.currentOverlays.isEmpty()
-            is ObservableTransitionState.Transition -> scene.toContent == Scenes.Lockscreen &&
-                scenes.currentOverlays.value.isEmpty()
+            // Do not expose pixels while an outgoing PIN/shade/other scene
+            // may still be in the same composition. A future qualified latch
+            // may admit a particular transition only with frame evidence.
+            is ObservableTransitionState.Transition -> false
         }
         val fromAllowed = step.transitionState == TransitionState.FINISHED ||
             step.from == KeyguardState.LOCKSCREEN || step.from == KeyguardState.OFF ||
