@@ -83,7 +83,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val armed=AtomicBoolean(false); val candidate=AtomicReference<KeyguardCardInspectionRequest?>()
         val route=AtomicReference<Route?>(); val held=CountDownLatch(1); val release=CountDownLatch(1)
         val workerTimeout=AtomicBoolean(false); val done=CountDownLatch(1); val successorStarted=CountDownLatch(1)
-        val originalMain=AtomicLong(0); val originalExit=AtomicLong(0); val bStarted=AtomicLong(0); val bId=AtomicLong(0)
+        val originalMain=AtomicLong(0); val originalExit=AtomicLong(0); val bStarted=AtomicLong(0); val bId=AtomicLong(0); val actualSuccessor=AtomicLong(0)
         val order=AtomicLong(0); val oldProofAtExit=AtomicLong(0); val maxReaders=AtomicInteger(0); val readers=AtomicInteger(0)
         val r25Posts=AtomicInteger(0); val earlyReveal=AtomicInteger(0); val records=Collections.synchronizedList(mutableListOf<String>())
         val originalCross=KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross
@@ -135,7 +135,17 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                     override fun started(request:KeyguardCardInspectionRequest) {
                         val count=readers.incrementAndGet(); maxReaders.updateAndGet { maxOf(it,count) }
                         val seq=order.incrementAndGet(); records.add("READ_START id=${request.id} seq=$seq")
-                        if(request.id==bId.get() && request.id>0) { bStarted.set(seq); successorStarted.countDown() }
+                        val original=candidate.get()
+                        // The real queue is latest-wins: the offered B may be
+                        // replaced by a newer system event before A exits Main.
+                        // Accept only an actually started, same-authority B or
+                        // later request, and preserve both IDs in evidence.
+                        if(original!=null && bId.get()>0 && request.id>=bId.get() &&
+                            request.session==original.session && request.wakeGeneration==original.wakeGeneration &&
+                            request.visibilityEpoch==original.visibilityEpoch && request.interactionEpoch==original.interactionEpoch &&
+                            request.attachGeneration==original.attachGeneration && actualSuccessor.compareAndSet(0,request.id)) {
+                            bStarted.set(seq); records.add("ACTUAL_SUCCESSOR offered=${bId.get()} started=${request.id} seq=$seq"); successorStarted.countDown()
+                        }
                     }
                     override fun yielded(request:KeyguardCardInspectionRequest, successor:KeyguardCardInspectionRequest, startedAt:Long, finishedAt:Long, visited:Int) { readers.decrementAndGet() }
                     override fun readCompleted(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility,
@@ -188,7 +198,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             release.countDown()
             assertTrue("NOT REACHED: A did not complete ordered Main",done.await(20,TimeUnit.SECONDS))
             assertTrue("NOT REACHED: later B was not queued",bId.get()>a.id)
-            assertTrue("NOT REACHED: B did not start",successorStarted.await(20,TimeUnit.SECONDS))
+            assertTrue("NOT REACHED: B or a newer same-authority pending request did not start",successorStarted.await(20,TimeUnit.SECONDS))
             assertTrue("B started before A completed Main",originalMain.get()>0 && originalExit.get()>originalMain.get() && bStarted.get()>originalExit.get())
             assertEquals("the physical reader must remain single-owner",1,maxReaders.get())
             assertEquals("DIRECT A must not post an R25 completed-positive notice",0,r25Posts.get())
@@ -203,7 +213,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 report.lineSequence().any { it.startsWith(" R25_CORE ") && it.contains("backend=R18_DIRECT") && it.contains("bypass=DIRECT_ORDERED/") && it.contains("original=${a.id}@") }
             }
             File(dir,"capture.txt").writeText(report)
-            records.add("PASS a=${a.id} b=${bId.get()} route=$original main=${originalMain.get()}/${originalExit.get()} bStart=${bStarted.get()} earlyReveal=${earlyReveal.get()}")
+            records.add("PASS a=${a.id} b=${bId.get()} route=$original main=${originalMain.get()}/${originalExit.get()} offeredB=${bId.get()} actualSuccessor=${actualSuccessor.get()} bStart=${bStarted.get()} earlyReveal=${earlyReveal.get()}")
         } catch(t:Throwable) { failure=t; records.add("FAIL ${t.javaClass.simpleName}:${t.message}") }
         finally {
             release.countDown(); KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross=originalCross
