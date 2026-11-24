@@ -71,6 +71,16 @@ class R41AnalyzerTest(unittest.TestCase):
         self.assertEqual(result["coverage"], "INCOMPLETE")
         self.assertIn("denied_attempt_has_successful_winner", result["invalid"])
 
+    def test_aggregate_requires_eligible_complete_sub_300ms_trials(self):
+        denied = analyzer.analyze(self.row(eligible="false", outcome="DENIED"))
+        self.assertEqual(analyzer.summarize([denied])["strict_verdict"], "INCOMPLETE")
+        successful = analyzer.analyze(self.row())
+        self.assertEqual(analyzer.summarize([successful])["strict_verdict"], "PASS")
+        at_limit = analyzer.analyze(self.row(grantNs=str(100 + 300_000_000)))
+        self.assertEqual(analyzer.summarize([at_limit])["strict_verdict"], "FAIL")
+        incomplete = analyzer.analyze(self.row(coverage="INCOMPLETE"))
+        self.assertEqual(analyzer.summarize([incomplete])["strict_verdict"], "INCOMPLETE")
+
     def test_every_compact_attempt_is_preserved(self):
         report = "\n".join(" R41_CORE attempt=%d eligible=UNOBSERVED" % i for i in range(1, 12))
         rows = analyzer.parse_report(report)

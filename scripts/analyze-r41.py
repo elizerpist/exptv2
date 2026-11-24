@@ -104,12 +104,7 @@ def analyze(row):
     return result
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("report", type=Path)
-    args = parser.parse_args()
-    rows = parse_report(args.report.read_text(encoding="utf-8-sig"))
-    results = [analyze(row) for row in rows]
+def summarize(results):
     counts = {}
     for result in results:
         counts[result["coverage"]] = counts.get(result["coverage"], 0) + 1
@@ -122,7 +117,7 @@ def main():
         strict_verdict = "FAIL"
     elif qualifying and not duplicate_ids and all(r["coverage"] in ("COMPLETE", "DENIED") for r in results):
         strict_verdict = "PASS"
-    summary = {"attempts": len(results), "coverage_counts": counts, "duplicate_attempt_ids": duplicate_ids,
+    return {"attempts": len(results), "coverage_counts": counts, "duplicate_attempt_ids": duplicate_ids,
                "strict_verdict": strict_verdict,
                "under_300ms": sum(value < LIMIT_NS for value in samples),
                "at_or_above_300ms": sum(value >= LIMIT_NS for value in samples),
@@ -130,8 +125,17 @@ def main():
                "median_ns": statistics.median(samples) if samples else None,
                "p95_ns_nearest_rank": sorted(samples)[math.ceil(.95 * len(samples)) - 1] if len(samples) >= 20 else None,
                "sample_size": len(samples), "p95_method": "nearest_rank_n>=20"}
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("report", type=Path)
+    args = parser.parse_args()
+    rows = parse_report(args.report.read_text(encoding="utf-8-sig"))
+    results = [analyze(row) for row in rows]
+    summary = summarize(results)
     print(json.dumps({"summary": summary, "attempts": results}, indent=2))
-    return 0 if results and not duplicate_ids and all(r["coverage"] in ("COMPLETE", "DENIED") for r in results) else 1
+    return 0 if summary["strict_verdict"] == "PASS" else 1
 
 
 if __name__ == "__main__":
