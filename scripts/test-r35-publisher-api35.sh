@@ -50,7 +50,11 @@ FILES
       # This orchestration commit changes only this harness script. The APK
       # production source is the exact continuation candidate, checked below.
       candidate=0905f0d6e81cba396663c6b09898171913c195a9
-      git -C "$root" merge-base --is-ancestor "$candidate" HEAD
+      # Runner checkout is shallow. Fetch the exact source tree before the
+      # production-file comparison; ancestry is not available in this clone.
+      if ! git -C "$root" cat-file -e "${candidate}^{commit}" 2>/dev/null; then
+        git -C "$root" fetch --no-tags --depth=1 origin "$candidate"
+      fi
       git -C "$root" diff --exit-code "$candidate" HEAD -- \
         android/app/src/main lib platform pubspec.yaml pubspec.lock
       printf 'production_source=%s\n' "$candidate" >> "$out/identity.txt"
