@@ -59,6 +59,26 @@ jobs:
           printf 'application_sha=%s\norchestration_sha=%s\n' "$FLUVI_R18_APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r18-phone/source.txt"
           java -version 2>&1 | head -3 > "$RUNNER_TEMP/r18-phone/java.txt"
           flutter --version > "$RUNNER_TEMP/r18-phone/flutter.txt"
+      - name: Prefer Maven Central storage mirror on this builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.gradle/init.d"
+          cat > "$HOME/.gradle/init.d/r36-mirror.gradle" <<'GRADLE'
+          gradle.beforeSettings { settings ->
+              settings.pluginManagement.repositories {
+                  maven { name = 'MavenCentralStorageMirror'; url = uri('https://maven-central.storage-download.googleapis.com/maven2') }
+              }
+          }
+          gradle.beforeProject { project ->
+              project.buildscript.repositories {
+                  maven { name = 'MavenCentralStorageMirror'; url = uri('https://maven-central.storage-download.googleapis.com/maven2') }
+              }
+              project.repositories {
+                  maven { name = 'MavenCentralStorageMirror'; url = uri('https://maven-central.storage-download.googleapis.com/maven2') }
+              }
+          }
+          GRADLE
       - name: Build Human profile using project script
         shell: bash
         run: |
