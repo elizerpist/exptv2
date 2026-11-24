@@ -1,4 +1,4 @@
-name: R39 profile APK update over 0905 control
+name: R40 profile APK update over installed R39
 on:
   workflow_dispatch:
     inputs:
@@ -39,9 +39,9 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/r36-update"
           cd "$RUNNER_TEMP/r36-update"
-          curl --fail --location --silent --show-error 'https://media.githubusercontent.com/media/elizerpist/exptv2/bfc645087a7676efda4671f5011550e559a2ff08/fluvi_R38_resident_0905f0d6e81c.apk' -o old.apk
+          curl --fail --location --silent --show-error 'https://media.githubusercontent.com/media/elizerpist/exptv2/0f6426f6a31c819d1e199564603b88b53d55927b/fluvi_R39_HUMAN_fd7112e4e529.apk' -o old.apk
           curl --fail --location --silent --show-error "$APK_URL" -o new.apk
-          printf '%s  %s\n' a97c108670b4634fa26e8f35d1980b8aa4b8b4e5a9b1d41e6edddca9efa308dc old.apk "$APK_SHA" new.apk | sha256sum -c | tee hashes.txt
+          printf '%s  %s\n' 67dad10fc014970e2b10e812eab42a8b75ac88ba8b3875f6c41c08d288da9481 old.apk "$APK_SHA" new.apk | sha256sum -c | tee hashes.txt
           signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
           "$signer" verify --print-certs old.apk > old-signer.txt
           "$signer" verify --print-certs new.apk > new-signer.txt
@@ -82,15 +82,15 @@ jobs:
           }
           wait_for_app old
           adb shell run-as com.fluvi.app mkdir -p files
-          printf '%s' R38_TO_R39_UPDATE_SENTINEL | adb shell run-as com.fluvi.app tee files/r39_update_sentinel >/dev/null
+          printf '%s' R39_TO_R40_UPDATE_SENTINEL | adb shell run-as com.fluvi.app tee files/r40_update_sentinel >/dev/null
           adb shell am force-stop com.fluvi.app
           # Configure the existing normal entry using synthetic demo settings in
           # this disposable emulator; the update below must preserve them.
           adb shell run-as com.fluvi.app mkdir -p shared_prefs
           printf '%s' '<?xml version="1.0" encoding="utf-8" standalone="yes"?><map><boolean name="requested" value="true"/><boolean name="details" value="true"/><string name="presentationMode">orb</string><string name="animationMode">orbOnly</string><long name="generation" value="1"/></map>' | adb shell run-as com.fluvi.app tee shared_prefs/fluvi_native_keyguard_card.xml >/dev/null
           adb install -r "$out/new.apk" > "$out/new-install.txt" 2>&1
-          actual=$(adb shell run-as com.fluvi.app cat files/r39_update_sentinel | tr -d '\r')
-          test "$actual" = R38_TO_R39_UPDATE_SENTINEL
+          actual=$(adb shell run-as com.fluvi.app cat files/r40_update_sentinel | tr -d '\r')
+          test "$actual" = R39_TO_R40_UPDATE_SENTINEL
           adb shell am force-stop com.fluvi.app
           adb shell run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$out/preserved-orb-settings.txt"
           grep -q 'name="requested" value="true"' "$out/preserved-orb-settings.txt"
@@ -126,7 +126,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Install 0905, preserve sentinel, update and launch R39
+      - name: Install fd7112e4, preserve sentinel, update and launch R40
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -140,7 +140,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r39-profile-update-${{ github.run_id }}
+          name: r40-profile-update-${{ github.run_id }}
           path: |
             ${{ runner.temp }}/r36-update/*.txt
             ${{ runner.temp }}/r36-update/*.png
