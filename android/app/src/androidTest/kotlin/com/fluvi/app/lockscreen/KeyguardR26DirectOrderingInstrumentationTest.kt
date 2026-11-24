@@ -38,9 +38,10 @@ import org.junit.runner.RunWith
 class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun pendingDirectWaitsForOrderedMainThenStartsRealSuccessor() = exercise(true)
     @Test fun stableDirectUsesOrderedMainAndLaterOfferWaits() = exercise(false)
+    @Test fun orderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
-    private fun exercise(pendingBefore:Boolean) {
+    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -84,6 +85,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val route=AtomicReference<Route?>(); val held=CountDownLatch(1); val release=CountDownLatch(1)
         val workerTimeout=AtomicBoolean(false); val done=CountDownLatch(1); val successorStarted=CountDownLatch(1)
         val originalMain=AtomicLong(0); val originalExit=AtomicLong(0); val bStarted=AtomicLong(0); val bId=AtomicLong(0)
+        val r25Evaluations=AtomicLong(0); val r25AtAExit=AtomicLong(-1)
         val order=AtomicLong(0); val oldProofAtExit=AtomicLong(0); val maxReaders=AtomicInteger(0); val readers=AtomicInteger(0)
         val r25Posts=AtomicInteger(0); val earlyReveal=AtomicInteger(0); val records=Collections.synchronizedList(mutableListOf<String>())
         val orderedReads=Collections.synchronizedSet(mutableSetOf<Long>())
@@ -132,6 +134,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 originalCross?.invoke(output)
             }
             instrumentation.runOnMainSync {
+                actual.r41R25EvaluationsForTest = r25Evaluations
                 actual.inspectionProbeForTest=object:KeyguardInspectionProbeForTest {
                     override fun openingOrderSelected(request:KeyguardCardInspectionRequest, milestoneOrdered:Boolean) {
                         if(milestoneOrdered) orderedReads.add(request.id)
@@ -151,6 +154,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                             rootUnavailable || walkTruncated || abortedStale) return
                         val found=currentRoute(request) ?: return
                         if(found.backend!="R18_DIRECT" || !candidate.compareAndSet(null,request)) return
+                        r25Evaluations.set(0)
                         route.set(found); records.add("A_HELD id=${request.id} route=$found end=$finishedAt")
                         held.countDown()
                         if(!release.await(20,TimeUnit.SECONDS)) workerTimeout.set(true)
@@ -160,6 +164,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                     }
                     override fun afterApply(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility) {
                         if(request.id!=candidate.get()?.id) return
+                        r25AtAExit.set(r25Evaluations.get())
                         val proof=(gateField.get(actual) as KeyguardFirstAuthorizedOrb).current()
                         if(proof?.requestId==request.id) oldProofAtExit.set(request.id)
                         if(!pendingBefore) offerSuccessor()
@@ -196,8 +201,9 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 assertEquals("stale A revealed before B started",0,earlyReveal.get())
             }
             assertFalse("NOT REACHED: reader barrier timeout",workerTimeout.get())
+            if(checkR41Bypass) assertEquals("ordered DIRECT must not evaluate the inapplicable R25 route",0L,r25AtAExit.get())
             var report=""
-            await("DIRECT_ORDERED diagnostic for the actual A") {
+            if(!checkR41Bypass) await("DIRECT_ORDERED diagnostic for the actual A") {
                 report=KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
                 report.lineSequence().any { it.startsWith(" R25_CORE ") && it.contains("backend=R18_DIRECT") && it.contains("bypass=DIRECT_ORDERED/") && it.contains("original=${a.id}@") }
             }
@@ -206,7 +212,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         } catch(t:Throwable) { failure=t; records.add("FAIL ${t.javaClass.simpleName}:${t.message}") }
         finally {
             release.countDown(); KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross=originalCross
-            runCatching { instrumentation.runOnMainSync { service?.inspectionProbeForTest=null; service?.r25MainDispatchForTest=null } }
+            runCatching { instrumentation.runOnMainSync { service?.inspectionProbeForTest=null; service?.r25MainDispatchForTest=null; service?.r41R25EvaluationsForTest=null } }
             if(capture) runCatching { File(dir,"frozen.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"] as String) }
             runCatching {
                 secure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,other)
