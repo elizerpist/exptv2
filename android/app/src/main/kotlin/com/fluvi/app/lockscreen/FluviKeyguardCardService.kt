@@ -141,6 +141,8 @@ class FluviKeyguardCardService : AccessibilityService() {
     /** Optional instrumentation seam. It orders a negative acquisition/result;
      * it never skips the production classifier, authority gate or admission. */
     @Volatile internal var inspectionProbeForTest: KeyguardInspectionProbeForTest? = null
+    /** Fixture-only count of completed-read R25 evaluations; null in production. */
+    @Volatile internal var r41R25EvaluationsForTest: AtomicLong? = null
     internal fun inspectionStateForTest() = KeyguardInspectionStateForTest(
         inspectionAuthority, synchronized(queueLock) { inspectionQueue.pendingRequest() },
         wakeCycleOwner.current()?.id, ::overlay.isInitialized && overlay.isAttached, retryCount,
@@ -2771,6 +2773,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     }
 
     private fun r25CompleteLocked(read: CompletedInspection, handoff: InspectionHandoff): R25Completion {
+        r41R25EvaluationsForTest?.incrementAndGet()
         val request = read.request
         val result = read.result
         val pending = inspectionQueue.pendingRequest()
