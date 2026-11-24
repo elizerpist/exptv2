@@ -11,6 +11,9 @@ on:
       baseline:
         type: boolean
         default: false
+      test_scope:
+        type: string
+        default: ordered
       native_diagnostic:
         type: boolean
         default: true
@@ -33,6 +36,7 @@ jobs:
       APP_SHA: ${{ inputs.app_sha }}
       HARNESS_SHA: ${{ inputs.harness_sha }}
       BASELINE: ${{ inputs.baseline }}
+      TEST_SCOPE: ${{ inputs.test_scope }}
     steps:
       - uses: actions/checkout@v5
         with:
