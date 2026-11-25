@@ -27,6 +27,52 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         KeyguardCardDiagnostics.clearCapture(context)
     }
 
+    @Test fun r44PerWakeEvidenceSurvivesLightPressure() = r44EvidencePressure("LIGHT")
+    @Test fun r44PerWakeEvidenceSurvivesFullPressure() = r44EvidencePressure("FULL")
+
+    private fun r44EvidencePressure(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r44-fixture", "profile", mode)
+        var firstOwner: KeyguardDiagnosticContext? = null
+        repeat(6) { i ->
+            val wake = i + 1L
+            val base = wake * 1000L
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 944, wake, "wake", base))
+            if (firstOwner == null) firstOwner = owner
+            KeyguardCardDiagnostics.captureEvent(context, "SCREEN_ON_RECEIVED", "test",
+                diagnosticContext = owner, observedUptimeMs = base + 20)
+            fun record(request: Long, start: Long, verdict: KeyguardSurface) = KeyguardCardDiagnostics.recordR44(
+                KeyguardR44ReadObservation(owner, request, wake, wake + 50, start, start + 5,
+                    KeyguardSurface.UNKNOWN, verdict,
+                    if (verdict == KeyguardSurface.MAIN_KEYGUARD) KeyguardSurfaceReason.MAIN_CONFIRMED else KeyguardSurfaceReason.NO_MAIN_MARKER,
+                    true, false, false, false, 10, 2, true,
+                    KeyguardR44Witness(KeyguardR44Markers.Marker.HOST, KeyguardR44Markers.Carrier.VIEW_ID, 1),
+                    KeyguardR44Witness(KeyguardR44Markers.Marker.DEVICE_ENTRY, KeyguardR44Markers.Carrier.EXTRA_EAGER, 2),
+                    true, true, 1, 1, 0, false, 2))
+            record(base + 1, base + 10, KeyguardSurface.UNKNOWN)
+            record(base + 2, base + 21, KeyguardSurface.MAIN_KEYGUARD)
+            val show = KeyguardCardDiagnostics.newShowOperation(owner, wake + 10, base + 2)
+            KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "test", operation = show,
+                observedUptimeMs = base + 30)
+            repeat(40) { n -> KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure",
+                diagnosticContext = owner, requestId = base + 100 + n, observedUptimeMs = base + 50 + n) }
+            if (i % 2 == 1) KeyguardCardDiagnostics.captureSnapshot(context)
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        for (wake in 1L..6L) {
+            val row = report.lineSequence().single { it.startsWith("R44_WAKE ") && it.contains("wake=$wake ") }
+            assertTrue(row, row.contains("screenOn=${wake * 1000 + 20}"))
+            assertTrue(row, row.contains("firstPostRead=${wake * 1000 + 2}"))
+        }
+        assertEquals(6, report.lineSequence().count { it.startsWith("R44_HU ") })
+        assertTrue(report.contains("physicalPixels=UNOBSERVED"))
+        val frozen = report
+        KeyguardCardDiagnostics.recordR44(KeyguardR44ReadObservation(checkNotNull(firstOwner), 9999, 0, null,
+            9999, 10000, KeyguardSurface.UNKNOWN, KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.NO_MAIN_MARKER,
+            true, false, false, false, null, null, false, null, null, false, false, 0, 0, 0, false, 0))
+        assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+    }
+
     @Test fun r26ExactDirectEvidenceSurvivesLightAndFullPressure() {
         val settings = context.getSharedPreferences("fluvi_native_keyguard_card", android.content.Context.MODE_PRIVATE)
         val hadMode = settings.contains("presentationMode")

@@ -33,7 +33,9 @@ class KeyguardR22ReaderHandoffTest {
     }
 
     private data class Node(val id: String?, val windowId: Int, val pkg: String = "com.android.systemui",
-        val children: MutableList<AccessibilityNodeInfo> = mutableListOf(), var recycled: Int = 0)
+        val children: MutableList<AccessibilityNodeInfo> = mutableListOf(), var recycled: Int = 0,
+        val extras: Bundle = Bundle(), var advertised: Boolean = false, var lazyTag: String? = null,
+        var refreshSucceeds: Boolean = true)
     private data class Window(val id: Int, val layer: Int, val active: Boolean, val root: AccessibilityNodeInfo)
     private object Platform {
         val nodes = IdentityHashMap<AccessibilityNodeInfo, Node>()
@@ -45,10 +47,13 @@ class KeyguardR22ReaderHandoffTest {
         var missingChild = false
         var nullIndices = emptySet<Int>()
         var exceptionIndices = emptySet<Int>()
+        var extraCalls = 0
+        var onExtra: (() -> Unit)? = null
         fun reset() {
             nodes.clear(); windows.clear(); inventory = emptyList(); activeRoot = null
             childCalls = mutableListOf(); afterChild = null; missingChild = false
             nullIndices = emptySet(); exceptionIndices = emptySet()
+            extraCalls = 0; onExtra = null
         }
         fun node(id: String?, window: Int = 10, pkg: String = "com.android.systemui"): AccessibilityNodeInfo =
             Shadow.newInstanceOf(AccessibilityNodeInfo::class.java).also { nodes[it] = Node(id, window, pkg) }
@@ -82,8 +87,19 @@ class KeyguardR22ReaderHandoffTest {
         @Implementation fun getClassName(): CharSequence = "android.view.View"
         @Implementation fun isVisibleToUser(): Boolean = true
         @Implementation fun getViewIdResourceName(): String? = checkNotNull(Platform.nodes[real]).id
-        @Implementation fun getExtras(): Bundle = Bundle()
-        @Implementation fun getAvailableExtraData(): List<String> = emptyList()
+        @Implementation fun getExtras(): Bundle = checkNotNull(Platform.nodes[real]).extras
+        @Implementation fun getAvailableExtraData(): List<String> =
+            if (checkNotNull(Platform.nodes[real]).advertised) listOf(KeyguardR44Markers.EXTRA) else emptyList()
+        @Implementation fun getParent(): AccessibilityNodeInfo? =
+            Platform.nodes.entries.firstOrNull { it.value.children.contains(real) }?.key
+        @Implementation fun refreshWithExtraData(key: String, arguments: Bundle?): Boolean {
+            Platform.extraCalls += 1
+            Platform.onExtra?.invoke()
+            val node = checkNotNull(Platform.nodes[real])
+            if (!node.refreshSucceeds || key != KeyguardR44Markers.EXTRA || arguments == null) return false
+            node.lazyTag?.let { node.extras.putCharSequence(key, it) }
+            return true
+        }
         @Implementation fun getChildCount(): Int = checkNotNull(Platform.nodes[real]).children.size
         @Implementation fun getChild(index: Int): AccessibilityNodeInfo? = child(index)
         @Implementation fun getChild(index: Int, flags: Int): AccessibilityNodeInfo? = child(index)
@@ -156,6 +172,56 @@ class KeyguardR22ReaderHandoffTest {
             strictOwnAttribution = false, syntheticTrial = true)
         assertEquals("a qualified R44 path must recognise this distinct pair",
             KeyguardSurface.MAIN_KEYGUARD, decision.surface)
+    }
+
+    @Test fun r44EagerAndLazyTagsTraverseTheActualReader() {
+        for (lazy in listOf(false, true)) {
+            Platform.reset()
+            val root = Platform.node(null)
+            val child = Platform.node("com.android.systemui:id/device_entry_icon_view")
+            val rootData = checkNotNull(Platform.nodes[root])
+            rootData.children.add(child)
+            if (lazy) { rootData.advertised = true; rootData.lazyTag = "element:lockscreen" }
+            else rootData.extras.putCharSequence(KeyguardR44Markers.EXTRA, "element:lockscreen")
+            Platform.activeRoot = root
+            Platform.inventory = listOf(Platform.window(10, 1, true, root))
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+                r44Enabled = true, r44DeviceEntryResourceVerified = true), { true })
+            assertEquals(KeyguardSurface.MAIN_KEYGUARD, KeyguardR44SurfaceClassifier.classify(
+                read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+            assertEquals(if (lazy) 1 else 0, Platform.extraCalls)
+            assertEquals(if (lazy) KeyguardR44Markers.Carrier.EXTRA_LAZY else KeyguardR44Markers.Carrier.EXTRA_EAGER,
+                read.snapshots.single().r44?.host?.carrier)
+        }
+    }
+
+    @Test fun r44BudgetOrStaleExtraNeverCreatesAuthority() {
+        val root = Platform.node("element:lockscreen")
+        checkNotNull(Platform.nodes[root]).children.add(Platform.node("com.android.systemui:id/device_entry_icon_view"))
+        repeat(5) {
+            val node = Platform.node(null)
+            checkNotNull(Platform.nodes[node]).apply { advertised = true; lazyTag = "unrecognised" }
+            checkNotNull(Platform.nodes[root]).children.add(node)
+        }
+        Platform.activeRoot = root
+        Platform.inventory = listOf(Platform.window(10, 1, true, root))
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+            r44Enabled = true, r44DeviceEntryResourceVerified = true), { true })
+        assertEquals(4, Platform.extraCalls)
+        assertEquals(true, read.snapshots.single().r44?.budgetHit)
+        assertEquals(KeyguardSurface.UNKNOWN, KeyguardR44SurfaceClassifier.classify(
+            read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+
+        Platform.reset()
+        val lazyRoot = Platform.node(null)
+        checkNotNull(Platform.nodes[lazyRoot]).apply { advertised = true; lazyTag = "element:lockscreen" }
+        Platform.activeRoot = lazyRoot
+        Platform.inventory = listOf(Platform.window(10, 1, true, lazyRoot))
+        var current = true
+        Platform.onExtra = { current = false }
+        val stale = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+            r44Enabled = true, r44DeviceEntryResourceVerified = true), { current })
+        assertTrue(stale.abortedStale)
     }
 
     private class Handoff {

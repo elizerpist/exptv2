@@ -4239,11 +4239,15 @@ class FluviKeyguardCardService : AccessibilityService() {
                 openingHandoff.readStarted(request, firstAuthorizedOrb.sceneSerial(), startedAt)
         }
         var sceneAtRead: Long? = null
+        val r44Mode = Build.VERSION.SDK_INT == 37 && settings.presentationMode == KeyguardCardPresentationMode.ORB
+        val syntheticAtRead = r44Mode && KeyguardR44Trial.active
         val read = readSystemWindows(request, r38MilestoneOrdered, r40Read) { sceneAtRead = it }
         if (read.yieldedTo != null) return InspectionOutcome.Yielded(read.yieldedTo, read,
             requireNotNull(sceneAtRead), requireNotNull(read.yieldReason))
         if (read.abortedStale || !authorityIsCurrent(request)) {
             if (!read.abortedStale) inspectionsAbortedDuringWalk.incrementAndGet()
+            if (r44Mode) recordR44Read(request, read, sceneAtRead, startedAt, syntheticAtRead, true,
+                KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.NO_MAIN_MARKER))
             return InspectionOutcome.Completed(Inspection(
                 baseline,
                 KeyguardCardVisibility.HIDDEN_UNKNOWN,
@@ -4265,12 +4269,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         val snapshots = inspectionProbeForTest?.snapshots(request, read.snapshots) ?: read.snapshots
         val strictOwn = r18Active != null || r18ProvisionalWake?.targetAuthority?.matches(request) == true
-        val classification = if (Build.VERSION.SDK_INT == 37 && settings.presentationMode == KeyguardCardPresentationMode.ORB) {
+        val classification = if (r44Mode) {
             KeyguardR44SurfaceClassifier.classify(snapshots, read.rootUnavailable, read.walkTruncated,
-                strictOwn, syntheticTrial = KeyguardR44Trial.active)
+                strictOwn, syntheticTrial = syntheticAtRead)
         } else KeyguardSurfaceClassifier.classifyDetailed(snapshots,
             unavailableRoot = read.rootUnavailable, walkTruncated = read.walkTruncated,
             strictOwnAttribution = strictOwn)
+        if (r44Mode) recordR44Read(request, read, sceneAtRead, startedAt, syntheticAtRead, false, classification)
         if (read.r43Evidence != null) runCatching { recordR43Passive(request, read, classification, sceneAtRead) }
         val signals = quickSignals(settings, classification.surface)
         return InspectionOutcome.Completed(Inspection(
@@ -4291,6 +4296,29 @@ class FluviKeyguardCardService : AccessibilityService() {
             r34ReadOwner = read.r34ReadOwner,
             r34InventoryAt = read.r34InventoryAt,
             r40Read = r40Read,
+        ))
+    }
+
+    private fun recordR44Read(request: KeyguardCardInspectionRequest, read: SystemWindowsRead,
+                              scene: Long?, startedAt: Long, synthetic: Boolean, stale: Boolean,
+                              result: KeyguardSurfaceClassification) {
+        val owner = request.diagnosticContext ?: return
+        if (owner.captureId == null || owner.captureId != KeyguardCardDiagnostics.activeCaptureId()) return
+        val windows = read.snapshots
+        val host = windows.firstOrNull { it.r44?.let { e -> e.active && e.host != null } == true }
+            ?: windows.firstOrNull { it.r44?.active == true }
+        val evidence = windows.mapNotNull { it.r44 }
+        val hostEvidence = host?.r44
+        val legacy = KeyguardSurfaceClassifier.classifyDetailed(windows,
+            unavailableRoot = read.rootUnavailable, walkTruncated = read.walkTruncated).surface
+        KeyguardCardDiagnostics.recordR44(KeyguardR44ReadObservation(
+            owner, request.id, request.visibilityEpoch, scene, startedAt, SystemClock.uptimeMillis(), legacy,
+            result.surface, result.reason, synthetic, stale, read.rootUnavailable, read.walkTruncated,
+            host?.windowId, host?.layer, hostEvidence?.verifiedRoot == true, hostEvidence?.host,
+            hostEvidence?.content, hostEvidence?.contentBelowHost == true,
+            evidence.isNotEmpty() && evidence.all { it.complete }, evidence.sumOf { it.advertised },
+            evidence.sumOf { it.fetched }, evidence.sumOf { it.failed }, evidence.any { it.budgetHit },
+            evidence.sumOf { it.extraMs },
         ))
     }
 
@@ -5223,6 +5251,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         diagnosticContext: KeyguardDiagnosticContext?,
         causingInspectionRequestId: Long?,
     ) {
+        if (KeyguardR44Trial.active) return
         val focusChanged = activeFocusGeneration != focusGeneration
         if (focusChanged) {
             showEvent = false

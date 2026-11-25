@@ -489,6 +489,7 @@ internal object KeyguardCardDiagnostics {
     ) {
         val r43Dropped = AtomicLong()
         val r43Skipped = AtomicLong()
+        val r44Dropped = AtomicLong()
         val nextAttempt = AtomicLong(1L)
         val hiddenNoops = AtomicLong()
         val producerTotalNs = AtomicLong()
@@ -786,6 +787,9 @@ internal object KeyguardCardDiagnostics {
         var presentationMode: String = "NA",
         var wakeSource: String = "NA",
         var screenOnReceivedAtUptimeMs: Long? = null,
+        val r44Reads: ArrayDeque<KeyguardR44ReadObservation> = ArrayDeque(),
+        var r44Last: KeyguardR44ReadObservation? = null,
+        var r44ReadsOmitted: Int = 0,
         var firstExclusionSignalAtUptimeMs: Long? = null,
         var firstExclusionSignalSource: String? = null,
         var firstInspectionRequestId: Long? = null,
@@ -946,6 +950,7 @@ internal object KeyguardCardDiagnostics {
         val r43ProvisionalHolds: LinkedHashMap<String, String> = linkedMapOf(),
         var r43Dropped: Long = 0,
         var r43Skipped: Long = 0,
+        var r44Dropped: Long = 0,
         val r41StartMonoBeforeNs: Long? = null,
         val r41StartElapsedNs: Long? = null,
         val r41StartMonoAfterNs: Long? = null,
@@ -1656,6 +1661,31 @@ internal object KeyguardCardDiagnostics {
 
     internal fun r43PassiveSkipped(captureId: String) {
         ingress?.takeIf { it.r43Enabled && it.id == captureId }?.r43Skipped?.incrementAndGet()
+    }
+
+    /** A real read is associated with its original capture, session and
+     * wake. Reducing and formatting never occur on the reader thread. */
+    internal fun recordR44(observation: KeyguardR44ReadObservation) {
+        val token = ingress ?: return
+        val owner = observation.context
+        if (owner.captureId != token.id || owner.attemptId == null) return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" }
+                    ?: return@synchronized
+                val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
+                    ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
+                if (attempt == null || attempt.serviceSession != owner.serviceSession ||
+                    attempt.wakeEpoch != owner.originWakeEpoch) {
+                    token.r44Dropped.incrementAndGet()
+                    return@synchronized
+                }
+                if (attempt.r44Reads.any { it.request == observation.request }) return@synchronized
+                if (attempt.r44Reads.size < 12) attempt.r44Reads.addLast(observation)
+                else { attempt.r44ReadsOmitted += 1; attempt.r44Last = observation }
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
     }
 
     /** Bounded capture-only evidence. Resource verification/formatting run on
@@ -2856,6 +2886,7 @@ internal object KeyguardCardDiagnostics {
         r43ProvisionalHolds = LinkedHashMap(active.r43ProvisionalHolds),
         r43Dropped = r41Token?.r43Dropped?.get() ?: active.r43Dropped,
         r43Skipped = r41Token?.r43Skipped?.get() ?: active.r43Skipped,
+        r44Dropped = r41Token?.r44Dropped?.get() ?: active.r44Dropped,
         events = ArrayDeque(active.events.map { it.copy(fields = it.fields.toMap()) }),
         attempts = ArrayDeque(active.attempts.map(::copyAttempt)),
         r41Receipts = ArrayDeque(active.r41Receipts.map { it.copy() }),
@@ -2864,6 +2895,7 @@ internal object KeyguardCardDiagnostics {
     }
 
     private fun copyAttempt(attempt: TimingAttempt): TimingAttempt = attempt.copy(
+        r44Reads = ArrayDeque(attempt.r44Reads),
         r13Work = attempt.r13Work?.let { work -> work.copy(
             first = work.first?.let { it.copy(fields = it.fields.toMap()) },
             last = work.last?.let { it.copy(fields = it.fields.toMap()) },
@@ -2979,6 +3011,7 @@ internal object KeyguardCardDiagnostics {
             appendLine("androidApi=${Build.VERSION.SDK_INT}")
             appendLine("manufacturer=${technicalValue(Build.MANUFACTURER)}")
             appendLine("model=${technicalValue(Build.MODEL)}")
+            if (Build.VERSION.SDK_INT == 37) appendLine("R44_CAPTURE dropped=${active.r44Dropped} physicalPixels=UNOBSERVED")
             if (active.r43Enabled) {
                 appendLine("R43_DEVICE buildId=${technicalValue(Build.ID)} incremental=${technicalValue(Build.VERSION.INCREMENTAL)} fingerprint=${technicalValue(Build.FINGERPRINT)}")
                 appendLine("R43_CAPTURE enabled=true samples=${active.r43Samples} dropped=${active.r43Dropped} passiveRateSkipped=${active.r43Skipped} labels=timeAnnotations_notAuthority")
@@ -3096,6 +3129,11 @@ internal object KeyguardCardDiagnostics {
             selected[id] = text
             bytes += size
             return true
+        }
+        val r44Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
+        r44Attempts.filter { it.r44Reads.isNotEmpty() ||
+            (Build.VERSION.SDK_INT == 37 && it.presentationMode == "ORB") }.forEach { attempt ->
+            select("a${attempt.id}:r44Core", r44Record(active.id, attempt), attempt.id)
         }
         // These bounded scene records are the purpose of the opted-in R43
         // capture and precede verbose per-request and raw-event detail.
@@ -3447,12 +3485,13 @@ internal object KeyguardCardDiagnostics {
             append(header.replace("exportTruncated=false", "exportTruncated=${omittedEvents.isNotEmpty() || omittedRecords.isNotEmpty()}"))
             append(metadata)
             appendLine("ATTEMPT_SUMMARIES")
+            selected.filterKeys { it.endsWith(":r44Core") }.values.forEach(::append)
             selected.filterKeys { it.endsWith(":summary") }.forEach { (id, text) ->
                 val attemptId = id.substringAfter('a').substringBefore(':').toLong()
                 append(if (attemptId in incompleteAttempts) text.replace("causalSpineComplete=true", "causalSpineComplete=false") else text)
             }
             appendLine("EPISODES")
-            selected.filterKeys { !it.endsWith(":summary") && !it.endsWith(":spineRows") && !it.endsWith(":raw") && ":drawGap:" !in it }.values.forEach(::append)
+            selected.filterKeys { !it.endsWith(":summary") && !it.endsWith(":r44Core") && !it.endsWith(":spineRows") && !it.endsWith(":raw") && ":drawGap:" !in it }.values.forEach(::append)
             appendLine("DRAW_GAPS")
             selected.filterKeys { ":drawGap:" in it }.values.forEach(::append)
             appendLine("CAUSAL_SPINES")
@@ -3464,6 +3503,32 @@ internal object KeyguardCardDiagnostics {
         val sized = withExportBytes(report)
         check(sized.toByteArray(Charsets.UTF_8).size <= exportLimitBytes)
         return sized
+    }
+
+    private fun r44Record(captureId: String, attempt: TimingAttempt): String = buildString {
+        val reads = attempt.r44Reads.toList()
+        val screen = attempt.screenOnReceivedAtUptimeMs
+        val post = screen?.let { t -> reads.filter { it.start >= t && !it.stale && !it.unavailable && !it.truncated }
+            .minByOrNull { it.start } }
+        val pre = screen?.let { t -> reads.filter { it.start < t }.minByOrNull { it.start } }
+        val last = attempt.r44Last ?: reads.lastOrNull()
+        val change = post?.let { first -> reads.firstOrNull { it.start > first.start && it.verdict != first.verdict } }
+        val show = attempt.shows.firstOrNull()
+        val hide = attempt.hides.lastOrNull()
+        val outcome = if (show != null) "megjelenítési_kérelem" else "nincs_megjelenítési_kérelem"
+        appendLine("R44_HU próba=${attempt.id} eredmény=$outcome első_ébredés_utáni_olvasás=${post?.request ?: "HIÁNYZIK"} fizikailag_látható=ISMERETLEN")
+        appendLine("R44_WAKE capture=$captureId session=${attempt.serviceSession} wake=${attempt.wakeEpoch} screenOn=${screen ?: "UNOBSERVED"} firstPostRead=${post?.request ?: "missing"} omitted=${attempt.r44ReadsOmitted} showRequest=${show?.requestId ?: "none"}")
+        fun line(kind: String, read: KeyguardR44ReadObservation) {
+            val host = read.host
+            val content = read.content
+            appendLine("R44_READ kind=$kind wake=${attempt.wakeEpoch} req=${read.request} epoch=${read.epoch} scene=${read.scene ?: "UNOBSERVED"} start=${read.start} end=${read.end} owner=${if (read.hostVerified) "verified" else "rejected"} hostWin=${read.hostWindow ?: "UNOBSERVED"} hostLayer=${read.hostLayer ?: "UNOBSERVED"} complete=${read.coverageComplete} legacy=${read.legacy} host=${host?.marker ?: "none"}/${host?.carrier ?: "none"} content=${content?.marker ?: "none"}/${content?.carrier ?: "none"} relation=${if (read.relation) "descendant" else "unknown"} extra=${read.advertised}/${read.fetched}/${read.failed} budgetHit=${read.budgetHit} extraMs=${read.extraMs} stale=${read.stale} unavailable=${read.unavailable} truncated=${read.truncated}")
+            appendLine("R44_DECISION wake=${attempt.wakeEpoch} req=${read.request} mode=${if (read.synthetic) "syntheticTrial" else "normal"} verdict=${read.verdict} reason=${read.reason}")
+        }
+        pre?.let { line("pre", it) }
+        post?.let { line("firstPost", it) }
+        change?.let { line("change", it) }
+        if (last != null && last.request != pre?.request && last.request != post?.request && last.request != change?.request) line("last", last)
+        appendLine("R44_END wake=${attempt.wakeEpoch} last=${attempt.finalState} grant=${show?.decisionAtUptimeMs ?: "UNOBSERVED"} attach=${show?.addReturnAtUptimeMs ?: "UNOBSERVED"} post=${show?.r12Evidence?.get("firstPost") ?: "UNOBSERVED"} postDelivery=${show?.r12Evidence?.get("firstPostMain") ?: "UNOBSERVED"} ack=${show?.r11Evidence?.get("ack") ?: "UNOBSERVED"} remove=${hide?.removeReturnAtUptimeMs ?: "UNOBSERVED"} physicalPixels=UNOBSERVED")
     }
 
     private fun r34CoreRecord(attempt: TimingAttempt): String = buildString {
