@@ -58,7 +58,7 @@ case "${1:-}" in
       ;;
     h2_fixture)
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
-      methods=(r41FixtureRealIngressReconcilesBeforeSuccessor)
+      methods=(r41FixtureFifoControlWaitsForOriginalMain r41FixtureRealIngressReconcilesBeforeSuccessor)
       ;;
     report)
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
