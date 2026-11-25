@@ -95,7 +95,9 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val originalMain=AtomicLong(0); val originalExit=AtomicLong(0); val bStarted=AtomicLong(0); val bId=AtomicLong(0)
         val preReaderHeld=CountDownLatch(1); val preReaderRelease=CountDownLatch(1)
         val selectedReaderHeld=CountDownLatch(1); val selectedReaderRelease=CountDownLatch(1)
-        val lastPreStartOffer=AtomicLong(0); val selectedD=AtomicLong(0); val selectedDCompleted=CountDownLatch(1)
+        val lastPreStartOffer=AtomicLong(0); val selectedD=AtomicLong(0)
+        val laterStarted=AtomicLong(0); val laterStartedLatch=CountDownLatch(1); val laterCompleted=CountDownLatch(1)
+        val pendingAtSelectedCompletion=AtomicLong(0)
         val firstPhysical=AtomicLong(0); val firstPhysicalStarted=CountDownLatch(1)
         val selectedC=AtomicLong(0); val selectedCCompleted=CountDownLatch(1); val selectedCOutcome=AtomicReference<String?>()
         val realPositive=AtomicBoolean(false); val positivePathEntries=AtomicInteger(0)
@@ -205,6 +207,14 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         }
                         if ((duringRead || afterRead) && currentRoute(request)?.backend == "R18_DIRECT")
                             directAtStart.add(request.id)
+                        if (preStartD == "after" && selectedD.get() > 0 && request.id > selectedC.get() &&
+                            laterStarted.compareAndSet(0,request.id)) {
+                            synchronized(queueLock) {
+                                val queue=queueField.get(actual) as KeyguardCardInspectionQueue
+                                records.add("LATER_START id=${request.id} active=${queue.activeRequest()?.id ?: 0} pending=${queue.pendingRequest()?.id ?: 0} lastOffer=${lastPreStartOffer.get()} at=${SystemClock.uptimeMillis()}")
+                            }
+                            laterStartedLatch.countDown()
+                        }
                         val count=readers.incrementAndGet(); maxReaders.updateAndGet { maxOf(it,count) }
                         val seq=order.incrementAndGet(); records.add("READ_START id=${request.id} seq=$seq")
                         val a=candidate.get()
@@ -226,11 +236,17 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         readers.decrementAndGet()
                         if (preStart && request.id == selectedC.get()) {
                             selectedCOutcome.set("$decision/$reason unavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale")
+                            if (preStartD == "after") synchronized(queueLock) {
+                                val queue=queueField.get(actual) as KeyguardCardInspectionQueue
+                                val pending=queue.pendingRequest()?.id ?: 0
+                                pendingAtSelectedCompletion.set(pending)
+                                records.add("SELECTED_COMPLETES id=${request.id} pending=$pending at=${SystemClock.uptimeMillis()}")
+                            }
                             selectedCCompleted.countDown()
                         }
-                        if (preStartD == "after" && request.id == selectedD.get()) {
-                            records.add("D_OWN_READ id=${request.id} result=$decision/$reason unavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale")
-                            selectedDCompleted.countDown()
+                        if (preStartD == "after" && request.id == laterStarted.get()) {
+                            records.add("LATER_OWN_READ id=${request.id} result=$decision/$reason unavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale")
+                            laterCompleted.countDown()
                         }
                         if (duringRead && candidate.get()?.id == request.id) {
                             realPositive.set(decision==KeyguardCardVisibility.SHOW_FULL && reason==KeyguardSurfaceReason.MAIN_CONFIRMED &&
@@ -397,8 +413,12 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 assertTrue("NOT REACHED: selected request did not finish its own physical read", selectedCCompleted.await(20,TimeUnit.SECONDS))
                 records.add("SELECTED_OWN_READ id=$expected result=${selectedCOutcome.get()} proofAndVisibleOutput=SEPARATE_CONTROLS")
                 if (preStartD == "after") {
-                    assertTrue("NOT REACHED: D never began after selected read",successorStarted.await(20,TimeUnit.SECONDS))
-                    assertTrue("NOT REACHED: D did not complete its own physical read",selectedDCompleted.await(20,TimeUnit.SECONDS))
+                    assertTrue("NOT REACHED: no successor began after selected read",laterStartedLatch.await(20,TimeUnit.SECONDS))
+                    val actualLater=laterStarted.get(); val pendingAtCompletion=pendingAtSelectedCompletion.get()
+                    records.add("ACTUAL_LATER controlledD=${selectedD.get()} pendingAtSelectedCompletion=$pendingAtCompletion started=$actualLater")
+                    assertTrue("NOT REACHED: no observed pending successor when selected read completed",pendingAtCompletion >= selectedD.get())
+                    assertTrue("a successor older than the pending request started",actualLater >= pendingAtCompletion)
+                    assertTrue("NOT REACHED: actual successor did not complete its own physical read",laterCompleted.await(20,TimeUnit.SECONDS))
                 }
                 return
             }
