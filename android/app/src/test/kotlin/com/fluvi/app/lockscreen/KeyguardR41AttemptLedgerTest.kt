@@ -91,4 +91,18 @@ class KeyguardR41AttemptLedgerTest {
         ledger.record("ELIGIBLE", null, 200)
         assertTrue(ledger.core(1, 1, 1, 0).contains("systemEligible=true eligible=true"))
     }
+
+    @Test fun fallbackReceiptRequiresTheSameShowAndNeverFabricatesAGrant() {
+        val same = KeyguardR41AttemptLedger()
+        same.record("FALLBACK_CANDIDATE", 20, 100, 30, 40)
+        same.record("FALLBACK_POST_RECEIPT", 20, 200, 30, 50)
+        val row = same.core(1, 1, 1, 0)
+        assertTrue(row, row.contains("fallbackCandidateAndPostReceipt=20/30/40/50/100/200"))
+        assertTrue(row, row.contains("fallbackGrant=UNOBSERVED"))
+        assertTrue(row, row.contains("outcome=UNOBSERVED"))
+        val different = KeyguardR41AttemptLedger()
+        different.record("FALLBACK_CANDIDATE", 20, 100, 30, 40)
+        different.record("FALLBACK_POST_RECEIPT", 20, 200, 31, 50)
+        assertTrue(different.core(1, 1, 1, 0).contains("fallbackCandidateAndPostReceipt=UNOBSERVED"))
+    }
 }

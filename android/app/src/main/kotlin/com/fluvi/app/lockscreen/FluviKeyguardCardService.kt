@@ -1768,9 +1768,22 @@ class FluviKeyguardCardService : AccessibilityService() {
             armSurfaceDiagnostic = { attach ->
                 val operation = activeWindowDiagnosticOperation
                 val owner = KeyguardCardDiagnostics.drawEvidenceOwner()
+                val r41FallbackOperation = operation?.context?.let {
+                    it.captureId != null && r18FallbackWake == it.originWakeEpoch
+                } == true
                 if (operation?.context?.captureId == null || owner == null) null
                 else { observation ->
                     if (KeyguardCardDiagnostics.drawEvidenceOwner() === owner) {
+                        // This is the callback receipt, not a compositor or
+                        // physical-pixel timestamp. It is linked to the exact
+                        // original show operation and output generation.
+                        if (r41FallbackOperation && observation.stage == "FIRST_POST" && observation.full && observation.attachment == attach) {
+                            val request = operation.causingInspectionRequestId
+                            val show = operation.showOperationId
+                            if (request != null && show != null) KeyguardCardDiagnostics.r41Mark(
+                                KeyguardR41RawLedger.FALLBACK_POST_RECEIPT, operation.context,
+                                request, show, observation.generation)
+                        }
                         KeyguardCardDiagnostics.captureEvent(
                             context = this,
                             stage = "R12_SURFACE",
@@ -5215,6 +5228,18 @@ class FluviKeyguardCardService : AccessibilityService() {
         activeWindowDiagnosticOperation = showOperation
         setReadAheadShowInProgress(true)
         val result = try {
+            // A candidate at the real fallback display call is not yet a
+            // proven effective authorization. A matching first-post callback
+            // is recorded separately and never fabricates a grant.
+            if (directOwner == null && r18FallbackWake == wakeEpoch && presentation.full &&
+                showOperation?.context?.captureId != null) {
+                val request = showOperation.causingInspectionRequestId
+                val show = showOperation.showOperationId
+                val attachment = showOperation.attachGeneration
+                if (request != null && show != null && attachment != null)
+                    KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.FALLBACK_CANDIDATE,
+                        showOperation.context, request, show, attachment)
+            }
             overlay.showOrUpdate(presentation, settings, directToken?.stamp?.hostGeneration)
         } finally {
             setReadAheadShowInProgress(false)

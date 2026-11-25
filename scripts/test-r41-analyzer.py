@@ -99,6 +99,14 @@ class R41AnalyzerTest(unittest.TestCase):
         self.assertIn("dispatch>main", lane["invalid"])
         self.assertNotIn("dispatch_to_main", lane["intervals_ns"])
 
+    def test_fallback_post_callback_is_not_an_authorization_or_pixel(self):
+        result = analyzer.analyze(self.row(coverage="INCOMPLETE",
+            fallbackCandidateAndPostReceipt="7/8/9/10/1000/1300"))
+        fallback = result["fallback_observation"]
+        self.assertEqual(fallback["candidate_to_post_callback_ns"], 300)
+        self.assertEqual(fallback["effective_grant"], "UNOBSERVED")
+        self.assertEqual(fallback["physical_presentation"], "UNOBSERVED")
+
     def test_every_compact_attempt_is_preserved(self):
         report = "\n".join(" R41_CORE attempt=%d eligible=UNOBSERVED" % i for i in range(1, 12))
         rows = analyzer.parse_report(report)

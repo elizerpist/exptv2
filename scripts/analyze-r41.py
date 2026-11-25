@@ -56,6 +56,7 @@ def analyze(row):
               "outcome": row.get("outcome", "UNOBSERVED"), "owner": row.get("owner", "UNOBSERVED"),
               "missing": [], "invalid": [], "segments_ns": {}, "total_ns": None,
               "observed_total_ns": None,
+              "fallback_observation": None,
               "screen_to_grant_ns": None, "under_300ms": None,
               "clock": "in_process_monotonic_ns", "physical_pixel": "UNOBSERVED"}
     if row.get("eligible") == "false":
@@ -94,6 +95,18 @@ def analyze(row):
     screen, grant = number(row, "screenNs"), values["grantNs"]
     if screen is not None and grant is not None:
         result["screen_to_grant_ns"] = grant - screen
+    fallback = row.get("fallbackCandidateAndPostReceipt", "UNOBSERVED")
+    if fallback != "UNOBSERVED":
+        try:
+            request, show, attachment, generation, candidate_ns, post_ns = (int(value) for value in fallback.split("/"))
+            if min(request, show, attachment, generation) <= 0 or post_ns < candidate_ns:
+                raise ValueError("invalid fallback identity or order")
+            result["fallback_observation"] = {"request": request, "show": show, "attachment": attachment,
+                "generation": generation, "candidate_ns": candidate_ns, "post_callback_receipt_ns": post_ns,
+                "candidate_to_post_callback_ns": post_ns - candidate_ns, "effective_grant": "UNOBSERVED",
+                "physical_presentation": "UNOBSERVED"}
+        except ValueError:
+            result["invalid"].append("invalid_fallback_observation")
     if (values["wakeNs"] is not None and grant is not None and grant >= values["wakeNs"]
             and row.get("outcome") == "SUCCESS" and owner and owner != "UNOBSERVED"
             and row.get("grantOwner") == owner):

@@ -62,6 +62,8 @@ class KeyguardR41DiagnosticsInstrumentationTest {
         mark(KeyguardR41RawLedger.MAIN, 102, 19_000L)
         mark(KeyguardR41RawLedger.GRANT, 102, 20_000L, 1002, 2002)
         mark(KeyguardR41RawLedger.WINNER, 102, 21_000L, 1002, 2002)
+        mark(KeyguardR41RawLedger.FALLBACK_CANDIDATE, 103, 22_000L, 1003, 3003)
+        mark(KeyguardR41RawLedger.FALLBACK_POST_RECEIPT, 103, 23_000L, 1003, 4003)
         val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
         retain("raw-original-frozen.txt", report)
         val row = report.lineSequence().single { it.startsWith(" R41_CORE ") }
@@ -69,6 +71,8 @@ class KeyguardR41DiagnosticsInstrumentationTest {
         assertTrue(row, row.contains("wakeNs=10000") && row.contains("screenNs=10000"))
         assertTrue(row, row.contains("grantNs=20000") && row.contains("winnerNs=21000"))
         assertTrue(row, row.contains("h2ShadowOffers=1 h2PartialMatches=1") && row.contains("h2Enabled=false"))
+        assertTrue(row, row.contains("fallbackCandidateAndPostReceipt=103/1003/3003/4003/22000/23000") &&
+            row.contains("fallbackGrant=UNOBSERVED"))
         assertTrue(report, report.lineSequence().any {
             it.startsWith(" R41_SAMPLE ") && it.contains("sample=55 ") &&
                 it.contains("attempt=1 ") && it.contains("receipt=$receipt ") && it.contains("stateFlags=5 ")
