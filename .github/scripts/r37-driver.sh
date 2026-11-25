@@ -45,6 +45,12 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR42SignedProfileProbeTest.kt
     sha256sum "$fixture" > "$out/fixture-r42-profile.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r42_stale_verbose ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR26DirectOrderingInstrumentationTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r42-stale-verbose.sha256"
+  fi
   flutter pub get > "$out/pub-get.log" 2>&1
   rc=0
   (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain) > "$out/build.log" 2>&1 || rc=$?
@@ -226,6 +232,10 @@ case "${1:-}" in
       methods=(r42StalePositiveExitsAfterOrderedRestrictions)
       ;;
     r42_stale_after_read)
+      class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
+      methods=(r42StalePositiveAfterRealReadExitsBeforePositivePath)
+      ;;
+    r42_stale_verbose)
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
       methods=(r42StalePositiveAfterRealReadExitsBeforePositivePath)
       ;;
