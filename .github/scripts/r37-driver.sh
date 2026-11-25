@@ -123,6 +123,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR44ServiceInstrumentationTest
       methods=(actualSystemUiRestrictiveTransitions)
       ;;
+    r44_widget)
+      class=com.fluvi.app.lockscreen.KeyguardFinancialSnapshotRemoteViewsInstrumentationTest
+      methods=(remoteViewsAndNotificationDelegateKeepRealPixelsAndText)
+      ;;
     r44_provider)
       class=com.fluvi.app.lockscreen.KeyguardR44LazyProviderInstrumentationTest
       methods=(advertisedTagIsFilledOnlyAfterRealExtraRequest)
