@@ -135,17 +135,14 @@ PY
   printf '%s\n' 'PASS: API 35 R41-to-R42 install -r, synthetic preferences/file preserved and accessibility service is bound with a live process before/after.' > "$evidence/result.txt"
   # The instrumentation package is signed with the same update key and
   # exercises the actual installed PROFILE application, not the debug APK.
-  adb shell settings put secure enabled_accessibility_services ''
-  adb shell settings put secure accessibility_enabled 0
-  adb shell am force-stop com.fluvi.app
   adb install -r "$dir/test.apk" > "$evidence/install-test.txt" 2>&1
   trial=$(cat /proc/sys/kernel/random/uuid)
   printf '%s\n' "$trial" > "$evidence/motion-trial.txt"
   rc=0
   timeout -k 5s 300s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$trial" \
-    -e class 'com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest#r41SystemWarmPreparedLiveOrbShowsCalibratedFramesThenWithdraws' \
+    -e class 'com.fluvi.app.lockscreen.KeyguardR42SignedProfileProbeTest#signedProfileShowsCurrentGrantedOrbAndNaturalMotion' \
     com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$evidence/profile-motion.txt" 2>&1 || rc=$?
-  adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r19/$trial" > "$evidence/profile-motion.tar" 2> "$evidence/profile-motion-tar.stderr" || true
+  adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r42-profile/$trial" > "$evidence/profile-motion.tar" 2> "$evidence/profile-motion-tar.stderr" || true
   if (( rc != 0 )) || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$evidence/profile-motion.txt" ||
      ! grep -Eq '^OK \(1 test\)' "$evidence/profile-motion.txt"; then
     printf '%s\n' 'FAIL or NOT REACHED: profile visible-motion instrumentation; see retained transcript and samples.' >> "$evidence/result.txt"
@@ -160,7 +157,10 @@ PY
     printf '%s\n' 'FAIL or NOT REACHED: no matching owner-bound R41 grant/winner in profile capture.' >> "$evidence/result.txt"
     exit 1
   fi
-  printf '%s\n' 'PASS: matching owner-bound grant/winner and two calibrated distinct compositor samples on the installed profile candidate.' 'Physical phone latency and continuous privacy remain unmeasured.' >> "$evidence/result.txt"
+  observe_service post-motion
+  adb exec-out run-as com.fluvi.app cat files/r41-update-sentinel.txt > "$evidence/sentinel-post-motion.txt"
+  cmp "$dir/sentinel.txt" "$evidence/sentinel-post-motion.txt"
+  printf '%s\n' 'PASS: matching owner-bound grant/winner and repeated distinct natural compositor samples on the installed profile candidate.' 'Physical phone latency and continuous privacy remain unmeasured.' >> "$evidence/result.txt"
   ;;
  *) exit 2;;
 esac

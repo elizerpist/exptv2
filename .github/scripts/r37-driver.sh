@@ -39,6 +39,12 @@ case "${1:-}" in
     git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR41DiagnosticsInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt > "$out/fixture.patch"
     sha256sum "$fixture" > "$out/fixture.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r42_profile_motion_fixture ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR42SignedProfileProbeTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR42SignedProfileProbeTest.kt
+    sha256sum "$fixture" > "$out/fixture-r42-profile.sha256"
+  fi
   flutter pub get > "$out/pub-get.log" 2>&1
   rc=0
   (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain) > "$out/build.log" 2>&1 || rc=$?
@@ -60,6 +66,7 @@ case "${1:-}" in
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r19/$uuid" > "$out/visual-$uuid.tar" 2> "$out/visual-$uuid.stderr" || true
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r26/$uuid" > "$out/r26-$uuid.tar" 2> "$out/r26-$uuid.stderr" || true
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r41/$uuid" > "$out/r41-$uuid.tar" 2> "$out/r41-$uuid.stderr" || true
+      adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r42-profile/$uuid" > "$out/r42-profile-$uuid.tar" 2> "$out/r42-profile-$uuid.stderr" || true
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r15/$uuid" > "$out/r15-$uuid.tar" 2> "$out/r15-$uuid.stderr" || true
     done
   }
@@ -143,8 +150,8 @@ case "${1:-}" in
       methods=(r41SystemWarmPreparedLiveOrbShowsCalibratedFramesThenWithdraws)
       ;;
     r42_profile_motion_fixture)
-      class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
-      methods=(r41SystemWarmPreparedLiveOrbShowsCalibratedFramesThenWithdraws)
+      class=com.fluvi.app.lockscreen.KeyguardR42SignedProfileProbeTest
+      methods=(signedProfileShowsCurrentGrantedOrbAndNaturalMotion)
       ;;
     r41_system_warm_arrival_motion)
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
