@@ -5,6 +5,10 @@ mkdir -p "$out"
 case "$1" in
   prepare)
     [[ "$APP_SHA" =~ ^[0-9a-f]{40}$ && "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ && "$CANDIDATE_SIZE" =~ ^[0-9]+$ ]]
+    if [[ "${R44_PRIVATE:-false}" == true ]]; then
+      test -s "$out/r43.apk"
+      test -s "$out/r44.apk"
+    else
     curl -fLsS --retry 3 'https://media.githubusercontent.com/media/elizerpist/exptv2/47ba86e432b7027ea9c786270211d1d8b5b8edf2/fluvi_R43_HUMAN_0732bee6a2bc.apk' -o "$out/r43.apk"
     test "$(wc -c < "$out/r43.apk")" -eq 121039632
     printf '%s  %s\n' 4abcfd4f0b929919c1102a76155d061a721112b8efac5c5ee7c293d3c198b166 "$out/r43.apk" | sha256sum -c -
@@ -22,6 +26,9 @@ case "$1" in
         ;;
       *) printf '%s\n' 'unsupported candidate source' >&2; exit 2;;
     esac
+    fi
+    test "$(wc -c < "$out/r43.apk")" -eq 121039632
+    printf '%s  %s\n' 4abcfd4f0b929919c1102a76155d061a721112b8efac5c5ee7c293d3c198b166 "$out/r43.apk" | sha256sum -c -
     test "$(wc -c < "$out/r44.apk")" -eq "$CANDIDATE_SIZE"
     printf '%s  %s\n' "$CANDIDATE_SHA256" "$out/r44.apk" | sha256sum -c -
     signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)

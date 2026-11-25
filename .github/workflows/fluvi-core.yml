@@ -29,6 +29,9 @@ on:
       stage_size:
         type: string
         default: '0'
+      stage_nonce:
+        type: string
+        default: ''
       test_sha256:
         type: string
         default: ''
@@ -51,7 +54,7 @@ permissions:
   contents: read
 jobs:
   service:
-    if: ${{ inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' && inputs.test_scope != 'r44_update' && inputs.test_scope != 'r43_flutter' }}
+    if: ${{ inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' && inputs.test_scope != 'r44_update' && inputs.test_scope != 'r44_update_private' && inputs.test_scope != 'r43_flutter' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -266,9 +269,11 @@ jobs:
           retention-days: 14
 
   r44-update:
-    if: ${{ inputs.test_scope == 'r44_update' }}
+    if: ${{ inputs.test_scope == 'r44_update' || inputs.test_scope == 'r44_update_private' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    permissions:
+      contents: write
     env:
       APP_SHA: ${{ inputs.app_sha }}
       CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
@@ -277,6 +282,8 @@ jobs:
       R44_STAGE_SHA256: ${{ inputs.stage_sha256 }}
       R44_STAGE_SIZE: ${{ inputs.stage_size }}
       FLUVI_R44_STAGE_KEY: ${{ secrets.FLUVI_R44_UPDATE_STAGE_KEY }}
+      R44_STAGE_NONCE: ${{ inputs.stage_nonce }}
+      R44_PRIVATE: ${{ inputs.test_scope == 'r44_update_private' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -291,6 +298,9 @@ jobs:
           packages: 'platform-tools build-tools;36.0.0'
       - name: Ensure lossless patch tool is available
         run: command -v zstd || (sudo apt-get update && sudo apt-get install -y zstd)
+      - name: Prepare private signed update fixture
+        if: ${{ inputs.test_scope == 'r44_update_private' }}
+        run: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r44-private-handshake.sh"
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
