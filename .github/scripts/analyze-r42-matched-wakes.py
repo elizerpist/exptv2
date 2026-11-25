@@ -73,9 +73,13 @@ def analyzed_rows(block, arm, mode, source, trial, report, capture_hash):
         post = integer(trial.get('workerPostNs'))
         cancel = integer(row.get('cancelNs'))
         cancelled_before_post = cancel is not None and grant is not None and post is not None and grant <= cancel <= post
+        boundary_names = ('wakeNs', 'offerNs', 'workerNs', 'readStartNs', 'readEndNs',
+                          'dispatchNs', 'mainNs', 'grantNs', 'winnerNs')
+        known_boundaries = [value for value in (integer(row.get(key)) for key in boundary_names) if value is not None]
+        ordered_boundaries = all(left <= right for left, right in zip(known_boundaries, known_boundaries[1:]))
         real_winner = (unique_record and same_owner and same_output and same_pipeline and row.get('invalid') == '0' and grant is not None and
                        winner is not None and post is not None and winner >= grant and post >= grant and
-                       not cancelled_before_post)
+                       not cancelled_before_post and ordered_boundaries)
         eligible = row.get('eligible', 'UNOBSERVED')
         outcome = row.get('outcome', 'UNOBSERVED')
         bound = ms(row.get('wakeNs'), row.get('grantNs')) if real_winner and eligible == 'true' and outcome == 'SUCCESS' else 'UNOBSERVED'
@@ -91,6 +95,7 @@ def analyzed_rows(block, arm, mode, source, trial, report, capture_hash):
             attempt=row.get('attempt', 'UNOBSERVED'), session=row.get('session', 'UNOBSERVED'), wake=row.get('wake', 'UNOBSERVED'),
             eligible=eligible, outcome=outcome, owner=owner, request=row.get('request', 'UNOBSERVED'),
             duplicate_core_record=str(not unique_record).lower(),
+            ordered_known_boundaries=str(ordered_boundaries).lower(),
             posted=trial.get('workerPost', 'UNOBSERVED'), visible=trial.get('visible', 'UNOBSERVED'),
             direct_pipeline_match=str(same_pipeline).lower(),
             callback_to_grant_ms=bound, earlier_same_wake_to_grant_ms=alternative,
