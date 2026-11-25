@@ -120,6 +120,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
       methods=(r15PhoneShapeKeepsFinancialAndActualWithdrawalFull r15PhoneShapeKeepsFinancialAndActualWithdrawalLight lightAndFullPressureRetainEverySelectedEpisodeCauseAndFitTheWholeUtf8Budget r14FullPressureRetainsEverySelectedEpisode r14LightPressureRetainsEverySelectedEpisode)
       ;;
+    old_r18_evidence)
+      class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
+      methods=(r18PipelineEvidenceRemainsBoundedAndOwnedInLight r18PipelineEvidenceRemainsBoundedAndOwnedInFull)
+      ;;
     all)
       class=""
       methods=(orderedDirectSkipsInapplicableR25Evaluation allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners)
