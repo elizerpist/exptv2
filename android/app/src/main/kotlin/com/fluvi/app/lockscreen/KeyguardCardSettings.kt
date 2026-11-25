@@ -3538,8 +3538,8 @@ internal object KeyguardCardDiagnostics {
         fun unique(kind: String, read: KeyguardR44ReadObservation?) {
             if (read != null && emitted.add(read.request)) line(kind, read)
         }
-        unique("firstGrant", attempt.r44FirstGrant)
-        unique("firstRestriction", attempt.r44FirstRestriction)
+        unique("firstMainClassification", attempt.r44FirstGrant)
+        unique("firstRestrictionClassification", attempt.r44FirstRestriction)
         unique("pre", pre)
         unique("change", change)
         unique("last", last)

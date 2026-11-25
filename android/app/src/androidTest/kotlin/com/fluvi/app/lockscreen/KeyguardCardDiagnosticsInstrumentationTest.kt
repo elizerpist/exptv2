@@ -66,7 +66,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             val row = report.lineSequence().single { it.startsWith("R44_WAKE ") && it.contains("wake=$wake ") }
             assertTrue(row, row.contains("screenOn=${wake * 1000 + 20}"))
             assertTrue(row, row.contains("firstPostRead=${wake * 1000 + 2}"))
-            assertTrue(report, report.contains("kind=firstRestriction wake=$wake req=${wake * 1000 + 400} "))
+            assertTrue(report, report.contains("kind=firstRestrictionClassification wake=$wake req=${wake * 1000 + 400} "))
         }
         assertEquals(6, report.lineSequence().count { it.startsWith("R44_HU ") })
         assertTrue(report.contains("physicalPixels=UNOBSERVED"))
