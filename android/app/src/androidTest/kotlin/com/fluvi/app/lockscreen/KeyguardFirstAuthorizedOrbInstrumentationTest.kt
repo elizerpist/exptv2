@@ -55,6 +55,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         runService(false, false, false, false, false, false, true)
     @Test fun r41SystemWarmExclusionBeforeRealMainAck() =
         runService(false, true, false, false, false, false, true)
+    @Test fun r41SystemWarmSwipeShadeBeforeRealMainAck() =
+        runService(false, true, false, false, false, false, true, false, true)
     @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
     @Test fun r41ActualWarmFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, true, true)
     @Test fun r41TwentyUnheldWakeAttempts() = runNaturalWakeBatch()
@@ -202,7 +204,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                            r41Warm: Boolean = false, r41Fallback: Boolean = false,
                            r41WaitForPreparedRoute: Boolean = false,
                            r41WarmSystemBeforeService: Boolean = false,
-                           r41LiveMotion: Boolean = false) {
+                           r41LiveMotion: Boolean = false,
+                           r21SwipeShade: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -451,7 +454,18 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                     assertTrue("a second show was observed while acknowledgement was held", same.contains(" following=UNOBSERVED/"))
                 } else {
                     negativeEnabled.set(true)
-                    File(dir, "shade-command.txt").writeText(shell("cmd statusbar expand-notifications"))
+                    if (r21SwipeShade) {
+                        val screen = context.getSystemService(android.view.WindowManager::class.java).currentWindowMetrics.bounds
+                        val x = screen.centerX()
+                        val fromY = screen.top + 1
+                        val toY = screen.top + screen.height() * 3 / 4
+                        File(dir, "shade-gesture.txt").writeText("bounds=$screen from=$x,$fromY to=$x,$toY durationMs=400\n")
+                        shell("input swipe $x $fromY $x $toY 400")
+                    } else File(dir, "shade-command.txt").writeText(shell("cmd statusbar expand-notifications"))
+                    // Capture the actual attempted shade state even if the
+                    // classifier never reaches its required negative result.
+                    File(dir, "shade-attempt-windows.txt").writeText(shell("dumpsys window windows"))
+                    saveScreenshot(File(dir, "02-shade-attempt.png"))
                     assertTrue("NOT REACHED: real shade/credential decision was not observed", negativeFinished.await(12, TimeUnit.SECONDS))
                     await("actual negative withdrew service window", 10_000) {
                         var visible = true
