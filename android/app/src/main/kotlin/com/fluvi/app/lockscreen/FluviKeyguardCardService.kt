@@ -271,6 +271,17 @@ class FluviKeyguardCardService : AccessibilityService() {
                         val authority = inspectionAuthority
                         val scene = firstAuthorizedOrb.sceneHint()
                         val evidence = KeyguardR43SurfaceEvidence()
+                        val busy = synchronized(queueLock) {
+                            inspectionQueue.activeRequest() != null || inspectionQueue.pendingRequest() != null
+                        }
+                        if (busy) {
+                            KeyguardCardDiagnostics.recordR43(applicationContext, KeyguardR43Observation(
+                                plan.captureId, authority.serviceSession, authority.wakeGeneration, null, scene,
+                                SystemClock.uptimeMillis(), "OBSERVER_SKIPPED_BUSY", r43Labels[index], r43EffectiveFlags,
+                                true, KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.ROOT_UNAVAILABLE),
+                                true, false, true, 0, 0, 0, evidence))
+                            return@launch
+                        }
                         val observation = runCatching {
                             val result = windowSnapshotReader.read(
                                 KeyguardWindowSnapshotReader.Request(knownOwnOverlayIdentity,

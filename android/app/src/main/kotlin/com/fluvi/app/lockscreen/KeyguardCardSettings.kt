@@ -2970,7 +2970,7 @@ internal object KeyguardCardDiagnostics {
                 appendLine("R43_DEVICE buildId=${technicalValue(Build.ID)} incremental=${technicalValue(Build.VERSION.INCREMENTAL)} fingerprint=${technicalValue(Build.FINGERPRINT)}")
                 appendLine("R43_CAPTURE enabled=true samples=${active.r43Samples} dropped=${active.r43Dropped} passiveRateSkipped=${active.r43Skipped} labels=timeAnnotations_notAuthority")
                 val expected = listOf("CLOCK_1", "PIN", "CLOCK_2", "SHADE")
-                appendLine("R43_HOLDS anchor=SCREEN_ON offsetsMs=4000/10000/16000/22000 present=${active.r43Holds.keys.joinToString(",").ifEmpty { "none" }} missing=${expected.filterNot { it in active.r43Holds }.joinToString(",").ifEmpty { "none" }}")
+                appendLine("R43_HOLDS anchor=SCREEN_ON offsetsMs=4000/10000/16000/22000 records=${active.r43Holds.keys.joinToString(",").ifEmpty { "none" }} noRecord=${expected.filterNot { it in active.r43Holds }.joinToString(",").ifEmpty { "none" }} recordsMayBeIncomplete=true")
                 appendLine("R43_FIELDS win=id/type/layer/display/active/own root=category/verified nodes=visited/visible/nullId/systemId/otherId/nonSystemUiOwner idPath=entry@ordinal:parent:depth stable=not_proven")
             }
             appendLine("startedAt=${SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date(active.startedWallMs))}")
@@ -3086,9 +3086,13 @@ internal object KeyguardCardDiagnostics {
         }
         // These bounded scene records are the purpose of the opted-in R43
         // capture and precede verbose per-request and raw-event detail.
-        active.r43First?.let { select("r43:first", it) }
-        active.r43Last?.takeIf { it != active.r43First }?.let { select("r43:last", it) }
-        active.r43Holds.forEach { (hold, row) -> select("r43:hold:$hold", row) }
+        active.r43First?.let { select("r43:first", it.replaceFirst(" R43_SCENE ", " R43_SCENE retained=FIRST ")) }
+        active.r43Last?.takeIf { it != active.r43First }?.let {
+            select("r43:last", it.replaceFirst(" R43_SCENE ", " R43_SCENE retained=LAST_DISTINCT "))
+        }
+        active.r43Holds.forEach { (hold, row) ->
+            select("r43:hold:$hold", row.replaceFirst(" R43_SCENE ", " R43_SCENE retained=HOLD "))
+        }
         // Compact R41 accounting is reserved for every retained attempt
         // before first/last verbose selections compete for the same budget.
         val r41Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }

@@ -10,6 +10,27 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class KeyguardR43DiagnosticsInstrumentationTest {
+    @Test fun frozenOrReplacedCaptureCannotReceiveAnOldObservation() {
+        assumeTrue("genuine API 37 device required", Build.VERSION.SDK_INT >= 37)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        KeyguardCardDiagnostics.startCapture(context, "r43-old", "debug", "LIGHT", true)
+        val old = requireNotNull(KeyguardCardDiagnostics.activeCaptureId())
+        val oldObservation = KeyguardR43Observation(old, 1, 1, 1, 1, 1, "TEST", "CLOCK_1", 0, false,
+            KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.NO_MAIN_MARKER),
+            false, false, false, 0, 0, 0, KeyguardR43SurfaceEvidence())
+        try {
+            KeyguardCardDiagnostics.freezeCapture(context)
+            assertFalse(KeyguardCardDiagnostics.recordR43(context, oldObservation))
+            KeyguardCardDiagnostics.startCapture(context, "r43-new", "debug", "LIGHT", true)
+            assertFalse(KeyguardCardDiagnostics.recordR43(context, oldObservation))
+            val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            assertFalse(report.contains("hold=CLOCK_1"))
+            assertTrue(report.contains("R43_CAPTURE enabled=true samples=0"))
+        } finally {
+            KeyguardCardDiagnostics.clearCapture(context)
+        }
+    }
+
     @Test fun namedHoldsSurvivePressureWithoutUnverifiedOrForeignIds() {
         assumeTrue("genuine API 37 device required", Build.VERSION.SDK_INT >= 37)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -40,6 +61,8 @@ class KeyguardR43DiagnosticsInstrumentationTest {
             val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
             assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
             labels.forEach { assertTrue("missing hold $it", report.contains("hold=$it")) }
+            assertTrue(report.contains("retained=FIRST"))
+            assertTrue(report.contains("retained=LAST_DISTINCT"))
             assertFalse(report.contains("PRIVATE_NOT_A_REAL_RESOURCE"))
             assertFalse(report.contains("ACCOUNT_SECRET"))
             assertTrue(report.contains("labelIsNotAuthority=true"))
