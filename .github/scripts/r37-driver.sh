@@ -11,7 +11,19 @@ case "${1:-}" in
   test -z "$(git status --porcelain --untracked-files=no)"
   if [[ "$BASELINE" = true ]]; then
     test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
-    if [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui ]]; then
+    if [[ "$TEST_SCOPE" == r44_1_capture_* ]]; then
+      for fixture in \
+        android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt \
+        android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22VisualCalibration.kt \
+        android/app/src/main/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfacePresenter.kt \
+        android/app/src/debug/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt \
+        android/app/src/profile/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt \
+        android/app/src/release/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSurfaceWorkerTestHooks.kt; do
+        cp "$GITHUB_WORKSPACE/harness/$fixture" "$fixture"
+        sha256sum "$fixture" >> "$out/fixture.sha256"
+      done
+      git diff > "$out/fixture.patch"
+    elif [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui ]]; then
       fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt"
       test -f "$fixture"
       cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt
@@ -89,6 +101,8 @@ case "${1:-}" in
  run)
   collect() {
     adb logcat -b all -d -v monotonic > "$out/logcat.txt" 2>&1 || true
+    adb logcat -b crash -d -v monotonic > "$out/crash.txt" 2>&1 || true
+    adb shell dumpsys activity exit-info com.fluvi.app > "$out/exit-info.txt" 2>&1 || true
     adb shell dumpsys window > "$out/final-window.txt" 2>&1 || true
     for uuid in ${r37_uuids:-}; do
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r39/$uuid" > "$out/r39-$uuid.tar" 2> "$out/r39-$uuid.stderr" || true
@@ -111,6 +125,18 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r44_1_capture_off)
+      class=com.fluvi.app.lockscreen.KeyguardR44ServiceInstrumentationTest
+      methods=(syntheticPairUsesRealServiceWithCaptureOff)
+      ;;
+    r44_1_capture_on)
+      class=com.fluvi.app.lockscreen.KeyguardR44ServiceInstrumentationTest
+      methods=(syntheticPairUsesRealServiceWithCaptureOn)
+      ;;
+    r44_1_stale)
+      class=com.fluvi.app.lockscreen.KeyguardR44ServiceInstrumentationTest
+      methods=(supersededSyntheticReadCannotGrantAfterRestriction)
+      ;;
     r44_pressure)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
       methods=(r44PerWakeEvidenceSurvivesLightPressure r44PerWakeEvidenceSurvivesFullPressure)
@@ -348,7 +374,7 @@ case "${1:-}" in
     if (( rc != 0 )) || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then
       printf '%s FAIL exit=%s\n' "$method" "$rc" >> "$out/results.txt"; failed=1
     else printf '%s PASS\n' "$method" >> "$out/results.txt"; fi
-    if [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui ]]; then
+    if [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui || "$TEST_SCOPE" == r44_1_* ]]; then
       # A native process crash bypasses the fixture's finally block. This is
       # the disposable fixture PIN only; clear it so the following declared
       # method can independently establish its own secure-lock precondition.
