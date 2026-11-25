@@ -51,6 +51,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         runService(false, null, true, false, false, false, true)
     @Test fun r41SystemWarmLiveOrbShowsTwoCalibratedFramesThenWithdraws() =
         runService(false, null, true, false, false, false, true, true)
+    @Test fun r41SystemWarmPreparedLiveOrbShowsCalibratedFramesThenWithdraws() =
+        runService(false, null, true, false, false, true, true, true)
     @Test fun r41SystemWarmBenignIngressBeforeRealMainAck() =
         runService(false, false, false, false, false, false, true)
     @Test fun r41SystemWarmExclusionBeforeRealMainAck() =
