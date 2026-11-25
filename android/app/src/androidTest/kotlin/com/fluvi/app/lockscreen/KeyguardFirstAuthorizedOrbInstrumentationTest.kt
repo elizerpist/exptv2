@@ -57,6 +57,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         runService(false, true, false, false, false, false, true)
     @Test fun r41SystemWarmSwipeShadeBeforeRealMainAck() =
         runService(false, true, false, false, false, false, true, false, true)
+    @Test fun r41SystemWarmPinBeforeRealMainAck() =
+        runService(false, true, false, false, false, false, true, false, false, true)
     @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
     @Test fun r41ActualWarmFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, true, true)
     @Test fun r41TwentyUnheldWakeAttempts() = runNaturalWakeBatch()
@@ -205,7 +207,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                            r41WaitForPreparedRoute: Boolean = false,
                            r41WarmSystemBeforeService: Boolean = false,
                            r41LiveMotion: Boolean = false,
-                           r21SwipeShade: Boolean = false) {
+                           r21SwipeShade: Boolean = false,
+                           r21Pin: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -266,6 +269,12 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
             await("unlocked", 5_000) { power.isInteractive && !keyguard.isKeyguardLocked }
             saveScreenshot(File(dir, "01-unlocked-background.png"))
             shell("locksettings set-disabled false")
+            if (r21Pin) {
+                // Disposable API-35 fixture only: start from an insecure
+                // keyguard and always remove this synthetic PIN in finally.
+                File(dir, "pin-setup.txt").writeText(shell("locksettings set-pin 2468"))
+                await("synthetic PIN enrolled", 8_000) { keyguard.isDeviceSecure }
+            }
             check(context.getSharedPreferences("fluvi_keyguard_orb_diagnostic_route", Context.MODE_PRIVATE)
                 .edit().putString("mode", "SURFACE_LIVE").commit())
             instrumentation.runOnMainSync {
@@ -454,7 +463,15 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                     assertTrue("a second show was observed while acknowledgement was held", same.contains(" following=UNOBSERVED/"))
                 } else {
                     negativeEnabled.set(true)
-                    if (r21SwipeShade) {
+                    if (r21Pin) {
+                        val screen = context.getSystemService(android.view.WindowManager::class.java).currentWindowMetrics.bounds
+                        // Avoid the actual ORB hit region while opening bouncer.
+                        val x = screen.left + screen.width() / 5
+                        val fromY = screen.top + screen.height() * 85 / 100
+                        val toY = screen.top + screen.height() / 4
+                        File(dir, "pin-gesture.txt").writeText("bounds=$screen from=$x,$fromY to=$x,$toY durationMs=400\n")
+                        shell("input swipe $x $fromY $x $toY 400")
+                    } else if (r21SwipeShade) {
                         val screen = context.getSystemService(android.view.WindowManager::class.java).currentWindowMetrics.bounds
                         val x = screen.centerX()
                         val fromY = screen.top + 1
@@ -637,6 +654,12 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 File(dir, "capture.txt").writeText(checkNotNull(report))
             } }.onFailure { errors += "freeze:${it.javaClass.simpleName}:${it.message}" }
             File(dir, "reads.txt").writeText(synchronized(reads) { reads.joinToString("\n", postfix = "\n") })
+            runCatching {
+                if (r21Pin) {
+                    File(dir, "pin-cleanup.txt").writeText(shell("locksettings clear --old 2468"))
+                    check(!keyguard.isDeviceSecure) { "synthetic PIN cleanup failed" }
+                }
+            }.onFailure { errors += "pin-cleanup:${it.javaClass.simpleName}:${it.message}" }
             runCatching {
                 if (r21Negative == true) shell("cmd statusbar collapse")
                 setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, other)
