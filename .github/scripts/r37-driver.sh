@@ -11,7 +11,11 @@ case "${1:-}" in
   test -z "$(git status --porcelain --untracked-files=no)"
   if [[ "$BASELINE" = true ]]; then
     test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
-    if [[ "$TEST_SCOPE" == r44_1_capture_* ]]; then
+    if [[ "$TEST_SCOPE" == r44_1_holder_* ]]; then
+      fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR441HolderReproInstrumentationTest.kt"
+      cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR441HolderReproInstrumentationTest.kt
+      sha256sum "$fixture" > "$out/fixture.sha256"
+    elif [[ "$TEST_SCOPE" == r44_1_capture_* ]]; then
       for fixture in \
         android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt \
         android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22VisualCalibration.kt \
@@ -103,6 +107,8 @@ case "${1:-}" in
     adb logcat -b all -d -v monotonic > "$out/logcat.txt" 2>&1 || true
     adb logcat -b crash -d -v monotonic > "$out/crash.txt" 2>&1 || true
     adb shell dumpsys activity exit-info com.fluvi.app > "$out/exit-info.txt" 2>&1 || true
+    adb shell dumpsys SurfaceFlinger > "$out/surfaceflinger.txt" 2>&1 || true
+    adb shell getprop ro.hardware.egl > "$out/egl-property.txt" 2>&1 || true
     adb shell dumpsys window > "$out/final-window.txt" 2>&1 || true
     for uuid in ${r37_uuids:-}; do
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r39/$uuid" > "$out/r39-$uuid.tar" 2> "$out/r39-$uuid.stderr" || true
@@ -125,6 +131,14 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r44_1_holder_post)
+      class=com.fluvi.app.lockscreen.KeyguardR441HolderReproInstrumentationTest
+      methods=(realHolderPostThenDetach)
+      ;;
+    r44_1_holder_locked)
+      class=com.fluvi.app.lockscreen.KeyguardR441HolderReproInstrumentationTest
+      methods=(realHolderDetachWhileCanvasIsLocked)
+      ;;
     r44_1_capture_off)
       class=com.fluvi.app.lockscreen.KeyguardR44ServiceInstrumentationTest
       methods=(syntheticPairUsesRealServiceWithCaptureOff)
