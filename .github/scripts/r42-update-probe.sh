@@ -169,7 +169,7 @@ PY
   # pre-cleanup dumps and explicitly request a normal rebind for teardown.
   if grep -Eq 'Force stopping com[.]fluvi[.]app .*: finished inst' "$evidence/profile-motion-logcat.txt"; then
     printf '%s\n' 'Instrumentation force-stopped target at finish; requesting ordinary accessibility-service rebind.' > "$evidence/post-instrumentation-rebind.txt"
-    adb shell settings put secure enabled_accessibility_services ''
+    adb shell "settings put secure enabled_accessibility_services ''"
     adb shell settings put secure accessibility_enabled 0
     adb shell settings put secure enabled_accessibility_services "$component"
     adb shell settings put secure accessibility_enabled 1
