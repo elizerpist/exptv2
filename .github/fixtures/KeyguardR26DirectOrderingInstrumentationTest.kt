@@ -42,11 +42,13 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun warmOrderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true, warmup = true)
     @Test fun readyWorkDoesNotWaitForDiagnosticPublication() = exercise(true, true, warmup = true, checkReport = true)
     @Test fun r42PreStartSelectsActualLatestRequest() = exercise(true, preStart = true)
+    @Test fun r441PreStartDOfferedBeforeSelector() = exercise(true, preStart = true, preStartD = "before")
+    @Test fun r441PreStartDAfterSelectedReaderStarts() = exercise(true, preStart = true, preStartD = "after")
     @Test fun r42StalePositiveExitsAfterOrderedRestrictions() = exercise(true, duringRead = true, platformWarm = true)
     @Test fun r42StalePositiveAfterRealReadExitsBeforePositivePath() = exercise(true, afterRead = true, platformWarm = true)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
-    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false, preStart:Boolean = false, duringRead:Boolean = false, afterRead:Boolean = false, platformWarm:Boolean = false) {
+    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false, preStart:Boolean = false, duringRead:Boolean = false, afterRead:Boolean = false, platformWarm:Boolean = false, preStartD:String = "") {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -92,6 +94,8 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val reportHeld=CountDownLatch(1); val reportRelease=CountDownLatch(1); val reportTimeout=AtomicBoolean(false)
         val originalMain=AtomicLong(0); val originalExit=AtomicLong(0); val bStarted=AtomicLong(0); val bId=AtomicLong(0)
         val preReaderHeld=CountDownLatch(1); val preReaderRelease=CountDownLatch(1)
+        val selectedReaderHeld=CountDownLatch(1); val selectedReaderRelease=CountDownLatch(1)
+        val lastPreStartOffer=AtomicLong(0); val selectedD=AtomicLong(0); val selectedDCompleted=CountDownLatch(1)
         val firstPhysical=AtomicLong(0); val firstPhysicalStarted=CountDownLatch(1)
         val selectedC=AtomicLong(0); val selectedCCompleted=CountDownLatch(1); val selectedCOutcome=AtomicReference<String?>()
         val realPositive=AtomicBoolean(false); val positivePathEntries=AtomicInteger(0)
@@ -158,7 +162,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 actual.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
                     AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,-1,Display.DEFAULT_DISPLAY,0,"com.android.systemui",at))
                 val pending=actual.inspectionStateForTest().pending
-                if(pending!=null) { bId.set(pending.id); records.add("B_OFFER id=${pending.id} at=$at") }
+                if (preStartD.isNotEmpty()) {
+                    val offered=lastPreStartOffer.get()
+                    if (offered>0) { bId.set(offered); records.add("CONTROL_OFFER id=$offered pending=${pending?.id ?: 0} at=$at") }
+                } else if(pending!=null) { bId.set(pending.id); records.add("B_OFFER id=${pending.id} at=$at") }
             }
             KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = { output ->
                 if(candidate.get()!=null && bId.get()>0 && bStarted.get()==0L) earlyReveal.incrementAndGet()
@@ -172,11 +179,15 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                     }
                     override fun queueOffered(request:KeyguardCardInspectionRequest, previous:KeyguardCardInspectionRequest?,
                         pending:KeyguardCardInspectionRequest?, startsWorker:Boolean) {
+                        if (preStartD.isNotEmpty() && armed.get()) {
+                            lastPreStartOffer.set(request.id)
+                            records.add("ALL_OFFER id=${request.id} previous=${previous?.id ?: 0} pending=${pending?.id ?: 0} at=${SystemClock.uptimeMillis()}")
+                        }
                         val a=candidate.get()
                         if ((duringRead || afterRead) && a != null && pending != null && pending.id > a.id &&
                             pending.session == a.session && pending.wakeGeneration == a.wakeGeneration) {
                             offeredAfterA.add(pending.id)
-                            records.add("PENDING id=${pending.id} replaces=${previous?.id ?: 0} request=$pending")
+                            records.add("PENDING id=${pending.id} replaces=${previous?.id ?: 0}")
                         }
                     }
                     override fun openingOrderSelected(request:KeyguardCardInspectionRequest, milestoneOrdered:Boolean) {
@@ -184,7 +195,14 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         records.add("ORDER_SELECTED id=${request.id} milestone=$milestoneOrdered")
                     }
                     override fun started(request:KeyguardCardInspectionRequest) {
-                        if (preStart && armed.get() && firstPhysical.compareAndSet(0, request.id)) firstPhysicalStarted.countDown()
+                        if (preStart && armed.get() && firstPhysical.compareAndSet(0, request.id)) {
+                            records.add("PHYSICAL_START id=${request.id} at=${SystemClock.uptimeMillis()} authority=${request.session}/${request.wakeGeneration}/${request.visibilityEpoch}")
+                            firstPhysicalStarted.countDown()
+                            if (preStartD == "after") {
+                                selectedReaderHeld.countDown()
+                                if (!selectedReaderRelease.await(20, TimeUnit.SECONDS)) workerTimeout.set(true)
+                            }
+                        }
                         if ((duringRead || afterRead) && currentRoute(request)?.backend == "R18_DIRECT")
                             directAtStart.add(request.id)
                         val count=readers.incrementAndGet(); maxReaders.updateAndGet { maxOf(it,count) }
@@ -209,6 +227,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         if (preStart && request.id == selectedC.get()) {
                             selectedCOutcome.set("$decision/$reason unavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale")
                             selectedCCompleted.countDown()
+                        }
+                        if (preStartD == "after" && request.id == selectedD.get()) {
+                            records.add("D_OWN_READ id=${request.id} result=$decision/$reason unavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale")
+                            selectedDCompleted.countDown()
                         }
                         if (duringRead && candidate.get()?.id == request.id) {
                             realPositive.set(decision==KeyguardCardVisibility.SHOW_FULL && reason==KeyguardSurfaceReason.MAIN_CONFIRMED &&
@@ -236,7 +258,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                     override fun beforeDecision(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility,
                         pending:KeyguardCardInspectionRequest?, authority:KeyguardInspectionAuthority) {
                         if ((duringRead || afterRead) && request.id == candidate.get()?.id)
-                            records.add("A_ORDERED_DECISION id=${request.id} decision=$decision pending=$pending currentScene=${(gateField.get(actual) as KeyguardFirstAuthorizedOrb).sceneSerial()}")
+                            records.add("A_ORDERED_DECISION id=${request.id} decision=$decision pending=${pending?.id ?: 0}")
                     }
                     override fun beforeOptionalInspectionReport(request:KeyguardCardInspectionRequest) {
                         if (checkReport && request.id == candidate.get()?.id) {
@@ -332,15 +354,42 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 val c=bId.get()
                 assertTrue("NOT REACHED: B and C must be distinct actual offers", c>b && b>a.id)
                 assertEquals("NOT REACHED: exact DIRECT owner changed", original, currentRoute(a))
-                records.add("PRE_START a=${a.id} b=$b c=$c route=$original aFreshness=${a.windowFreshness}")
-                selectedC.set(c)
+                var expected=c
+                if (preStartD == "before") {
+                    instrumentation.runOnMainSync { offerSuccessor() }
+                    val d=bId.get()
+                    assertTrue("NOT REACHED: distinct D before selection",d>c)
+                    expected=d
+                }
+                synchronized(queueLock) {
+                    val queue=queueField.get(actual) as KeyguardCardInspectionQueue
+                    records.add("PRE_START a=${a.id} b=$b c=$c expected=$expected active=${queue.activeRequest()?.id ?: 0} pending=${queue.pendingRequest()?.id ?: 0} route=$original authority=${a.session}/${a.wakeGeneration}/${a.visibilityEpoch}")
+                }
+                selectedC.set(expected)
                 preReaderRelease.countDown()
                 assertTrue("NOT REACHED: physical reader did not start", firstPhysicalStarted.await(20,TimeUnit.SECONDS))
-                records.add("FIRST_PHYSICAL id=${firstPhysical.get()} expected=$c")
+                records.add("FIRST_PHYSICAL id=${firstPhysical.get()} expected=$expected")
                 assertFalse("NOT REACHED: reader barrier timed out", workerTimeout.get())
-                assertEquals("R42: the actual latest C must start, before any A or B physical read", c, firstPhysical.get())
-                assertTrue("NOT REACHED: selected C did not finish its own physical read", selectedCCompleted.await(20,TimeUnit.SECONDS))
-                records.add("C_OWN_READ id=$c result=${selectedCOutcome.get()} proofAndVisibleOutput=SEPARATE_CONTROLS")
+                assertEquals("R44.1: latest controlled request must start unless independently superseded", expected, firstPhysical.get())
+                if (preStartD == "after") {
+                    assertTrue("NOT REACHED: selected reader held before physical tree read",selectedReaderHeld.await(5,TimeUnit.SECONDS))
+                    instrumentation.runOnMainSync { offerSuccessor() }
+                    val d=bId.get(); selectedD.set(d)
+                    assertTrue("NOT REACHED: distinct D after selected reader start",d>expected)
+                    synchronized(queueLock) {
+                        val queue=queueField.get(actual) as KeyguardCardInspectionQueue
+                        records.add("AFTER_START d=$d active=${queue.activeRequest()?.id ?: 0} pending=${queue.pendingRequest()?.id ?: 0} at=${SystemClock.uptimeMillis()}")
+                        assertEquals("selected owner changed during its held start",expected,queue.activeRequest()?.id)
+                        assertEquals("NOT REACHED: D was independently superseded before queue observation",d,queue.pendingRequest()?.id)
+                    }
+                    selectedReaderRelease.countDown()
+                }
+                assertTrue("NOT REACHED: selected request did not finish its own physical read", selectedCCompleted.await(20,TimeUnit.SECONDS))
+                records.add("SELECTED_OWN_READ id=$expected result=${selectedCOutcome.get()} proofAndVisibleOutput=SEPARATE_CONTROLS")
+                if (preStartD == "after") {
+                    assertTrue("NOT REACHED: D never began after selected read",successorStarted.await(20,TimeUnit.SECONDS))
+                    assertTrue("NOT REACHED: D did not complete its own physical read",selectedDCompleted.await(20,TimeUnit.SECONDS))
+                }
                 return
             }
             if (duringRead) {
@@ -399,7 +448,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             records.add("PASS a=${a.id} b=${bId.get()} route=$original main=${originalMain.get()}/${originalExit.get()} bStart=${bStarted.get()} earlyReveal=${earlyReveal.get()}")
         } catch(t:Throwable) { failure=t; records.add("FAIL ${t.javaClass.simpleName}:${t.message}") }
         finally {
-            release.countDown(); reportRelease.countDown(); preReaderRelease.countDown(); openingRelease.countDown(); KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross=originalCross
+            release.countDown(); reportRelease.countDown(); preReaderRelease.countDown(); selectedReaderRelease.countDown(); openingRelease.countDown(); KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross=originalCross
             KeyguardR15AcquisitionTestHooks.beforeChildCall=originalR15Before
             KeyguardR15AcquisitionTestHooks.observer=originalR15Observer
             KeyguardR15AcquisitionTestHooks.observeIneligible=originalR15Ineligible

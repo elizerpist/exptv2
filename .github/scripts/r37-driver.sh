@@ -45,6 +45,12 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR42SignedProfileProbeTest.kt
     sha256sum "$fixture" > "$out/fixture-r42-profile.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r44_1_prestart_before || "$TEST_SCOPE" == r44_1_prestart_after ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR26DirectOrderingInstrumentationTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r44-1-prestart.sha256"
+  fi
   if [[ "$TEST_SCOPE" == r42_stale_verbose ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR26DirectOrderingInstrumentationTest.kt"
     test -f "$fixture"
@@ -87,6 +93,14 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r44_1_prestart_before)
+      class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
+      methods=(r441PreStartDOfferedBeforeSelector)
+      ;;
+    r44_1_prestart_after)
+      class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
+      methods=(r441PreStartDAfterSelectedReaderStarts)
+      ;;
     r44_1_cover)
       class=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest
       methods=(r441PrivacyCoverSwitchesWithExactRetiredChild)
