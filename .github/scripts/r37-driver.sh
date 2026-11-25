@@ -332,6 +332,16 @@ case "${1:-}" in
     if (( rc != 0 )) || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then
       printf '%s FAIL exit=%s\n' "$method" "$rc" >> "$out/results.txt"; failed=1
     else printf '%s PASS\n' "$method" >> "$out/results.txt"; fi
+    if [[ "$TEST_SCOPE" == r44_service ]]; then
+      # A native process crash bypasses the fixture's finally block. This is
+      # the disposable fixture PIN only; clear it so the following declared
+      # method can independently establish its own secure-lock precondition.
+      { adb shell locksettings clear --old 2468 || true
+        adb shell input keyevent KEYCODE_WAKEUP || true
+        adb shell wm dismiss-keyguard || true
+        adb shell locksettings get-disabled || true
+      } > "$out/$method-cleanup.txt" 2>&1
+    fi
   done
   cat "$out/results.txt"
   exit "$failed"
