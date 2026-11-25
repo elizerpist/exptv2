@@ -29,6 +29,49 @@ class KeyguardR41DiagnosticsInstrumentationTest {
     @Test fun allAttemptsSurviveVerboseLightPressure() = exercise("LIGHT")
     @Test fun allAttemptsSurviveVerboseFullPressure() = exercise("FULL")
 
+    @Test fun r42LateCriticalWakeSurvivesRawLightPressure() = r42LateCriticalWakeSurvivesRawPressure("LIGHT")
+    @Test fun r42LateCriticalWakeSurvivesRawFullPressure() = r42LateCriticalWakeSurvivesRawPressure("FULL")
+
+    /** The supplied R41 phone capture lost its complete last attempt after
+     * raw overflow. This fixture keeps the original raw loss visible while
+     * requiring independent compact wake/grant/owner evidence for later
+     * attempts. These timestamps are synthetic and do not measure speed. */
+    private fun r42LateCriticalWakeSurvivesRawPressure(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r42-raw-pressure", "profile", mode)
+        val capture = checkNotNull(KeyguardCardDiagnostics.activeCaptureId())
+        val receipts = mutableListOf<Long>()
+        for (attempt in 1L..6L) {
+            val base = attempt * 1_000_000_000L
+            val receipt = KeyguardCardDiagnostics.r41Provisional(capture, 1, 942, attempt * 1000, base)
+            receipts += receipt
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 942, attempt, "wake", attempt * 1000))
+            KeyguardCardDiagnostics.r41Bind(owner, receipt)
+            val request = attempt * 100 + 1
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.ELIGIBLE, owner, atNs = base + 1)
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.READ_START, owner, request, atNs = base + 2)
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.READ_END, owner, request, atNs = base + 3)
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.GRANT, owner, request, 100 + attempt, 200 + attempt, atNs = base + 4)
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.WINNER, owner, request, 100 + attempt, 200 + attempt, atNs = base + 5)
+            if (attempt == 1L) repeat(2_200) { index ->
+                KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.OFFER, owner, 10_000L + index, atNs = base + 100 + index)
+            }
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        retain("$mode-r42-raw-pressure-frozen.txt", report)
+        assertTrue("$mode overflow must be reported", Regex("rawOverflow=[1-9][0-9]*").containsMatchIn(report))
+        assertTrue("$mode export must fit the native byte limit", report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        val rows = report.lineSequence().filter { it.startsWith(" R41_CORE ") }.toList()
+        assertEquals("$mode must retain the six independently owned attempts", 6, rows.size)
+        for (attempt in 1L..6L) {
+            val row = rows.single { it.contains("attempt=$attempt ") }
+            assertTrue("$mode attempt $attempt has no protected receipt: $receipts", receipts[(attempt - 1).toInt()] > 0)
+            assertTrue("$mode lost wake identity: $row", row.contains("wakeNs=${attempt * 1_000_000_000L}"))
+            assertTrue("$mode lost the exact terminal owner: $row", row.contains("outcome=SUCCESS") &&
+                row.contains("owner=${100 + attempt}/${200 + attempt}/${attempt * 100 + 1}"))
+            assertTrue("raw loss cannot be reported as complete: $row", row.contains("coverage=INCOMPLETE"))
+        }
+    }
+
     @Test fun twentyFiveRequestWakeSurvivesLightExport() = exportTwentyFiveRequests("LIGHT")
     @Test fun twentyFiveRequestWakeSurvivesFullExport() = exportTwentyFiveRequests("FULL")
 
