@@ -492,9 +492,18 @@ internal object KeyguardCardDiagnostics {
         val producerMaxNs = AtomicLong()
         val legacyProducerTotalNs = AtomicLong()
         val skippedRecords = AtomicLong()
+        // Verbose offers/sampler observations cannot consume the independent
+        // capacity reserved for wake, reader and terminal-owner evidence.
         val r41 = KeyguardR41RawLedger()
+        val r42Core = KeyguardR41RawLedger(8192)
+        val r42OfferTail = KeyguardR42OfferTail()
         var r41Flushed = 0 // diagnostic consumer only
+        var r42CoreFlushed = 0 // diagnostic consumer only
+        val r42TailSeen = LongArray(KeyguardR42OfferTail.SLOTS) // diagnostic consumer only
         var r41PendingAtCut = 0L // diagnostic consumer only
+        fun cutR41() {
+            r41PendingAtCut = r41.cut() + r42Core.cut() + r42OfferTail.cut()
+        }
         val r41ReportsPending = AtomicLong()
         val r41ReportsDropped = AtomicLong()
         val r41ProducerFailures = AtomicLong()
@@ -946,6 +955,10 @@ internal object KeyguardCardDiagnostics {
         var r41Bindings: Long = 0,
         var r41RawUnmatched: Long = 0,
         var r41RawOverflow: Long = 0,
+        var r42CoreOverflow: Long = 0,
+        var r42TailContention: Long = 0,
+        var r42TailOverwritten: Long = 0,
+        var r42TailLate: Long = 0,
         var r41RawPending: Long = 0,
         var r41RawLate: Long = 0,
         var r41ReportsPending: Long = 0,
@@ -1414,7 +1427,7 @@ internal object KeyguardCardDiagnostics {
     ): Map<String, Any?> = reduction.read {
         val export = synchronized(captureLock) {
         ensureRecoveredLoadedLocked(context)
-        ingress?.let { it.r41PendingAtCut = it.r41.cut() }
+        ingress?.cutR41()
         val settings = FluviKeyguardCardSettings.read(context)
         val runtime = FluviRuntimeCoordinator.status(context)
         val id = UUID.randomUUID().toString()
@@ -1472,11 +1485,11 @@ internal object KeyguardCardDiagnostics {
             val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
             if (service != null) service.cutR22DiagnosticCapture {
                 if (ingress === token) {
-                    token.r41PendingAtCut = token.r41.cut()
+                    token.cutR41()
                     ingress = null
                 }
             } else if (ingress === token) {
-                token.r41PendingAtCut = token.r41.cut()
+                token.cutR41()
                 ingress = null
             }
         }
@@ -1516,7 +1529,7 @@ internal object KeyguardCardDiagnostics {
     }
 
     fun clearCapture(context: Context): Map<String, Any?> = reduction.read { synchronized(captureLock) {
-        ingress?.let { it.r41PendingAtCut = it.r41.cut() }
+        ingress?.cutR41()
         ingress = null
         lastIngress = null
         capture = null
@@ -1720,14 +1733,14 @@ internal object KeyguardCardDiagnostics {
                        uptimeMs: Long, atNs: Long, eventTimeMs: Long = -1L): Long {
         val token = ingress ?: return 0L
         if (captureId == null || captureId != token.id || atNs == Long.MIN_VALUE) return 0L
-        return token.r41.offer(KeyguardR41RawLedger.PROVISIONAL, 0, serviceSession, 0, 0,
+        return token.r42Core.offer(KeyguardR41RawLedger.PROVISIONAL, 0, serviceSession, 0, 0,
             atNs, Process.myTid().toLong(), source.toLong(), eventTimeMs, uptimeMs)
     }
 
     fun r41Bind(owner: KeyguardDiagnosticContext?, ordinal: Long, screen: Boolean = false) {
         val token = ingress ?: return
         if (owner == null || owner.captureId != token.id || owner.attemptId == null) return
-        token.r41.offer(if (screen) KeyguardR41RawLedger.BIND_SCREEN else KeyguardR41RawLedger.BIND_WAKE,
+        token.r42Core.offer(if (screen) KeyguardR41RawLedger.BIND_SCREEN else KeyguardR41RawLedger.BIND_WAKE,
             owner.attemptId, owner.serviceSession, owner.originWakeEpoch, 0,
             System.nanoTime(), Process.myTid().toLong(), ordinal, 0, SystemClock.uptimeMillis())
     }
@@ -1736,9 +1749,14 @@ internal object KeyguardCardDiagnostics {
                 extra1: Long = 0, extra2: Long = 0, atNs: Long = Long.MIN_VALUE, tid: Long = 0) {
         val token = ingress ?: return
         if (owner == null || owner.captureId != token.id || owner.attemptId == null) return
-        token.r41.offer(phase, owner.attemptId, owner.serviceSession, owner.originWakeEpoch, request,
-            if (atNs == Long.MIN_VALUE) System.nanoTime() else atNs, if (tid > 0) tid else Process.myTid().toLong(),
-            extra1, extra2, SystemClock.uptimeMillis())
+        val whenNs = if (atNs == Long.MIN_VALUE) System.nanoTime() else atNs
+        val thread = if (tid > 0) tid else Process.myTid().toLong()
+        val verbose = phase == KeyguardR41RawLedger.OFFER || phase == KeyguardR41RawLedger.ORDERED_SHADOW_OFFER
+        val ledger = if (verbose) token.r41 else token.r42Core
+        val offered = ledger.offer(phase, owner.attemptId, owner.serviceSession, owner.originWakeEpoch, request,
+            whenNs, thread, extra1, extra2, SystemClock.uptimeMillis())
+        if (phase == KeyguardR41RawLedger.OFFER && offered == 0L)
+            token.r42OfferTail.offer(owner.attemptId, owner.serviceSession, owner.originWakeEpoch, request, whenNs, thread)
     }
 
     /** The sampler can run before an attempt exists. Preserve its original
@@ -2519,7 +2537,7 @@ internal object KeyguardCardDiagnostics {
         active.endedElapsedMs = SystemClock.elapsedRealtime()
         active.state = "EXPIRED"
         ingress?.takeIf { it.id == active.id }?.let {
-            it.r41PendingAtCut = it.r41.cut()
+            it.cutR41()
             ingress = null
         }
         appendLocked(active, "CAPTURE_EXPIRED", "timeout")
@@ -2572,115 +2590,138 @@ internal object KeyguardCardDiagnostics {
      * unfinished producer; a freeze records that gap instead of waiting. */
     private fun flushR41Raw(active: TimingCapture, token: CaptureIngress?) {
         if (token == null || token.id != active.id) return
-        val raw = token.r41
         val isFinal = active.state != "REC"
-        val limit = raw.size()
-        while (token.r41Flushed < limit) {
-            val record = raw.read(token.r41Flushed)
-            if (record == null) {
-                if (!isFinal) break
-                active.r41RawUnmatched += 1
-                token.r41Flushed += 1
-                continue
-            }
-            if (record.phase == KeyguardR41RawLedger.PROVISIONAL) {
-                active.r41Provisional += 1
-                if (active.r41Receipts.size >= 512) {
-                    active.r41Receipts.removeFirst()
-                    active.r41ProvisionalEvicted += 1
-                }
-                active.r41Receipts.addLast(R41ProvisionalRecord(token.r41Flushed + 1L, record.session,
-                    record.extra1, record.atNs, record.tid, record.uptimeMs, record.extra2.takeIf { it > 0 }))
-                token.r41Flushed += 1
-                continue
-            }
-            if (record.phase in KeyguardR41RawLedger.SAMPLE_OFFER..KeyguardR41RawLedger.SAMPLE_REJECT) {
-                if (record.request <= 0) {
+        fun drain(raw: KeyguardR41RawLedger, core: Boolean) {
+            var cursor = if (core) token.r42CoreFlushed else token.r41Flushed
+            val limit = raw.size()
+            while (cursor < limit) {
+                val record = raw.read(cursor)
+                if (record == null) {
+                    if (!isFinal) break
                     active.r41RawUnmatched += 1
-                } else {
-                    val key = record.session to record.request
-                    var sample = active.r41Samples[key]
-                    if (sample == null) {
-                        if (active.r41Samples.size >= 64) {
-                            active.r41Samples.remove(active.r41Samples.keys.first())
-                            active.r41SamplesEvicted += 1
-                        }
-                        sample = R41SampleRecord(record.session, record.wake, record.request)
-                        active.r41Samples[key] = sample
-                    }
-                    val index = record.phase - KeyguardR41RawLedger.SAMPLE_OFFER
-                    if (sample.wake != record.wake || sample.times[index] != Long.MIN_VALUE) sample.invalid += 1
-                    else {
-                        sample.times[index] = record.atNs
-                        sample.tids[index] = record.tid
-                        sample.receipts[index] = record.extra1
-                        sample.details[index] = record.extra2
-                    }
+                    cursor += 1
+                    continue
                 }
-                token.r41Flushed += 1
-                continue
+                if (record.phase == KeyguardR41RawLedger.PROVISIONAL) {
+                    active.r41Provisional += 1
+                    if (active.r41Receipts.size >= 512) {
+                        active.r41Receipts.removeFirst()
+                        active.r41ProvisionalEvicted += 1
+                    }
+                    active.r41Receipts.addLast(R41ProvisionalRecord(cursor + 1L, record.session,
+                        record.extra1, record.atNs, record.tid, record.uptimeMs, record.extra2.takeIf { it > 0 }))
+                    cursor += 1
+                    continue
+                }
+                if (record.phase in KeyguardR41RawLedger.SAMPLE_OFFER..KeyguardR41RawLedger.SAMPLE_REJECT) {
+                    if (record.request <= 0) {
+                        active.r41RawUnmatched += 1
+                    } else {
+                        val key = record.session to record.request
+                        var sample = active.r41Samples[key]
+                        if (sample == null) {
+                            if (active.r41Samples.size >= 64) {
+                                active.r41Samples.remove(active.r41Samples.keys.first())
+                                active.r41SamplesEvicted += 1
+                            }
+                            sample = R41SampleRecord(record.session, record.wake, record.request)
+                            active.r41Samples[key] = sample
+                        }
+                        val index = record.phase - KeyguardR41RawLedger.SAMPLE_OFFER
+                        if (sample.wake != record.wake || sample.times[index] != Long.MIN_VALUE) sample.invalid += 1
+                        else {
+                            sample.times[index] = record.atNs
+                            sample.tids[index] = record.tid
+                            sample.receipts[index] = record.extra1
+                            sample.details[index] = record.extra2
+                        }
+                    }
+                    cursor += 1
+                    continue
+                }
+                val attempt = active.attempts.lastOrNull { it.id == record.attempt }
+                    ?: active.firstAttempt?.takeIf { it.id == record.attempt }
+                if (attempt == null) {
+                    val oldest = active.attempts.firstOrNull()?.id
+                    if (!isFinal && (oldest == null || record.attempt >= oldest)) break
+                    active.r41RawUnmatched += 1
+                    cursor += 1
+                    continue
+                }
+                if (attempt.serviceSession != record.session || attempt.wakeEpoch != record.wake) {
+                    active.r41RawUnmatched += 1
+                    cursor += 1
+                    continue
+                }
+                if (record.phase == KeyguardR41RawLedger.BIND_WAKE || record.phase == KeyguardR41RawLedger.BIND_SCREEN) {
+                    val ordinal = record.extra1
+                    val source = if (ordinal in 1L..Int.MAX_VALUE.toLong()) raw.read((ordinal - 1).toInt()) else null
+                    if (source == null || source.phase != KeyguardR41RawLedger.PROVISIONAL || source.session != record.session ||
+                        (record.phase == KeyguardR41RawLedger.BIND_SCREEN && source.extra1 != 1L)) {
+                        active.r41RawUnmatched += 1
+                    } else {
+                        val receipt = active.r41Receipts.firstOrNull { it.ordinal == ordinal }
+                        if (receipt == null || (receipt.attempt != null && receipt.attempt != attempt.id)) {
+                            active.r41RawUnmatched += 1
+                        } else {
+                            receipt.attempt = attempt.id
+                            val kind = if (record.phase == KeyguardR41RawLedger.BIND_SCREEN) "SCREEN" else "WAKE"
+                            receipt.binding = if (receipt.binding == "UNOBSERVED" || receipt.binding == kind) kind else "WAKE_AND_SCREEN"
+                        }
+                        attempt.r41.record(if (record.phase == KeyguardR41RawLedger.BIND_SCREEN) "SCREEN" else "WAKE", null, source.atNs,
+                            tid = source.tid, uptimeMs = source.uptimeMs, source = source.extra1,
+                            eventTimeMs = source.extra2.takeIf { it > 0 })
+                        active.r41Bindings += 1
+                    }
+                } else {
+                    val phase = when (record.phase) {
+                        KeyguardR41RawLedger.OFFER -> "OFFER"
+                        KeyguardR41RawLedger.WORKER -> "WORKER_START"
+                        KeyguardR41RawLedger.READ_START -> "READ_START"
+                        KeyguardR41RawLedger.READ_END -> "READ_END"
+                        KeyguardR41RawLedger.DISPATCH -> "DISPATCH"
+                        KeyguardR41RawLedger.MAIN -> "MAIN"
+                        KeyguardR41RawLedger.GRANT -> "GRANT"
+                        KeyguardR41RawLedger.WINNER -> "WINNER"
+                        KeyguardR41RawLedger.CANCEL -> "CANCEL"
+                        KeyguardR41RawLedger.ELIGIBLE -> "ELIGIBLE"
+                        KeyguardR41RawLedger.DENIED -> "DENIED"
+                        KeyguardR41RawLedger.ORDERED_BYPASS -> "ORDERED_BYPASS"
+                        KeyguardR41RawLedger.ORDERED_SHADOW_OFFER -> "ORDERED_SHADOW_OFFER"
+                        KeyguardR41RawLedger.SYSTEM_ELIGIBLE -> "SYSTEM_ELIGIBLE"
+                        KeyguardR41RawLedger.FALLBACK_CANDIDATE -> "FALLBACK_CANDIDATE"
+                        KeyguardR41RawLedger.FALLBACK_POST_RECEIPT -> "FALLBACK_POST_RECEIPT"
+                        else -> null
+                    }
+                    if (phase == null) active.r41RawUnmatched += 1 else attempt.r41.record(
+                        phase, record.request.takeIf { it > 0 }, record.atNs,
+                        record.extra1.takeIf { it > 0 }, record.extra2.takeIf { it > 0 },
+                        tid = record.tid,
+                    )
+                }
+                cursor += 1
             }
+            if (core) token.r42CoreFlushed = cursor else token.r41Flushed = cursor
+        }
+        // Detail first preserves the oldest offered request; the independent
+        // core then restores exact wake/reader/grant ownership under pressure.
+        drain(token.r41, false)
+        drain(token.r42Core, true)
+        for (slot in 0 until KeyguardR42OfferTail.SLOTS) {
+            val record = token.r42OfferTail.read(slot) ?: continue
+            if (token.r42TailSeen[slot] == record.version) continue
             val attempt = active.attempts.lastOrNull { it.id == record.attempt }
                 ?: active.firstAttempt?.takeIf { it.id == record.attempt }
             if (attempt == null) {
-                val oldest = active.attempts.firstOrNull()?.id
-                if (!isFinal && (oldest == null || record.attempt >= oldest)) break
-                active.r41RawUnmatched += 1
-                token.r41Flushed += 1
+                if (isFinal) { active.r41RawUnmatched += 1; token.r42TailSeen[slot] = record.version }
                 continue
             }
             if (attempt.serviceSession != record.session || attempt.wakeEpoch != record.wake) {
                 active.r41RawUnmatched += 1
-                token.r41Flushed += 1
-                continue
-            }
-            if (record.phase == KeyguardR41RawLedger.BIND_WAKE || record.phase == KeyguardR41RawLedger.BIND_SCREEN) {
-                val ordinal = record.extra1
-                val source = if (ordinal in 1L..Int.MAX_VALUE.toLong()) raw.read((ordinal - 1).toInt()) else null
-                if (source == null || source.phase != KeyguardR41RawLedger.PROVISIONAL || source.session != record.session ||
-                    (record.phase == KeyguardR41RawLedger.BIND_SCREEN && source.extra1 != 1L)) {
-                    active.r41RawUnmatched += 1
-                } else {
-                    val receipt = active.r41Receipts.firstOrNull { it.ordinal == ordinal }
-                    if (receipt == null || (receipt.attempt != null && receipt.attempt != attempt.id)) {
-                        active.r41RawUnmatched += 1
-                    } else {
-                        receipt.attempt = attempt.id
-                        val kind = if (record.phase == KeyguardR41RawLedger.BIND_SCREEN) "SCREEN" else "WAKE"
-                        receipt.binding = if (receipt.binding == "UNOBSERVED" || receipt.binding == kind) kind else "WAKE_AND_SCREEN"
-                    }
-                    attempt.r41.record(if (record.phase == KeyguardR41RawLedger.BIND_SCREEN) "SCREEN" else "WAKE", null, source.atNs,
-                        tid = source.tid, uptimeMs = source.uptimeMs, source = source.extra1,
-                        eventTimeMs = source.extra2.takeIf { it > 0 })
-                    active.r41Bindings += 1
-                }
             } else {
-                val phase = when (record.phase) {
-                    KeyguardR41RawLedger.OFFER -> "OFFER"
-                    KeyguardR41RawLedger.WORKER -> "WORKER_START"
-                    KeyguardR41RawLedger.READ_START -> "READ_START"
-                    KeyguardR41RawLedger.READ_END -> "READ_END"
-                    KeyguardR41RawLedger.DISPATCH -> "DISPATCH"
-                    KeyguardR41RawLedger.MAIN -> "MAIN"
-                    KeyguardR41RawLedger.GRANT -> "GRANT"
-                    KeyguardR41RawLedger.WINNER -> "WINNER"
-                    KeyguardR41RawLedger.CANCEL -> "CANCEL"
-                    KeyguardR41RawLedger.ELIGIBLE -> "ELIGIBLE"
-                    KeyguardR41RawLedger.DENIED -> "DENIED"
-                    KeyguardR41RawLedger.ORDERED_BYPASS -> "ORDERED_BYPASS"
-                    KeyguardR41RawLedger.ORDERED_SHADOW_OFFER -> "ORDERED_SHADOW_OFFER"
-                    KeyguardR41RawLedger.SYSTEM_ELIGIBLE -> "SYSTEM_ELIGIBLE"
-                    KeyguardR41RawLedger.FALLBACK_CANDIDATE -> "FALLBACK_CANDIDATE"
-                    KeyguardR41RawLedger.FALLBACK_POST_RECEIPT -> "FALLBACK_POST_RECEIPT"
-                    else -> null
-                }
-                if (phase == null) active.r41RawUnmatched += 1 else attempt.r41.record(
-                    phase, record.request.takeIf { it > 0 }, record.atNs,
-                    record.extra1.takeIf { it > 0 }, record.extra2.takeIf { it > 0 },
-                    tid = record.tid,
-                )
+                attempt.r41.record("OFFER", record.request, record.atNs, tid = record.tid)
             }
-            token.r41Flushed += 1
+            token.r42TailSeen[slot] = record.version
         }
     }
 
@@ -2691,14 +2732,19 @@ internal object KeyguardCardDiagnostics {
         r41AttemptsIssued = lastIngress?.takeIf { it.id == active.id }?.nextAttempt?.get()?.minus(1)
             ?: active.r41AttemptsIssued,
         r41RawOverflow = r41Token?.r41?.overflow?.get() ?: active.r41RawOverflow,
-        r41RawPending = r41Token?.let { maxOf(it.r41PendingAtCut, it.r41.inFlight()) } ?: active.r41RawPending,
-        r41RawLate = r41Token?.r41?.late?.get() ?: active.r41RawLate,
+        r42CoreOverflow = r41Token?.r42Core?.overflow?.get() ?: active.r42CoreOverflow,
+        r42TailContention = r41Token?.r42OfferTail?.contention?.get() ?: active.r42TailContention,
+        r42TailOverwritten = r41Token?.r42OfferTail?.overwritten?.get() ?: active.r42TailOverwritten,
+        r42TailLate = r41Token?.r42OfferTail?.late?.get() ?: active.r42TailLate,
+        r41RawPending = r41Token?.let { maxOf(it.r41PendingAtCut,
+            it.r41.inFlight() + it.r42Core.inFlight() + it.r42OfferTail.inFlight()) } ?: active.r41RawPending,
+        r41RawLate = r41Token?.let { it.r41.late.get() + it.r42Core.late.get() } ?: active.r41RawLate,
         r41ReportsPending = r41Token?.r41ReportsPending?.get() ?: active.r41ReportsPending,
         r41ReportsDropped = r41Token?.r41ReportsDropped?.get() ?: active.r41ReportsDropped,
         r41ProducerFailures = r41Token?.r41ProducerFailures?.get() ?: active.r41ProducerFailures,
-        r41MailboxWallNs = r41Token?.r41?.offerWallNs?.get() ?: active.r41MailboxWallNs,
-        r41MailboxMaxWallNs = r41Token?.r41?.offerMaxWallNs?.get() ?: active.r41MailboxMaxWallNs,
-        r41MailboxTimingInvalid = r41Token?.r41?.offerTimingInvalid?.get() ?: active.r41MailboxTimingInvalid,
+        r41MailboxWallNs = r41Token?.let { it.r41.offerWallNs.get() + it.r42Core.offerWallNs.get() + it.r42OfferTail.offerWallNs.get() } ?: active.r41MailboxWallNs,
+        r41MailboxMaxWallNs = r41Token?.let { maxOf(it.r41.offerMaxWallNs.get(), it.r42Core.offerMaxWallNs.get(), it.r42OfferTail.offerMaxWallNs.get()) } ?: active.r41MailboxMaxWallNs,
+        r41MailboxTimingInvalid = r41Token?.let { it.r41.offerTimingInvalid.get() + it.r42Core.offerTimingInvalid.get() + it.r42OfferTail.offerTimingInvalid.get() } ?: active.r41MailboxTimingInvalid,
         diagnosticDroppedRecords = active.diagnosticDroppedRecords + (lastIngress?.takeIf { it.id == active.id }?.skippedRecords?.get()?.toInt() ?: 0),
         hiddenNoopCount = lastIngress?.takeIf { it.id == active.id }?.hiddenNoops?.get()?.toInt() ?: active.hiddenNoopCount,
         diagnosticProducerTotalNs = lastIngress?.takeIf { it.id == active.id }?.producerTotalNs?.get() ?: active.diagnosticProducerTotalNs,
@@ -2903,6 +2949,9 @@ internal object KeyguardCardDiagnostics {
                 "rawUnmatched=${active.r41RawUnmatched} rawPending=${active.r41RawPending} rawLate=${active.r41RawLate} " +
                 "reportsPending=${active.r41ReportsPending} reportsDropped=${active.r41ReportsDropped} " +
                 "coverage=INCOMPLETE clock=System.nanoTime physical=UNOBSERVED")
+            appendLine("R42_DIAGNOSTIC_CAPACITY coreOverflow=${active.r42CoreOverflow} " +
+                "offerTailContention=${active.r42TailContention} offerTailOverwritten=${active.r42TailOverwritten} offerTailLate=${active.r42TailLate} " +
+                "detailOverflow=${active.r41RawOverflow} tailIncludedInDetailLoss=true")
             val openingRows = retainedAttempts.map { it.r22Opening }
             val warmRows = retainedAttempts.flatMap { it.r18Generations.values }
                 .mapNotNull { it.values["r27WarmStatus"]?.takeUnless { value -> value == "UNOBSERVED" } }
@@ -2942,7 +2991,7 @@ internal object KeyguardCardDiagnostics {
         // before first/last verbose selections compete for the same budget.
         val r41Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
         val r41Loss = active.r41AttemptsEvicted + active.diagnosticQueueOverflow +
-            active.diagnosticConsumerFailures + active.r41RawOverflow + active.r41RawUnmatched + active.r41RawPending +
+            active.diagnosticConsumerFailures + active.r41RawOverflow + active.r42CoreOverflow + active.r41RawUnmatched + active.r41RawPending +
             active.r41RawLate + active.r41ReportsPending + active.r41ReportsDropped + active.r41ProvisionalEvicted +
             active.r41SamplesEvicted + active.r41ProducerFailures + active.r41MailboxTimingInvalid +
             active.r41Samples.values.sumOf { it.invalid } +
