@@ -42,11 +42,11 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun warmOrderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true, warmup = true)
     @Test fun readyWorkDoesNotWaitForDiagnosticPublication() = exercise(true, true, warmup = true, checkReport = true)
     @Test fun r42PreStartSelectsActualLatestRequest() = exercise(true, preStart = true)
-    @Test fun r42StalePositiveExitsAfterOrderedRestrictions() = exercise(true, warmup = true, duringRead = true)
-    @Test fun r42StalePositiveAfterRealReadExitsBeforePositivePath() = exercise(true, afterRead = true)
+    @Test fun r42StalePositiveExitsAfterOrderedRestrictions() = exercise(true, duringRead = true, platformWarm = true)
+    @Test fun r42StalePositiveAfterRealReadExitsBeforePositivePath() = exercise(true, afterRead = true, platformWarm = true)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
-    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false, preStart:Boolean = false, duringRead:Boolean = false, afterRead:Boolean = false) {
+    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false, preStart:Boolean = false, duringRead:Boolean = false, afterRead:Boolean = false, platformWarm:Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -99,6 +99,8 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val order=AtomicLong(0); val oldProofAtExit=AtomicLong(0); val maxReaders=AtomicInteger(0); val readers=AtomicInteger(0)
         val r25Posts=AtomicInteger(0); val earlyReveal=AtomicInteger(0); val records=Collections.synchronizedList(mutableListOf<String>())
         val orderedReads=Collections.synchronizedSet(mutableSetOf<Long>())
+        val directAtStart=Collections.synchronizedSet(mutableSetOf<Long>())
+        val offeredAfterA=Collections.synchronizedSet(mutableSetOf<Long>())
         val originalCross=KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross
         var service:FluviKeyguardCardService?=null; var failure:Throwable?=null; var capture=false
         try {
@@ -113,6 +115,18 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 FluviKeyguardCardSettings.update(context,mapOf("requested" to true,"showFinancialDetails" to true,"presentationMode" to "orb","animationMode" to "orbOnly"))
                 val epoch=maxOf(SystemClock.elapsedRealtimeNanos(),(prefs[1].second["publisherEpoch"] as? Long ?: -1L)+1L)
                 check(FluviKeyguardMaterialStore.publish(context,KeyguardR12ServiceTimingInstrumentationTest().materialProfile(),epoch))
+            }
+            if (platformWarm) {
+                // Warm SystemUI before this service is connected; this does
+                // not manufacture a root, classification or positive result.
+                shell("input keyevent KEYCODE_SLEEP")
+                await("platform warm-up sleeping") { !power.isInteractive && keyguard.isKeyguardLocked }
+                shell("input keyevent KEYCODE_WAKEUP")
+                await("platform warm-up locked wake") { power.isInteractive && keyguard.isKeyguardLocked }
+                File(dir,"platform-warm-windows.txt").writeText(shell("dumpsys window windows"))
+                shell("input keyevent KEYCODE_SLEEP")
+                await("platform warm-up withdrawal") { !power.isInteractive && keyguard.isKeyguardLocked }
+                check(!FluviKeyguardCardServiceRegistry.connected)
             }
             KeyguardCardDiagnostics.startCapture(context,source,"debug","LIGHT"); capture=true
             secure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,listOf(other,component.flattenToString()).filter(String::isNotBlank).joinToString(":"))
@@ -148,19 +162,34 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             instrumentation.runOnMainSync {
                 actual.r41R25EvaluationsForTest = r25Evaluations
                 actual.inspectionProbeForTest=object:KeyguardInspectionProbeForTest {
+                    override fun queueOffered(request:KeyguardCardInspectionRequest, previous:KeyguardCardInspectionRequest?,
+                        pending:KeyguardCardInspectionRequest?, startsWorker:Boolean) {
+                        val a=candidate.get()
+                        if ((duringRead || afterRead) && a != null && pending != null && pending.id > a.id &&
+                            pending.session == a.session && pending.wakeGeneration == a.wakeGeneration) {
+                            offeredAfterA.add(pending.id)
+                            records.add("PENDING id=${pending.id} replaces=${previous?.id ?: 0}")
+                        }
+                    }
                     override fun openingOrderSelected(request:KeyguardCardInspectionRequest, milestoneOrdered:Boolean) {
                         if(milestoneOrdered) orderedReads.add(request.id)
                         records.add("ORDER_SELECTED id=${request.id} milestone=$milestoneOrdered")
                     }
                     override fun started(request:KeyguardCardInspectionRequest) {
                         if (preStart && armed.get() && firstPhysical.compareAndSet(0, request.id)) firstPhysicalStarted.countDown()
+                        if ((duringRead || afterRead) && currentRoute(request)?.backend == "R18_DIRECT")
+                            directAtStart.add(request.id)
                         val count=readers.incrementAndGet(); maxReaders.updateAndGet { maxOf(it,count) }
                         val seq=order.incrementAndGet(); records.add("READ_START id=${request.id} seq=$seq")
-                        if(request.id==bId.get() && request.id>0) { bStarted.set(seq); successorStarted.countDown() }
+                        val a=candidate.get()
+                        val actualLatest=(duringRead || afterRead) && a != null && request.id > a.id && offeredAfterA.contains(request.id)
+                        if((request.id==bId.get() && request.id>0) || actualLatest) {
+                            if (bStarted.compareAndSet(0,seq)) { records.add("ACTUAL_SUCCESSOR id=${request.id}"); successorStarted.countDown() }
+                        }
                     }
                     override fun yielded(request:KeyguardCardInspectionRequest, successor:KeyguardCardInspectionRequest, startedAt:Long, finishedAt:Long, visited:Int) { readers.decrementAndGet() }
                     override fun openingChildBefore(request:KeyguardCardInspectionRequest, windowId:Int, index:Int) {
-                        if (!duringRead || !armed.get() || candidate.get() != null) return
+                        if (!duringRead || !armed.get() || candidate.get() != null || !directAtStart.contains(request.id)) return
                         val found=currentRoute(request) ?: return
                         if (found.backend != "R18_DIRECT" || !candidate.compareAndSet(null,request)) return
                         route.set(found); r25Evaluations.set(0)
@@ -183,6 +212,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                             return
                         }
                         if (duringRead) return
+                        if (afterRead && !directAtStart.contains(request.id)) return
                         if(preStart || !armed.get() || decision!=KeyguardCardVisibility.SHOW_FULL || reason!=KeyguardSurfaceReason.MAIN_CONFIRMED ||
                             rootUnavailable || walkTruncated || abortedStale) return
                         val found=currentRoute(request) ?: return
@@ -197,6 +227,11 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                     }
                     override fun positiveApplyAttempt(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility) {
                         if ((duringRead || afterRead) && request.id == candidate.get()?.id) positivePathEntries.incrementAndGet()
+                    }
+                    override fun beforeDecision(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility,
+                        pending:KeyguardCardInspectionRequest?, authority:KeyguardInspectionAuthority) {
+                        if ((duringRead || afterRead) && request.id == candidate.get()?.id)
+                            records.add("A_ORDERED_DECISION id=${request.id} decision=$decision pending=${pending?.id ?: 0}")
                     }
                     override fun beforeOptionalInspectionReport(request:KeyguardCardInspectionRequest) {
                         if (checkReport && request.id == candidate.get()?.id) {
