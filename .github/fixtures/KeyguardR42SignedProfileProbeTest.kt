@@ -40,7 +40,8 @@ class KeyguardR42SignedProfileProbeTest {
         fun singleton(name: String): Any = checkNotNull(Class.forName(name).getDeclaredField("INSTANCE").get(null))
         fun call(owner: Any, prefix: String, vararg values: Any?): Any? {
             val method = owner.javaClass.declaredMethods.single {
-                it.name.substringBefore('$') == prefix && it.parameterCount == values.size
+                it.name.substringBefore('$') == prefix && it.parameterCount == values.size &&
+                    !it.isSynthetic && !java.lang.reflect.Modifier.isStatic(it.modifiers)
             }
             method.isAccessible = true
             return method.invoke(owner, *values)
