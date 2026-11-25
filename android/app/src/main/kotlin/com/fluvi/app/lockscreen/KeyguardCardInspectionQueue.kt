@@ -141,6 +141,9 @@ internal interface KeyguardInspectionProbeForTest {
     fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {}
     /** Test-only optional report boundary; never called while queueLock is held. */
     fun beforeOptionalInspectionReport(request: KeyguardCardInspectionRequest) {}
+    /** Fixture-only R41 ownership observation; never grants presentation. */
+    fun r41H2Boundary(request: KeyguardCardInspectionRequest, phase: String,
+        successor: KeyguardCardInspectionRequest? = null) {}
 }
 
 internal data class KeyguardR22VisualIdentityForTest(

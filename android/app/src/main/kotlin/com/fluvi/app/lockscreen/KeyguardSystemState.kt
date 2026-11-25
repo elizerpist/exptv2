@@ -127,6 +127,8 @@ internal class KeyguardSystemStateSampler(
         pending = null
         revocation++
     }
+    /** Main-only fixture veto; never changes, cancels or reuses a system read. */
+    fun hasOutstandingForR41Fixture(): Boolean = active != null || pending != null || delivering
     fun dispose() { disposed = true; clearPending() }
 
     fun renewPending(renew: (KeyguardSystemGateRequest) -> KeyguardSystemGateRequest) {

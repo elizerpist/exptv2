@@ -2603,6 +2603,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         // Exclusion is mandatory and stays ordered before the successor. The
         // optional description of the superseded ticket may follow dispatch.
         queueOffer.superseded?.let { old -> r25RequestExclusionCheck(old.request.session) }
+        if (KeyguardR41H2FixtureHooks.ENABLED && KeyguardR41H2FixtureHooks.enableIntervention)
+            r41FixtureClaimOnIngress(request, ingress, frameworkEvent, externalScene, queueOffer)
         val recovery = r14Recovery
         val recoveryToReport = if (recovery?.used == true && queueOffer.previousPending != null && queueOffer.pendingAfter != null) {
             val next = recovery.copy(replacements = recovery.replacements + 1)
@@ -2740,6 +2742,101 @@ class FluviKeyguardCardService : AccessibilityService() {
         val handoff: InspectionHandoff,
         val decision: ReadAheadDecision,
     )
+
+    // A single debug-fixture receipt. Profile/release compile the selector to
+    // false. It holds no node, frame, or new presentation authority.
+    private enum class R41FixtureClaimState { READY, FIFO, CLAIMED, RELEASED, CANCELLED }
+    private class R41FixtureClaim(
+        val read: CompletedInspection,
+        val handoff: InspectionHandoff,
+        val original: R32DirectSnapshot,
+        val readScene: Long,
+        val receiptUptimeMs: Long,
+        var state: R41FixtureClaimState = R41FixtureClaimState.READY,
+        var originalClosed: Boolean = false,
+    )
+    private var r41FixtureClaim: R41FixtureClaim? = null // queueLock
+
+    private fun r41FixturePublish(read: CompletedInspection, handoff: InspectionHandoff,
+                                  decision: ReadAheadDecision): R41FixtureClaim? {
+        if (!KeyguardR41H2FixtureHooks.ENABLED || !KeyguardR41H2FixtureHooks.enableIntervention ||
+            Build.VERSION.SDK_INT != 35 || !read.r38MilestoneOrdered || decision.pendingId != null ||
+            read.result.decision != KeyguardCardVisibility.SHOW_FULL ||
+            read.result.surfaceReason != KeyguardSurfaceReason.MAIN_CONFIRMED ||
+            read.result.rootUnavailable || read.result.walkTruncated || read.result.abortedStale ||
+            read.result.windowTiming.ownAttributionAmbiguous || read.result.r40Read != null) return null
+        val scene = read.result.r19ReadSceneSerial ?: return null
+        val freshness = read.result.freshnessRevision ?: return null
+        val signals = read.result.signals
+        if (!signals.systemStateAvailable || !signals.userUnlocked || !signals.primaryDisplay ||
+            !signals.interactive || !signals.displayOn || signals.displayOff || !signals.keyguardLocked) return null
+        return synchronized(queueLock) {
+            if (r41FixtureClaim != null || inspectionQueue.pendingRequest() != null ||
+                !authorityIsCurrent(read.request)) return@synchronized null
+            val original = r34EmptyDirectLocked(read.request) ?: return@synchronized null
+            if (scene != firstAuthorizedOrb.sceneSerial() || freshness != original.route.freshnessRevision ||
+                !inspectionFreshness.isEstablished(inspectionAuthority, freshness) ||
+                !firstAuthorizedOrb.isUnclaimedReadCurrent(read.request.id, scene)) return@synchronized null
+            R41FixtureClaim(read, handoff, original, scene, SystemClock.uptimeMillis()).also {
+                r41FixtureClaim = it
+            }
+        }
+    }
+
+    /** Main only. The caller has already invalidated the scene, offered the
+     * genuine ingress and performed the ordinary seal/restriction handling. */
+    private fun r41FixtureClaimOnIngress(request: KeyguardCardInspectionRequest, ingress: KeyguardR14Ingress?,
+                                         frameworkEvent: Boolean, scene: Long?, offer: R25QueueOffer) {
+        if (!KeyguardR41H2FixtureHooks.ENABLED || !KeyguardR41H2FixtureHooks.enableIntervention ||
+            !frameworkEvent || ingress?.externalSystemUi != true || ingress.origin != KeyguardR14Origin.SYSTEM_UI ||
+            ingress.windowId < 0 || ingress.displayId != Display.DEFAULT_DISPLAY || scene == null ||
+            offer.start != null) return
+        check(Looper.myLooper() == Looper.getMainLooper())
+        // A pending system/exclusion gate or an already restrictive decision
+        // wins. This fixture does not classify the new event as safe.
+        if (!serviceJob.isActive || appliedDecision != KeyguardCardVisibility.HIDDEN_UNKNOWN ||
+            terminalHideState != null || r25ExclusionPosted.get() || systemSampler.hasOutstandingForR41Fixture()) return
+        val claim = synchronized(queueLock) {
+            val existing = r41FixtureClaim ?: return@synchronized null
+            val earlier = existing.read.request
+            val pending = inspectionQueue.pendingRequest()
+            if (existing.state != R41FixtureClaimState.READY || ingress.callbackAt <= existing.receiptUptimeMs ||
+                ingress.eventAt == null || ingress.eventAt <= 0 || ingress.eventAt > ingress.callbackAt ||
+                inspectionQueue.activeRequest() != earlier || pending?.id != request.id ||
+                pending.r14Ingress != ingress || pending.r34SceneSerial != scene ||
+                offer.pendingAfter?.id != request.id || !inspectionAuthority.matches(earlier) ||
+                !inspectionAuthority.matches(pending) || scene == existing.readScene ||
+                firstAuthorizedOrb.sceneSerial() != scene ||
+                !inspectionFreshness.isEstablished(inspectionAuthority, existing.original.route.freshnessRevision) ||
+                !r34SameEmptyOwnerLocked(earlier, existing.original)) return@synchronized null
+            existing.state = R41FixtureClaimState.CLAIMED
+            existing
+        } ?: return
+        val earlier = claim.read.request
+        runCatching { inspectionProbeForTest?.r41H2Boundary(earlier, "CLAIMED", request) }
+        try {
+            // A cannot authorize a positive view after the scene has changed.
+            // The ordinary restriction path is executed on Main without a lock.
+            applyCompletedInspection(claim.read, claim.handoff,
+                disposition = CompletedDisposition.R32_RESTRICTION_ONLY)
+        } finally {
+            val next = synchronized(queueLock) {
+                if (claim.state != R41FixtureClaimState.CLAIMED) return@synchronized null
+                claim.state = R41FixtureClaimState.RELEASED
+                val actual = if (serviceJob.isActive) inspectionQueue.complete(earlier) else {
+                    inspectionQueue.abandonSessionIfActive(earlier)
+                    null
+                }
+                if (claim.originalClosed && r41FixtureClaim === claim) r41FixtureClaim = null
+                actual
+            }
+            runCatching { inspectionProbeForTest?.r41H2Boundary(earlier, "RECONCILED", next) }
+            if (next != null && serviceJob.isActive) {
+                scheduleR19Join()
+                inspectionScope.launch { processInspectionQueue(next) }
+            }
+        }
+    }
 
     private fun finishR41Reports(reports: java.util.ArrayDeque<R41DeferredInspectionReport>?, discard: Boolean) {
         if (reports == null) return
@@ -3457,6 +3554,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         var request: KeyguardCardInspectionRequest? = first
         var promotedOwner: KeyguardCardInspectionRequest? = null
         var r41DeferredReports: java.util.ArrayDeque<R41DeferredInspectionReport>? = null
+        var r41FixtureActive: R41FixtureClaim? = null
         try {
         while (request != null) {
             val active = request
@@ -3567,6 +3665,11 @@ class FluviKeyguardCardService : AccessibilityService() {
                     KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.ORDERED_BYPASS,
                         active.diagnosticContext, active.id)
                 }
+                val fixtureReceipt = if (KeyguardR41H2FixtureHooks.ENABLED && KeyguardR41H2FixtureHooks.enableIntervention)
+                    r41FixturePublish(read, handoff, decision) else null
+                r41FixtureActive = fixtureReceipt
+                if (fixtureReceipt != null)
+                    runCatching { inspectionProbeForTest?.r41H2Boundary(active, "RECEIPT", null) }
                 val r41CaptureId = active.diagnosticContext?.captureId
                 val r41CaptureEnabled = r41CaptureId != null && r41CaptureId == KeyguardCardDiagnostics.activeCaptureId()
                 val scene = read.result.r19ReadSceneSerial
@@ -3581,6 +3684,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 }
                 val r41DispatchTid = if (r41CaptureEnabled) android.os.Process.myTid().toLong() else 0L
                 val r41DispatchNs = if (r41CaptureEnabled) System.nanoTime() else Long.MIN_VALUE
+                var fixtureAlreadyClaimed = false
                 val lateSuperseded = try { withContext(Dispatchers.Main.immediate) {
                     if (r41ShadowReceipt?.request == active.id) r41ShadowReceipt = null
                     if (r41DispatchNs != Long.MIN_VALUE) {
@@ -3592,13 +3696,42 @@ class FluviKeyguardCardService : AccessibilityService() {
                             active.id, atNs = r41MainNs, tid = r41MainTid)
                     }
                     r32AwaitApplyGateForTest(active)
+                    val ownsOriginal = if (fixtureReceipt == null) true else synchronized(queueLock) {
+                        if (fixtureReceipt.state == R41FixtureClaimState.READY) {
+                            fixtureReceipt.state = R41FixtureClaimState.FIFO
+                            true
+                        } else false
+                    }
+                    if (!ownsOriginal) {
+                        fixtureAlreadyClaimed = true
+                        return@withContext null
+                    }
                     val latest = if (read.r38MilestoneOrdered) null else
                         synchronized(queueLock) { r34SupersedeCompletedLocked(read) }
                     if (latest == null) applyCompletedInspection(read, handoff)
                     latest
                 } } finally {
                     if (r41ShadowReceipt?.request == active.id) r41ShadowReceipt = null
+                    if (fixtureReceipt != null) synchronized(queueLock) {
+                        fixtureReceipt.originalClosed = true
+                        if (fixtureReceipt.state == R41FixtureClaimState.READY)
+                            fixtureReceipt.state = R41FixtureClaimState.CANCELLED
+                        if (fixtureReceipt.state != R41FixtureClaimState.CLAIMED &&
+                            r41FixtureClaim === fixtureReceipt) r41FixtureClaim = null
+                    }
                 }
+                if (fixtureAlreadyClaimed) {
+                    // The Main ingress already reconciled A and released the
+                    // actual queue-selected successor. This old FIFO callback
+                    // is a no-op and cannot complete or relabel that owner.
+                    runCatching { inspectionProbeForTest?.r41H2Boundary(active, "FIFO_NOOP", null) }
+                    if (promotedOwner == active) promotedOwner = null
+                    request = null
+                    r41FixtureActive = null
+                    traceCompletedInspection(read, handoff, decision)
+                    continue
+                }
+                r41FixtureActive = null
                 if (lateSuperseded != null) {
                     traceCompletedInspection(read, null)
                     traceR34Superseded(read, lateSuperseded)
@@ -3678,7 +3811,13 @@ class FluviKeyguardCardService : AccessibilityService() {
             scheduleR19Join()
         }
         } finally {
-            if (!serviceJob.isActive) synchronized(queueLock) {
+            val fixtureClaimOwnsRecovery = synchronized(queueLock) {
+                r41FixtureActive?.state == R41FixtureClaimState.CLAIMED
+            }
+            if (fixtureClaimOwnsRecovery) {
+                // Main must complete restrictive reconciliation before the
+                // successor can own the reader, even if this waiter cancels.
+            } else if (!serviceJob.isActive) synchronized(queueLock) {
                 val owner = promotedOwner
                 if (owner != null && !inspectionQueue.abandonSessionIfActive(owner))
                     inspectionQueue.abandonOpeningTransferIfActive(owner)
