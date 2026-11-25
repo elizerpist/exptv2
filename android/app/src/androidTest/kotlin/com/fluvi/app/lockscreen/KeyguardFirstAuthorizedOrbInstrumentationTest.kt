@@ -52,6 +52,19 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
     @Test fun r41ActualWarmFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, true, true)
     @Test fun r41TwentyUnheldWakeAttempts() = runNaturalWakeBatch()
+    @Test fun r41TwentyUnheldWakeAttemptsWithH2Fixture() {
+        // This selector exists only in the debug fixture. It never enables
+        // the experimental path in the Human/profile or release variants.
+        check(KeyguardR41H2FixtureHooks.ENABLED)
+        KeyguardR41H2FixtureHooks.observeOnly = false
+        KeyguardR41H2FixtureHooks.enableIntervention = true
+        try {
+            runNaturalWakeBatch()
+        } finally {
+            KeyguardR41H2FixtureHooks.enableIntervention = false
+            KeyguardR41H2FixtureHooks.observeOnly = false
+        }
+    }
     @Test fun externalIngressWhileFirstPaintIsHeldCannotUseOldProof() = runService(true)
     @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
     @Test fun r21ExclusionRetiresSubmittedOrbWithMainAckHeld() = runService(false, true)
