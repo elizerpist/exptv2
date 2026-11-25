@@ -10,9 +10,16 @@ case "${1:-}" in
   test "$(git rev-parse HEAD)" = "$APP_SHA"
   test -z "$(git status --porcelain --untracked-files=no)"
   if [[ "$BASELINE" = true ]]; then
+    test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
+    if [[ "$TEST_SCOPE" == r44_service ]]; then
+      fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt"
+      test -f "$fixture"
+      cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt
+      git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt > "$out/fixture.patch"
+      sha256sum "$fixture" > "$out/fixture.sha256"
+    else
     fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt"
     test -f "$fixture"
-    test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
     if [[ "$TEST_SCOPE" != isolated_ready_witness ]]; then
       cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
     fi
@@ -38,6 +45,7 @@ case "${1:-}" in
     esac
     git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR41DiagnosticsInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt > "$out/fixture.patch"
     sha256sum "$fixture" > "$out/fixture.sha256"
+    fi
   fi
   if [[ "$TEST_SCOPE" == r42_profile_motion_fixture ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR42SignedProfileProbeTest.kt"
