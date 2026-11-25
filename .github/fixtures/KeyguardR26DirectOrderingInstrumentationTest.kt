@@ -363,7 +363,17 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 }
                 synchronized(queueLock) {
                     val queue=queueField.get(actual) as KeyguardCardInspectionQueue
-                    records.add("PRE_START a=${a.id} b=$b c=$c expected=$expected active=${queue.activeRequest()?.id ?: 0} pending=${queue.pendingRequest()?.id ?: 0} route=$original authority=${a.session}/${a.wakeGeneration}/${a.visibilityEpoch}")
+                    val pending=queue.pendingRequest()
+                    val ingress=pending?.r14Ingress
+                    val scene=(gateField.get(actual) as KeyguardFirstAuthorizedOrb).sceneSerial()
+                    val authority=actual.inspectionStateForTest().authority
+                    val authorityMatches=pending?.let { authority.matches(it) } == true
+                    val provenance=pending != null && ingress != null && pending.id == expected && pending.id > a.id &&
+                        pending.r42SceneSerial == scene && authorityMatches && ingress.displayId == Display.DEFAULT_DISPLAY &&
+                        (ingress.origin == KeyguardR14Origin.SYSTEM_UI || ingress.origin == KeyguardR14Origin.AMBIGUOUS) &&
+                        ingress.callbackAt <= pending.queuedAtUptimeMs && (ingress.eventAt == null || ingress.eventAt <= ingress.callbackAt)
+                    records.add("PRE_START a=${a.id} b=$b c=$c expected=$expected active=${queue.activeRequest()?.id ?: 0} pending=${pending?.id ?: 0} route=$original authority=${a.session}/${a.wakeGeneration}/${a.visibilityEpoch} pendingAuthority=${pending?.session}/${pending?.wakeGeneration}/${pending?.visibilityEpoch} authorityMatches=$authorityMatches scene=$scene pendingScene=${pending?.r42SceneSerial} ingressOrigin=${ingress?.origin} display=${ingress?.displayId} callbackAt=${ingress?.callbackAt} eventAt=${ingress?.eventAt} queuedAt=${pending?.queuedAtUptimeMs} provenance=$provenance")
+                    if (preStartD.isNotEmpty()) assertTrue("NOT REACHED: controlled pending request lacks current eligible provenance",provenance)
                 }
                 selectedC.set(expected)
                 preReaderRelease.countDown()
