@@ -425,8 +425,10 @@ internal class KeyguardCardWindow(
     /** Creates/configures the one retained root while detached. It has no
      * WindowManager presence and therefore grants neither visibility nor touch
      * authority on an unlocked device. */
-    fun prepareRetainedView(settings: KeyguardCardSettings, profile: KeyguardMaterialProfile?) {
+    fun prepareRetainedView(requestedSettings: KeyguardCardSettings, requestedProfile: KeyguardMaterialProfile?) {
         checkMainThread()
+        val settings = KeyguardR44Trial.settings(requestedSettings)
+        val profile = KeyguardR44Trial.profile(requestedProfile)
         materialSettings = settings
         materialProfile = profile
         val current = root ?: createRoot().also { root = it }
@@ -599,6 +601,10 @@ internal class KeyguardCardWindow(
     fun showOrUpdate(presentation: FluviFinancialCardPresentation, settings: KeyguardCardSettings,
                      directHostGeneration: Long? = null): Result {
         checkMainThread()
+        // A stale financial callback or a retained pre-trial material cannot
+        // become a synthetic trial frame, even after a valid admission.
+        if (KeyguardR44Trial.active && (presentation.full || materialProfile !== KeyguardR44Trial.profile(null)))
+            return Result.FAILED
         // A synchronous callback is not a new authorization. The outer
         // restriction retains authority until its permitted content is bound.
         if (windowRestriction != null) return Result.PENDING
@@ -1007,8 +1013,10 @@ internal class KeyguardCardWindow(
         appliedPresentationConfiguration = null
     }
 
-    fun updateMaterial(profile: KeyguardMaterialProfile?, settings: KeyguardCardSettings) {
+    fun updateMaterial(requestedProfile: KeyguardMaterialProfile?, requestedSettings: KeyguardCardSettings) {
         checkMainThread()
+        val profile = KeyguardR44Trial.profile(requestedProfile)
+        val settings = KeyguardR44Trial.settings(requestedSettings)
         windowRestriction?.let { it.pendingMaterial = profile to settings; return }
         materialProfile = profile
         materialSettings = settings

@@ -205,6 +205,41 @@ class FluviKeyguardCardService : AccessibilityService() {
         refreshR18RouteOnMain()
         if (hadR18) requestSystemCheck("r18RouteChanged", evaluate = true)
     }
+
+    /** Explicit unlocked owner action. Dispose every previously prepared
+     * surface before switching material domains and invalidate old reads. */
+    internal fun setR44SyntheticTrial(enabled: Boolean): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (Build.VERSION.SDK_INT != 37 || !KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext)) return false
+        val km = getSystemService(android.app.KeyguardManager::class.java) ?: return false
+        if (km.isKeyguardLocked || !::overlay.isInitialized || !FluviKeyguardCardServiceRegistry.connected) return false
+        val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)
+        if (enabled && (!settings.requested || settings.presentationMode != KeyguardCardPresentationMode.ORB)) return false
+        if (enabled == KeyguardR44Trial.active) return true
+        val resourceVerified = if (enabled) runCatching {
+            packageManager.getResourcesForApplication("com.android.systemui")
+                .getIdentifier("device_entry_icon_view", "id", "com.android.systemui") != 0
+        }.getOrDefault(false) else false
+        hideImmediately("r44TrialChange")
+        if (overlay.isAttached) return false
+        visibilityEpoch.incrementAndGet()
+        interactionEpoch.incrementAndGet()
+        synchronized(queueLock) { inspectionQueue.clearPending() }
+        publishInspectionAuthority()
+        stopFinancialObservation()
+        invalidateFullContent()
+        overlay.clearPrivateOrbPoster()
+        overlay.dispose()
+        KeyguardR44Trial.set(enabled, resourceVerified)
+        return runCatching {
+            overlay.prepareRetainedView(settings, lastMaterialProfile)
+            true
+        }.getOrElse {
+            KeyguardR44Trial.set(false, false)
+            runCatching { overlay.dispose() }
+            false
+        }
+    }
     private var nextSystemGateId = 0L
     private val systemGateExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
         Thread(task, "Fluvi-system-gate")
@@ -4228,13 +4263,14 @@ class FluviKeyguardCardService : AccessibilityService() {
                 r34PausedForOffer = read.r34PausedForOffer,
             ))
         }
-        val classification = KeyguardSurfaceClassifier.classifyDetailed(
-            inspectionProbeForTest?.snapshots(request, read.snapshots) ?: read.snapshots,
-            unavailableRoot = read.rootUnavailable,
-            walkTruncated = read.walkTruncated,
-            strictOwnAttribution = r18Active != null ||
-                r18ProvisionalWake?.targetAuthority?.matches(request) == true,
-        )
+        val snapshots = inspectionProbeForTest?.snapshots(request, read.snapshots) ?: read.snapshots
+        val strictOwn = r18Active != null || r18ProvisionalWake?.targetAuthority?.matches(request) == true
+        val classification = if (Build.VERSION.SDK_INT == 37 && settings.presentationMode == KeyguardCardPresentationMode.ORB) {
+            KeyguardR44SurfaceClassifier.classify(snapshots, read.rootUnavailable, read.walkTruncated,
+                strictOwn, syntheticTrial = KeyguardR44Trial.active)
+        } else KeyguardSurfaceClassifier.classifyDetailed(snapshots,
+            unavailableRoot = read.rootUnavailable, walkTruncated = read.walkTruncated,
+            strictOwnAttribution = strictOwn)
         if (read.r43Evidence != null) runCatching { recordR43Passive(request, read, classification, sceneAtRead) }
         val signals = quickSignals(settings, classification.surface)
         return InspectionOutcome.Completed(Inspection(
@@ -4273,7 +4309,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             displayOn = state.available && state.displayOn,
             keyguardLocked = state.available && state.keyguardLocked,
             surface = surface,
-            showFinancialDetails = settings.showFinancialDetails,
+            showFinancialDetails = settings.showFinancialDetails && !KeyguardR44Trial.active,
             systemStateAvailable = state.available,
             displayOff = state.displayOff,
         )
@@ -4336,6 +4372,9 @@ class FluviKeyguardCardService : AccessibilityService() {
             request = KeyguardWindowSnapshotReader.Request(
                 knownOwn = knownOwnOverlayIdentity,
                 attachGeneration = request.attachGeneration,
+                r44Enabled = Build.VERSION.SDK_INT == 37 &&
+                    lastSettings?.presentationMode == KeyguardCardPresentationMode.ORB,
+                r44DeviceEntryResourceVerified = KeyguardR44Trial.deviceEntryResourceVerified,
                 freshness = freshness?.reason ?: KeyguardWindowFreshness.FRAMEWORK_EVENT,
                 activeRootStrategyAtCall = selectRootStrategy,
                 knownOwnAtInventory = { knownOwnOverlayIdentity },
@@ -4808,7 +4847,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)
         var signals = inspection.signals.copy(requested = settings.requested,
             serviceConnected = FluviKeyguardCardServiceRegistry.connected,
-            showFinancialDetails = settings.showFinancialDetails)
+            showFinancialDetails = settings.showFinancialDetails && !KeyguardR44Trial.active)
         var decision = KeyguardCardVisibilityPolicy.decide(signals)
         if (KeyguardSystemAdmission.requiresFreshRead(overlay.isAttached, appliedDecision, decision)) {
             // The only inspection-apply Main acquisition: actual admission or
@@ -5420,6 +5459,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         scope: com.fluvi.app.runtime.FluviFinancialOrbWork.Scope?,
     ): KeyguardDiagnosticOperation? {
         if (!localPresentationAllowed()) return null
+        if (KeyguardR44Trial.active && presentation.full) return null
         if (referenceOwnership != null) referenceLocalPresentationAttempted = true
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext).also { lastSettings = it }
         val directOwner = r18Active?.takeIf { !overlay.isAttached }
@@ -6358,6 +6398,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             displayRegistered = false
         }
         if (::overlay.isInitialized) overlay.dispose()
+        KeyguardR44Trial.set(false, false)
         FluviKeyguardCardServiceRegistry.disconnected(this)
         KeyguardCardDiagnostics.record(this, "KG|SERVICE_DISCONNECTED", reason, false)
         serviceJob.cancel()

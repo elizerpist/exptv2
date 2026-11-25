@@ -363,6 +363,22 @@ class MainActivity : FlutterActivity() {
             RUNTIME_MONITORING_CHANNEL,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
+                if (call.method == "getR44SyntheticTrial" || call.method == "setR44SyntheticTrial") {
+                    scope.launch(Dispatchers.Main.immediate) {
+                        val available = android.os.Build.VERSION.SDK_INT == 37 &&
+                            KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext)
+                        val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
+                        if (call.method == "setR44SyntheticTrial") {
+                            val enabled = (call.arguments as? Map<*, *>)?.get("enabled") as? Boolean
+                            if (!available || service == null || enabled == null || !service.setR44SyntheticTrial(enabled)) {
+                                result.error("R44_TRIAL", "A próba csak feloldott telefonon, bekapcsolt ORB-szolgáltatással indítható.", null)
+                                return@launch
+                            }
+                        }
+                        result.success(mapOf("available" to available, "enabled" to com.fluvi.app.lockscreen.KeyguardR44Trial.active))
+                    }
+                    return@setMethodCallHandler
+                }
                 if (call.method == "getKeyguardOrbRenderMode" || call.method == "setKeyguardOrbRenderMode") {
                     scope.launch(Dispatchers.Main.immediate) {
                         if (!KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext)) {

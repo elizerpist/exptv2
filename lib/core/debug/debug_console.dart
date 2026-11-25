@@ -55,6 +55,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   bool _pushCopied = false;
   KeyguardTimingCaptureSnapshot? _keyguardSnapshot;
   KeyguardOrbRenderModeStatus? _keyguardRenderMode;
+  bool _r44TrialAvailable = false;
+  bool _r44TrialEnabled = false;
   bool _loadingKeyguard = false;
   bool _copyingKeyguard = false;
   bool _keyguardCopied = false;
@@ -282,6 +284,33 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
       if (mounted) setState(() => _keyguardSnapshot = snapshot);
       final mode = await bridge.getRenderMode();
       if (mounted) setState(() => _keyguardRenderMode = mode);
+      try {
+        final trial = await bridge.r44SyntheticTrial();
+        if (mounted)
+          setState(() {
+            _r44TrialAvailable = trial['available'] == true;
+            _r44TrialEnabled = trial['enabled'] == true;
+          });
+      } on Object catch (_) {
+        if (mounted) setState(() => _r44TrialAvailable = false);
+      }
+    } on Object catch (error) {
+      if (mounted) setState(() => _keyguardError = '$error');
+    } finally {
+      if (mounted) setState(() => _loadingKeyguard = false);
+    }
+  }
+
+  Future<void> _setR44Trial(bool enabled) async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _loadingKeyguard) return;
+    setState(() {
+      _loadingKeyguard = true;
+      _keyguardError = null;
+    });
+    try {
+      final trial = await bridge.r44SyntheticTrial(enabled: enabled);
+      if (mounted) setState(() => _r44TrialEnabled = trial['enabled'] == true);
     } on Object catch (error) {
       if (mounted) setState(() => _keyguardError = '$error');
     } finally {
@@ -947,7 +976,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
                   child: Text(
-                    'Android 17 próbához válaszd a külön gombot, zárd le és ébreszd fel a telefont. Tartsd kb. 6 másodpercig az órát, majd a PIN-képernyőt kód beírása nélkül, ismét az órát, végül a teljesen lehúzott panelt. Oldd fel, állítsd le a rögzítést és másold a riportot. A minták időzített jelölések, nem kijelzőazonosítások.',
+                    'Android 17: kapcsold be a demópróbát, indíts rögzítést, zárd le és ébreszd fel egyszer a telefont. Figyeld meg az orbot, majd oldd fel és másold a riportot. A PIN és a panel külön próbálható. A demópróba nem használ valós adatot.',
                     key: const ValueKey('debug-console-keyguard-help'),
                     style: const TextStyle(
                       color: Color(0xFFBAC2DE),
@@ -956,6 +985,16 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                     ),
                   ),
                 ),
+                if (_r44TrialAvailable)
+                  SwitchListTile(
+                    key: const ValueKey('debug-console-r44-synthetic'),
+                    title: const Text('Android 17 demópróba · csak mintaadat'),
+                    subtitle: const Text(
+                      'Újraindításkor kikapcsol; a szokásos adatvédelmi ellenőrzés érvényben marad.',
+                    ),
+                    value: _r44TrialEnabled,
+                    onChanged: _loadingKeyguard ? null : _setR44Trial,
+                  ),
                 if (_keyguardRenderMode?.available == true)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),

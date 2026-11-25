@@ -1,6 +1,7 @@
 package com.fluvi.app.lockscreen
 
 import android.accessibilityservice.AccessibilityService
+import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
@@ -81,6 +82,8 @@ class KeyguardR22ReaderHandoffTest {
         @Implementation fun getClassName(): CharSequence = "android.view.View"
         @Implementation fun isVisibleToUser(): Boolean = true
         @Implementation fun getViewIdResourceName(): String? = checkNotNull(Platform.nodes[real]).id
+        @Implementation fun getExtras(): Bundle = Bundle()
+        @Implementation fun getAvailableExtraData(): List<String> = emptyList()
         @Implementation fun getChildCount(): Int = checkNotNull(Platform.nodes[real]).children.size
         @Implementation fun getChild(index: Int): AccessibilityNodeInfo? = child(index)
         @Implementation fun getChild(index: Int, flags: Int): AccessibilityNodeInfo? = child(index)
@@ -142,13 +145,15 @@ class KeyguardR22ReaderHandoffTest {
         checkNotNull(Platform.nodes[root]).children.add(entry)
         Platform.activeRoot = root
         Platform.inventory = listOf(Platform.window(10, 1, true, root))
-        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5), { true })
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+            r44Enabled = true, r44DeviceEntryResourceVerified = true), { true })
         assertFalse("the real walker must complete", read.rootUnavailable)
         assertFalse("the real walker must not truncate", read.walkTruncated)
         assertEquals(2, read.visitedNodeCount)
         assertEquals(10, read.snapshots.single().windowId)
-        val decision = KeyguardSurfaceClassifier.classifyDetailed(read.snapshots,
-            unavailableRoot = read.rootUnavailable, walkTruncated = read.walkTruncated)
+        val decision = KeyguardR44SurfaceClassifier.classify(read.snapshots,
+            unavailableRoot = read.rootUnavailable, walkTruncated = read.walkTruncated,
+            strictOwnAttribution = false, syntheticTrial = true)
         assertEquals("a qualified R44 path must recognise this distinct pair",
             KeyguardSurface.MAIN_KEYGUARD, decision.surface)
     }

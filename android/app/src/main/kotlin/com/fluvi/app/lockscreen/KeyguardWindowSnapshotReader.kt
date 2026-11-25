@@ -218,6 +218,9 @@ internal class KeyguardWindowSnapshotReader(
         val pauseOpeningAfterYieldAttempt: (() -> Boolean)? = null,
         /** Optional capture-only observer of this exact existing traversal. */
         val r43Evidence: KeyguardR43SurfaceEvidence? = null,
+        /** API-37 ORB only. This is independent of capture being enabled. */
+        val r44Enabled: Boolean = false,
+        val r44DeviceEntryResourceVerified: Boolean = false,
     )
 
     /** One immutable, bounded original-A observation; never owns a node. */
@@ -295,6 +298,7 @@ internal class KeyguardWindowSnapshotReader(
         val yieldedTo: KeyguardCardInspectionRequest?,
         val yieldReason: KeyguardOpeningYieldReason?,
         val firstIncompleteReason: KeyguardWalkIncompleteReason?,
+        val r44: KeyguardR44WindowEvidence? = null,
     )
 
     private class Accumulator(private val getWindowsMs: Long, val captureOpening: Boolean) {
@@ -473,6 +477,7 @@ internal class KeyguardWindowSnapshotReader(
         val windowsReadMs = SystemClock.uptimeMillis() - windowsStartedAt
         val treeStartedAt = SystemClock.uptimeMillis()
         val timing = Accumulator(windowsReadMs, request.captureOriginalOpeningEvidence)
+        val r44Budget = if (request.r44Enabled) KeyguardR44ExtraBudget() else null
         fun observeIngressCall(kind: String, begin: Long, end: Long) {
             if (timing.ingressCallKind != null) return
             val ingress = request.openingFirstIngressUptime?.invoke() ?: return
@@ -719,6 +724,13 @@ internal class KeyguardWindowSnapshotReader(
                     own, rootPackage, rootPackage == "com.android.systemui" &&
                         window.type == AccessibilityWindowInfo.TYPE_SYSTEM && root?.windowId == window.id)
             }.getOrNull() }
+            val r44Window = if (r44Budget != null && root != null && rootPackage in SYSTEM_PACKAGES) {
+                val verified = rootPackage == "com.android.systemui" &&
+                    window.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
+                    runCatching { root.windowId == window.id }.getOrDefault(false)
+                KeyguardR44TreeReader(window.id, verified, window.isActive,
+                    request.r44DeviceEntryResourceVerified, r44Budget)
+            } else null
             val rootNext = if (request.r37YieldHint?.invoke() == true && root != null &&
                 !unavailableRoot && !walkTruncated && !timing.ownAttributionAmbiguous)
                 maybeR37("AFTER_WINDOW_ROOT", r37SafeRoot(root, window.id), visited) else null
@@ -768,7 +780,7 @@ internal class KeyguardWindowSnapshotReader(
                     if (request.claimR37Yield != null && r37SafeRoot(root, window.id) &&
                         !unavailableRoot && !walkTruncated && !timing.ownAttributionAmbiguous) {
                         { count -> maybeR37("AFTER_NODE", true, visited + count) }
-                    } else null, r43Window).also {
+                    } else null, r43Window, r44Window).also {
                     if (timing.firstIncompleteReason == null) timing.firstIncompleteReason = it.firstIncompleteReason
                     if (it.yieldReason != null) timing.openingYieldReason = it.yieldReason
                     walkTruncated = walkTruncated || it.truncated
@@ -791,7 +803,7 @@ internal class KeyguardWindowSnapshotReader(
                 timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), true, readsAfterInvalidation)
             snapshots += KeyguardWindowSnapshot(
                 windowId = window.id, packageName = rootPackage, type = window.type, layer = window.layer,
-                displayId = displayId(window), ownOverlay = own, visibleViewIds = visible?.ids.orEmpty(),
+                displayId = displayId(window), ownOverlay = own, visibleViewIds = visible?.ids.orEmpty(), r44 = visible?.r44,
             )
         }
         activeRoot?.recycle()
@@ -831,6 +843,7 @@ internal class KeyguardWindowSnapshotReader(
         pauseOpeningAfterYieldAttempt: (() -> Boolean)?,
         tryR37AfterNode: ((Int) -> KeyguardCardInspectionRequest?)?,
         r43Window: KeyguardR43SurfaceEvidence.Window?,
+        r44Window: KeyguardR44TreeReader?,
     ): VisibleIds {
         val ids = linkedSetOf<String>()
         var decisiveReported = false
@@ -855,7 +868,8 @@ internal class KeyguardWindowSnapshotReader(
             else if (firstIncompleteReason != reason) mixedIncomplete = true
         }
         var readsAfterInvalidation = 0
-        fun visit(node: AccessibilityNodeInfo?, depth: Int, parentOrdinal: Int) {
+        fun visit(node: AccessibilityNodeInfo?, depth: Int, parentOrdinal: Int,
+                  parent: AccessibilityNodeInfo?, r44Ancestor: Int?, r44Excluded: Boolean) {
             if (node == null || aborted || yieldedTo != null) return
             if (!authorityIsCurrent()) { aborted = true; return }
             if (visited >= MAX_VISITED_NODES) {
@@ -880,6 +894,10 @@ internal class KeyguardWindowSnapshotReader(
                 }
                 viewId?.let(::recordId)
                 node.className?.toString()?.takeIf { it.contains("BouncerContent") }?.let { recordId("element:BouncerContent") }
+                val r44Node = r44Window?.readNode(node, parent, nodeOrdinal, r44Ancestor, r44Excluded,
+                    viewId, authorityIsCurrent)
+                r44Node?.exclusions?.forEach(::recordId)
+                if (!authorityIsCurrent()) { aborted = true; return }
                 // The returned node's own restrictive markers must be read
                 // first, including when this is the final child or a leaf.
                 if (!decisiveReported && !truncated && tryR37AfterNode != null) {
@@ -960,7 +978,8 @@ internal class KeyguardWindowSnapshotReader(
                         timing.invalid(kind, timing.childCount, depth + 1, nodeOrdinal, index, acquisition.exceptionOrNull())
                     }
                     try {
-                        visit(child, depth + 1, nodeOrdinal)
+                        visit(child, depth + 1, nodeOrdinal, node,
+                            r44Node?.hostAncestor ?: r44Ancestor, r44Node?.excluded ?: r44Excluded)
                     } finally {
                         child?.recycle()
                     }
@@ -975,13 +994,14 @@ internal class KeyguardWindowSnapshotReader(
                 timing.invalid("NODE_ACCESS_EXCEPTION", timing.childCount, depth, parentOrdinal, null, error)
             }
         }
-        visit(root, 0, 0)
+        visit(root, 0, 0, null, null, false)
         if (timing.captureOpening && timing.checkpointState == null && openingYieldHint?.invoke() == true) {
             timing.checkpointState = if (truncated) "END_TRUNCATED" else if (decisiveReported)
                 "END_DECISIVE" else "END_NO_CHECKPOINT"
             timing.checkpointWindow = windowId
         }
-        return VisibleIds(ids, truncated, visited, aborted, readsAfterInvalidation, yieldedTo, yieldReason, firstIncompleteReason)
+        return VisibleIds(ids, truncated, visited, aborted, readsAfterInvalidation, yieldedTo, yieldReason, firstIncompleteReason,
+            r44Window?.finish())
     }
 
     private fun isExactKnownOwn(window: AccessibilityWindowInfo, request: Request): Boolean {

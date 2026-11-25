@@ -100,6 +100,18 @@ class KeyguardTimingCaptureBridge {
   Future<KeyguardTimingCaptureSnapshot> clear() =>
       _invoke('clearKeyguardDiagnosticCapture');
 
+  Future<Map<String, bool>> r44SyntheticTrial({bool? enabled}) async {
+    if (!_isAndroid()) return const {'available': false, 'enabled': false};
+    final raw = await _channel.invokeMapMethod<Object?, Object?>(
+      enabled == null ? 'getR44SyntheticTrial' : 'setR44SyntheticTrial',
+      enabled == null ? null : <String, Object?>{'enabled': enabled},
+    );
+    return {
+      'available': raw?['available'] == true,
+      'enabled': raw?['enabled'] == true,
+    };
+  }
+
   Future<KeyguardOrbRenderModeStatus> getRenderMode() =>
       _invokeRenderMode('getKeyguardOrbRenderMode');
 
