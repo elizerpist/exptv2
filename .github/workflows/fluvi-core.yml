@@ -1,55 +1,12 @@
-name: R41 ordered DIRECT real-service control
+name: R42 matched R41 and R42 wake blocks
 on:
   workflow_dispatch:
-    inputs:
-      app_sha:
-        type: string
-        required: true
-      harness_sha:
-        type: string
-        required: true
-      baseline:
-        type: boolean
-        default: false
-      test_scope:
-        type: string
-        default: ordered
-      candidate_sha256:
-        type: string
-        default: '26315d180d094392ef0c7e14f1f39b1c596e2938ce5c127e3d463dfc576f7428'
-      candidate_size:
-        type: string
-        default: '121006864'
-      test_sha256:
-        type: string
-        default: ''
-      test_size:
-        type: string
-        default: '0'
-      native_diagnostic:
-        type: boolean
-        default: true
-      native_scope:
-        type: string
-        default: full
-      run_nightly:
-        type: boolean
-        default: false
-      run_baseline_profile:
-        type: boolean
-        default: false
 permissions:
   contents: read
 jobs:
-  service:
-    if: ${{ inputs.test_scope != 'update_probe' }}
+  matched-wakes:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      APP_SHA: ${{ inputs.app_sha }}
-      HARNESS_SHA: ${{ inputs.harness_sha }}
-      BASELINE: ${{ inputs.baseline }}
-      TEST_SCOPE: ${{ inputs.test_scope }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -57,14 +14,12 @@ jobs:
           path: orchestrator
       - uses: actions/checkout@v5
         with:
-          ref: ${{ env.APP_SHA }}
-          path: app
-          fetch-depth: 0
+          ref: 97f9704120e2ae997185ea6e35fbc053e1d7f0ab
+          path: app-r41
       - uses: actions/checkout@v5
-        if: ${{ inputs.baseline }}
         with:
-          ref: ${{ env.HARNESS_SHA }}
-          path: harness
+          ref: 1584ccb020a8500efd5f9c67eac8ebd4830b1271
+          path: app-r42
       - name: Free disposable runner space
         run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
       - uses: actions/setup-java@v5
@@ -83,7 +38,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$HOME/.gradle/init.d"
-          cat > "$HOME/.gradle/init.d/r37-mirror.gradle" <<'GRADLE'
+          cat > "$HOME/.gradle/init.d/r42-mirror.gradle" <<'GRADLE'
           gradle.beforeSettings { settings ->
               settings.pluginManagement.repositories {
                   maven { name = 'MavenCentralStorageMirror'; url = uri('https://maven-central.storage-download.googleapis.com/maven2') }
@@ -95,37 +50,12 @@ jobs:
               }
           }
           GRADLE
-      - name: Run exact-source Android JVM unit gates
-        if: ${{ inputs.test_scope == 'units' }}
-        shell: bash
-        working-directory: app
-        run: |
-          mkdir -p "$RUNNER_TEMP/r37-evidence"
-          git rev-parse HEAD > "$RUNNER_TEMP/r37-evidence/unit-source.txt"
-          test "$(git rev-parse HEAD)" = "$APP_SHA"
-          flutter pub get > "$RUNNER_TEMP/r37-evidence/unit-pub-get.log" 2>&1
-          rc=0
-          # Robolectric fetches its platform independently of Gradle's
-          # repositories. Use the same public Maven Central mirror when its
-          # default repo1 endpoint is rate-limited on a disposable runner.
-          (cd android && JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -Drobolectric.dependency.repo.url=https://maven-central.storage-download.googleapis.com/maven2" ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --continue --no-daemon --max-workers=3 --console=plain) > "$RUNNER_TEMP/r37-evidence/unit.log" 2>&1 || rc=$?
-          printf '%s\n' "$rc" > "$RUNNER_TEMP/r37-evidence/unit-exit.txt"
-          for path in build/app/test-results build/fluvi-core/test-results; do
-            if [[ -d "$path" ]]; then
-              mkdir -p "$RUNNER_TEMP/r37-evidence/$(dirname "$path")"
-              cp -a "$path" "$RUNNER_TEMP/r37-evidence/$path"
-            fi
-          done
-          tail -100 "$RUNNER_TEMP/r37-evidence/unit.log"
-          exit "$rc"
       - name: Enable KVM
-        if: ${{ inputs.test_scope != 'units' }}
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Compile and exercise real service on API 35
-        if: ${{ inputs.test_scope != 'units' }}
+      - name: Build and run alternating real-service wake blocks
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -134,76 +64,13 @@ jobs:
           arch: x86_64
           profile: pixel_7
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          pre-emulator-launch-script: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r37-driver.sh" build
-          script: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r37-driver.sh" run
-      - name: Retain controls and screenshots
+          pre-emulator-launch-script: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r42-matched-wakes.sh" build
+          script: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r42-matched-wakes.sh" run
+      - name: Preserve all attempted blocks and device evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: r40-service-${{ github.run_id }}
-          path: ${{ runner.temp }}/r37-evidence/**
-          if-no-files-found: warn
-          retention-days: 14
-
-  update-probe:
-    if: ${{ inputs.test_scope == 'update_probe' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      APP_SHA: ${{ inputs.app_sha }}
-      CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
-      CANDIDATE_SIZE: ${{ inputs.candidate_size }}
-      TEST_SHA256: ${{ inputs.test_sha256 }}
-      TEST_SIZE: ${{ inputs.test_size }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          path: orchestrator
-          fetch-depth: 1
-      - name: Create ephemeral encryption key
-        shell: bash
-        run: |
-          mkdir -p "$RUNNER_TEMP/r41-update" "$RUNNER_TEMP/r41-key"
-          umask 077
-          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$RUNNER_TEMP/r41-update/private.pem" 2>/dev/null
-          openssl pkey -in "$RUNNER_TEMP/r41-update/private.pem" -pubout -out "$RUNNER_TEMP/r41-key/public.pem"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: r41-update-public-key-${{ github.run_id }}
-          path: ${{ runner.temp }}/r41-key/public.pem
-          retention-days: 1
-      - name: Retrieve encrypted exact APK
-        shell: bash
-        run: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r42-update-probe.sh" retrieve
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools build-tools;36.0.0'
-      - name: Verify downloaded APK identities
-        shell: bash
-        run: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r42-update-probe.sh" verify
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Install R40 and update on disposable API 35
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          disable-animations: false
-          target: default
-          arch: x86_64
-          profile: pixel_7
-          emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r42-update-probe.sh" install
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: r41-update-evidence-${{ github.run_id }}
-          path: ${{ runner.temp }}/r41-update/evidence/**
+          name: r42-matched-wakes-${{ github.run_id }}
+          path: ${{ runner.temp }}/r42-matched-wakes/**
           if-no-files-found: warn
           retention-days: 14
