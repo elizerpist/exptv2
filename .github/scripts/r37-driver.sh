@@ -96,6 +96,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
       methods=(r41TwentyUnheldWakeAttempts)
       ;;
+    natural_h2_20)
+      class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
+      methods=(r41TwentyUnheldWakeAttemptsWithH2Fixture)
+      ;;
     pressure)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
       methods=(allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners burstOfPendingOffersPreservesWinningOwnerAndReportsLoss)
