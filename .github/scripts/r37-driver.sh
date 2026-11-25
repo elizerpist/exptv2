@@ -103,6 +103,10 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r44_pressure)
+      class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
+      methods=(r44PerWakeEvidenceSurvivesLightPressure r44PerWakeEvidenceSurvivesFullPressure)
+      ;;
     r43_api37)
       class=com.fluvi.app.lockscreen.KeyguardR43Api37BaselineTest
       methods=(ordinaryFirstAndLaterWake)
