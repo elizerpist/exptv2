@@ -113,5 +113,11 @@ internal class KeyguardR41RawLedger(private val capacity: Int = 2048) {
         const val SYSTEM_ELIGIBLE = 31
         const val FALLBACK_CANDIDATE = 32
         const val FALLBACK_POST_RECEIPT = 33
+        const val H2_FIXTURE_READY = 34
+        const val H2_FIXTURE_CLAIM = 35
+        const val H2_FIXTURE_RECONCILED = 36
+        const val H2_FIXTURE_RELEASED = 37
+        const val H2_FIXTURE_FIFO = 38
+        const val H2_FIXTURE_NOOP = 39
     }
 }

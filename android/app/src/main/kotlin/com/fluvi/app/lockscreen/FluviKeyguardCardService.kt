@@ -2820,12 +2820,16 @@ class FluviKeyguardCardService : AccessibilityService() {
             existing
         } ?: return
         val earlier = claim.read.request
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.H2_FIXTURE_CLAIM,
+            earlier.diagnosticContext, earlier.id, request.id)
         runCatching { inspectionProbeForTest?.r41H2Boundary(earlier, "CLAIMED", request) }
         try {
             // A cannot authorize a positive view after the scene has changed.
             // The ordinary restriction path is executed on Main without a lock.
             applyCompletedInspection(claim.read, claim.handoff,
                 disposition = CompletedDisposition.R32_RESTRICTION_ONLY)
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.H2_FIXTURE_RECONCILED,
+                earlier.diagnosticContext, earlier.id, request.id)
         } finally {
             val next = synchronized(queueLock) {
                 if (claim.state != R41FixtureClaimState.CLAIMED) return@synchronized null
@@ -2838,6 +2842,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 actual
             }
             runCatching { inspectionProbeForTest?.r41H2Boundary(earlier, "RECONCILED", next) }
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.H2_FIXTURE_RELEASED,
+                earlier.diagnosticContext, earlier.id, next?.id ?: 0L)
             if (next != null && serviceJob.isActive) {
                 scheduleR19Join()
                 inspectionScope.launch { processInspectionQueue(next) }
@@ -3676,8 +3682,11 @@ class FluviKeyguardCardService : AccessibilityService() {
                     (KeyguardR41H2FixtureHooks.enableIntervention || KeyguardR41H2FixtureHooks.observeOnly))
                     r41FixturePublish(read, handoff, decision) else null
                 r41FixtureActive = fixtureReceipt
-                if (fixtureReceipt != null)
+                if (fixtureReceipt != null) {
+                    KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.H2_FIXTURE_READY,
+                        active.diagnosticContext, active.id)
                     runCatching { inspectionProbeForTest?.r41H2Boundary(active, "RECEIPT", null) }
+                }
                 val r41CaptureId = active.diagnosticContext?.captureId
                 val r41CaptureEnabled = r41CaptureId != null && r41CaptureId == KeyguardCardDiagnostics.activeCaptureId()
                 val scene = read.result.r19ReadSceneSerial
@@ -3714,6 +3723,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                         fixtureAlreadyClaimed = true
                         return@withContext null
                     }
+                    if (fixtureReceipt != null)
+                        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.H2_FIXTURE_FIFO,
+                            active.diagnosticContext, active.id)
                     val latest = if (read.r38MilestoneOrdered) null else
                         synchronized(queueLock) { r34SupersedeCompletedLocked(read) }
                     if (latest == null) applyCompletedInspection(read, handoff)
@@ -3733,6 +3745,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                     // actual queue-selected successor. This old FIFO callback
                     // is a no-op and cannot complete or relabel that owner.
                     runCatching { inspectionProbeForTest?.r41H2Boundary(active, "FIFO_NOOP", null) }
+                    KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.H2_FIXTURE_NOOP,
+                        active.diagnosticContext, active.id)
                     if (promotedOwner == active) promotedOwner = null
                     request = null
                     r41FixtureActive = null

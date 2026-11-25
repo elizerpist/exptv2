@@ -111,4 +111,19 @@ class KeyguardR41AttemptLedgerTest {
         assertTrue(receiptOnly.core(1, 1, 1, 0).contains("fallbackCandidateAndPostReceipt=UNOBSERVED"))
         assertTrue(receiptOnly.core(1, 1, 1, 0).contains("fallbackGrant=UNOBSERVED"))
     }
+
+    @Test fun fixtureClaimIsCountedWithoutBecomingPresentationAuthority() {
+        val ledger = KeyguardR41AttemptLedger()
+        ledger.record("H2_FIXTURE_READY", 10, 100)
+        ledger.record("H2_FIXTURE_CLAIM", 10, 120, 11)
+        ledger.record("H2_FIXTURE_RECONCILED", 10, 140, 11)
+        ledger.record("H2_FIXTURE_RELEASED", 10, 150, 12)
+        ledger.record("H2_FIXTURE_NOOP", 10, 200)
+        val row = ledger.core(1, 1, 1, 0)
+        assertTrue(row, row.contains("h2Claims=1 h2Enabled=fixture"))
+        assertTrue(row, row.contains("h2FixtureTimes=120/140/150 h2Selected=12"))
+        assertTrue(row, row.contains("h2Noops=1"))
+        assertTrue(row, row.contains("outcome=UNOBSERVED"))
+        assertTrue(row, row.contains("coverage=INCOMPLETE"))
+    }
 }

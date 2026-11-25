@@ -29,6 +29,14 @@ internal class KeyguardR41AttemptLedger {
     var orderedBypasses: Long = 0; private set
     var shadowOffers: Long = 0; private set
     var shadowPartialMatches: Long = 0; private set
+    var fixtureReady: Long = 0; private set
+    var fixtureClaims: Long = 0; private set
+    var fixtureFifo: Long = 0; private set
+    var fixtureNoops: Long = 0; private set
+    private var fixtureClaimNs: Long = MISSING
+    private var fixtureReconciledNs: Long = MISSING
+    private var fixtureReleasedNs: Long = MISSING
+    private var fixtureSelected: Long = MISSING
     private var shadowLastRequest: Long = MISSING
     private var shadowLastFlags: Long = MISSING
 
@@ -47,6 +55,21 @@ internal class KeyguardR41AttemptLedger {
             return
         }
         when (phase) {
+            "H2_FIXTURE_READY" -> { fixtureReady++; return }
+            "H2_FIXTURE_CLAIM" -> {
+                fixtureClaims++
+                if (fixtureClaims > 1) invalid++
+                fixtureClaimNs = once(fixtureClaimNs, atNs)
+                return
+            }
+            "H2_FIXTURE_RECONCILED" -> { fixtureReconciledNs = once(fixtureReconciledNs, atNs); return }
+            "H2_FIXTURE_RELEASED" -> {
+                fixtureReleasedNs = once(fixtureReleasedNs, atNs)
+                if (reservation != null && reservation > 0) fixtureSelected = once(fixtureSelected, reservation)
+                return
+            }
+            "H2_FIXTURE_FIFO" -> { fixtureFifo++; return }
+            "H2_FIXTURE_NOOP" -> { fixtureNoops++; return }
             "WAKE" -> {
                 wakeNs = once(wakeNs, atNs)
                 if (tid != null) wakeTid = once(wakeTid, tid)
@@ -173,7 +196,11 @@ internal class KeyguardR41AttemptLedger {
             " dispatchNs=${value(time(slot, DISPATCH))} mainNs=${value(time(slot, MAIN))} grantNs=${value(time(slot, GRANT))}" +
             " winnerNs=${value(time(slot, WINNER))} cancelNs=${value(time(slot, CANCEL))} orderedBypassNs=${value(time(slot, BYPASS))}" +
             " orderedBypasses=$orderedBypasses h2ShadowOffers=$shadowOffers h2PartialMatches=$shadowPartialMatches" +
-            " h2LastRequest=${value(shadowLastRequest)} h2LastFlags=${value(shadowLastFlags)} h2Claims=0 h2Enabled=false" +
+            " h2LastRequest=${value(shadowLastRequest)} h2LastFlags=${value(shadowLastFlags)}" +
+            " h2Claims=$fixtureClaims h2Enabled=${if (fixtureReady > 0) "fixture" else "false"}" +
+            " h2FixtureReady=$fixtureReady h2Fifo=$fixtureFifo h2Noops=$fixtureNoops" +
+            " h2FixtureTimes=${value(fixtureClaimNs)}/${value(fixtureReconciledNs)}/${value(fixtureReleasedNs)}" +
+            " h2Selected=${value(fixtureSelected)}" +
             " h2ShadowCoverage=partialGuardsDispatchUnverified" +
             " fallbackCandidateAndPostReceipt=$fallbackEvidence fallbackGrant=UNOBSERVED" +
             " requests=$count omitted=$omitted invalid=$invalid dropped=$loss" +
@@ -202,6 +229,10 @@ internal class KeyguardR41AttemptLedger {
         copy.omitted = omitted; copy.invalid = invalid; copy.orderedBypasses = orderedBypasses
         copy.shadowOffers = shadowOffers; copy.shadowPartialMatches = shadowPartialMatches
         copy.shadowLastRequest = shadowLastRequest; copy.shadowLastFlags = shadowLastFlags
+        copy.fixtureReady = fixtureReady; copy.fixtureClaims = fixtureClaims
+        copy.fixtureFifo = fixtureFifo; copy.fixtureNoops = fixtureNoops
+        copy.fixtureClaimNs = fixtureClaimNs; copy.fixtureReconciledNs = fixtureReconciledNs
+        copy.fixtureReleasedNs = fixtureReleasedNs; copy.fixtureSelected = fixtureSelected
     }
 
     companion object {

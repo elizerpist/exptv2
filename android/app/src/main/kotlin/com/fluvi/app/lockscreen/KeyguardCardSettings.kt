@@ -2672,6 +2672,12 @@ internal object KeyguardCardDiagnostics {
                     KeyguardR41RawLedger.SYSTEM_ELIGIBLE -> "SYSTEM_ELIGIBLE"
                     KeyguardR41RawLedger.FALLBACK_CANDIDATE -> "FALLBACK_CANDIDATE"
                     KeyguardR41RawLedger.FALLBACK_POST_RECEIPT -> "FALLBACK_POST_RECEIPT"
+                    KeyguardR41RawLedger.H2_FIXTURE_READY -> "H2_FIXTURE_READY"
+                    KeyguardR41RawLedger.H2_FIXTURE_CLAIM -> "H2_FIXTURE_CLAIM"
+                    KeyguardR41RawLedger.H2_FIXTURE_RECONCILED -> "H2_FIXTURE_RECONCILED"
+                    KeyguardR41RawLedger.H2_FIXTURE_RELEASED -> "H2_FIXTURE_RELEASED"
+                    KeyguardR41RawLedger.H2_FIXTURE_FIFO -> "H2_FIXTURE_FIFO"
+                    KeyguardR41RawLedger.H2_FIXTURE_NOOP -> "H2_FIXTURE_NOOP"
                     else -> null
                 }
                 if (phase == null) active.r41RawUnmatched += 1 else attempt.r41.record(
