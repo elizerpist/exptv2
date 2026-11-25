@@ -17,6 +17,12 @@ case "${1:-}" in
       cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
     fi
     case "$TEST_SCOPE" in
+      r42_raw_pressure)
+        second="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR41DiagnosticsInstrumentationTest.kt"
+        test -f "$second"
+        cp "$second" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR41DiagnosticsInstrumentationTest.kt
+        sha256sum "$second" > "$out/fixture-r41-diagnostics.sha256"
+        ;;
       system_warm_report|system_warm_ordered|system_warm_latest_report|system_warm_latest_ordered|system_warm_target_report|system_warm_target_ordered)
         second="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt"
         test -f "$second"
@@ -30,7 +36,7 @@ case "${1:-}" in
         sha256sum "$second" > "$out/fixture-material.sha256"
         ;;
     esac
-    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt > "$out/fixture.patch"
+    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR41DiagnosticsInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt > "$out/fixture.patch"
     sha256sum "$fixture" > "$out/fixture.sha256"
   fi
   flutter pub get > "$out/pub-get.log" 2>&1
@@ -188,6 +194,10 @@ case "${1:-}" in
     pressure)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
       methods=(allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners burstOfPendingOffersPreservesWinningOwnerAndReportsLoss)
+      ;;
+    r42_raw_pressure)
+      class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
+      methods=(r42LateCriticalWakeSurvivesRawLightPressure r42LateCriticalWakeSurvivesRawFullPressure)
       ;;
     capacity_pressure)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
