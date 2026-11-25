@@ -874,16 +874,28 @@ internal class KeyguardOrbBufferRenderer(
             preparingCover = lease
             worker.preparePrivacyCover(lease) deliver@{ bitmap ->
                 if (preparingCover == lease) preparingCover = null
-                if (bitmap == null) return@deliver
+                if (bitmap == null) {
+                    retryCurrentCoverAfter(lease)
+                    return@deliver
+                }
                 if (disposed || privacyCover != null || attachment !== active || desired?.lease != lease ||
                     desired?.scene?.full != true || !ownsFirstPublication(token) ||
                     !active.root.isAttachedToWindow || !active.orb.isAttachedToWindow ||
                     active.orb.width != lease.width || active.orb.height != lease.height) {
                     bitmap.recycle()
+                    retryCurrentCoverAfter(lease)
                     return@deliver
                 }
                 installPrivacyCover(active, lease, bitmap)
             }
+        }
+
+        /** A stale preparation must not strand a later FULL lease. Do not
+         * retry a failure for the same owner or create an unbounded queue. */
+        private fun retryCurrentCoverAfter(oldLease: KeyguardOrbBufferLease) {
+            val current = firstPublishedToken ?: return
+            if (current.lease != oldLease && desired?.scene?.full == true && ownsFirstPublication(current))
+                preparePrivacyCover(current)
         }
 
         private fun installPrivacyCover(active: KeyguardOrbBufferAttachment, lease: KeyguardOrbBufferLease, bitmap: Bitmap) {
@@ -920,7 +932,10 @@ internal class KeyguardOrbBufferRenderer(
                                 mainHandler.post {
                                     runCatching { SurfaceControl.Transaction().use { it.reparent(cover.layer, null).apply() } }
                                     runCatching { cover.layer.release() }
-                                    if (privacyCover === cover) privacyCover = null
+                                    if (privacyCover === cover) {
+                                        privacyCover = null
+                                        retryCurrentCoverAfter(cover.lease)
+                                    }
                                 }
                             }
                         } else runCatching { fence.close() }
@@ -946,7 +961,10 @@ internal class KeyguardOrbBufferRenderer(
                         mainHandler.post {
                             runCatching { SurfaceControl.Transaction().use { it.reparent(coverLayer, null).apply() } }
                             runCatching { coverLayer.release() }
-                            if (privacyCover === cover) privacyCover = null
+                            if (privacyCover === cover) {
+                                privacyCover = null
+                                retryCurrentCoverAfter(cover.lease)
+                            }
                         }
                     }
                 }
@@ -1625,8 +1643,8 @@ internal class KeyguardOrbBufferRenderer(
         private val thread = HandlerThread("fluvi-keyguard-orb-render").apply { start() }
         private val handler = Handler(thread.looper)
         /** The renderer-control handler must remain able to retire/reconfigure
-         * while a release fence is outstanding. At most three fence records
-         * exist because the pool is globally fixed at three slots. */
+         * while a fence is outstanding. The pool has three slot fences; the
+         * one immutable privacy cover may contribute one additional fence. */
         private val fenceThread = HandlerThread("fluvi-keyguard-orb-fence").apply { start() }
         private val fenceHandler = Handler(fenceThread.looper)
         private val retainedPrivacyCovers = AtomicInteger()
