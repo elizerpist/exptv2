@@ -561,6 +561,9 @@ internal class KeyguardWindowSnapshotReader(
                 root.packageName?.toString() == "com.android.systemui" &&
                 (!root.isVisibleToUser ||
                     (root.viewIdResourceName?.let { KeyguardSurfaceClassifier.isDecisiveExclusionMarker(it) } != true &&
+                        (!request.r44Enabled || root.viewIdResourceName?.let { id ->
+                            KeyguardR44Markers.exact(id)?.let(KeyguardR44Markers::exclusion) != null
+                        } != true) &&
                         root.className?.toString()?.contains("BouncerContent") != true))
         }.getOrDefault(false)
         val afterWindows = maybeR37("AFTER_WINDOWS", true, 0)
@@ -731,7 +734,9 @@ internal class KeyguardWindowSnapshotReader(
                 KeyguardR44TreeReader(window.id, verified, window.isActive,
                     request.r44DeviceEntryResourceVerified, r44Budget)
             } else null
-            val rootNext = if (request.r37YieldHint?.invoke() == true && root != null &&
+            // API 37 root extras can themselves carry an exclusion; consume
+            // that node in the regular DFS before transferring the reader.
+            val rootNext = if (!request.r44Enabled && request.r37YieldHint?.invoke() == true && root != null &&
                 !unavailableRoot && !walkTruncated && !timing.ownAttributionAmbiguous)
                 maybeR37("AFTER_WINDOW_ROOT", r37SafeRoot(root, window.id), visited) else null
             if (rootNext != null) {
@@ -809,7 +814,8 @@ internal class KeyguardWindowSnapshotReader(
         activeRoot?.recycle()
         val finalNext = if (request.r37YieldHint?.invoke() == true) {
             val hasRestrictiveMarker = snapshots.any { snap -> snap.visibleViewIds.any {
-                KeyguardSurfaceClassifier.isDecisiveExclusionMarker(it)
+                KeyguardSurfaceClassifier.isDecisiveExclusionMarker(it) ||
+                    (request.r44Enabled && KeyguardR44Markers.exact(it)?.let(KeyguardR44Markers::exclusion) != null)
             } }
             maybeR37("BEFORE_RESULT", !unavailableRoot && !walkTruncated &&
                 !timing.ownAttributionAmbiguous && !hasRestrictiveMarker, visited)
@@ -850,7 +856,9 @@ internal class KeyguardWindowSnapshotReader(
         fun recordId(id: String) {
             ids.add(id)
             if (r40Provenance != null) r40Provenance.marker(id)
-            if (!decisiveReported && KeyguardSurfaceClassifier.isDecisiveExclusionMarker(id) && authorityIsCurrent()) {
+            val r44Restriction = r44Window != null &&
+                KeyguardR44Markers.exact(id)?.let(KeyguardR44Markers::exclusion) != null
+            if (!decisiveReported && (KeyguardSurfaceClassifier.isDecisiveExclusionMarker(id) || r44Restriction) && authorityIsCurrent()) {
                 decisiveReported = true
                 if (timing.captureOpening) timing.decisiveMarker = true
                 if (onDecisiveSystemMarker != null) runCatching { onDecisiveSystemMarker() }

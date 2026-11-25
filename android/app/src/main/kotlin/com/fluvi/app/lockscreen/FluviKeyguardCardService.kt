@@ -217,8 +217,9 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (enabled && (!settings.requested || settings.presentationMode != KeyguardCardPresentationMode.ORB)) return false
         if (enabled == KeyguardR44Trial.active) return true
         val resourceVerified = if (enabled) runCatching {
-            packageManager.getResourcesForApplication("com.android.systemui")
-                .getIdentifier("device_entry_icon_view", "id", "com.android.systemui") != 0
+            val resources = packageManager.getResourcesForApplication("com.android.systemui")
+            val id = resources.getIdentifier("device_entry_icon_view", "id", "com.android.systemui")
+            id != 0 && resources.getResourceName(id) == "com.android.systemui:id/device_entry_icon_view"
         }.getOrDefault(false) else false
         hideImmediately("r44TrialChange")
         if (overlay.isAttached) return false
@@ -4275,7 +4276,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         } else KeyguardSurfaceClassifier.classifyDetailed(snapshots,
             unavailableRoot = read.rootUnavailable, walkTruncated = read.walkTruncated,
             strictOwnAttribution = strictOwn)
-        if (r44Mode) recordR44Read(request, read, sceneAtRead, startedAt, syntheticAtRead, false, classification)
+        if (r44Mode) recordR44Read(request, read, sceneAtRead, startedAt, syntheticAtRead, false, classification,
+            snapshots, inspectionProbeForTest != null)
         if (read.r43Evidence != null) runCatching { recordR43Passive(request, read, classification, sceneAtRead) }
         val signals = quickSignals(settings, classification.surface)
         return InspectionOutcome.Completed(Inspection(
@@ -4301,10 +4303,11 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     private fun recordR44Read(request: KeyguardCardInspectionRequest, read: SystemWindowsRead,
                               scene: Long?, startedAt: Long, synthetic: Boolean, stale: Boolean,
-                              result: KeyguardSurfaceClassification) {
+                              result: KeyguardSurfaceClassification,
+                              windows: List<KeyguardWindowSnapshot> = read.snapshots,
+                              injected: Boolean = false) {
         val owner = request.diagnosticContext ?: return
         if (owner.captureId == null || owner.captureId != KeyguardCardDiagnostics.activeCaptureId()) return
-        val windows = read.snapshots
         val host = windows.firstOrNull { it.r44?.let { e -> e.active && e.host != null } == true }
             ?: windows.firstOrNull { it.r44?.active == true }
         val evidence = windows.mapNotNull { it.r44 }
@@ -4313,11 +4316,11 @@ class FluviKeyguardCardService : AccessibilityService() {
             unavailableRoot = read.rootUnavailable, walkTruncated = read.walkTruncated).surface
         KeyguardCardDiagnostics.recordR44(KeyguardR44ReadObservation(
             owner, request.id, request.visibilityEpoch, scene, startedAt, SystemClock.uptimeMillis(), legacy,
-            result.surface, result.reason, synthetic, stale, read.rootUnavailable, read.walkTruncated,
+            result.surface, result.reason, synthetic, injected, stale, read.rootUnavailable, read.walkTruncated,
             host?.windowId, host?.layer, hostEvidence?.verifiedRoot == true, hostEvidence?.host,
             hostEvidence?.content, hostEvidence?.contentBelowHost == true,
             evidence.isNotEmpty() && evidence.all { it.complete }, evidence.sumOf { it.advertised },
-            evidence.sumOf { it.fetched }, evidence.sumOf { it.failed }, evidence.any { it.budgetHit },
+            evidence.sumOf { it.fetched }, evidence.sumOf { it.failed }, evidence.sumOf { it.unsupported }, evidence.any { it.budgetHit },
             evidence.sumOf { it.extraMs },
         ))
     }

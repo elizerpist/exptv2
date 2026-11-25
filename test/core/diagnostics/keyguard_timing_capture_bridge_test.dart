@@ -138,4 +138,25 @@ void main() {
     );
     expect((await bridge.getRenderMode()).available, isFalse);
   });
+
+  test('R44 synthetic trial changes only after an explicit request', () async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return <String, Object?>{
+            'available': true,
+            'enabled': call.method == 'setR44SyntheticTrial',
+          };
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: channel,
+      isAndroid: () => true,
+    );
+    expect((await bridge.r44SyntheticTrial())['enabled'], isFalse);
+    expect(calls.single.method, 'getR44SyntheticTrial');
+    expect((await bridge.r44SyntheticTrial(enabled: true))['enabled'], isTrue);
+    expect(calls.last.method, 'setR44SyntheticTrial');
+    expect((calls.last.arguments as Map)['enabled'], isTrue);
+  });
 }

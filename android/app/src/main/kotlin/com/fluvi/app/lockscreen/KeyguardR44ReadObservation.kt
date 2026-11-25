@@ -13,6 +13,7 @@ internal data class KeyguardR44ReadObservation(
     val verdict: KeyguardSurface,
     val reason: KeyguardSurfaceReason,
     val synthetic: Boolean,
+    val testProbeInjected: Boolean,
     val stale: Boolean,
     val unavailable: Boolean,
     val truncated: Boolean,
@@ -26,6 +27,7 @@ internal data class KeyguardR44ReadObservation(
     val advertised: Int,
     val fetched: Int,
     val failed: Int,
+    val unsupported: Int,
     val budgetHit: Boolean,
     val extraMs: Long,
 )

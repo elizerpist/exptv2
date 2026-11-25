@@ -212,4 +212,38 @@ void main() {
     expect(sent, 'SURFACE_STATIC');
     expect(find.textContaining('következő elrejtés'), findsOneWidget);
   });
+
+  testWidgets('R44 synthetic data requires an explicit switch', (tester) async {
+    final changes = <bool>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(runtime, (call) async {
+          if (call.method == 'getR44SyntheticTrial') {
+            return <String, Object?>{'available': true, 'enabled': false};
+          }
+          if (call.method == 'setR44SyntheticTrial') {
+            final enabled = (call.arguments as Map)['enabled'] as bool;
+            changes.add(enabled);
+            return <String, Object?>{'available': true, 'enabled': enabled};
+          }
+          return response('IDLE', '');
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: runtime,
+      isAndroid: () => true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
+    await tester.pumpAndSettle();
+    expect(changes, isEmpty);
+    final toggle = find.byKey(const ValueKey('debug-console-r44-synthetic'));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(changes, [true]);
+    expect(find.textContaining('csak mintaadat'), findsOneWidget);
+  });
 }

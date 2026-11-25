@@ -27,6 +27,7 @@ internal class KeyguardR44TreeReader(
     private var advertised = 0
     private var fetched = 0
     private var failed = 0
+    private var unsupported = 0
     private var extraMs = 0L
     private var budgetHit = false
 
@@ -57,7 +58,9 @@ internal class KeyguardR44TreeReader(
         KeyguardR44Markers.exact(viewId)?.let { markers += it to KeyguardR44Markers.Carrier.VIEW_ID }
         try {
             val eager = node.extras.getCharSequence(KeyguardR44Markers.EXTRA)
-            KeyguardR44Markers.exact(eager)?.let { markers += it to KeyguardR44Markers.Carrier.EXTRA_EAGER }
+            val eagerMarker = KeyguardR44Markers.exact(eager)
+            eagerMarker?.let { markers += it to KeyguardR44Markers.Carrier.EXTRA_EAGER }
+            if (eager != null && eagerMarker == null) { complete = false; unsupported += 1 }
             val hasDirectTag = markers.any { it.second == KeyguardR44Markers.Carrier.VIEW_ID &&
                 it.first != KeyguardR44Markers.Marker.DEVICE_ENTRY }
             val hasEagerTag = eager != null
@@ -79,21 +82,25 @@ internal class KeyguardR44TreeReader(
                     // The parent was already held by the DFS. Reacquiring it
                     // here validates the same ancestry after the only extra
                     // synchronous framework call; no additional walk occurs.
-                    val parentMatches = if (expectedParent == null) true else {
-                        val parent = runCatching { node.parent }.getOrNull()
-                        try { parent != null && parent == expectedParent } finally { parent?.recycle() }
-                    }
-                    val stillOwned = runCatching {
+                    val stillOwned = refreshed && authorityIsCurrent() && runCatching {
                         node.windowId == windowId && node.packageName?.toString() == "com.android.systemui" &&
                             node.isVisibleToUser && node.viewIdResourceName == viewId
                     }.getOrDefault(false)
+                    val parentMatches = if (!stillOwned || !authorityIsCurrent()) false else if (expectedParent == null) true else {
+                        val parent = runCatching { node.parent }.getOrNull()
+                        try { parent != null && parent == expectedParent } finally { parent?.recycle() }
+                    }
                     if (!refreshed || !authorityIsCurrent() || !stillOwned || !parentMatches) {
                         complete = false
                         failed += 1
                     } else {
                         val value = node.extras.getCharSequence(KeyguardR44Markers.EXTRA)
                         if (value == null) { complete = false; failed += 1 }
-                        else KeyguardR44Markers.exact(value)?.let { markers += it to KeyguardR44Markers.Carrier.EXTRA_LAZY }
+                        else {
+                            val marker = KeyguardR44Markers.exact(value)
+                            if (marker == null) { complete = false; unsupported += 1 }
+                            else markers += marker to KeyguardR44Markers.Carrier.EXTRA_LAZY
+                        }
                     }
                 } else complete = false
             }
@@ -102,8 +109,9 @@ internal class KeyguardR44TreeReader(
             failed += 1
         }
         val exclusions = markers.mapNotNull { KeyguardR44Markers.exclusion(it.first) }
-        val excluded = excludedAncestor || exclusions.isNotEmpty() || viewId in setOf(
-            "com.android.systemui:id/notification_stack_scroller", "com.android.systemui:id/notificationShelf")
+        val excluded = excludedAncestor || exclusions.isNotEmpty() ||
+            viewId == "com.android.systemui:id/notification_stack_scroller" ||
+            viewId == "com.android.systemui:id/notificationShelf"
         var childAncestor = ancestor
         if (!excluded) {
             val nodeHost = markers.firstOrNull { it.first == KeyguardR44Markers.Marker.HOST }
@@ -127,6 +135,7 @@ internal class KeyguardR44TreeReader(
 
     fun finish(): KeyguardR44WindowEvidence = KeyguardR44WindowEvidence(
         verifiedRoot, active, host, content, below, complete, foreign,
-        advertised = advertised, fetched = fetched, failed = failed, budgetHit = budgetHit, extraMs = extraMs,
+        advertised = advertised, fetched = fetched, failed = failed, unsupported = unsupported,
+        budgetHit = budgetHit, extraMs = extraMs,
     )
 }

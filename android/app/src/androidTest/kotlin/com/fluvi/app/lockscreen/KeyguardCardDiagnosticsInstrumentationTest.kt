@@ -44,10 +44,10 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                 KeyguardR44ReadObservation(owner, request, wake, wake + 50, start, start + 5,
                     KeyguardSurface.UNKNOWN, verdict,
                     if (verdict == KeyguardSurface.MAIN_KEYGUARD) KeyguardSurfaceReason.MAIN_CONFIRMED else KeyguardSurfaceReason.NO_MAIN_MARKER,
-                    true, false, false, false, 10, 2, true,
+                    true, false, false, false, false, 10, 2, true,
                     KeyguardR44Witness(KeyguardR44Markers.Marker.HOST, KeyguardR44Markers.Carrier.VIEW_ID, 1),
                     KeyguardR44Witness(KeyguardR44Markers.Marker.DEVICE_ENTRY, KeyguardR44Markers.Carrier.EXTRA_EAGER, 2),
-                    true, true, 1, 1, 0, false, 2))
+                    true, true, 1, 1, 0, 0, false, 2))
             record(base + 1, base + 10, KeyguardSurface.UNKNOWN)
             record(base + 2, base + 21, KeyguardSurface.MAIN_KEYGUARD)
             val show = KeyguardCardDiagnostics.newShowOperation(owner, wake + 10, base + 2)
@@ -69,7 +69,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         val frozen = report
         KeyguardCardDiagnostics.recordR44(KeyguardR44ReadObservation(checkNotNull(firstOwner), 9999, 0, null,
             9999, 10000, KeyguardSurface.UNKNOWN, KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.NO_MAIN_MARKER,
-            true, false, false, false, null, null, false, null, null, false, false, 0, 0, 0, false, 0))
+            true, false, false, false, false, null, null, false, null, null, false, false, 0, 0, 0, 0, false, 0))
         assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
     }
 

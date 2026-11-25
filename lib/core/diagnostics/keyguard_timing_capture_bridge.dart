@@ -107,7 +107,7 @@ class KeyguardTimingCaptureBridge {
       enabled == null ? null : <String, Object?>{'enabled': enabled},
     );
     return {
-      'available': raw?['available'] == true,
+      'available': raw?['available'] == true && raw?['enabled'] is bool,
       'enabled': raw?['enabled'] == true,
     };
   }

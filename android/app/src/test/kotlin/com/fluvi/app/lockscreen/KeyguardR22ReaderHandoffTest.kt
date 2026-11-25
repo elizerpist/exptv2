@@ -224,6 +224,68 @@ class KeyguardR22ReaderHandoffTest {
         assertTrue(stale.abortedStale)
     }
 
+    @Test fun r44ReaderRejectsSpoofedSiblingAndSameNodePairs() {
+        fun run(root: AccessibilityNodeInfo): KeyguardSurface {
+            Platform.activeRoot = root
+            Platform.inventory = listOf(Platform.window(10, 1, true, root))
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+                r44Enabled = true, r44DeviceEntryResourceVerified = true), { true })
+            return KeyguardR44SurfaceClassifier.classify(read.snapshots, read.rootUnavailable,
+                read.walkTruncated, false, true).surface
+        }
+        val same = Platform.node("element:lockscreen")
+        checkNotNull(Platform.nodes[same]).extras.putCharSequence(KeyguardR44Markers.EXTRA, "element:LargeClock")
+        assertEquals(KeyguardSurface.UNKNOWN, run(same))
+        Platform.reset()
+        val root = Platform.node(null)
+        checkNotNull(Platform.nodes[root]).children.addAll(listOf(Platform.node("element:lockscreen"),
+            Platform.node("com.android.systemui:id/device_entry_icon_view")))
+        assertEquals(KeyguardSurface.UNKNOWN, run(root))
+        Platform.reset()
+        val host = Platform.node("element:lockscreen")
+        checkNotNull(Platform.nodes[host]).children.add(
+            Platform.node("com.android.systemui:id/device_entry_icon_view", pkg = "foreign.app"))
+        assertEquals(KeyguardSurface.UNKNOWN, run(host))
+    }
+
+    @Test fun r44ReaderDeniesShadeAfterAnOtherwiseValidPair() {
+        val host = Platform.node("element:lockscreen")
+        val entry = Platform.node("com.android.systemui:id/device_entry_icon_view")
+        val shade = Platform.node("scene:shade")
+        checkNotNull(Platform.nodes[host]).children.addAll(listOf(entry, shade))
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 1, true, host))
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+            r44Enabled = true, r44DeviceEntryResourceVerified = true), { true })
+        assertEquals(KeyguardSurface.SHADE, KeyguardR44SurfaceClassifier.classify(
+            read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+    }
+
+    @Test fun r44UnsupportedOrFailedAdvertisedExtraFailsClosed() {
+        for (failure in listOf(false, true)) {
+            Platform.reset()
+            val host = Platform.node("element:lockscreen")
+            val entry = Platform.node("com.android.systemui:id/device_entry_icon_view")
+            val unknown = Platform.node(null)
+            checkNotNull(Platform.nodes[unknown]).apply {
+                advertised = true
+                lazyTag = "unrecognised"
+                refreshSucceeds = !failure
+            }
+            checkNotNull(Platform.nodes[host]).children.addAll(listOf(entry, unknown))
+            Platform.activeRoot = host
+            Platform.inventory = listOf(Platform.window(10, 1, true, host))
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+                r44Enabled = true, r44DeviceEntryResourceVerified = true), { true })
+            assertEquals(KeyguardSurface.UNKNOWN, KeyguardR44SurfaceClassifier.classify(
+                read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+            val facts = checkNotNull(read.snapshots.single().r44)
+            assertFalse(facts.complete)
+            assertEquals(if (failure) 1 else 0, facts.failed)
+            assertEquals(if (failure) 0 else 1, facts.unsupported)
+        }
+    }
+
     private class Handoff {
         val safe = KeyguardOpeningInspectionHandoff.Conditions(
             true, true, true, true, true, true, true, true, true, true)

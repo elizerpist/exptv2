@@ -68,7 +68,6 @@ internal object KeyguardSurfaceClassifier {
         "com.android.systemui:id/keyguard_host_view",
         "com.android.systemui:id/password_entry",
         "element:BouncerContent",
-        "overlay:bouncer",
     )
     private val shadeIds = setOf(
         "com.android.systemui:id/quick_settings_panel",
@@ -77,10 +76,6 @@ internal object KeyguardSurfaceClassifier {
         "com.android.systemui:id/settings_button",
         "com.android.systemui:id/notification_shade_shortcut",
         "com.android.systemui:id/split_shade_status_bar",
-        "overlay:notifications_shade",
-        "overlay:quick_settings_shade",
-        "scene:shade",
-        "scene:quick_settings",
     )
     private val occludedIds = setOf(
         "com.android.systemui:id/global_actions_container",

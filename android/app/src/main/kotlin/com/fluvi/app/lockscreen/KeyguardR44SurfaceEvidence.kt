@@ -48,6 +48,7 @@ internal data class KeyguardR44WindowEvidence(
     val advertised: Int = 0,
     val fetched: Int = 0,
     val failed: Int = 0,
+    val unsupported: Int = 0,
     val budgetHit: Boolean = false,
     val extraMs: Long = 0,
 )
@@ -66,6 +67,15 @@ internal object KeyguardR44SurfaceClassifier {
             windows, unavailableRoot = unavailableRoot, walkTruncated = walkTruncated,
             strictOwnAttribution = strictOwnAttribution,
         )
+        val systemIds = windows.asSequence().filter {
+            it.displayId == 0 && !it.ownOverlay && it.packageName == "com.android.systemui"
+        }.flatMap { it.visibleViewIds.asSequence() }
+        val r44Restrictions = systemIds.mapNotNull(KeyguardR44Markers::exact).toSet()
+        if (KeyguardR44Markers.Marker.BOUNCER in r44Restrictions) return KeyguardSurfaceClassification(
+            KeyguardSurface.CREDENTIAL, KeyguardSurfaceReason.CREDENTIAL_MARKER, legacy.markers)
+        if (KeyguardR44Markers.Marker.SHADE in r44Restrictions ||
+            KeyguardR44Markers.Marker.QUICK_SETTINGS in r44Restrictions) return KeyguardSurfaceClassification(
+            KeyguardSurface.SHADE, KeyguardSurfaceReason.SHADE_MARKER, legacy.markers)
         // Known restrictions remain useful even when a different root is
         // incomplete.  They always precede any positive proof.
         if (legacy.surface == KeyguardSurface.CREDENTIAL || legacy.surface == KeyguardSurface.SHADE ||
