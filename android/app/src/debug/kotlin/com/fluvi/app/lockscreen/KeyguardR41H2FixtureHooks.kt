@@ -4,4 +4,5 @@ package com.fluvi.app.lockscreen
 internal object KeyguardR41H2FixtureHooks {
     const val ENABLED = true
     @Volatile var enableIntervention = false
+    @Volatile var observeOnly = false
 }

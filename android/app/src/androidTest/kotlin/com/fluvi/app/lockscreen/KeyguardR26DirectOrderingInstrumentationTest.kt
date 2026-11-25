@@ -41,9 +41,12 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun orderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true)
     @Test fun warmOrderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true, warmup = true)
     @Test fun readyWorkDoesNotWaitForDiagnosticPublication() = exercise(true, true, warmup = true, checkReport = true)
+    @Test fun r41FixtureRealIngressReconcilesBeforeSuccessor() = exercise(true, true, warmup = true, h2Fixture = true)
+    @Test fun r41FixtureFifoControlWaitsForOriginalMain() = exercise(true, true, warmup = true, h2Fixture = true, h2ClaimEnabled = false)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
-    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false) {
+    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false,
+                         checkReport:Boolean = false, h2Fixture:Boolean = false, h2ClaimEnabled:Boolean = true) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -51,7 +54,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val source = requireNotNull(args.getString("sourceSha"))
         require(source.matches(Regex("[0-9a-f]{40}")))
         val uuid = UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
-        val name = if (checkReport) "r41-report" else if (warmup) "r41-warm-pending" else if (checkR41Bypass) "r41-pending" else if (pendingBefore) "pending" else "stable-later-offer"
+        val name = if (h2Fixture) { if (h2ClaimEnabled) "r41-h2-fixture" else "r41-h2-fifo-control" } else if (checkReport) "r41-report" else if (warmup) "r41-warm-pending" else if (checkR41Bypass) "r41-pending" else if (pendingBefore) "pending" else "stable-later-offer"
         val dir = File(context.filesDir, "keyguard-service-probe/r26/$uuid/$name")
         check(dir.mkdirs())
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
@@ -87,6 +90,9 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val route=AtomicReference<Route?>(); val held=CountDownLatch(1); val release=CountDownLatch(1)
         val workerTimeout=AtomicBoolean(false); val done=CountDownLatch(1); val successorStarted=CountDownLatch(1)
         val reportHeld=CountDownLatch(1); val reportRelease=CountDownLatch(1); val reportTimeout=AtomicBoolean(false)
+        val h2Receipt=CountDownLatch(1); val h2MainHeld=CountDownLatch(1); val h2Claimed=CountDownLatch(1)
+        val h2Reconciled=CountDownLatch(1); val h2FifoNoop=CountDownLatch(1)
+        val h2Resume=AtomicReference<Runnable?>(); val h2ApplyCount=AtomicInteger(0)
         val originalMain=AtomicLong(0); val originalExit=AtomicLong(0); val bStarted=AtomicLong(0); val bId=AtomicLong(0)
         val r25Evaluations=AtomicLong(0); val r25AtAExit=AtomicLong(-1)
         val order=AtomicLong(0); val oldProofAtExit=AtomicLong(0); val maxReaders=AtomicInteger(0); val readers=AtomicInteger(0)
@@ -137,6 +143,17 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 originalCross?.invoke(output)
             }
             instrumentation.runOnMainSync {
+                if (h2Fixture) {
+                    KeyguardR41H2FixtureHooks.enableIntervention = h2ClaimEnabled
+                    KeyguardR41H2FixtureHooks.observeOnly = !h2ClaimEnabled
+                    actual.r32MainApplyGateForTest = { request, resume ->
+                        if (request.id == candidate.get()?.id && h2Resume.compareAndSet(null, resume)) {
+                            records.add("H2_ORIGINAL_MAIN_HELD id=${request.id}")
+                            h2MainHeld.countDown()
+                            true
+                        } else false
+                    }
+                }
                 actual.r41R25EvaluationsForTest = r25Evaluations
                 actual.inspectionProbeForTest=object:KeyguardInspectionProbeForTest {
                     override fun openingOrderSelected(request:KeyguardCardInspectionRequest, milestoneOrdered:Boolean) {
@@ -160,10 +177,30 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         r25Evaluations.set(0)
                         route.set(found); records.add("A_HELD id=${request.id} route=$found end=$finishedAt")
                         held.countDown()
-                        if(!release.await(20,TimeUnit.SECONDS)) workerTimeout.set(true)
+                        if(!h2Fixture && !release.await(20,TimeUnit.SECONDS)) workerTimeout.set(true)
+                    }
+                    override fun ingressOffered(meta: KeyguardAccessibilityEventMeta, request: KeyguardCardInspectionRequest,
+                        previous: KeyguardCardInspectionRequest?, pending: KeyguardCardInspectionRequest?,
+                        startsWorker: Boolean, frameworkEvent: Boolean) {
+                        if (h2Fixture && frameworkEvent && request.r14Ingress?.origin == KeyguardR14Origin.SYSTEM_UI &&
+                            pending?.id == request.id && !startsWorker && candidate.get() != null) {
+                            bId.compareAndSet(0, request.id)
+                            records.add("H2_REAL_OFFER id=${request.id} event=${meta.eventType} window=${meta.windowId}")
+                        }
+                    }
+                    override fun r41H2Boundary(request: KeyguardCardInspectionRequest, phase: String,
+                        successor: KeyguardCardInspectionRequest?) {
+                        if (!h2Fixture || request.id != candidate.get()?.id) return
+                        records.add("H2_$phase A=${request.id} next=${successor?.id}")
+                        when (phase) {
+                            "RECEIPT" -> h2Receipt.countDown()
+                            "CLAIMED" -> h2Claimed.countDown()
+                            "RECONCILED" -> { if (successor != null) bId.set(successor.id); h2Reconciled.countDown() }
+                            "FIFO_NOOP" -> h2FifoNoop.countDown()
+                        }
                     }
                     override fun beforeApply(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility) {
-                        if(request.id==candidate.get()?.id) { originalMain.set(order.incrementAndGet()); records.add("A_MAIN id=${request.id} seq=${originalMain.get()}") }
+                        if(request.id==candidate.get()?.id) { if(h2Fixture) h2ApplyCount.incrementAndGet(); originalMain.set(order.incrementAndGet()); records.add("A_MAIN id=${request.id} seq=${originalMain.get()}") }
                     }
                     override fun beforeOptionalInspectionReport(request:KeyguardCardInspectionRequest) {
                         if (checkReport && request.id == candidate.get()?.id) {
@@ -217,11 +254,35 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             assertTrue("the real DIRECT read must select the milestone order",orderedReads.contains(a.id))
             assertTrue(original.reservation>0 && original.host>0 && original.output>0)
             assertEquals("NOT REACHED: exact original route changed",original,currentRoute(a))
-            if(pendingBefore) instrumentation.runOnMainSync { offerSuccessor() }
-            if(pendingBefore) {
-                assertTrue("NOT REACHED: real B was not queued",bId.get()>a.id)
-                assertEquals("NOT REACHED: route changed after offer",original,currentRoute(a))
-            } else assertNull("NOT REACHED: stable A already had a pending request",actual.inspectionStateForTest().pending)
+            if (h2Fixture) {
+                assertTrue("NOT REACHED: qualified completed A receipt", h2Receipt.await(10,TimeUnit.SECONDS))
+                assertTrue("NOT REACHED: original A Main continuation held", h2MainHeld.await(10,TimeUnit.SECONDS))
+                // A real framework event; never inject a classification or
+                // assert that the volume surface is safe for disclosure.
+                shell("input keyevent KEYCODE_VOLUME_UP")
+                if (h2ClaimEnabled) {
+                    assertTrue("NOT REACHED: genuine identified ingress claimed A", h2Claimed.await(12,TimeUnit.SECONDS))
+                    assertTrue("NOT REACHED: A restrictive reconciliation returned", h2Reconciled.await(10,TimeUnit.SECONDS))
+                    assertTrue("NOT REACHED: actual queue-selected B did not start", successorStarted.await(10,TimeUnit.SECONDS))
+                    assertNotNull("original A continuation was not held", h2Resume.get())
+                    instrumentation.runOnMainSync { checkNotNull(h2Resume.getAndSet(null)).run() }
+                    assertTrue("NOT REACHED: original FIFO no-op", h2FifoNoop.await(10,TimeUnit.SECONDS))
+                } else {
+                    await("actual identified B offered while A is held") { bId.get() > a.id }
+                    assertFalse("FIFO control started B while original A was held", successorStarted.await(2,TimeUnit.SECONDS))
+                    assertEquals("FIFO control unexpectedly claimed A", 1L, h2Claimed.count)
+                    instrumentation.runOnMainSync { checkNotNull(h2Resume.getAndSet(null)).run() }
+                    assertTrue("NOT REACHED: FIFO A did not finish", done.await(10,TimeUnit.SECONDS))
+                    assertTrue("NOT REACHED: FIFO successor did not start", successorStarted.await(10,TimeUnit.SECONDS))
+                }
+                assertEquals("A was applied more than once", 1, h2ApplyCount.get())
+            } else if(pendingBefore) instrumentation.runOnMainSync { offerSuccessor() }
+            if (!h2Fixture) {
+                if(pendingBefore) {
+                    assertTrue("NOT REACHED: real B was not queued",bId.get()>a.id)
+                    assertEquals("NOT REACHED: route changed after offer",original,currentRoute(a))
+                } else assertNull("NOT REACHED: stable A already had a pending request",actual.inspectionStateForTest().pending)
+            }
             release.countDown()
             assertTrue("NOT REACHED: A did not complete ordered Main",done.await(20,TimeUnit.SECONDS))
             assertTrue("NOT REACHED: later B was not queued",bId.get()>a.id)
@@ -255,7 +316,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         } catch(t:Throwable) { failure=t; records.add("FAIL ${t.javaClass.simpleName}:${t.message}") }
         finally {
             release.countDown(); reportRelease.countDown(); KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross=originalCross
-            runCatching { instrumentation.runOnMainSync { service?.inspectionProbeForTest=null; service?.r25MainDispatchForTest=null; service?.r41R25EvaluationsForTest=null } }
+            h2Resume.getAndSet(null)?.let { Handler(Looper.getMainLooper()).post(it) }
+            KeyguardR41H2FixtureHooks.enableIntervention = false
+            KeyguardR41H2FixtureHooks.observeOnly = false
+            runCatching { instrumentation.runOnMainSync { service?.inspectionProbeForTest=null; service?.r25MainDispatchForTest=null; service?.r41R25EvaluationsForTest=null; service?.r32MainApplyGateForTest=null } }
             if(capture) runCatching { File(dir,"frozen.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"] as String) }
             runCatching {
                 secure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,other)

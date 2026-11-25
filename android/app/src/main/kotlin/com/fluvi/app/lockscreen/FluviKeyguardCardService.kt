@@ -2756,10 +2756,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         var originalClosed: Boolean = false,
     )
     private var r41FixtureClaim: R41FixtureClaim? = null // queueLock
+    private var r41FixtureUsedSession = -1L // queueLock
+    private var r41FixtureUsedWake = -1L // queueLock
 
     private fun r41FixturePublish(read: CompletedInspection, handoff: InspectionHandoff,
                                   decision: ReadAheadDecision): R41FixtureClaim? {
-        if (!KeyguardR41H2FixtureHooks.ENABLED || !KeyguardR41H2FixtureHooks.enableIntervention ||
+        if (!KeyguardR41H2FixtureHooks.ENABLED ||
+            !(KeyguardR41H2FixtureHooks.enableIntervention || KeyguardR41H2FixtureHooks.observeOnly) ||
             Build.VERSION.SDK_INT != 35 || !read.r38MilestoneOrdered || decision.pendingId != null ||
             read.result.decision != KeyguardCardVisibility.SHOW_FULL ||
             read.result.surfaceReason != KeyguardSurfaceReason.MAIN_CONFIRMED ||
@@ -2771,7 +2774,9 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (!signals.systemStateAvailable || !signals.userUnlocked || !signals.primaryDisplay ||
             !signals.interactive || !signals.displayOn || signals.displayOff || !signals.keyguardLocked) return null
         return synchronized(queueLock) {
-            if (r41FixtureClaim != null || inspectionQueue.pendingRequest() != null ||
+            if (r41FixtureClaim != null ||
+                (r41FixtureUsedSession == read.request.session && r41FixtureUsedWake == read.request.wakeGeneration) ||
+                inspectionQueue.pendingRequest() != null ||
                 !authorityIsCurrent(read.request)) return@synchronized null
             val original = r34EmptyDirectLocked(read.request) ?: return@synchronized null
             if (scene != firstAuthorizedOrb.sceneSerial() || freshness != original.route.freshnessRevision ||
@@ -2792,10 +2797,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             ingress.windowId < 0 || ingress.displayId != Display.DEFAULT_DISPLAY || scene == null ||
             offer.start != null) return
         check(Looper.myLooper() == Looper.getMainLooper())
-        // A pending system/exclusion gate or an already restrictive decision
-        // wins. This fixture does not classify the new event as safe.
+        // An already restrictive decision or an outstanding exclusion
+        // barrier wins. The ordinary recurring sampler stays independent.
         if (!serviceJob.isActive || appliedDecision != KeyguardCardVisibility.HIDDEN_UNKNOWN ||
-            terminalHideState != null || r25ExclusionPosted.get() || systemSampler.hasOutstandingForR41Fixture()) return
+            terminalHideState != null || r25ExclusionPosted.get()) return
         val claim = synchronized(queueLock) {
             val existing = r41FixtureClaim ?: return@synchronized null
             val earlier = existing.read.request
@@ -2810,6 +2815,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 !inspectionFreshness.isEstablished(inspectionAuthority, existing.original.route.freshnessRevision) ||
                 !r34SameEmptyOwnerLocked(earlier, existing.original)) return@synchronized null
             existing.state = R41FixtureClaimState.CLAIMED
+            r41FixtureUsedSession = earlier.session
+            r41FixtureUsedWake = earlier.wakeGeneration
             existing
         } ?: return
         val earlier = claim.read.request
@@ -3665,7 +3672,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                     KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.ORDERED_BYPASS,
                         active.diagnosticContext, active.id)
                 }
-                val fixtureReceipt = if (KeyguardR41H2FixtureHooks.ENABLED && KeyguardR41H2FixtureHooks.enableIntervention)
+                val fixtureReceipt = if (KeyguardR41H2FixtureHooks.ENABLED &&
+                    (KeyguardR41H2FixtureHooks.enableIntervention || KeyguardR41H2FixtureHooks.observeOnly))
                     r41FixturePublish(read, handoff, decision) else null
                 r41FixtureActive = fixtureReceipt
                 if (fixtureReceipt != null)
