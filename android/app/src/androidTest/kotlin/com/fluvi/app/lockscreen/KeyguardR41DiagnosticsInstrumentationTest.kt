@@ -31,6 +31,31 @@ class KeyguardR41DiagnosticsInstrumentationTest {
 
     @Test fun r42LateCriticalWakeSurvivesRawLightPressure() = r42LateCriticalWakeSurvivesRawPressure("LIGHT")
     @Test fun r42LateCriticalWakeSurvivesRawFullPressure() = r42LateCriticalWakeSurvivesRawPressure("FULL")
+    @Test fun r42LateWinnerOfferAndReadSurviveRawPressure() {
+        KeyguardCardDiagnostics.startCapture(context, "r42-winning-offer", "profile", "FULL")
+        val capture = checkNotNull(KeyguardCardDiagnostics.activeCaptureId())
+        val first = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 943, 1, "wake", 1000))
+        repeat(2_200) { index ->
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.OFFER, first, 10_000L + index, atNs = 1_000_000L + index)
+        }
+        val receipt = KeyguardCardDiagnostics.r41Provisional(capture, 1, 943, 2000, 2_000_000L)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 943, 2, "wake", 2000))
+        KeyguardCardDiagnostics.r41Bind(owner, receipt)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.OFFER, owner, 201, atNs = 2_000_001L)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.WORKER, owner, 201, atNs = 2_000_002L)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.READ_START, owner, 201, atNs = 2_000_003L)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.READ_END, owner, 201, atNs = 2_000_004L)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.GRANT, owner, 201, 102, 202, atNs = 2_000_005L)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.WINNER, owner, 201, 102, 202, atNs = 2_000_006L)
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        retain("FULL-r42-late-winner-offer.txt", report)
+        val row = report.lineSequence().single { it.startsWith(" R41_CORE attempt=2 ") }
+        assertTrue("raw loss must remain explicit", Regex("rawOverflow=[1-9][0-9]*").containsMatchIn(report))
+        assertTrue(row, row.contains("wakeNs=2000000") && row.contains("offerNs=2000001") &&
+            row.contains("workerNs=2000002") && row.contains("readStartNs=2000003") &&
+            row.contains("readEndNs=2000004") && row.contains("outcome=SUCCESS") && row.contains("owner=102/202/201"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+    }
 
     /** The supplied R41 phone capture lost its complete last attempt after
      * raw overflow. This fixture keeps the original raw loss visible while
