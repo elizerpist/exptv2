@@ -117,6 +117,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
       methods=(r41SystemWarmBenignIngressBeforeRealMainAck r41SystemWarmExclusionBeforeRealMainAck)
       ;;
+    r21_system_warm_swipe)
+      class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
+      methods=(r41SystemWarmSwipeShadeBeforeRealMainAck)
+      ;;
     fallback)
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
       methods=(r41ActualFallbackRetainsCandidateAndPostReceipt)
