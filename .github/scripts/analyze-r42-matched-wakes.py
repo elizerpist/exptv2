@@ -45,6 +45,7 @@ def capture_scalar(text, key):
 
 def analyzed_rows(block, arm, mode, source, trial, report, capture_hash):
     records = [fields(line) for line in report.splitlines() if line.startswith(' R41_CORE ')]
+    pipelines = [fields(line) for line in report.splitlines() if line.startswith(' R18_PIPELINE ')]
     trial_no = trial.get('trial', 'UNOBSERVED')
     if not records:
         return [dict(block=block, arm=arm, mode=mode, source_sha=source, trial=trial_no,
@@ -58,11 +59,17 @@ def analyzed_rows(block, arm, mode, source, trial, report, capture_hash):
         same_owner = owner != 'UNOBSERVED' and all(row.get(key) == owner for key in ('readOwner', 'dispatchOwner', 'grantOwner'))
         same_output = (len(owner_parts) == 3 and owner_parts[1] == trial.get('generation') and
                        trial.get('workerPost') == 'true')
+        same_pipeline = (len(owner_parts) == 3 and any(
+            pipe.get('attempt') == row.get('attempt') and pipe.get('attach') == trial.get('attachment') and
+            pipe.get('output') == owner_parts[1] and pipe.get('proof') == owner_parts[2] and
+            pipe.get('consumedReq') == owner_parts[2] and pipe.get('backend') == 'R18_DIRECT_ATTEMPT' and
+            integer(pipe.get('grant')) is not None
+            for pipe in pipelines))
         grant, winner = (integer(row.get(k)) for k in ('grantNs', 'winnerNs'))
         post = integer(trial.get('workerPostNs'))
         cancel = integer(row.get('cancelNs'))
         cancelled_before_post = cancel is not None and grant is not None and post is not None and grant <= cancel <= post
-        real_winner = (same_owner and same_output and row.get('invalid') == '0' and grant is not None and
+        real_winner = (same_owner and same_output and same_pipeline and row.get('invalid') == '0' and grant is not None and
                        winner is not None and post is not None and winner >= grant and post >= grant and
                        not cancelled_before_post)
         eligible = row.get('eligible', 'UNOBSERVED')
@@ -80,6 +87,7 @@ def analyzed_rows(block, arm, mode, source, trial, report, capture_hash):
             attempt=row.get('attempt', 'UNOBSERVED'), session=row.get('session', 'UNOBSERVED'), wake=row.get('wake', 'UNOBSERVED'),
             eligible=eligible, outcome=outcome, owner=owner, request=row.get('request', 'UNOBSERVED'),
             posted=trial.get('workerPost', 'UNOBSERVED'), visible=trial.get('visible', 'UNOBSERVED'),
+            direct_pipeline_match=str(same_pipeline).lower(),
             callback_to_grant_ms=bound, earlier_same_wake_to_grant_ms=alternative,
             screen_to_grant_ms=ms(row.get('screenNs'), row.get('grantNs')) if real_winner else 'UNOBSERVED',
             callback_to_winning_offer_ms=ms(row.get('wakeNs'), row.get('offerNs')),
