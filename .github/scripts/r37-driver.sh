@@ -11,7 +11,7 @@ case "${1:-}" in
   test -z "$(git status --porcelain --untracked-files=no)"
   if [[ "$BASELINE" = true ]]; then
     test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
-    if [[ "$TEST_SCOPE" == r44_service ]]; then
+    if [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui ]]; then
       fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt"
       test -f "$fixture"
       cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt
@@ -118,6 +118,10 @@ case "${1:-}" in
     r44_service)
       class=com.fluvi.app.lockscreen.KeyguardR44ServiceInstrumentationTest
       methods=(syntheticPairUsesRealServiceWithCaptureOff syntheticPairUsesRealServiceWithCaptureOn supersededSyntheticReadCannotGrantAfterRestriction)
+      ;;
+    r44_systemui)
+      class=com.fluvi.app.lockscreen.KeyguardR44ServiceInstrumentationTest
+      methods=(actualSystemUiRestrictiveTransitions)
       ;;
     r44_provider)
       class=com.fluvi.app.lockscreen.KeyguardR44LazyProviderInstrumentationTest
@@ -340,7 +344,7 @@ case "${1:-}" in
     if (( rc != 0 )) || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then
       printf '%s FAIL exit=%s\n' "$method" "$rc" >> "$out/results.txt"; failed=1
     else printf '%s PASS\n' "$method" >> "$out/results.txt"; fi
-    if [[ "$TEST_SCOPE" == r44_service ]]; then
+    if [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui ]]; then
       # A native process crash bypasses the fixture's finally block. This is
       # the disposable fixture PIN only; clear it so the following declared
       # method can independently establish its own secure-lock precondition.
