@@ -38,4 +38,17 @@ class KeyguardR43SurfaceEvidenceTest {
         assertEquals(1, evidence.omittedWindows)
         assertFalse(evidence.windows().toString().contains("foreign.secret"))
     }
+
+    @Test fun passiveHoldRemainsEligibleAfterBusyObserverOnlyWithinItsOwnWindow() {
+        assertEquals(-1, KeyguardR43HoldTiming.passiveIndex(2_499))
+        assertEquals(0, KeyguardR43HoldTiming.passiveIndex(2_500))
+        assertEquals(0, KeyguardR43HoldTiming.passiveIndex(5_999))
+        assertEquals(-1, KeyguardR43HoldTiming.passiveIndex(6_000))
+        assertEquals(3, KeyguardR43HoldTiming.passiveIndex(22_513))
+        assertEquals(-1, KeyguardR43HoldTiming.passiveIndex(24_000))
+        assertTrue(KeyguardR43HoldTiming.canAcceptPassive(KeyguardR43HoldTiming.OPEN))
+        assertTrue(KeyguardR43HoldTiming.canAcceptPassive(KeyguardR43HoldTiming.OBSERVER_INCOMPLETE))
+        assertFalse(KeyguardR43HoldTiming.canAcceptPassive(KeyguardR43HoldTiming.OBSERVER_RESERVED))
+        assertFalse(KeyguardR43HoldTiming.canAcceptPassive(KeyguardR43HoldTiming.PASSIVE_RETAINED))
+    }
 }

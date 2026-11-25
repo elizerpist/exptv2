@@ -266,7 +266,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             mainHandler.postDelayed({
                 if (r43Plan === plan && KeyguardCardDiagnostics.r43Enabled(plan.captureId)) {
                     inspectionScope.launch {
-                        if (!plan.holds.compareAndSet(index, 0, 2) ||
+                        if (!plan.holds.compareAndSet(index, KeyguardR43HoldTiming.OPEN, KeyguardR43HoldTiming.OBSERVER_RESERVED) ||
                             !KeyguardCardDiagnostics.r43Enabled(plan.captureId)) return@launch
                         val authority = inspectionAuthority
                         val scene = firstAuthorizedOrb.sceneHint()
@@ -280,6 +280,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                                 SystemClock.uptimeMillis(), "OBSERVER_SKIPPED_BUSY", r43Labels[index], r43EffectiveFlags,
                                 true, KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.ROOT_UNAVAILABLE),
                                 true, false, true, 0, 0, 0, evidence))
+                            plan.holds.compareAndSet(index, KeyguardR43HoldTiming.OBSERVER_RESERVED, KeyguardR43HoldTiming.OBSERVER_INCOMPLETE)
                             return@launch
                         }
                         val observation = runCatching {
@@ -307,6 +308,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                                 true, false, true, 0, 0, 0, KeyguardR43SurfaceEvidence())
                         }
                         KeyguardCardDiagnostics.recordR43(applicationContext, observation)
+                        if (observation.rootUnavailable || observation.truncated || observation.stale) {
+                            plan.holds.compareAndSet(index, KeyguardR43HoldTiming.OBSERVER_RESERVED, KeyguardR43HoldTiming.OBSERVER_INCOMPLETE)
+                        }
                     }
                 }
             }, 4_000L + 6_000L * index)
@@ -322,16 +326,17 @@ class FluviKeyguardCardService : AccessibilityService() {
         val stale = scene == null || scene != firstAuthorizedOrb.sceneHint()
         evidence.attachMarkers(read.snapshots)
         val elapsed = at - plan.wakeAt
-        val index = if (plan.wakeAt > 0L && elapsed >= 2_500L) (elapsed / 6_000L).toInt() else -1
-        val inHold = index in r43Labels.indices && elapsed - index * 6_000L in 2_500L..4_000L &&
+        val index = if (plan.wakeAt > 0L) KeyguardR43HoldTiming.passiveIndex(elapsed) else -1
+        val inHold = index in r43Labels.indices &&
             !read.rootUnavailable && !read.walkTruncated && !read.abortedStale && !stale
-        val label = if (inHold && plan.holds.get(index) == 0) r43Labels[index] else null
+        val holdState = if (inHold) plan.holds.get(index) else -1
+        val label = if (inHold && KeyguardR43HoldTiming.canAcceptPassive(holdState)) r43Labels[index] else null
         val accepted = KeyguardCardDiagnostics.recordR43(applicationContext, KeyguardR43Observation(
             plan.captureId, request.session, request.wakeGeneration, request.id, scene, at, "PASSIVE", label,
             r43EffectiveFlags, read.timing.ownAttributionAmbiguous, classification,
             read.rootUnavailable, read.walkTruncated, read.abortedStale || stale,
             read.windowsReadMs, read.treeScanMs, read.visitedNodeCount, evidence))
-        if (accepted && label != null) plan.holds.compareAndSet(index, 0, 1)
+        if (accepted && label != null) plan.holds.compareAndSet(index, holdState, KeyguardR43HoldTiming.PASSIVE_RETAINED)
     }
     private val financialScope = CoroutineScope(serviceJob + financialDispatcher)
     private val queueLock = Any()

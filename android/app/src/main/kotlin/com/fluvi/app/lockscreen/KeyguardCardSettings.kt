@@ -943,6 +943,7 @@ internal object KeyguardCardDiagnostics {
         var r43LastSignature: String? = null,
         var r43Samples: Long = 0,
         val r43Holds: LinkedHashMap<String, String> = linkedMapOf(),
+        val r43ProvisionalHolds: LinkedHashMap<String, String> = linkedMapOf(),
         var r43Dropped: Long = 0,
         var r43Skipped: Long = 0,
         val r41StartMonoBeforeNs: Long? = null,
@@ -1707,8 +1708,19 @@ internal object KeyguardCardDiagnostics {
                         active.r43LastSignature = signature
                     }
                 }
-                if (observation.hold in setOf("CLOCK_1", "PIN", "CLOCK_2", "SHADE"))
-                    active.r43Holds.putIfAbsent(requireNotNull(observation.hold), row)
+                if (observation.hold in setOf("CLOCK_1", "PIN", "CLOCK_2", "SHADE")) {
+                    val hold = requireNotNull(observation.hold)
+                    val complete = !observation.rootUnavailable && !observation.truncated && !observation.stale
+                    val previous = active.r43ProvisionalHolds[hold]
+                    if (previous != null && observation.source == "PASSIVE" && complete) {
+                        active.r43Holds[hold] = row.replaceFirst(" labelIsNotAuthority=true", " priorObserver=$previous labelIsNotAuthority=true")
+                        active.r43ProvisionalHolds.remove(hold)
+                    } else if (!active.r43Holds.containsKey(hold)) {
+                        active.r43Holds[hold] = row
+                        if (observation.source.startsWith("OBSERVER") && !complete)
+                            active.r43ProvisionalHolds[hold] = observation.source
+                    }
+                }
             }
         }
         if (!accepted) token.r43Dropped.incrementAndGet()
@@ -2841,6 +2853,7 @@ internal object KeyguardCardDiagnostics {
             ?: active.coldPreparation?.let { it.copy(stages = LinkedHashMap(it.stages)) },
         firstAttempt = active.firstAttempt?.let(::copyAttempt),
         r43Holds = LinkedHashMap(active.r43Holds),
+        r43ProvisionalHolds = LinkedHashMap(active.r43ProvisionalHolds),
         r43Dropped = r41Token?.r43Dropped?.get() ?: active.r43Dropped,
         r43Skipped = r41Token?.r43Skipped?.get() ?: active.r43Skipped,
         events = ArrayDeque(active.events.map { it.copy(fields = it.fields.toMap()) }),

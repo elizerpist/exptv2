@@ -1,5 +1,21 @@
 package com.fluvi.app.lockscreen
 
+/** Timing is an annotation of a user-held surface, never visibility authority. */
+internal object KeyguardR43HoldTiming {
+    const val OPEN = 0
+    const val PASSIVE_RETAINED = 1
+    const val OBSERVER_RESERVED = 2
+    const val OBSERVER_INCOMPLETE = 3
+
+    fun passiveIndex(elapsedMs: Long): Int {
+        if (elapsedMs < 2_500L) return -1
+        val index = (elapsedMs / 6_000L).toInt()
+        return if (index in 0..3 && elapsedMs - index * 6_000L >= 2_500L) index else -1
+    }
+
+    fun canAcceptPassive(state: Int): Boolean = state == OPEN || state == OBSERVER_INCOMPLETE
+}
+
 /** Capture-only technical evidence. It never conveys visibility authority or
  * retains a node, text, content description, notification, or foreign name. */
 internal class KeyguardR43SurfaceEvidence {

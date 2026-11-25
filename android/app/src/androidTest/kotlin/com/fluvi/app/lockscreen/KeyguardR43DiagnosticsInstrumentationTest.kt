@@ -10,6 +10,35 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class KeyguardR43DiagnosticsInstrumentationTest {
+    @Test fun laterCompletePassiveHoldReplacesBusyObserverAndRetainsItsCause() {
+        assumeTrue("genuine API 37 device required", Build.VERSION.SDK_INT >= 37)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        KeyguardCardDiagnostics.startCapture(context, "r43-busy", "debug", "LIGHT", true)
+        val capture = requireNotNull(KeyguardCardDiagnostics.activeCaptureId())
+        try {
+            val unknown = KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.ROOT_UNAVAILABLE)
+            val busy = KeyguardR43Observation(capture, 1, 1, null, 7, 22_000, "OBSERVER_SKIPPED_BUSY", "SHADE", 80,
+                true, unknown, true, false, true, 0, 0, 0, KeyguardR43SurfaceEvidence())
+            assertTrue(KeyguardCardDiagnostics.recordR43(context, busy))
+            val before = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+            assertTrue(before.contains("hold=SHADE source=OBSERVER_SKIPPED_BUSY"))
+            val stale = busy.copy(request = 98, observedAt = 22_400, source = "PASSIVE")
+            assertTrue(KeyguardCardDiagnostics.recordR43(context, stale))
+            val afterStale = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+            assertTrue(afterStale.contains("retained=HOLD hold=SHADE source=OBSERVER_SKIPPED_BUSY"))
+            val actual = KeyguardR43Observation(capture, 1, 1, 99, 7, 22_513, "PASSIVE", "SHADE", 80,
+                false, KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.NO_MAIN_MARKER),
+                false, false, false, 2, 3, 4, KeyguardR43SurfaceEvidence())
+            assertTrue(KeyguardCardDiagnostics.recordR43(context, actual))
+            val after = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            assertTrue(after.contains("retained=HOLD hold=SHADE source=PASSIVE"))
+            assertTrue(after.contains("priorObserver=OBSERVER_SKIPPED_BUSY"))
+            assertTrue(after.toByteArray(Charsets.UTF_8).size <= 32_768)
+        } finally {
+            KeyguardCardDiagnostics.clearCapture(context)
+        }
+    }
+
     @Test fun frozenOrReplacedCaptureCannotReceiveAnOldObservation() {
         assumeTrue("genuine API 37 device required", Build.VERSION.SDK_INT >= 37)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
