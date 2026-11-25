@@ -29,6 +29,35 @@ class KeyguardR41DiagnosticsInstrumentationTest {
     @Test fun allAttemptsSurviveVerboseLightPressure() = exercise("LIGHT")
     @Test fun allAttemptsSurviveVerboseFullPressure() = exercise("FULL")
 
+    @Test fun twentyFiveRequestWakeSurvivesLightExport() = exportTwentyFiveRequests("LIGHT")
+    @Test fun twentyFiveRequestWakeSurvivesFullExport() = exportTwentyFiveRequests("FULL")
+
+    private fun exportTwentyFiveRequests(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r41-25-requests", "profile", mode)
+        val capture = checkNotNull(KeyguardCardDiagnostics.activeCaptureId())
+        val receipt = KeyguardCardDiagnostics.r41Provisional(capture, 1, 941, 1, 1_000L)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 941, 1, "wake", 1))
+        KeyguardCardDiagnostics.r41Bind(owner, receipt)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.ELIGIBLE, owner, atNs = 1_001L)
+        for (id in 1L..25L) {
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.OFFER, owner, id, atNs = 2_000L + id)
+        }
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.READ_START, owner, 1, atNs = 3_000L)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.READ_END, owner, 1, atNs = 4_000L)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.READ_START, owner, 25, atNs = 5_000L)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.READ_END, owner, 25, atNs = 6_000L)
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        retain("$mode-25-requests-frozen.txt", report)
+        val core = report.lineSequence().single { it.startsWith(" R41_CORE ") }
+        assertTrue(core, core.contains("requests=25 omitted=0"))
+        val rows = report.lineSequence().filter { it.startsWith(" R41_REQ ") }.toList()
+        assertEquals("$mode must export every retained request", 25, rows.size)
+        for (id in 1L..25L) assertEquals("request $id", 1, rows.count { it.contains("req=$id ") })
+        assertTrue(rows.single { it.contains("req=1 ") }.contains("read=3000/4000"))
+        assertTrue(rows.single { it.contains("req=25 ") }.contains("read=5000/6000"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+    }
+
     @Test fun rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners() {
         KeyguardCardDiagnostics.startCapture(context, "r41-raw-owner", "profile", "LIGHT")
         val capture = checkNotNull(KeyguardCardDiagnostics.activeCaptureId())

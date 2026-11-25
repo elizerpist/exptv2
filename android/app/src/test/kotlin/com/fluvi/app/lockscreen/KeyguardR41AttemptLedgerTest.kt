@@ -36,7 +36,7 @@ class KeyguardR41AttemptLedgerTest {
     @Test fun capacityLossAndConflictsAreExplicitAndSnapshotsAreIndependent() {
         val ledger = KeyguardR41AttemptLedger()
         ledger.record("WAKE", null, 100)
-        repeat(17) { ledger.record("READ_START", it.toLong(), 200 + it.toLong()) }
+        repeat(33) { ledger.record("READ_START", it.toLong(), 200 + it.toLong()) }
         ledger.record("READ_START", 0, 999)
         val frozen = ledger.snapshot()
         ledger.record("WAKE", null, 101)
@@ -44,7 +44,24 @@ class KeyguardR41AttemptLedgerTest {
         assertEquals(1L, frozen.invalid)
         assertEquals(100L, frozen.wakeNs)
         assertTrue(frozen.core(1, 1, 1, 0).contains("omitted=1 invalid=1 dropped=2"))
-        assertEquals(16, frozen.requestRows(1).size)
+        assertEquals(32, frozen.requestRows(1).size)
+    }
+
+    @Test fun aTwentyFiveRequestWakeRetainsEachOriginalOfferAndRead() {
+        val ledger = KeyguardR41AttemptLedger()
+        ledger.record("WAKE", null, 100)
+        for (id in 1L..25L) ledger.record("OFFER", id, 200 + id)
+        ledger.record("READ_START", 1, 300)
+        ledger.record("READ_END", 1, 400)
+        ledger.record("READ_START", 25, 500)
+        ledger.record("READ_END", 25, 600)
+        val frozen = ledger.snapshot()
+        val rows = frozen.requestRows(1)
+        assertEquals(0L, frozen.omitted)
+        assertEquals(25, rows.size)
+        for (id in 1L..25L) assertEquals("request $id", 1, rows.count { it.contains("req=$id ") })
+        assertTrue(rows.single { it.contains("req=1 ") }.contains("read=300/400"))
+        assertTrue(rows.single { it.contains("req=25 ") }.contains("read=500/600"))
     }
 
     @Test fun shadowMatchesDoNotClaimOrEnableTheH2Intervention() {

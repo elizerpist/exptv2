@@ -205,7 +205,9 @@ internal class KeyguardR41AttemptLedger {
     }
 
     companion object {
-        private const val CAPACITY = 16
+        // A single real wake produced 25 distinct request IDs. Keep a
+        // bounded margin for that observed burst; overflow remains explicit.
+        private const val CAPACITY = 32
         private const val OFFER = 0
         private const val WORKER = 1
         private const val READ_START = 2
