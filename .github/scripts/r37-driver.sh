@@ -13,7 +13,9 @@ case "${1:-}" in
     fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt"
     test -f "$fixture"
     test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
-    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
+    if [[ "$TEST_SCOPE" != isolated_ready_witness ]]; then
+      cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
+    fi
     case "$TEST_SCOPE" in
       system_warm_report|system_warm_ordered|system_warm_latest_report|system_warm_latest_ordered|system_warm_target_report|system_warm_target_ordered)
         second="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt"
@@ -21,8 +23,14 @@ case "${1:-}" in
         cp "$second" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt
         sha256sum "$second" > "$out/fixture-r26.sha256"
         ;;
+      isolated_ready_witness)
+        second="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt"
+        test -f "$second"
+        cp "$second" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
+        sha256sum "$second" > "$out/fixture-material.sha256"
+        ;;
     esac
-    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt > "$out/fixture.patch"
+    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt > "$out/fixture.patch"
     sha256sum "$fixture" > "$out/fixture.sha256"
   fi
   flutter pub get > "$out/pub-get.log" 2>&1
@@ -128,6 +136,10 @@ case "${1:-}" in
     r21_system_warm_swipe)
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
       methods=(r41SystemWarmSwipeShadeBeforeRealMainAck)
+      ;;
+    isolated_ready_witness)
+      class=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest
+      methods=(r41RetiredReadyUsesExactAttachmentWitness)
       ;;
     fallback)
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
