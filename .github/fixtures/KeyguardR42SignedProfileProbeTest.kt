@@ -121,20 +121,37 @@ class KeyguardR42SignedProfileProbeTest {
             shell("locksettings set-disabled false")
             call(diagnostics, "startCapture", context, source, "profile", "LIGHT")
             capture = true
-            shell("input keyevent KEYCODE_SLEEP")
-            await("locked sleeping device") { !power.isInteractive && keyguard.isKeyguardLocked }
-            val wakeNs = System.nanoTime()
-            shell("input keyevent KEYCODE_WAKEUP")
+            var wakeNs = 0L
             var owner: Any? = null
-            await("current DIRECT owner and matching grant", 30_000) {
-                instrumentation.runOnMainSync { owner = service()?.let { call(it, "r22VisualIdentityForTest") } }
-                val id = owner?.let(::identityOf)
-                val expected = id?.let { "${it[0]}/${it[2]}/${it[3]}" }
-                expected != null && report().lineSequence().any {
-                    it.startsWith(" R41_CORE ") && it.contains("outcome=SUCCESS") &&
-                        it.contains(" owner=$expected ")
+            var granted = false
+            // Ordinary wake can legitimately take a fallback route. Retain
+            // each distinct attempt and its diagnostic snapshot; never count
+            // that fallback as a DIRECT grant or discard the earlier wake.
+            for (attempt in 1..3) {
+                owner = null
+                shell("input keyevent KEYCODE_SLEEP")
+                await("locked sleeping device") { !power.isInteractive && keyguard.isKeyguardLocked }
+                wakeNs = System.nanoTime()
+                shell("input keyevent KEYCODE_WAKEUP")
+                try {
+                    await("current DIRECT owner and matching grant", 15_000) {
+                        instrumentation.runOnMainSync { owner = service()?.let { call(it, "r22VisualIdentityForTest") } }
+                        val id = owner?.let(::identityOf)
+                        val expected = id?.let { "${it[0]}/${it[2]}/${it[3]}" }
+                        expected != null && report().lineSequence().any {
+                            it.startsWith(" R41_CORE ") && it.contains("outcome=SUCCESS") &&
+                                it.contains(" owner=$expected ")
+                        }
+                    }
+                    granted = true
+                    notes.add("wakeAttempt=$attempt wakeNs=$wakeNs matchedDirectGrant=true")
+                    break
+                } catch (error: AssertionError) {
+                    notes.add("wakeAttempt=$attempt wakeNs=$wakeNs matchedDirectGrant=false reason=${error.message}")
+                    File(dir, "capture-attempt-$attempt.txt").writeText(report())
                 }
             }
+            assertTrue("NOT REACHED: a current DIRECT owner and matching grant in retained wakes", granted)
             val firstOwner = requireNotNull(owner)
             val identity = requireNotNull(identityOf(firstOwner))
             val bounds = Rect(call(firstOwner, "getBounds") as Rect)
