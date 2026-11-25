@@ -20,6 +20,12 @@ on:
       candidate_size:
         type: string
         default: '121006864'
+      test_sha256:
+        type: string
+        default: ''
+      test_size:
+        type: string
+        default: '0'
       native_diagnostic:
         type: boolean
         default: true
@@ -147,6 +153,8 @@ jobs:
       APP_SHA: ${{ inputs.app_sha }}
       CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
       CANDIDATE_SIZE: ${{ inputs.candidate_size }}
+      TEST_SHA256: ${{ inputs.test_sha256 }}
+      TEST_SIZE: ${{ inputs.test_size }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -166,7 +174,7 @@ jobs:
           retention-days: 1
       - name: Retrieve encrypted exact APK
         shell: bash
-        run: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r41-update-probe.sh" retrieve
+        run: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r42-update-probe.sh" retrieve
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -176,7 +184,7 @@ jobs:
           packages: 'platform-tools build-tools;36.0.0'
       - name: Verify downloaded APK identities
         shell: bash
-        run: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r41-update-probe.sh" verify
+        run: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r42-update-probe.sh" verify
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -190,7 +198,7 @@ jobs:
           arch: x86_64
           profile: pixel_7
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r41-update-probe.sh" install
+          script: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r42-update-probe.sh" install
       - uses: actions/upload-artifact@v4
         if: always()
         with:

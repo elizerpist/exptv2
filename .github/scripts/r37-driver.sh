@@ -44,6 +44,9 @@ case "${1:-}" in
   (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain) > "$out/build.log" 2>&1 || rc=$?
   if (( rc != 0 )); then tail -100 "$out/build.log"; exit "$rc"; fi
   sha256sum build/app/outputs/apk/debug/app-debug.apk build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$out/pair.sha256"
+  if [[ "$TEST_SCOPE" == r42_profile_motion_fixture ]]; then
+    cp build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk "$out/r42-profile-test-input.apk"
+  fi
   # This is a disposable hosted runner. Keep the APK pair and evidence.
   rm -rf -- "$root/build/app/intermediates" "$root/build/app/tmp" "$HOME/.gradle/caches"
   sha256sum -c "$out/pair.sha256"
@@ -136,6 +139,10 @@ case "${1:-}" in
       methods=(r41SystemWarmLiveOrbShowsTwoCalibratedFramesThenWithdraws)
       ;;
     r41_system_warm_prepared_motion)
+      class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
+      methods=(r41SystemWarmPreparedLiveOrbShowsCalibratedFramesThenWithdraws)
+      ;;
+    r42_profile_motion_fixture)
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
       methods=(r41SystemWarmPreparedLiveOrbShowsCalibratedFramesThenWithdraws)
       ;;
