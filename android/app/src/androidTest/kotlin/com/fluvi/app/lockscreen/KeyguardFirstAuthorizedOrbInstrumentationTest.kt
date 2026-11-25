@@ -47,6 +47,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r41WarmHeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() = runService(false, null, true, true)
     @Test fun r41PreparedRouteHeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() =
         runService(false, null, true, true, false, true)
+    @Test fun r41SystemWarmFreshServiceKeepsVisualAndUnlockControls() =
+        runService(false, null, true, false, false, false, true)
     @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
     @Test fun r41ActualWarmFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, true, true)
     @Test fun r41TwentyUnheldWakeAttempts() = runNaturalWakeBatch()
@@ -177,7 +179,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
 
     private fun runService(changeScene: Boolean, r21Negative: Boolean? = null, r40: Boolean = false,
                            r41Warm: Boolean = false, r41Fallback: Boolean = false,
-                           r41WaitForPreparedRoute: Boolean = false) {
+                           r41WaitForPreparedRoute: Boolean = false,
+                           r41WarmSystemBeforeService: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -261,6 +264,20 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                     if (r41WarmReady.get()) callsAtFirstCross.compareAndSet(-1, r40Calls.get())
                     savedCross?.invoke(output)
                 }
+            }
+            if (r41WarmSystemBeforeService) {
+                // Warm only the platform keyguard while Fluvi's service is
+                // still disconnected. The subsequent test starts the real
+                // service from fresh state and keeps every original visual,
+                // admission and unlock assertion unchanged.
+                shell("input keyevent KEYCODE_SLEEP")
+                await("platform warm-up sleeping", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+                shell("input keyevent KEYCODE_WAKEUP")
+                await("platform warm-up locked wake", 8_000) { power.isInteractive && keyguard.isKeyguardLocked }
+                File(dir, "r41-platform-warm-windows.txt").writeText(shell("dumpsys window windows"))
+                shell("input keyevent KEYCODE_SLEEP")
+                await("platform warm-up withdrawal", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+                check(!FluviKeyguardCardServiceRegistry.connected)
             }
             KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT")
             captureStarted = true
