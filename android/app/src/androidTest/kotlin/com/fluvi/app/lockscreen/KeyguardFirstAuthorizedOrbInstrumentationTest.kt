@@ -69,6 +69,9 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r41SystemWarmPreparedPinMenuBeforeRealMainAck() =
         runService(changeScene = false, r21Negative = true, r41WaitForPreparedRoute = true,
             r41WarmSystemBeforeService = true, r21Pin = true, r21PinUseMenu = true)
+    @Test fun r41SystemWarmPreparedSettingsShadeBeforeRealMainAck() =
+        runService(changeScene = false, r21Negative = true, r41WaitForPreparedRoute = true,
+            r41WarmSystemBeforeService = true, r21ShadeSettings = true)
     @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
     @Test fun r41ActualWarmFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, true, true)
     @Test fun r41TwentyUnheldWakeAttempts() = runNaturalWakeBatch()
@@ -220,7 +223,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                            r21SwipeShade: Boolean = false,
                            r21Pin: Boolean = false,
                            r21PinUseMenu: Boolean = false,
-                           r41LiveWaitForA: Boolean = false) {
+                           r41LiveWaitForA: Boolean = false,
+                           r21ShadeSettings: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -488,6 +492,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                             File(dir, "pin-gesture.txt").writeText("bounds=$screen from=$x,$fromY to=$x,$toY durationMs=400\n")
                             shell("input swipe $x $fromY $x $toY 400")
                         }
+                    } else if (r21ShadeSettings) {
+                        File(dir, "shade-command.txt").writeText(shell("cmd statusbar expand-settings"))
                     } else if (r21SwipeShade) {
                         val screen = context.getSystemService(android.view.WindowManager::class.java).currentWindowMetrics.bounds
                         val x = screen.centerX()
@@ -501,6 +507,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                     File(dir, "shade-attempt-windows.txt").writeText(shell("dumpsys window windows"))
                     saveScreenshot(File(dir, "02-shade-attempt.png"))
                     assertTrue("NOT REACHED: real shade/credential decision was not observed", negativeFinished.await(12, TimeUnit.SECONDS))
+                    if (r21ShadeSettings) assertTrue("NOT REACHED: expected a real SHADE decision",
+                        negativeResult.get()?.contains("/HIDDEN_SHADE/") == true)
                     await("actual negative withdrew service window", 10_000) {
                         var visible = true
                         instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
@@ -518,7 +526,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 val task = checkNotNull(acknowledgement.getAndSet(null))
                 instrumentation.runOnMainSync { task.run() }
                 if (r21Negative) {
-                    if (r21PinUseMenu) {
+                    if (r21PinUseMenu || r21ShadeSettings) {
                         File(dir, "after-ack-windows.txt").writeText(shell("dumpsys window windows"))
                         saveScreenshot(File(dir, "04-after-ack.png"))
                     }
