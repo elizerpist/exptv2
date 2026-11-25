@@ -3452,6 +3452,17 @@ internal object KeyguardCardDiagnostics {
      * reservation identities are joined. Nanosecond frame data is labelled. */
     private fun r22CoreRecord(attempt: TimingAttempt): String = buildString {
         val values = attempt.r22Opening
+        // With no R22 opening evidence there is also no R22 reservation or
+        // opening request by which to join a DIRECT generation. The former
+        // row repeated UNOBSERVED for every field; retain the attempt and an
+        // explicit all-boundaries-missing marker in a compact versioned row.
+        // No observed R22 field or matched DIRECT evidence is discarded.
+        if (values.isEmpty()) {
+            appendLine(" R22_CORE v=2 attempt=${attempt.id} session=${attempt.serviceSession} wake=${attempt.wakeEpoch} wakeAt=${attempt.startedUptimeMs}" +
+                " opening=UNOBSERVED/UNOBSERVED outcome=UNOBSERVED/UNOBSERVED missing=ALL_R22_BOUNDARIES" +
+                " clock=uptimeMs firstPostClock=System.nanoTime physical=UNOBSERVED")
+            return@buildString
+        }
         val reservation = values["r22Reservation"]
         val opening = values["r22Opening"]
         val direct = attempt.r18Generations.values.firstOrNull { timeline ->

@@ -35,6 +35,22 @@ class KeyguardR41DiagnosticsInstrumentationTest {
     @Test fun directAndWithdrawalEvidenceSurvivesR41LightPressure() = protectedDirectUnderPressure("LIGHT")
     @Test fun directAndWithdrawalEvidenceSurvivesR41FullPressure() = protectedDirectUnderPressure("FULL")
 
+    @Test fun absentR22BoundariesRemainExplicitlyUnknown() {
+        for (mode in listOf("LIGHT", "FULL")) {
+            KeyguardCardDiagnostics.startCapture(context, "r41-empty-r22", "profile", mode)
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 941, 1, "wake", 10))
+            KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", "WAKE_ADOPTED", serviceSession = 941,
+                wakeEpoch = 1, requestId = 77, attachGeneration = 2, diagnosticContext = owner,
+                observedUptimeMs = 11, fields = mapOf<String, Any>("r18Host" to 2, "r18Output" to 3))
+            val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            val row = report.lineSequence().single { it.startsWith(" R22_CORE ") }
+            assertTrue(row, row.contains("v=2 attempt=1 session=941 wake=1 wakeAt=10"))
+            assertTrue(row, row.contains("opening=UNOBSERVED/UNOBSERVED outcome=UNOBSERVED/UNOBSERVED"))
+            assertTrue(row, row.contains("missing=ALL_R22_BOUNDARIES"))
+            assertTrue(row, row.contains("physical=UNOBSERVED"))
+        }
+    }
+
     private fun protectedDirectUnderPressure(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r41-direct-pressure", "profile", mode)
         val capture = checkNotNull(KeyguardCardDiagnostics.activeCaptureId())
