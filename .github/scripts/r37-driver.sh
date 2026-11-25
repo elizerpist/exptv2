@@ -55,6 +55,11 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR43Api37LiveProbeTest.kt
     sha256sum "$fixture" > "$out/fixture-r43-live.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r43_busy_red ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR43DiagnosticsInstrumentationTest.kt"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR43DiagnosticsInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r43-busy-red.sha256"
+  fi
   if [[ "$TEST_SCOPE" == r42_stale_verbose ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR26DirectOrderingInstrumentationTest.kt"
     test -f "$fixture"
@@ -108,7 +113,11 @@ case "${1:-}" in
       ;;
     r43_diagnostics)
       class=com.fluvi.app.lockscreen.KeyguardR43DiagnosticsInstrumentationTest
-      methods=(namedHoldsSurvivePressureWithoutUnverifiedOrForeignIds frozenOrReplacedCaptureCannotReceiveAnOldObservation)
+      methods=(namedHoldsSurvivePressureWithoutUnverifiedOrForeignIds frozenOrReplacedCaptureCannotReceiveAnOldObservation laterCompletePassiveHoldReplacesBusyObserverAndRetainsItsCause)
+      ;;
+    r43_busy_red)
+      class=com.fluvi.app.lockscreen.KeyguardR43DiagnosticsInstrumentationTest
+      methods=(laterCompletePassiveHoldReplacesBusyObserverAndRetainsItsCause)
       ;;
     ordered)
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
