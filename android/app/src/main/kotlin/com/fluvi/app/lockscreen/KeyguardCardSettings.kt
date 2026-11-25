@@ -2968,29 +2968,6 @@ internal object KeyguardCardDiagnostics {
         // same bounded attempt/generation state and the same export budget.
         attemptsForCausalEvidence.filter { it.presentationMode == "ORB" || it.r18Generations.isNotEmpty() }
             .forEach { attempt -> select("a${attempt.id}:r26Core", r26CoreRecord(attempt), attempt.id) }
-        r41Attempts.forEach { attempt ->
-            attempt.r41.requestRows(attempt.id).forEachIndexed { index, row ->
-                select("a${attempt.id}:r41Req$index", row, attempt.id)
-            }
-        }
-        active.r41Receipts.forEach { receipt ->
-            val row = " R41_RECEIPT id=${receipt.ordinal} session=${receipt.session} source=${receipt.source}" +
-                " ns=${receipt.atNs} tid=${receipt.tid} up=${receipt.uptimeMs} eventMs=${receipt.eventTimeMs ?: "UNOBSERVED"}" +
-                " attempt=${receipt.attempt ?: "UNOBSERVED"} binding=${receipt.binding}\n"
-            select("r41Receipt${receipt.ordinal}", row, receipt.attempt)
-        }
-        active.r41Samples.values.forEach { sample ->
-            fun value(number: Long) = if (number == Long.MIN_VALUE) "UNOBSERVED" else number.toString()
-            val ordinal = sample.receipts[2].takeIf { it > 0 } ?: sample.receipts[0].takeIf { it > 0 }
-            val attempt = active.r41Receipts.firstOrNull { it.ordinal == ordinal }?.attempt
-            val row = " R41_SAMPLE session=${sample.session} wake=${sample.wake} sample=${sample.request}" +
-                " attempt=${attempt ?: "UNOBSERVED"} receipt=${ordinal ?: "UNOBSERVED"}" +
-                " times=${sample.times.joinToString("/") { value(it) }}" +
-                " tids=${sample.tids.joinToString("/") { value(it) }}" +
-                " replacement=${sample.details[1]} stateFlags=${sample.details[5]} reject=${sample.details[9]}" +
-                " invalid=${sample.invalid} order=offer/replaced/submit/worker/readStart/readEnd/dispatch/main/deliver/reject\n"
-            select("r41Sample${sample.session}_${sample.request}", row, attempt)
-        }
         // Restriction decisions are independent of the rolling raw ring.
         // The same global export budget and omission accounting still apply.
         attemptsForCausalEvidence.forEach { attempt ->
@@ -3070,6 +3047,33 @@ internal object KeyguardCardDiagnostics {
         }
         attemptsForCausalEvidence.forEach { attempt ->
             select("a${attempt.id}:summary", compactAttemptSummary(attempt), attempt.id)
+        }
+        // R41 compact accounting was reserved above. Verbose per-request,
+        // receipt and sampler rows must not crowd out an existing show/hide
+        // episode or its R18 owner/authorization evidence. Any details that
+        // do not fit remain explicitly identified by the shared budget.
+        r41Attempts.forEach { attempt ->
+            attempt.r41.requestRows(attempt.id).forEachIndexed { index, row ->
+                select("a${attempt.id}:r41Req$index", row, attempt.id)
+            }
+        }
+        active.r41Receipts.forEach { receipt ->
+            val row = " R41_RECEIPT id=${receipt.ordinal} session=${receipt.session} source=${receipt.source}" +
+                " ns=${receipt.atNs} tid=${receipt.tid} up=${receipt.uptimeMs} eventMs=${receipt.eventTimeMs ?: "UNOBSERVED"}" +
+                " attempt=${receipt.attempt ?: "UNOBSERVED"} binding=${receipt.binding}\n"
+            select("r41Receipt${receipt.ordinal}", row, receipt.attempt)
+        }
+        active.r41Samples.values.forEach { sample ->
+            fun value(number: Long) = if (number == Long.MIN_VALUE) "UNOBSERVED" else number.toString()
+            val ordinal = sample.receipts[2].takeIf { it > 0 } ?: sample.receipts[0].takeIf { it > 0 }
+            val attempt = active.r41Receipts.firstOrNull { it.ordinal == ordinal }?.attempt
+            val row = " R41_SAMPLE session=${sample.session} wake=${sample.wake} sample=${sample.request}" +
+                " attempt=${attempt ?: "UNOBSERVED"} receipt=${ordinal ?: "UNOBSERVED"}" +
+                " times=${sample.times.joinToString("/") { value(it) }}" +
+                " tids=${sample.tids.joinToString("/") { value(it) }}" +
+                " replacement=${sample.details[1]} stateFlags=${sample.details[5]} reject=${sample.details[9]}" +
+                " invalid=${sample.invalid} order=offer/replaced/submit/worker/readStart/readEnd/dispatch/main/deliver/reject\n"
+            select("r41Sample${sample.session}_${sample.request}", row, attempt)
         }
         attemptsForCausalEvidence.forEach { attempt ->
             if (attempt.r14RecoveryEvents.isNotEmpty() || attempt.r14RecoveryOmitted > 0) {
