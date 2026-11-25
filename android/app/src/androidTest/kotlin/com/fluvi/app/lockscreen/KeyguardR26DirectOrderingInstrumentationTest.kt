@@ -43,10 +43,13 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun readyWorkDoesNotWaitForDiagnosticPublication() = exercise(true, true, warmup = true, checkReport = true)
     @Test fun systemWarmOrderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true, platformWarm = true)
     @Test fun systemWarmReadyWorkDoesNotWaitForDiagnosticPublication() = exercise(true, true, checkReport = true, platformWarm = true)
+    @Test fun systemWarmLatestDirectPreservesOrdering() = exercise(true, true, platformWarm = true, followLatest = true)
+    @Test fun systemWarmLatestReadyWorkDoesNotWaitForDiagnosticPublication() =
+        exercise(true, true, checkReport = true, platformWarm = true, followLatest = true)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
     private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false,
-                         checkReport:Boolean = false, platformWarm:Boolean = false) {
+                         checkReport:Boolean = false, platformWarm:Boolean = false, followLatest:Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -91,6 +94,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val workerTimeout=AtomicBoolean(false); val done=CountDownLatch(1); val successorStarted=CountDownLatch(1)
         val reportHeld=CountDownLatch(1); val reportRelease=CountDownLatch(1); val reportTimeout=AtomicBoolean(false)
         val originalMain=AtomicLong(0); val originalExit=AtomicLong(0); val bStarted=AtomicLong(0); val bId=AtomicLong(0)
+        val selectedSuccessor=AtomicLong(0); val offeredAfterA=Collections.synchronizedSet(mutableSetOf<Long>())
         val r25Evaluations=AtomicLong(0); val r25AtAExit=AtomicLong(-1)
         val order=AtomicLong(0); val oldProofAtExit=AtomicLong(0); val maxReaders=AtomicInteger(0); val readers=AtomicInteger(0)
         val r25Posts=AtomicInteger(0); val earlyReveal=AtomicInteger(0); val records=Collections.synchronizedList(mutableListOf<String>())
@@ -154,6 +158,15 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             instrumentation.runOnMainSync {
                 actual.r41R25EvaluationsForTest = r25Evaluations
                 actual.inspectionProbeForTest=object:KeyguardInspectionProbeForTest {
+                    override fun queueOffered(request:KeyguardCardInspectionRequest, previous:KeyguardCardInspectionRequest?,
+                                              pending:KeyguardCardInspectionRequest?, startsWorker:Boolean) {
+                        val a = candidate.get() ?: return
+                        if (request.id > a.id && request.session == a.session && request.wakeGeneration == a.wakeGeneration &&
+                            pending?.id == request.id) {
+                            offeredAfterA.add(request.id)
+                            if (followLatest) records.add("PENDING id=${request.id} replaces=${previous?.id ?: 0}")
+                        }
+                    }
                     override fun openingOrderSelected(request:KeyguardCardInspectionRequest, milestoneOrdered:Boolean) {
                         if(milestoneOrdered) orderedReads.add(request.id)
                         records.add("ORDER_SELECTED id=${request.id} milestone=$milestoneOrdered")
@@ -161,7 +174,14 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                     override fun started(request:KeyguardCardInspectionRequest) {
                         val count=readers.incrementAndGet(); maxReaders.updateAndGet { maxOf(it,count) }
                         val seq=order.incrementAndGet(); records.add("READ_START id=${request.id} seq=$seq")
-                        if(request.id==bId.get() && request.id>0) { bStarted.set(seq); successorStarted.countDown() }
+                        val a = candidate.get()
+                        val expected = request.id==bId.get() && request.id>0
+                        val actualLatest = followLatest && a != null && request.id > a.id &&
+                            request.session == a.session && request.wakeGeneration == a.wakeGeneration &&
+                            offeredAfterA.contains(request.id)
+                        if ((expected || actualLatest) && selectedSuccessor.compareAndSet(0, request.id)) {
+                            bStarted.set(seq); successorStarted.countDown()
+                        }
                     }
                     override fun yielded(request:KeyguardCardInspectionRequest, successor:KeyguardCardInspectionRequest, startedAt:Long, finishedAt:Long, visited:Int) { readers.decrementAndGet() }
                     override fun readCompleted(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility,
@@ -250,6 +270,11 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 records.add("B_STARTED_BEFORE_A_REPORT_RELEASE")
                 reportRelease.countDown()
             } else assertTrue("NOT REACHED: B did not start",successorStarted.await(20,TimeUnit.SECONDS))
+            if (followLatest) {
+                assertTrue("the selected successor was not an actual pending offer", offeredAfterA.contains(selectedSuccessor.get()))
+                assertTrue("the selected successor predates the originally observed pending request", selectedSuccessor.get() >= bId.get())
+                records.add("SELECTED_SUCCESSOR id=${selectedSuccessor.get()} originalPending=${bId.get()}")
+            }
             assertTrue("B started before A completed Main",originalMain.get()>0 && originalExit.get()>originalMain.get() && bStarted.get()>originalExit.get())
             assertEquals("the physical reader must remain single-owner",1,maxReaders.get())
             assertEquals("DIRECT A must not post an R25 completed-positive notice",0,r25Posts.get())
