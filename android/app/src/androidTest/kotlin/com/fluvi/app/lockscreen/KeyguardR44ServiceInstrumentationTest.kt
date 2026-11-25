@@ -34,8 +34,9 @@ class KeyguardR44ServiceInstrumentationTest {
     @Test fun syntheticPairUsesRealServiceWithCaptureOff() = exercise(false)
     @Test fun syntheticPairUsesRealServiceWithCaptureOn() = exercise(true)
     @Test fun supersededSyntheticReadCannotGrantAfterRestriction() = exercise(false, staleControl = true)
+    @Test fun actualSystemUiRestrictiveTransitions() = exercise(true, actualControls = true)
 
-    private fun exercise(capture: Boolean, staleControl: Boolean = false) {
+    private fun exercise(capture: Boolean, staleControl: Boolean = false, actualControls: Boolean = false) {
         assertEquals(37, Build.VERSION.SDK_INT)
         val ins = InstrumentationRegistry.getInstrumentation()
         val context = ins.targetContext
@@ -191,6 +192,67 @@ class KeyguardR44ServiceInstrumentationTest {
             main { schedule(owner, "r44-controlled-shade") }
             waitFor("controlled restriction withdrawn") { sawRestriction.get() && main { !owner.inspectionStateForTest().attached } }
             evidence.append("controlledShade=withdrawn\n")
+            if (actualControls) {
+                // Reacquire a visible synthetic ORB, then remove the injected
+                // scene before exercising real AOSP transitions. The observer
+                // below never changes snapshots or admission.
+                restrict.set(false); sawPositive.set(false)
+                main { schedule(owner, "r44-reopen-before-actual-controls") }
+                waitFor("controlled ORB reattached before actual controls") {
+                    sawPositive.get() && main { owner.inspectionStateForTest().attached &&
+                        (owner.surfaceMetricsForInstrumentation()?.submissions ?: 0L) > 0L }
+                }
+                val actualMain = AtomicBoolean(false)
+                val actualPin = AtomicBoolean(false)
+                val actualShade = AtomicBoolean(false)
+                owner.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
+                    override fun readCompleted(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
+                        reason: KeyguardSurfaceReason, rootUnavailable: Boolean, walkTruncated: Boolean,
+                        abortedStale: Boolean, startedAt: Long, finishedAt: Long) {
+                        synchronized(evidence) { evidence.append("actual req=${request.id} decision=$decision reason=$reason start=$startedAt end=$finishedAt truncated=$walkTruncated stale=$abortedStale\n") }
+                        if (abortedStale) return
+                        when (decision) {
+                            KeyguardCardVisibility.SHOW_DISCREET, KeyguardCardVisibility.SHOW_FULL -> actualMain.set(true)
+                            KeyguardCardVisibility.HIDDEN_CREDENTIAL -> actualPin.set(true)
+                            KeyguardCardVisibility.HIDDEN_SHADE -> actualShade.set(true)
+                            else -> Unit
+                        }
+                    }
+                }
+                fun actualImage(name: String) {
+                    val bitmap = ui.takeScreenshot() ?: return
+                    out.resolve("$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    bitmap.recycle()
+                    out.resolve("$name-window.txt").writeText(shell("dumpsys window windows"))
+                }
+                main { schedule(owner, "r44-actual-initial-clock") }
+                waitFor("actual AOSP clock admission before restriction") { actualMain.get() && main { owner.inspectionStateForTest().attached } }
+                actualImage("actual-clock")
+                val pinStart = SystemClock.uptimeMillis()
+                shell("input swipe 200 2200 200 500 350")
+                waitFor("actual PIN credential decision and withdrawal") { actualPin.get() && main { !owner.inspectionStateForTest().attached } }
+                evidence.append("actualPinStart=$pinStart detached=${SystemClock.uptimeMillis()} physicalPixels=UNOBSERVED\n")
+                actualImage("actual-pin")
+                actualMain.set(false)
+                shell("input keyevent KEYCODE_BACK")
+                waitFor("actual clock readmission after PIN") { actualMain.get() && main { owner.inspectionStateForTest().attached } }
+                actualShade.set(false)
+                val shadeStart = SystemClock.uptimeMillis()
+                shell("cmd statusbar expand-notifications")
+                waitFor("actual notifications decision and withdrawal") { actualShade.get() && main { !owner.inspectionStateForTest().attached } }
+                evidence.append("actualNotificationsStart=$shadeStart detached=${SystemClock.uptimeMillis()} physicalPixels=UNOBSERVED\n")
+                actualImage("actual-notifications")
+                actualMain.set(false)
+                shell("cmd statusbar collapse")
+                waitFor("actual clock readmission after notifications") { actualMain.get() && main { owner.inspectionStateForTest().attached } }
+                actualShade.set(false)
+                val qsStart = SystemClock.uptimeMillis()
+                shell("cmd statusbar expand-settings")
+                waitFor("actual quick settings decision and withdrawal") { actualShade.get() && main { !owner.inspectionStateForTest().attached } }
+                evidence.append("actualQuickSettingsStart=$qsStart detached=${SystemClock.uptimeMillis()} physicalPixels=UNOBSERVED\n")
+                actualImage("actual-quick-settings")
+                shell("cmd statusbar collapse")
+            }
             if (capture) {
                 val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
                 out.resolve("r44-report.txt").writeText(report)
