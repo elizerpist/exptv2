@@ -154,10 +154,8 @@ internal class KeyguardR41AttemptLedger {
             systemEligible == -1 && shadowOffers == 0L && orderedBypasses == 0L) {
             val loss = captureLoss + omitted + invalid
             return " R41_CORE attempt=$attempt session=$session wake=$wake systemEligible=UNOBSERVED eligible=UNOBSERVED" +
-                " outcome=UNOBSERVED owner=UNOBSERVED readOwner=UNOBSERVED dispatchOwner=UNOBSERVED grantOwner=UNOBSERVED" +
-                " request=UNOBSERVED wakeNs=UNOBSERVED screenNs=UNOBSERVED grantNs=UNOBSERVED" +
-                " winnerNs=UNOBSERVED cancelNs=UNOBSERVED missing=ALL_R41_BOUNDARIES" +
-                " h2Claims=0 h2Enabled=false fallbackGrant=UNOBSERVED requests=0 omitted=$omitted" +
+                " outcome=UNOBSERVED owner=UNOBSERVED missing=ALL_R41_BOUNDARIES" +
+                " h2Claims=0 h2Enabled=false requests=0 omitted=$omitted" +
                 " invalid=$invalid dropped=$loss coverage=INCOMPLETE clock=System.nanoTime physical=UNOBSERVED\n"
         }
         val winner = (0 until count).filter { time(it, WINNER) != MISSING }.minByOrNull { time(it, WINNER) }

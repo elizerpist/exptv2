@@ -34,6 +34,19 @@ class R41AnalyzerTest(unittest.TestCase):
         self.assertIsNone(result["total_ns"])
         self.assertIn("grantNs", result["missing"])
 
+    def test_compact_empty_attempt_cannot_fabricate_missing_boundaries(self):
+        report = (" R41_CORE attempt=8 session=9 wake=10 systemEligible=UNOBSERVED "
+                  "eligible=UNOBSERVED outcome=UNOBSERVED owner=UNOBSERVED "
+                  "missing=ALL_R41_BOUNDARIES h2Claims=0 h2Enabled=false "
+                  "requests=0 omitted=0 invalid=0 dropped=0 coverage=INCOMPLETE")
+        result = analyzer.analyze(analyzer.parse_report(report)[0])
+        self.assertEqual(result["coverage"], "INCOMPLETE")
+        self.assertIsNone(result["total_ns"])
+        self.assertIsNone(result["screen_to_grant_ns"])
+        self.assertIsNone(result["under_300ms"])
+        self.assertIn("wakeNs", result["missing"])
+        self.assertIn("grantNs", result["missing"])
+
     def test_lost_or_other_owner_grant_cannot_win(self):
         for change in (dict(outcome="CANCELLED"), dict(grantOwner="4/9"), dict(readOwner="3/8"),
                        dict(dispatchOwner="UNOBSERVED")):
