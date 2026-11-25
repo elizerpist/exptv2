@@ -217,7 +217,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         reason:KeyguardSurfaceReason, rootUnavailable:Boolean, walkTruncated:Boolean,
                         abortedStale:Boolean, startedAt:Long, finishedAt:Long) {
                         readers.decrementAndGet()
-                        if (preStart && request.id == selectedC.get()) {
+                        if (preStart && request.id == firstPhysical.get()) {
                             selectedCOutcome.set("$decision/$reason unavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale")
                             selectedCCompleted.countDown()
                         }
@@ -377,33 +377,49 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 assertTrue("NOT REACHED: physical reader did not start", firstPhysicalStarted.await(20,TimeUnit.SECONDS))
                 records.add("FIRST_PHYSICAL id=${firstPhysical.get()} expected=$c pending=${pendingAtFirstPhysical.get()}")
                 assertFalse("NOT REACHED: reader barrier timed out", workerTimeout.get())
-                if (firstPhysical.get()!=c && pendingAtFirstPhysical.get()!=c)
+                val selected=firstPhysical.get()
+                fun field(line:String, key:String):String? = Regex("(?:^| )$key=([^ ]+)").find(line)?.groupValues?.get(1)
+                if (selected>c) {
+                    var promotionReport=""
+                    await("a newer physical request was selected by the R42 prestart transition") {
+                        promotionReport=KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                        promotionReport.lineSequence().any { line ->
+                            if (!line.startsWith(" R41_CORE ")) false else {
+                                val pre=field(line,"r42Pre")?.split('/') ?: emptyList()
+                                val check=field(line,"r42PreCheck")?.split('/') ?: emptyList()
+                                pre.size>=8 && check.size>=7 && pre[1]==a.id.toString() && pre[2]==selected.toString() &&
+                                    check[1]==a.id.toString() && check[2]=="9" && check[3]==selected.toString()
+                            }
+                        }
+                    }
+                    File(dir,"prestart-promotion.txt").writeText(promotionReport)
+                    records.add("NEWER_SELECTED a=${a.id} c=$c actualLatest=$selected")
+                } else if (selected!=c && pendingAtFirstPhysical.get()!=c)
                     throw AssertionError("NOT REACHED: a later request changed pending after C=$c; physical=${firstPhysical.get()} pending=${pendingAtFirstPhysical.get()}")
-                assertEquals("R42: the actual latest C must start, before any A or B physical read", c, firstPhysical.get())
+                else assertEquals("R42: the actual latest C must start, before any A or B physical read", c, selected)
                 assertTrue("NOT REACHED: selected C did not finish its own physical read", selectedCCompleted.await(20,TimeUnit.SECONDS))
-                records.add("C_OWN_READ id=$c result=${selectedCOutcome.get()} proofAndVisibleOutput=SEPARATE_CONTROLS")
+                records.add("C_OWN_READ id=$selected result=${selectedCOutcome.get()} proofAndVisibleOutput=SEPARATE_CONTROLS")
                 if (requirePreStartGrant) {
                     if (selectedCOutcome.get() != "SHOW_FULL/MAIN_CONFIRMED unavailable=false truncated=false stale=false")
                         throw AssertionError("NOT REACHED: selected C did not obtain a complete FULL scene: ${selectedCOutcome.get()}")
                     var report = ""
-                    fun field(line:String, key:String):String? = Regex("(?:^| )$key=([^ ]+)").find(line)?.groupValues?.get(1)
                     await("selected C owner-bound grant and DIRECT output") {
                         report=KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
                         val core=report.lineSequence().firstOrNull { line ->
-                            line.startsWith(" R41_CORE ") && field(line,"request")==c.toString() &&
+                            line.startsWith(" R41_CORE ") && field(line,"request")==selected.toString() &&
                                 field(line,"eligible")=="true" && field(line,"outcome")=="SUCCESS" &&
                                 field(line,"grantNs")?.toLongOrNull()!=null && field(line,"winnerNs")?.toLongOrNull()!=null
                         }
                         val owner=core?.let { field(it,"owner")?.split('/') } ?: emptyList()
-                        core != null && owner.size==3 && owner[2]==c.toString() && report.lineSequence().any { line ->
+                        core != null && owner.size==3 && owner[2]==selected.toString() && report.lineSequence().any { line ->
                             line.startsWith(" R18_PIPELINE ") && field(line,"attach")==owner[0] &&
                                 field(line,"output")==owner[1] && field(line,"privacy")=="full" &&
-                                field(line,"proof")==c.toString() && field(line,"consumedReq")==c.toString() &&
+                                field(line,"proof")==selected.toString() && field(line,"consumedReq")==selected.toString() &&
                                 field(line,"backend")=="R18_DIRECT_ATTEMPT"
                         }
                     }
                     File(dir,"prestart-full-grant.txt").writeText(report)
-                    records.add("C_OWN_FULL_GRANT id=$c; pixel/physical timing remain SEPARATE")
+                    records.add("C_OWN_FULL_GRANT id=$selected; pixel/physical timing remain SEPARATE")
                 }
                 return
             }
