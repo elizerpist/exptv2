@@ -57,7 +57,13 @@ case "${1:-}" in
     <boolean name="details" value="true" />
     <string name="presentationMode">orb</string>
     <string name="animationMode">orbOnly</string>
+    <boolean name="focusMigrated" value="true" />
+    <string name="focus.mode">budget</string>
+    <string name="focus.axis">month</string>
+    <string name="focus.direction">expense</string>
     <string name="focus.categoryId">r41-synthetic-category</string>
+    <string name="focus.eventLine">related</string>
+    <long name="focus.generation" value="7" />
 </map>
 XML
   printf '%s\n' 'r41-synthetic-update-sentinel' > "$dir/sentinel.txt"
@@ -103,7 +109,20 @@ XML
   observe_service after
   adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$evidence/prefs-after.xml"
   adb exec-out run-as com.fluvi.app cat files/r41-update-sentinel.txt > "$evidence/sentinel-after.txt"
-  cmp "$evidence/prefs-before.xml" "$evidence/prefs-after.xml"
+  # Android may reorder SharedPreferences XML and add unrelated defaults.
+  # Verify every original synthetic selection by typed key/value, including
+  # the category, against both the R40 and R41 observations.
+  python3 - "$dir/seed.xml" "$evidence/prefs-before.xml" "$evidence/prefs-after.xml" > "$evidence/settings-check.txt" <<'PY'
+import sys, xml.etree.ElementTree as ET
+def load(path):
+    return {node.attrib['name']: (node.tag, node.attrib.get('value', node.text or ''))
+            for node in ET.parse(path).getroot()}
+seed, before, after = map(load, sys.argv[1:])
+for name, expected in sorted(seed.items()):
+    assert before.get(name) == expected, f'R40 did not retain synthetic {name}'
+    assert after.get(name) == expected, f'R41 did not retain synthetic {name}'
+    print(name, 'PASS')
+PY
   cmp "$dir/sentinel.txt" "$evidence/sentinel-after.txt"
   adb shell am start -n com.fluvi.app/.MainActivity > "$evidence/launch.txt" 2>&1
   adb shell dumpsys package com.fluvi.app > "$evidence/package-after.txt"
