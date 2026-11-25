@@ -143,6 +143,12 @@ PY
     -e class 'com.fluvi.app.lockscreen.KeyguardR42SignedProfileProbeTest#signedProfileShowsCurrentGrantedOrbAndNaturalMotion' \
     com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$evidence/profile-motion.txt" 2>&1 || rc=$?
   adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r42-profile/$trial" > "$evidence/profile-motion.tar" 2> "$evidence/profile-motion-tar.stderr" || true
+  # These are test-environment observations, retained even if the profile
+  # instrumentation cannot reconnect after Android restarts its process.
+  adb shell settings get global animator_duration_scale > "$evidence/animator-duration-scale.txt" 2>&1 || true
+  adb shell dumpsys accessibility > "$evidence/accessibility-post-instrumentation.txt" 2>&1 || true
+  adb shell dumpsys activity services com.fluvi.app/.lockscreen.FluviKeyguardCardService > "$evidence/service-post-instrumentation.txt" 2>&1 || true
+  adb logcat -d -v monotonic -s FluviKeyguard:* AndroidRuntime:E ActivityManager:I > "$evidence/profile-motion-logcat.txt" 2>&1 || true
   if (( rc != 0 )) || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$evidence/profile-motion.txt" ||
      ! grep -Eq '^OK \(1 test\)' "$evidence/profile-motion.txt"; then
     printf '%s\n' 'FAIL or NOT REACHED: profile visible-motion instrumentation; see retained transcript and samples.' >> "$evidence/result.txt"
