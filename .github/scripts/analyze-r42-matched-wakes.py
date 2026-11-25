@@ -123,11 +123,20 @@ def read_member(archive, name):
 
 def analyze_directory(root):
     all_rows, blocks = [], []
+    plan = [('a' if i % 2 == 0 else 'b', 'LIGHT') for i in range(12)]
+    plan += [('a', 'FULL'), ('b', 'FULL'), ('a', 'OFF'), ('b', 'OFF')]
+    sources = {'a': '97f9704120e2ae997185ea6e35fbc053e1d7f0ab',
+               'b': '1584ccb020a8500efd5f9c67eac8ebd4830b1271'}
+    seen_blocks = set()
     for path in sorted(root.glob('block-*-*-*')):
         if not path.is_dir():
             continue
         identity = fields((path / 'identity.txt').read_text().replace('\n', ' '))
         block, arm, mode, source = (identity[k] for k in ('block', 'arm', 'mode', 'source'))
+        number = int(block)
+        if not 1 <= number <= len(plan) or number in seen_blocks or (arm, mode) != plan[number-1] or source != sources[arm]:
+            raise ValueError(f'invalid or duplicated planned block identity: {path}')
+        seen_blocks.add(number)
         status = (path / 'result.txt').read_text().strip() if (path / 'result.txt').exists() else 'NOT REACHED: block did not finish'
         item = dict(block=block, arm=arm, mode=mode, source_sha=source, result=status,
                     planned=5, attempted_recorded=0)
@@ -150,6 +159,11 @@ def analyze_directory(root):
                         raw = read_member(archive, capture_path)
                         all_rows += analyzed_rows(block, arm, mode, source, trial, raw.decode('utf-8'), hashlib.sha256(raw).hexdigest())
         blocks.append(item)
+    for number, (arm, mode) in enumerate(plan, 1):
+        if number not in seen_blocks:
+            blocks.append(dict(block=str(number), arm=arm, mode=mode, source_sha=sources[arm],
+                               result='NOT RUN: no block evidence', planned=5, attempted_recorded=0))
+    blocks.sort(key=lambda item: int(item['block']))
     return blocks, all_rows
 
 
@@ -159,15 +173,21 @@ def summarize(blocks, rows):
         key = block['arm'] + '/' + block['mode']
         group = groups.setdefault(key, dict(blocks=0, failed_or_unfinished_blocks=0, planned_wakes=0,
                                             attempted_wakes_recorded=0, matched_rows=0,
+                                            unmatched_rows=0, denied_rows=0, observed_cancel_rows=0,
                                             below_300=0, at_or_above_300=0, values_ms=[], matched_wakes=set()))
         group['blocks'] += 1
         group['planned_wakes'] += block['planned']
         group['attempted_wakes_recorded'] += block['attempted_recorded']
-        if not block['result'].startswith('PASS:'):
+        if not block['result'].startswith('PASS:') or block['attempted_recorded'] != block['planned']:
             group['failed_or_unfinished_blocks'] += 1
     for row in rows:
         group = groups[row['arm'] + '/' + row['mode']]
+        if row.get('eligible') == 'false' or row.get('outcome') == 'DENIED':
+            group['denied_rows'] += 1
+        if integer(row.get('cancel_ns')) is not None:
+            group['observed_cancel_rows'] += 1
         if row['status'] != 'MATCHED':
+            group['unmatched_rows'] += 1
             continue
         value = float(row['callback_to_grant_ms'])
         group['matched_rows'] += 1
