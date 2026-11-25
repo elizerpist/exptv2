@@ -44,6 +44,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
 
     @Test fun stableInitialFullUsesOneVirginOutputWithoutReadinessRead() = runService(false)
     @Test fun r40HeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() = runService(false, null, true)
+    @Test fun r41WarmHeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() = runService(false, null, true, true)
     @Test fun externalIngressWhileFirstPaintIsHeldCannotUseOldProof() = runService(true)
     @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
     @Test fun r21ExclusionRetiresSubmittedOrbWithMainAckHeld() = runService(false, true)
@@ -62,7 +63,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r22StableOpeningReadIsNotYielded() = KeyguardR22FirstInspectionFixture().run("stable")
     @Test fun r22UnstagedOpeningObservation() = KeyguardR22FirstInspectionFixture().run("natural")
 
-    private fun runService(changeScene: Boolean, r21Negative: Boolean? = null, r40: Boolean = false) {
+    private fun runService(changeScene: Boolean, r21Negative: Boolean? = null, r40: Boolean = false, r41Warm: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -104,6 +105,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         val savedDispatcher = KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone
         val savedCross = KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross
         val r40Calls = java.util.concurrent.atomic.AtomicInteger()
+        val r41WarmReady = AtomicBoolean(!r41Warm)
         val callsAtFirstCross = java.util.concurrent.atomic.AtomicInteger(-1)
         val r40Started = CountDownLatch(1)
         val r40Release = CountDownLatch(1)
@@ -142,7 +144,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 File(dir, "r40-before-service-windows.txt").writeText(shell("dumpsys window windows"))
                 KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
                 KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = { output ->
-                    callsAtFirstCross.compareAndSet(-1, r40Calls.get())
+                    if (r41WarmReady.get()) callsAtFirstCross.compareAndSet(-1, r40Calls.get())
                     savedCross?.invoke(output)
                 }
             }
@@ -162,7 +164,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
             instrumentation.runOnMainSync {
                 service.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
                     override fun r40ProvenanceStarted(request: KeyguardCardInspectionRequest) {
-                        if (r40) {
+                        if (r40 && r41WarmReady.get()) {
                             r40Calls.incrementAndGet()
                             reads.add("R40_OPTIONAL_STARTED id=${request.id} at=${SystemClock.uptimeMillis()}")
                             r40Started.countDown()
@@ -200,6 +202,31 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                     if (acknowledgement.compareAndSet(null, task)) acknowledgementHeld.countDown()
                     else Handler(Looper.getMainLooper()).post(task)
                 }
+            }
+            if (r41Warm) {
+                // Record the complete warm-up separately. The actual safety
+                // trial below retains every original assertion and threshold.
+                shell("input keyevent KEYCODE_SLEEP")
+                await("warm-up sleeping", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+                shell("input keyevent KEYCODE_WAKEUP")
+                val postedAndMoving = Regex(" winner=(?!R18_DIRECT_ATTEMPT/)[A-Z0-9_]+/[0-9]+/[0-9]+(?: |$)")
+                await("warm-up first post and distinct motion", 20_000) {
+                    val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                    power.isInteractive && keyguard.isKeyguardLocked && text.lineSequence().any {
+                        it.startsWith(" R21_CORE ") && postedAndMoving.containsMatchIn(it)
+                    }
+                }
+                File(dir, "r41-warm-up.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"] as String)
+                File(dir, "r41-warm-up-reads.txt").writeText(synchronized(reads) { reads.joinToString("\n", postfix = "\n") })
+                shell("input keyevent KEYCODE_SLEEP")
+                await("warm-up withdrawal", 8_000) {
+                    var visible = true
+                    instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
+                    !power.isInteractive && keyguard.isKeyguardLocked && !visible
+                }
+                synchronized(reads) { reads.clear() }
+                KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT")
+                r41WarmReady.set(true)
             }
             shell("input keyevent KEYCODE_SLEEP")
             await("sleep and keyguard", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
