@@ -8,6 +8,7 @@ import argparse
 import csv
 import hashlib
 import json
+from collections import Counter
 from pathlib import Path
 import re
 import statistics
@@ -46,6 +47,7 @@ def capture_scalar(text, key):
 def analyzed_rows(block, arm, mode, source, trial, report, capture_hash):
     records = [fields(line) for line in report.splitlines() if line.startswith(' R41_CORE ')]
     pipelines = [fields(line) for line in report.splitlines() if line.startswith(' R18_PIPELINE ')]
+    identities = Counter((item.get('session'), item.get('wake'), item.get('attempt')) for item in records)
     trial_no = trial.get('trial', 'UNOBSERVED')
     if not records:
         return [dict(block=block, arm=arm, mode=mode, source_sha=source, trial=trial_no,
@@ -56,6 +58,7 @@ def analyzed_rows(block, arm, mode, source, trial, report, capture_hash):
     for row in records:
         owner = row.get('owner', 'UNOBSERVED')
         owner_parts = owner.split('/')
+        unique_record = identities[(row.get('session'), row.get('wake'), row.get('attempt'))] == 1
         same_owner = owner != 'UNOBSERVED' and all(row.get(key) == owner for key in ('readOwner', 'dispatchOwner', 'grantOwner'))
         same_output = (len(owner_parts) == 3 and owner_parts[1] == trial.get('generation') and
                        trial.get('workerPost') == 'true' and trial.get('visible') == 'true')
@@ -70,7 +73,7 @@ def analyzed_rows(block, arm, mode, source, trial, report, capture_hash):
         post = integer(trial.get('workerPostNs'))
         cancel = integer(row.get('cancelNs'))
         cancelled_before_post = cancel is not None and grant is not None and post is not None and grant <= cancel <= post
-        real_winner = (same_owner and same_output and same_pipeline and row.get('invalid') == '0' and grant is not None and
+        real_winner = (unique_record and same_owner and same_output and same_pipeline and row.get('invalid') == '0' and grant is not None and
                        winner is not None and post is not None and winner >= grant and post >= grant and
                        not cancelled_before_post)
         eligible = row.get('eligible', 'UNOBSERVED')
@@ -87,6 +90,7 @@ def analyzed_rows(block, arm, mode, source, trial, report, capture_hash):
             fixture_class=trial.get('class', 'UNOBSERVED'), status='MATCHED' if bound != 'UNOBSERVED' else 'UNOBSERVED',
             attempt=row.get('attempt', 'UNOBSERVED'), session=row.get('session', 'UNOBSERVED'), wake=row.get('wake', 'UNOBSERVED'),
             eligible=eligible, outcome=outcome, owner=owner, request=row.get('request', 'UNOBSERVED'),
+            duplicate_core_record=str(not unique_record).lower(),
             posted=trial.get('workerPost', 'UNOBSERVED'), visible=trial.get('visible', 'UNOBSERVED'),
             direct_pipeline_match=str(same_pipeline).lower(),
             callback_to_grant_ms=bound, earlier_same_wake_to_grant_ms=alternative,
@@ -125,7 +129,8 @@ def analyze_directory(root):
         identity = fields((path / 'identity.txt').read_text().replace('\n', ' '))
         block, arm, mode, source = (identity[k] for k in ('block', 'arm', 'mode', 'source'))
         status = (path / 'result.txt').read_text().strip() if (path / 'result.txt').exists() else 'NOT REACHED: block did not finish'
-        item = dict(block=block, arm=arm, mode=mode, source_sha=source, result=status, attempted=0)
+        item = dict(block=block, arm=arm, mode=mode, source_sha=source, result=status,
+                    planned=5, attempted_recorded=0)
         tar_path = path / 'device.tar'
         if tar_path.exists() and tar_path.stat().st_size:
             with tarfile.open(tar_path) as archive:
@@ -136,7 +141,7 @@ def analyze_directory(root):
                 if trial_files:
                     manifest = trial_files[0]
                     trials = [fields(line) for line in read_member(archive, manifest).decode().splitlines() if line.strip()]
-                    item['attempted'] = len(trials)
+                    item['attempted_recorded'] = len(trials)
                     for trial in trials:
                         capture_path = manifest.rsplit('/', 1)[0] + '/capture-' + trial['trial'] + '.txt'
                         if capture_path not in names:
@@ -152,10 +157,12 @@ def summarize(blocks, rows):
     groups = {}
     for block in blocks:
         key = block['arm'] + '/' + block['mode']
-        group = groups.setdefault(key, dict(blocks=0, failed_or_unfinished_blocks=0, attempted_wakes=0,
-                                            matched_rows=0, below_300=0, at_or_above_300=0, values_ms=[]))
+        group = groups.setdefault(key, dict(blocks=0, failed_or_unfinished_blocks=0, planned_wakes=0,
+                                            attempted_wakes_recorded=0, matched_rows=0,
+                                            below_300=0, at_or_above_300=0, values_ms=[], matched_wakes=set()))
         group['blocks'] += 1
-        group['attempted_wakes'] += block['attempted']
+        group['planned_wakes'] += block['planned']
+        group['attempted_wakes_recorded'] += block['attempted_recorded']
         if not block['result'].startswith('PASS:'):
             group['failed_or_unfinished_blocks'] += 1
     for row in rows:
@@ -164,10 +171,12 @@ def summarize(blocks, rows):
             continue
         value = float(row['callback_to_grant_ms'])
         group['matched_rows'] += 1
+        group['matched_wakes'].add((row['block'], row['trial']))
         group['below_300' if value < 300 else 'at_or_above_300'] += 1
         group['values_ms'].append(value)
     for group in groups.values():
         values = group.pop('values_ms')
+        group['matched_wakes'] = len(group['matched_wakes'])
         group['observed_min_ms'] = min(values) if values else None
         group['observed_median_ms'] = statistics.median(values) if values else None
         group['observed_max_ms'] = max(values) if values else None
