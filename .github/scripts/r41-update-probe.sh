@@ -68,14 +68,44 @@ XML
   adb exec-out run-as com.fluvi.app cat files/r41-update-sentinel.txt > "$evidence/sentinel-before.txt"
   cmp "$dir/seed.xml" "$evidence/prefs-before.xml"
   cmp "$dir/sentinel.txt" "$evidence/sentinel-before.txt"
+  # Confirm the actual accessibility service exists and runs before update;
+  # an enabled component alone is not evidence of a bound live process.
+  component='com.fluvi.app/.lockscreen.FluviKeyguardCardService'
+  adb shell am start -n com.fluvi.app/.MainActivity > "$evidence/launch-r40.txt" 2>&1
+  adb shell settings put secure enabled_accessibility_services "$component"
+  adb shell settings put secure accessibility_enabled 1
+  observe_service() {
+    local label="$1" seen=false app_pid
+    for _ in $(seq 1 60); do
+      adb shell dumpsys activity services "$component" > "$evidence/service-$label.txt" 2>&1 || true
+      adb shell pidof com.fluvi.app > "$evidence/pid-$label.txt" 2>&1 || true
+      app_pid=$(tr -d '\r' < "$evidence/pid-$label.txt" | awk '{print $1}')
+      if [[ "$app_pid" =~ ^[0-9]+$ ]] &&
+         grep -Fq 'com.fluvi.app/.lockscreen.FluviKeyguardCardService' "$evidence/service-$label.txt" &&
+         grep -Eq "app=ProcessRecord\\{[^}]*[[:space:]]${app_pid}:com[.]fluvi[.]app/" "$evidence/service-$label.txt"; then
+        seen=true; break
+      fi
+      sleep 0.5
+    done
+    adb shell settings get secure enabled_accessibility_services > "$evidence/enabled-$label.txt"
+    adb shell dumpsys accessibility > "$evidence/accessibility-$label.txt" 2>&1 || true
+    "$seen" && grep -Fq "$component" "$evidence/enabled-$label.txt"
+  }
+  observe_service before
+  # The old app may write its own canonical preferences during startup.
+  # Compare the exact on-device state immediately before the upgrade.
+  adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$evidence/prefs-before.xml"
+  adb exec-out run-as com.fluvi.app cat files/r41-update-sentinel.txt > "$evidence/sentinel-before.txt"
+  cmp "$dir/sentinel.txt" "$evidence/sentinel-before.txt"
   adb install -r "$dir/candidate.apk" > "$evidence/install-r41-update.txt" 2>&1
+  observe_service after
   adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$evidence/prefs-after.xml"
   adb exec-out run-as com.fluvi.app cat files/r41-update-sentinel.txt > "$evidence/sentinel-after.txt"
-  cmp "$dir/seed.xml" "$evidence/prefs-after.xml"
+  cmp "$evidence/prefs-before.xml" "$evidence/prefs-after.xml"
   cmp "$dir/sentinel.txt" "$evidence/sentinel-after.txt"
   adb shell am start -n com.fluvi.app/.MainActivity > "$evidence/launch.txt" 2>&1
   adb shell dumpsys package com.fluvi.app > "$evidence/package-after.txt"
-  printf '%s\n' 'PASS: API 35 R40-to-R41 install -r and synthetic preferences/file preserved.' 'NOT TESTED: accessible service, authorization, ORB pixels, animation, privacy and phone performance.' > "$evidence/result.txt"
+  printf '%s\n' 'PASS: API 35 R40-to-R41 install -r, synthetic preferences/file preserved and enabled accessibility service has a live process before/after.' 'NOT TESTED: authorization, ORB pixels, animation, privacy and phone performance.' > "$evidence/result.txt"
   ;;
  *) exit 2;;
 esac
