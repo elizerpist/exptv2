@@ -111,7 +111,7 @@ case "${1:-}" in
       ;;
     export_priority)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
-      methods=(absentR22BoundariesRemainExplicitlyUnknown directAndWithdrawalEvidenceSurvivesR41LightPressure directAndWithdrawalEvidenceSurvivesR41FullPressure twentyFiveRequestWakeSurvivesLightExport twentyFiveRequestWakeSurvivesFullExport allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners burstOfPendingOffersPreservesWinningOwnerAndReportsLoss)
+      methods=(absentR22BoundariesRemainExplicitlyUnknown duplicateFirstCauseReferencesOnlyTheExactSelectedShowingCause directAndWithdrawalEvidenceSurvivesR41LightPressure directAndWithdrawalEvidenceSurvivesR41FullPressure twentyFiveRequestWakeSurvivesLightExport twentyFiveRequestWakeSurvivesFullExport allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners burstOfPendingOffersPreservesWinningOwnerAndReportsLoss)
       ;;
     old_export)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
