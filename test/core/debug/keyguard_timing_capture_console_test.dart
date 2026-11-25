@@ -150,6 +150,9 @@ void main() {
         find.byKey(const ValueKey('debug-console-keyguard-tab')),
       );
       await tester.pump();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('debug-console-keyguard-copy')),
+      );
       await tester.tap(
         find.byKey(const ValueKey('debug-console-keyguard-copy')),
       );
