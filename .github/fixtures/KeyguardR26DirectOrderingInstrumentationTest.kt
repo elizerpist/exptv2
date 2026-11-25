@@ -42,6 +42,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun warmOrderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true, warmup = true)
     @Test fun readyWorkDoesNotWaitForDiagnosticPublication() = exercise(true, true, warmup = true, checkReport = true)
     @Test fun r42PreStartSelectsActualLatestRequest() = exercise(true, preStart = true)
+    @Test fun r42PreStartWarmFullGrantOfSelectedRequest() = exercise(true, preStart = true, platformWarm = true, requirePreStartGrant = true)
     @Test fun r42StalePositiveExitsAfterOrderedRestrictions() = exercise(true, duringRead = true, platformWarm = true)
     @Test fun r42StalePositiveAfterRealReadExitsBeforePositivePath() = exercise(true, afterRead = true, platformWarm = true)
 
@@ -49,7 +50,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     private data class LatestPreconditionWitness(val pending:KeyguardCardInspectionRequest?, val oldScene:Long,
         val currentScene:Long, val freshness:KeyguardInspectionFreshness.Ticket?, val external:Boolean,
         val sameOwner:Boolean, val qualified:Boolean)
-    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false, preStart:Boolean = false, duringRead:Boolean = false, afterRead:Boolean = false, platformWarm:Boolean = false) {
+    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false, preStart:Boolean = false, duringRead:Boolean = false, afterRead:Boolean = false, platformWarm:Boolean = false, requirePreStartGrant:Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -367,6 +368,29 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 assertEquals("R42: the actual latest C must start, before any A or B physical read", c, firstPhysical.get())
                 assertTrue("NOT REACHED: selected C did not finish its own physical read", selectedCCompleted.await(20,TimeUnit.SECONDS))
                 records.add("C_OWN_READ id=$c result=${selectedCOutcome.get()} proofAndVisibleOutput=SEPARATE_CONTROLS")
+                if (requirePreStartGrant) {
+                    if (selectedCOutcome.get() != "SHOW_FULL/MAIN_CONFIRMED unavailable=false truncated=false stale=false")
+                        throw AssertionError("NOT REACHED: selected C did not obtain a complete FULL scene: ${selectedCOutcome.get()}")
+                    var report = ""
+                    fun field(line:String, key:String):String? = Regex("(?:^| )$key=([^ ]+)").find(line)?.groupValues?.get(1)
+                    await("selected C owner-bound grant and DIRECT output") {
+                        report=KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                        val core=report.lineSequence().firstOrNull { line ->
+                            line.startsWith(" R41_CORE ") && field(line,"request")==c.toString() &&
+                                field(line,"eligible")=="true" && field(line,"outcome")=="SUCCESS" &&
+                                field(line,"grantNs")?.toLongOrNull()!=null && field(line,"winnerNs")?.toLongOrNull()!=null
+                        }
+                        val owner=core?.let { field(it,"owner")?.split('/') } ?: emptyList()
+                        core != null && owner.size==3 && owner[2]==c.toString() && report.lineSequence().any { line ->
+                            line.startsWith(" R18_PIPELINE ") && field(line,"attach")==owner[0] &&
+                                field(line,"output")==owner[1] && field(line,"privacy")=="full" &&
+                                field(line,"proof")==c.toString() && field(line,"consumedReq")==c.toString() &&
+                                field(line,"backend")=="R18_DIRECT_ATTEMPT"
+                        }
+                    }
+                    File(dir,"prestart-full-grant.txt").writeText(report)
+                    records.add("C_OWN_FULL_GRANT id=$c; pixel/physical timing remain SEPARATE")
+                }
                 return
             }
             if (duringRead) {

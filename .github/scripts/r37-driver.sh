@@ -45,7 +45,7 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR42SignedProfileProbeTest.kt
     sha256sum "$fixture" > "$out/fixture-r42-profile.sha256"
   fi
-  if [[ "$TEST_SCOPE" == r42_stale_verbose ]]; then
+  if [[ "$TEST_SCOPE" == r42_stale_verbose || "$TEST_SCOPE" == r42_prestart_warm ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR26DirectOrderingInstrumentationTest.kt"
     test -f "$fixture"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt
@@ -238,6 +238,10 @@ case "${1:-}" in
     r42_stale_verbose)
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
       methods=(r42StalePositiveAfterRealReadExitsBeforePositivePath)
+      ;;
+    r42_prestart_warm)
+      class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
+      methods=(r42PreStartWarmFullGrantOfSelectedRequest)
       ;;
     capacity_pressure)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
