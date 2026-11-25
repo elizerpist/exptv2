@@ -59,7 +59,10 @@ XML
       for _ in $(seq 1 60); do
         adb shell dumpsys activity services "$component" > "$out/service-$label.txt" 2>&1 || true
         adb shell dumpsys accessibility > "$out/accessibility-$label.txt" 2>&1 || true
-        pid=$(adb shell pidof com.fluvi.app | tr -d '\r' | awk '{print $1}')
+        # The accessibility service binds asynchronously after its setting is
+        # enabled or the package is replaced. A missing PID is a retryable
+        # observation, not a shell error that should abort the first poll.
+        pid=$(adb shell pidof com.fluvi.app 2>/dev/null | tr -d '\r' | awk '{print $1}' || true)
         if [[ "$pid" =~ ^[0-9]+$ ]] && grep -Fq 'com.fluvi.app/.lockscreen.FluviKeyguardCardService' "$out/service-$label.txt" &&
             grep -Eq "app=ProcessRecord\\{[^}]*[[:space:]]${pid}:com[.]fluvi[.]app/" "$out/service-$label.txt" &&
             grep -Fq 'Bound services:{Service[label=Fluvi' "$out/accessibility-$label.txt"; then ok=true; break; fi
