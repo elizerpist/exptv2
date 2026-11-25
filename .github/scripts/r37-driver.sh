@@ -109,7 +109,11 @@ case "${1:-}" in
       ;;
     r44_service)
       class=com.fluvi.app.lockscreen.KeyguardR44ServiceInstrumentationTest
-      methods=(syntheticPairUsesRealServiceWithCaptureOff syntheticPairUsesRealServiceWithCaptureOn)
+      methods=(syntheticPairUsesRealServiceWithCaptureOff syntheticPairUsesRealServiceWithCaptureOn supersededSyntheticReadCannotGrantAfterRestriction)
+      ;;
+    r44_provider)
+      class=com.fluvi.app.lockscreen.KeyguardR44LazyProviderInstrumentationTest
+      methods=(advertisedTagIsFilledOnlyAfterRealExtraRequest)
       ;;
     r43_api37)
       class=com.fluvi.app.lockscreen.KeyguardR43Api37BaselineTest
