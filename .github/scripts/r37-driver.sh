@@ -14,7 +14,15 @@ case "${1:-}" in
     test -f "$fixture"
     test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
-    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt > "$out/fixture.patch"
+    case "$TEST_SCOPE" in
+      system_warm_report|system_warm_ordered)
+        second="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt"
+        test -f "$second"
+        cp "$second" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt
+        sha256sum "$second" > "$out/fixture-r26.sha256"
+        ;;
+    esac
+    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt > "$out/fixture.patch"
     sha256sum "$fixture" > "$out/fixture.sha256"
   fi
   flutter pub get > "$out/pub-get.log" 2>&1
@@ -65,6 +73,14 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
       methods=(readyWorkDoesNotWaitForDiagnosticPublication)
       ;;
+    system_warm_report)
+      class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
+      methods=(systemWarmReadyWorkDoesNotWaitForDiagnosticPublication)
+      ;;
+    system_warm_ordered)
+      class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
+      methods=(systemWarmOrderedDirectSkipsInapplicableR25Evaluation)
+      ;;
     r40_safety)
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
       methods=(r40HeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock)
@@ -84,6 +100,10 @@ case "${1:-}" in
     r21_controls)
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
       methods=(r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck r21ExclusionRetiresSubmittedOrbWithMainAckHeld)
+      ;;
+    r21_system_warm_controls)
+      class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
+      methods=(r41SystemWarmBenignIngressBeforeRealMainAck r41SystemWarmExclusionBeforeRealMainAck)
       ;;
     fallback)
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
