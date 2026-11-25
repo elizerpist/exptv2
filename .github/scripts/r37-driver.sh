@@ -77,6 +77,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
       methods=(r41FixtureFifoControlWaitsForOriginalMain r41FixtureRealIngressReconcilesBeforeSuccessor)
       ;;
+    isolated_dispose_original)
+      class=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest
+      methods=(isolatedOrbFirstDirectDisposeDoesNotWaitForWorkerOrOldCommit)
+      ;;
     report)
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
       methods=(readyWorkDoesNotWaitForDiagnosticPublication)
