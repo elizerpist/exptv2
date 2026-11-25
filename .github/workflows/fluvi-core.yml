@@ -92,7 +92,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$APP_SHA"
           flutter pub get > "$RUNNER_TEMP/r37-evidence/unit-pub-get.log" 2>&1
           rc=0
-          (cd android && ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --continue --no-daemon --max-workers=3 --console=plain) > "$RUNNER_TEMP/r37-evidence/unit.log" 2>&1 || rc=$?
+          # Robolectric fetches its platform independently of Gradle's
+          # repositories. Use the same public Maven Central mirror when its
+          # default repo1 endpoint is rate-limited on a disposable runner.
+          (cd android && JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -Drobolectric.dependency.repo.url=https://maven-central.storage-download.googleapis.com/maven2" ./gradlew :app:testDebugUnitTest :fluvi-core:testDebugUnitTest --continue --no-daemon --max-workers=3 --console=plain) > "$RUNNER_TEMP/r37-evidence/unit.log" 2>&1 || rc=$?
           printf '%s\n' "$rc" > "$RUNNER_TEMP/r37-evidence/unit-exit.txt"
           for path in build/app/test-results build/fluvi-core/test-results; do
             if [[ -d "$path" ]]; then
