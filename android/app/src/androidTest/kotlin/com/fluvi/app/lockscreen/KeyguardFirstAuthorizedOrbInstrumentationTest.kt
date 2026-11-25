@@ -49,6 +49,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         runService(false, null, true, true, false, true)
     @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
     @Test fun r41ActualWarmFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, true, true)
+    @Test fun r41TwentyUnheldWakeAttempts() = runNaturalWakeBatch()
     @Test fun externalIngressWhileFirstPaintIsHeldCannotUseOldProof() = runService(true)
     @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
     @Test fun r21ExclusionRetiresSubmittedOrbWithMainAckHeld() = runService(false, true)
@@ -66,6 +67,113 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r22YieldedWalkCannotGrantAfterExclusion() = KeyguardR22FirstInspectionFixture().run("negative")
     @Test fun r22StableOpeningReadIsNotYielded() = KeyguardR22FirstInspectionFixture().run("stable")
     @Test fun r22UnstagedOpeningObservation() = KeyguardR22FirstInspectionFixture().run("natural")
+
+    /** Unheld disposable-device observation, not a privacy or latency pass.
+     * Every attempted wake has a separate frozen report, including timeouts.
+     * The test callback observes a canvas post, which can still be hidden. */
+    private fun runNaturalWakeBatch() {
+        assertEquals(35, Build.VERSION.SDK_INT)
+        val args = InstrumentationRegistry.getArguments()
+        val source = requireNotNull(args.getString("sourceSha"))
+        require(source.matches(Regex("[0-9a-f]{40}")))
+        val run = UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
+        val dir = File(context.filesDir, "keyguard-service-probe/r19/$run/r41-natural")
+        check(dir.mkdirs())
+        automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        val resolver = context.contentResolver
+        val savedServices = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        val savedEnabled = Settings.Secure.getString(resolver, Settings.Secure.ACCESSIBILITY_ENABLED)
+        val savedLock = shell("locksettings get-disabled").trim()
+        val savedSettings = preferences("fluvi_native_keyguard_card")
+        val savedMaterial = preferences("fluvi_keyguard_header_material")
+        val savedMode = preferences("fluvi_keyguard_orb_diagnostic_route")
+        val component = ComponentName(context, FluviKeyguardCardService::class.java)
+        val other = savedServices.orEmpty().split(':').filter {
+            it.isNotBlank() && ComponentName.unflattenFromString(it) != component
+        }.joinToString(":")
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
+        val power = context.getSystemService(PowerManager::class.java)
+        val postLatch = AtomicReference<CountDownLatch?>()
+        val firstPostNs = AtomicLong(0)
+        val savedPost = KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost
+        val rows = mutableListOf<String>()
+        val errors = mutableListOf<String>()
+        var capture = false
+        try {
+            check(!FluviKeyguardCardServiceRegistry.connected && !keyguard.isDeviceSecure)
+            check(savedLock == "true" || savedLock == "false")
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, other)
+            shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard")
+            await("unlocked setup", 8_000) { power.isInteractive && !keyguard.isKeyguardLocked }
+            shell("locksettings set-disabled false")
+            check(context.getSharedPreferences("fluvi_keyguard_orb_diagnostic_route", Context.MODE_PRIVATE)
+                .edit().putString("mode", "SURFACE_LIVE").commit())
+            instrumentation.runOnMainSync {
+                FluviKeyguardCardSettings.update(context, mapOf("requested" to true, "showFinancialDetails" to true,
+                    "presentationMode" to "orb", "animationMode" to "orbOnly"))
+                val epoch = maxOf(SystemClock.elapsedRealtimeNanos(),
+                    (savedMaterial.second["publisherEpoch"] as? Long ?: -1L) + 1L)
+                check(FluviKeyguardMaterialStore.publish(context, KeyguardR12ServiceTimingInstrumentationTest().materialProfile(), epoch))
+            }
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                listOf(other, component.flattenToString()).filter(String::isNotBlank).joinToString(":"))
+            setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
+            await("actual service connected", 10_000) { FluviKeyguardCardServiceRegistry.connected }
+            val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
+            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = { target ->
+                if (target.attachment > 0 && target.full && !target.revoked) {
+                    firstPostNs.compareAndSet(0, System.nanoTime())
+                    postLatch.get()?.countDown()
+                }
+                savedPost?.invoke(target)
+            }
+            repeat(20) { index ->
+                shell("input keyevent KEYCODE_SLEEP")
+                await("sleep and keyguard ${index + 1}", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+                KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT"); capture = true
+                firstPostNs.set(0)
+                val latch = CountDownLatch(1)
+                postLatch.set(latch)
+                val wakeCommandNs = System.nanoTime()
+                shell("input keyevent KEYCODE_WAKEUP")
+                val posted = latch.await(7, TimeUnit.SECONDS)
+                var visible = false
+                if (posted) runCatching {
+                    await("service visible ${index + 1}", 3_000) {
+                        instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
+                        visible && power.isInteractive && keyguard.isKeyguardLocked
+                    }
+                }
+                postLatch.set(null)
+                val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+                capture = false
+                File(dir, "capture-${index + 1}.txt").writeText(report)
+                rows.add("trial=${index + 1} class=${if (index == 0) "fresh-service" else "warm"} " +
+                    "commandNs=$wakeCommandNs workerPostNs=${firstPostNs.get().takeIf { it > 0 } ?: "UNOBSERVED"} " +
+                    "workerPost=$posted visible=$visible optical=UNOBSERVED verdict=INCOMPLETE")
+                File(dir, "trials.txt").writeText(rows.joinToString("\n", postfix = "\n"))
+            }
+        } catch (error: Throwable) {
+            errors.add("${error.javaClass.simpleName}:${error.message}")
+        } finally {
+            postLatch.set(null)
+            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = savedPost
+            if (capture) runCatching { File(dir, "interrupted.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"] as String) }
+            runCatching {
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, other)
+                await("service disconnected", 10_000) { !FluviKeyguardCardServiceRegistry.connected }
+                restore(savedSettings); restore(savedMaterial); restore(savedMode)
+                shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard")
+                if (savedLock == "true" || savedLock == "false") shell("locksettings set-disabled $savedLock")
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices)
+                setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
+            }.onFailure { errors.add("cleanup:${it.javaClass.simpleName}:${it.message}") }
+            File(dir, "result.txt").writeText("source=$source attempts=${rows.size} errors=${errors.joinToString("|")} " +
+                "canvasPostIsNotVisiblePixel=true observerMainPollingAfterPost=true physical=UNOBSERVED\n")
+        }
+        assertEquals("natural batch interrupted: $errors", 20, rows.size)
+        assertTrue("natural batch cleanup failed: $errors", errors.isEmpty())
+    }
 
     private fun runService(changeScene: Boolean, r21Negative: Boolean? = null, r40: Boolean = false,
                            r41Warm: Boolean = false, r41Fallback: Boolean = false,
