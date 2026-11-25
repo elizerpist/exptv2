@@ -45,7 +45,7 @@ permissions:
   contents: read
 jobs:
   service:
-    if: ${{ inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' }}
+    if: ${{ inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' && inputs.test_scope != 'r43_flutter' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -258,3 +258,28 @@ jobs:
             ${{ runner.temp }}/r43-update/*.xml
           if-no-files-found: warn
           retention-days: 14
+
+  r43-flutter:
+    if: ${{ inputs.test_scope == 'r43_flutter' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      APP_SHA: ${{ inputs.app_sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.APP_SHA }}
+          path: app
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+      - name: Analyze and test the exact R43 console bridge
+        working-directory: app
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$APP_SHA"
+          flutter pub get
+          flutter analyze lib/core/debug/debug_console.dart lib/core/diagnostics/keyguard_timing_capture_bridge.dart test/core/debug/keyguard_timing_capture_console_test.dart test/core/diagnostics/keyguard_timing_capture_bridge_test.dart
+          flutter test test/core/debug/keyguard_timing_capture_console_test.dart test/core/diagnostics/keyguard_timing_capture_bridge_test.dart --reporter expanded
