@@ -40,10 +40,25 @@ internal class KeyguardR41AttemptLedger {
     private var r42StaleLastRequest = MISSING; private var r42StaleLastNext = MISSING; private var r42StaleLastNs = MISSING
     private var r42StaleScene = MISSING
     private var r42StaleOldScene = MISSING; private var r42StaleCause = MISSING
+    private var r42PreChecks = 0L; private var r42PreFirstCheck = MISSING; private var r42PreFirstReason = MISSING
+    private var r42PreFirstPending = MISSING; private var r42PreLastCheck = MISSING; private var r42PreLastReason = MISSING; private var r42PreLastPending = MISSING
+    private var r42PostChecks = 0L; private var r42PostFirstCheck = MISSING; private var r42PostFirstReason = MISSING
+    private var r42PostFirstPending = MISSING; private var r42PostLastCheck = MISSING; private var r42PostLastReason = MISSING; private var r42PostLastPending = MISSING
 
     fun record(phase: String, request: Long?, atNs: Long, reservation: Long? = null, output: Long? = null,
                tid: Long? = null, uptimeMs: Long? = null, source: Long? = null, eventTimeMs: Long? = null) {
         if (atNs == MISSING) { invalid++; return }
+        if (phase == "R42_PRECHECK" || phase == "R42_POSTCHECK") {
+            if (request == null || request <= 0 || output == null || output <= 0) { invalid++; return }
+            if (phase == "R42_PRECHECK") {
+                if (r42PreChecks++ == 0L) { r42PreFirstCheck = request; r42PreFirstReason = output; r42PreFirstPending = reservation ?: MISSING }
+                r42PreLastCheck = request; r42PreLastReason = output; r42PreLastPending = reservation ?: MISSING
+            } else {
+                if (r42PostChecks++ == 0L) { r42PostFirstCheck = request; r42PostFirstReason = output; r42PostFirstPending = reservation ?: MISSING }
+                r42PostLastCheck = request; r42PostLastReason = output; r42PostLastPending = reservation ?: MISSING
+            }
+            return
+        }
         if (phase == "R42_STALE_DETAIL") {
             if (request == null || request <= 0 || request != r42StaleLastRequest ||
                 reservation == null || reservation <= 0 || output == null || output <= 0) {
@@ -183,7 +198,8 @@ internal class KeyguardR41AttemptLedger {
         // spending the shared export budget on a long list of absent fields.
         // Parsers treat every omitted endpoint as missing, never as zero.
         if (count == 0 && wakeNs == MISSING && screenNs == MISSING && eligible == -1 &&
-            systemEligible == -1 && shadowOffers == 0L && orderedBypasses == 0L && r42PreCount == 0L && r42StaleCount == 0L) {
+            systemEligible == -1 && shadowOffers == 0L && orderedBypasses == 0L && r42PreCount == 0L &&
+            r42StaleCount == 0L && r42PreChecks == 0L && r42PostChecks == 0L) {
             val loss = captureLoss + omitted + invalid
             return " R41_CORE attempt=$attempt session=$session wake=$wake systemEligible=UNOBSERVED eligible=UNOBSERVED" +
                 " outcome=UNOBSERVED owner=UNOBSERVED missing=ALL_R41_BOUNDARIES" +
@@ -221,8 +237,10 @@ internal class KeyguardR41AttemptLedger {
             " h2ShadowCoverage=partialGuardsDispatchUnverified" +
             " r42Pre=$r42PreCount/${value(r42PreFirstRequest)}/${value(r42PreFirstNext)}/${value(r42PreFirstNs)}/${value(r42PreLastRequest)}/${value(r42PreLastNext)}/${value(r42PreLastNs)}/${value(r42PreFreshness)}" +
             " r42PreMeta=freshnessPlusOne_framework16_origin32" +
+            " r42PreCheck=$r42PreChecks/${value(r42PreFirstCheck)}/${value(r42PreFirstReason)}/${value(r42PreFirstPending)}/${value(r42PreLastCheck)}/${value(r42PreLastReason)}/${value(r42PreLastPending)}" +
             " r42Stale=$r42StaleCount/${value(r42StaleFirstRequest)}/${value(r42StaleFirstNext)}/${value(r42StaleFirstNs)}/${value(r42StaleLastRequest)}/${value(r42StaleLastNext)}/${value(r42StaleLastNs)}/${value(r42StaleScene)}" +
             " r42StaleOldScene=${value(r42StaleOldScene)} r42StaleCause=${value(r42StaleCause)} r42StaleSceneEncoding=currentPlusOne_causes1Scene2NewerRequest" +
+            " r42PostCheck=$r42PostChecks/${value(r42PostFirstCheck)}/${value(r42PostFirstReason)}/${value(r42PostFirstPending)}/${value(r42PostLastCheck)}/${value(r42PostLastReason)}/${value(r42PostLastPending)}" +
             " fallbackCandidateAndPostReceipt=$fallbackEvidence fallbackGrant=UNOBSERVED" +
             " requests=$count omitted=$omitted invalid=$invalid dropped=$loss" +
             " coverage=INCOMPLETE clock=System.nanoTime physical=UNOBSERVED\n"
@@ -257,6 +275,10 @@ internal class KeyguardR41AttemptLedger {
         copy.r42StaleFirstNs = r42StaleFirstNs; copy.r42StaleLastRequest = r42StaleLastRequest; copy.r42StaleLastNext = r42StaleLastNext
         copy.r42StaleLastNs = r42StaleLastNs; copy.r42StaleScene = r42StaleScene
         copy.r42StaleOldScene = r42StaleOldScene; copy.r42StaleCause = r42StaleCause
+        copy.r42PreChecks = r42PreChecks; copy.r42PreFirstCheck = r42PreFirstCheck; copy.r42PreFirstReason = r42PreFirstReason
+        copy.r42PreFirstPending = r42PreFirstPending; copy.r42PreLastCheck = r42PreLastCheck; copy.r42PreLastReason = r42PreLastReason; copy.r42PreLastPending = r42PreLastPending
+        copy.r42PostChecks = r42PostChecks; copy.r42PostFirstCheck = r42PostFirstCheck; copy.r42PostFirstReason = r42PostFirstReason
+        copy.r42PostFirstPending = r42PostFirstPending; copy.r42PostLastCheck = r42PostLastCheck; copy.r42PostLastReason = r42PostLastReason; copy.r42PostLastPending = r42PostLastPending
     }
 
     companion object {

@@ -3187,20 +3187,26 @@ class FluviKeyguardCardService : AccessibilityService() {
     /** Scheduling only: the selected request still needs its own physical
      * read and every existing Main/final disclosure gate. No platform call or
      * diagnostic formatting is performed while the queue lock is held. */
-    private fun r42SelectBeforeReadLocked(scheduled: KeyguardCardInspectionRequest): KeyguardCardInspectionRequest? {
-        val owner = r34EmptyDirectLocked(scheduled) ?: return null
-        val active = r18Active ?: return null
+    private class R42Precheck { var reason = 0L; var pending = 0L }
+
+    private fun r42SelectBeforeReadLocked(scheduled: KeyguardCardInspectionRequest,
+                                           trace: R42Precheck?): KeyguardCardInspectionRequest? {
+        val owner = r34EmptyDirectLocked(scheduled) ?: run { trace?.reason = 1; return null }
+        val active = r18Active ?: run { trace?.reason = 2; return null }
         val state = r18Coordinator.snapshot()
         if (r18ProvisionalWake != null || !state.adopted || active.token !== owner.reservation ||
-            !active.preparation.emptyAwaitingDisclosure || !active.preparation.full) return null
-        val latest = inspectionQueue.pendingRequest() ?: return null
+            !active.preparation.emptyAwaitingDisclosure || !active.preparation.full) { trace?.reason = 3; return null }
+        val latest = inspectionQueue.pendingRequest() ?: run { trace?.reason = 4; return null }
+        trace?.pending = latest.id
         val scene = firstAuthorizedOrb.sceneSerial()
-        if (!r42ActualLatestLocked(scheduled, latest, scene)) return null
-        val ticket = inspectionFreshness.beforeRead(scheduled) ?: return null
+        if (!r42ActualLatestLocked(scheduled, latest, scene)) { trace?.reason = 5; return null }
+        val ticket = inspectionFreshness.beforeRead(scheduled) ?: run { trace?.reason = 6; return null }
         if (inspectionFreshness.beforeRead(latest) != ticket ||
-            !openingHandoff.canRetireUnstartedForR42(scheduled, owner.reservation)) return null
-        val selected = inspectionQueue.selectUnstartedLatest(scheduled, latest, ticket.reason) ?: return null
+            !openingHandoff.canRetireUnstartedForR42(scheduled, owner.reservation)) { trace?.reason = 7; return null }
+        val selected = inspectionQueue.selectUnstartedLatest(scheduled, latest, ticket.reason)
+            ?: run { trace?.reason = 8; return null }
         openingHandoff.retireUnstartedForR42(scheduled, owner.reservation)
+        trace?.reason = 9
         return selected
     }
 
@@ -3505,7 +3511,10 @@ class FluviKeyguardCardService : AccessibilityService() {
         try {
         while (request != null) {
             val scheduled = request ?: break
-            val selected = synchronized(queueLock) { r42SelectBeforeReadLocked(scheduled) }
+            val r42Trace = if (scheduled.diagnosticContext?.captureId?.let {
+                    it == KeyguardCardDiagnostics.activeCaptureId()
+                } == true) R42Precheck() else null
+            val selected = synchronized(queueLock) { r42SelectBeforeReadLocked(scheduled, r42Trace) }
             if (selected != null) {
                 // Publish the new exact owner before any observer or possible
                 // cancellation can unwind this coroutine.
@@ -3517,6 +3526,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                         (if (selected.r42FrameworkEvent) 16L else 0L) +
                         32L * (selected.r14Ingress?.origin?.ordinal ?: 0))
             }
+            if (r42Trace != null) KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.R42_PRECHECK,
+                scheduled.diagnosticContext, scheduled.id, r42Trace.pending, r42Trace.reason)
             val active = selected ?: scheduled
             val physical = readInspection(active)
             if (physical is PhysicalReadOutcome.Yielded) {
@@ -4728,17 +4739,32 @@ class FluviKeyguardCardService : AccessibilityService() {
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.DECISION, request.id, request.attachGeneration, extra = decision.ordinal)
         val r42OldOwner = r42Read?.r42ReadOwner
         val r42OldScene = inspection.r19ReadSceneSerial
-        val r42Stale = if (disposition == CompletedDisposition.NORMAL && r42Read?.r38MilestoneOrdered == true &&
-            r42OldOwner != null && r42OldScene != null && inspection.freshnessRevision != null &&
-            completeMain && decision == KeyguardCardVisibility.SHOW_FULL && signals.systemStateAvailable) synchronized(queueLock) {
-            val pending = inspectionQueue.pendingRequest()
-            val scene = firstAuthorizedOrb.sceneSerial()
-            val freshness = pending?.let(inspectionFreshness::beforeRead)
-            if (!r34SameEmptyOwnerLocked(request, r42OldOwner) || pending == null || freshness == null ||
-                !r42ActualLatestLocked(request, pending, scene) ||
-                firstAuthorizedOrb.isUnclaimedReadCurrent(request.id, r42OldScene)) null
-            else R42StaleSuccessor(pending.id, r42OldScene, scene, if (r42OldScene != scene) 1L else 2L)
-        } else null
+        var r42PostReason = 0L
+        var r42PostPending = 0L
+        val r42Stale = when {
+            disposition != CompletedDisposition.NORMAL -> { r42PostReason = 1; null }
+            r42Read?.r38MilestoneOrdered != true -> { r42PostReason = 2; null }
+            r42OldOwner == null -> { r42PostReason = 3; null }
+            r42OldScene == null -> { r42PostReason = 4; null }
+            inspection.freshnessRevision == null -> { r42PostReason = 5; null }
+            !completeMain || decision != KeyguardCardVisibility.SHOW_FULL || !signals.systemStateAvailable -> { r42PostReason = 6; null }
+            else -> synchronized(queueLock) {
+                val pending = inspectionQueue.pendingRequest()
+                r42PostPending = pending?.id ?: 0L
+                val scene = firstAuthorizedOrb.sceneSerial()
+                val freshness = pending?.let(inspectionFreshness::beforeRead)
+                when {
+                    !r34SameEmptyOwnerLocked(request, r42OldOwner) -> { r42PostReason = 7; null }
+                    pending == null -> { r42PostReason = 8; null }
+                    freshness == null -> { r42PostReason = 9; null }
+                    !r42ActualLatestLocked(request, pending, scene) -> { r42PostReason = 10; null }
+                    firstAuthorizedOrb.isUnclaimedReadCurrent(request.id, r42OldScene) -> { r42PostReason = 11; null }
+                    else -> { r42PostReason = 12; R42StaleSuccessor(pending.id, r42OldScene, scene, if (r42OldScene != scene) 1L else 2L) }
+                }
+            }
+        }
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.R42_POSTCHECK,
+            request.diagnosticContext, request.id, r42PostPending, r42PostReason)
         if (r42Stale != null) {
             r42Read?.r42SuppressedPositive = true
             KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.R42_STALE_POSITIVE,

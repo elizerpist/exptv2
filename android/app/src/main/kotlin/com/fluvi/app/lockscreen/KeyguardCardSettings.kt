@@ -2694,6 +2694,8 @@ internal object KeyguardCardDiagnostics {
                     KeyguardR41RawLedger.R42_PRESTART -> "R42_PRESTART"
                     KeyguardR41RawLedger.R42_STALE_POSITIVE -> "R42_STALE_POSITIVE"
                     KeyguardR41RawLedger.R42_STALE_DETAIL -> "R42_STALE_DETAIL"
+                    KeyguardR41RawLedger.R42_PRECHECK -> "R42_PRECHECK"
+                    KeyguardR41RawLedger.R42_POSTCHECK -> "R42_POSTCHECK"
                         else -> null
                     }
                     if (phase == null) active.r41RawUnmatched += 1 else attempt.r41.record(
@@ -2955,6 +2957,9 @@ internal object KeyguardCardDiagnostics {
             appendLine("R42_DIAGNOSTIC_CAPACITY coreOverflow=${active.r42CoreOverflow} " +
                 "offerTailContention=${active.r42TailContention} offerTailOverwritten=${active.r42TailOverwritten} offerTailLate=${active.r42TailLate} " +
                 "detailOverflow=${active.r41RawOverflow} tailIncludedInDetailLoss=true")
+            appendLine("R42_CHECK_CODES pre=1owner,2active,3adoption,4noPending,5latest,6freshness,7opening,8queue,9selected " +
+                "post=1disposition,2unordered,3readOwner,4scene,5freshness,6notFull,7owner,8noPending,9ticket,10latest,11current,12exit")
+            appendLine("R42_CHECK_FIELDS=count/firstRequest/firstReason/firstPending/lastRequest/lastReason/lastPending")
             val openingRows = retainedAttempts.map { it.r22Opening }
             val warmRows = retainedAttempts.flatMap { it.r18Generations.values }
                 .mapNotNull { it.values["r27WarmStatus"]?.takeUnless { value -> value == "UNOBSERVED" } }

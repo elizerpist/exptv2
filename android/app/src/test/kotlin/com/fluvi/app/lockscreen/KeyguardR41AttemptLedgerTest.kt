@@ -4,6 +4,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeyguardR41AttemptLedgerTest {
+    @Test fun r42ChecksAndTransitionsKeepFirstLastAndFrozenOwnership() {
+        val ledger = KeyguardR41AttemptLedger()
+        ledger.record("R42_PRECHECK", 1, 100, 3, 9)
+        ledger.record("R42_PRESTART", 1, 101, 3, 2)
+        ledger.record("R42_PRECHECK", 3, 102, null, 4)
+        ledger.record("R42_POSTCHECK", 3, 200, 8, 12)
+        ledger.record("R42_STALE_POSITIVE", 3, 201, 8, 13)
+        ledger.record("R42_STALE_DETAIL", 3, 202, 11, 1)
+        val frozen = ledger.snapshot()
+        ledger.record("R42_PRECHECK", 8, 300, null, 4)
+        val row = frozen.core(1, 1, 1, 0)
+        assertTrue(row, row.contains("r42PreCheck=2/1/9/3/3/4/UNOBSERVED"))
+        assertTrue(row, row.contains("r42PostCheck=1/3/12/8/3/12/8"))
+        assertTrue(row, row.contains("r42StaleOldScene=10 r42StaleCause=1"))
+        assertEquals(0L, frozen.invalid)
+    }
+
     @Test fun emptyAttemptKeepsIdentityLossAndUnknownEndpointsInACompactCore() {
         val row = KeyguardR41AttemptLedger().core(8, 9, 10, 3)
         assertTrue(row, row.contains("attempt=8 session=9 wake=10 systemEligible=UNOBSERVED eligible=UNOBSERVED"))
