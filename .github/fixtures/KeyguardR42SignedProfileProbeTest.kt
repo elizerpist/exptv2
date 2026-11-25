@@ -119,8 +119,6 @@ class KeyguardR42SignedProfileProbeTest {
                 field.get(current) != null
             }
             shell("locksettings set-disabled false")
-            call(diagnostics, "startCapture", context, source, "profile", "LIGHT")
-            capture = true
             var wakeNs = 0L
             var owner: Any? = null
             var granted = false
@@ -130,7 +128,19 @@ class KeyguardR42SignedProfileProbeTest {
             for (attempt in 1..3) {
                 owner = null
                 shell("input keyevent KEYCODE_SLEEP")
-                await("locked sleeping device") { !power.isInteractive && keyguard.isKeyguardLocked }
+                await("locked sleeping device and previous window withdrawn") {
+                    var visible = true
+                    instrumentation.runOnMainSync {
+                        val current = service()
+                        if (current != null) {
+                            val status = checkNotNull(call(current, "renderModeStatus"))
+                            visible = call(status, "getVisible") as Boolean
+                        }
+                    }
+                    !power.isInteractive && keyguard.isKeyguardLocked && !visible
+                }
+                call(diagnostics, "startCapture", context, source, "profile", "LIGHT")
+                capture = true
                 wakeNs = System.nanoTime()
                 shell("input keyevent KEYCODE_WAKEUP")
                 try {
@@ -148,7 +158,9 @@ class KeyguardR42SignedProfileProbeTest {
                     break
                 } catch (error: AssertionError) {
                     notes.add("wakeAttempt=$attempt wakeNs=$wakeNs matchedDirectGrant=false reason=${error.message}")
-                    File(dir, "capture-attempt-$attempt.txt").writeText(report())
+                    val frozen = (call(diagnostics, "freezeCapture", context) as Map<*, *>) ["report"] as String
+                    File(dir, "capture-attempt-$attempt.txt").writeText(frozen)
+                    capture = false
                 }
             }
             assertTrue("NOT REACHED: a current DIRECT owner and matching grant in retained wakes", granted)
