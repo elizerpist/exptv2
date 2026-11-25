@@ -97,6 +97,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val originalMain=AtomicLong(0); val originalExit=AtomicLong(0); val bStarted=AtomicLong(0); val bId=AtomicLong(0)
         val preReaderHeld=CountDownLatch(1); val preReaderRelease=CountDownLatch(1)
         val firstPhysical=AtomicLong(0); val firstPhysicalStarted=CountDownLatch(1)
+        val pendingAtFirstPhysical=AtomicLong(0)
         val selectedC=AtomicLong(0); val selectedCCompleted=CountDownLatch(1); val selectedCOutcome=AtomicReference<String?>()
         val realPositive=AtomicBoolean(false); val positivePathEntries=AtomicInteger(0)
         val sceneAtCompletion=AtomicLong(-1); val decisionObserved=AtomicBoolean(false)
@@ -191,7 +192,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         records.add("ORDER_SELECTED id=${request.id} milestone=$milestoneOrdered")
                     }
                     override fun started(request:KeyguardCardInspectionRequest) {
-                        if (preStart && armed.get() && firstPhysical.compareAndSet(0, request.id)) firstPhysicalStarted.countDown()
+                        if (preStart && armed.get() && firstPhysical.compareAndSet(0, request.id)) {
+                            pendingAtFirstPhysical.set(actual.inspectionStateForTest().pending?.id ?: 0L)
+                            firstPhysicalStarted.countDown()
+                        }
                         if ((duringRead || afterRead) && currentRoute(request)?.backend == "R18_DIRECT")
                             directAtStart.add(request.id)
                         val count=readers.incrementAndGet(); maxReaders.updateAndGet { maxOf(it,count) }
@@ -357,18 +361,24 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 val original=checkNotNull(currentRoute(a))
                 assertEquals("R18_DIRECT", original.backend)
                 assertEquals("NOT REACHED: reader began before release", 0L, firstPhysical.get())
-                instrumentation.runOnMainSync { offerSuccessor() }
-                val b=bId.get()
-                instrumentation.runOnMainSync { offerSuccessor() }
-                val c=bId.get()
-                assertTrue("NOT REACHED: B and C must be distinct actual offers", c>b && b>a.id)
-                assertEquals("NOT REACHED: exact DIRECT owner changed", original, currentRoute(a))
-                records.add("PRE_START a=${a.id} b=$b c=$c route=$original aFreshness=${a.windowFreshness}")
-                selectedC.set(c)
-                preReaderRelease.countDown()
+                var b=0L; var c=0L
+                // Keep the two test offers and the release in one Main turn;
+                // Main does not wait for the Worker. Genuine later offers are
+                // still allowed and remain observable at the read boundary.
+                instrumentation.runOnMainSync {
+                    offerSuccessor(); b=bId.get()
+                    offerSuccessor(); c=bId.get()
+                    assertTrue("NOT REACHED: B and C must be distinct actual offers", c>b && b>a.id)
+                    assertEquals("NOT REACHED: exact DIRECT owner changed", original, currentRoute(a))
+                    records.add("PRE_START a=${a.id} b=$b c=$c route=$original aFreshness=${a.windowFreshness}")
+                    selectedC.set(c)
+                    preReaderRelease.countDown()
+                }
                 assertTrue("NOT REACHED: physical reader did not start", firstPhysicalStarted.await(20,TimeUnit.SECONDS))
-                records.add("FIRST_PHYSICAL id=${firstPhysical.get()} expected=$c")
+                records.add("FIRST_PHYSICAL id=${firstPhysical.get()} expected=$c pending=${pendingAtFirstPhysical.get()}")
                 assertFalse("NOT REACHED: reader barrier timed out", workerTimeout.get())
+                if (firstPhysical.get()!=c && pendingAtFirstPhysical.get()!=c)
+                    throw AssertionError("NOT REACHED: a later request changed pending after C=$c; physical=${firstPhysical.get()} pending=${pendingAtFirstPhysical.get()}")
                 assertEquals("R42: the actual latest C must start, before any A or B physical read", c, firstPhysical.get())
                 assertTrue("NOT REACHED: selected C did not finish its own physical read", selectedCCompleted.await(20,TimeUnit.SECONDS))
                 records.add("C_OWN_READ id=$c result=${selectedCOutcome.get()} proofAndVisibleOutput=SEPARATE_CONTROLS")
