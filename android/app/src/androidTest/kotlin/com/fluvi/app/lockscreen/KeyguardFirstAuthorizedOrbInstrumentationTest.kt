@@ -49,6 +49,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         runService(false, null, true, true, false, true)
     @Test fun r41SystemWarmFreshServiceKeepsVisualAndUnlockControls() =
         runService(false, null, true, false, false, false, true)
+    @Test fun r41SystemWarmLiveOrbShowsTwoCalibratedFramesThenWithdraws() =
+        runService(false, null, true, false, false, false, true, true)
     @Test fun r41SystemWarmBenignIngressBeforeRealMainAck() =
         runService(false, false, false, false, false, false, true)
     @Test fun r41SystemWarmExclusionBeforeRealMainAck() =
@@ -199,7 +201,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     private fun runService(changeScene: Boolean, r21Negative: Boolean? = null, r40: Boolean = false,
                            r41Warm: Boolean = false, r41Fallback: Boolean = false,
                            r41WaitForPreparedRoute: Boolean = false,
-                           r41WarmSystemBeforeService: Boolean = false) {
+                           r41WarmSystemBeforeService: Boolean = false,
+                           r41LiveMotion: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -533,6 +536,23 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 val crop = visual.captureCrop("r40-first-full", checkNotNull(identity).bounds)
                 assertTrue("NOT REACHED: compositor crop did not match the calibrated configured FULL orb",
                     KeyguardR22VisualCalibration.compare(visual.a, crop).nearlyEqual())
+                if (r41LiveMotion) {
+                    // Advance only the test's material clock; do not inject a
+                    // new scene, permission, frame or presentation callback.
+                    // Keep every compositor sample, including mismatches.
+                    KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeB
+                    var matched = false
+                    for (sample in 0 until 30) {
+                        SystemClock.sleep(100)
+                        val image = visual.captureCrop("r41-live-b-$sample", checkNotNull(identity).bounds)
+                        if (KeyguardR22VisualCalibration.compare(visual.b, image).nearlyEqual()) {
+                            assertTrue("second live crop is not distinct", KeyguardR22VisualCalibration.compare(crop, image).meaningful())
+                            matched = true
+                            break
+                        }
+                    }
+                    assertTrue("NOT REACHED: real live ORB never reached the calibrated B compositor frame", matched)
+                }
                 if (r40Started.count > 0) instrumentation.runOnMainSync {
                     val at = SystemClock.uptimeMillis()
                     service.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
@@ -549,7 +569,15 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                     instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
                     !visible
                 }
-                visual.captureCrop("r40-after-unlock", checkNotNull(identity).bounds)
+                val afterUnlock = visual.captureCrop("r40-after-unlock", checkNotNull(identity).bounds)
+                if (r41LiveMotion) {
+                    assertFalse("calibrated old A still occupies the post-withdrawal crop",
+                        KeyguardR22VisualCalibration.compare(visual.a, afterUnlock).nearlyEqual())
+                    assertFalse("calibrated old B still occupies the post-withdrawal crop",
+                        KeyguardR22VisualCalibration.compare(visual.b, afterUnlock).nearlyEqual())
+                    // This sample follows the observed invisible state; it is
+                    // not the first forbidden physical frame.
+                }
                 r40Release.countDown()
             }
             saveScreenshot(File(dir, "03-visible-unclassified.png"))
