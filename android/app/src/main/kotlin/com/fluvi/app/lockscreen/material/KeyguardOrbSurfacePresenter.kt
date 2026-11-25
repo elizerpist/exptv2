@@ -333,6 +333,9 @@ internal class KeyguardOrbSurfacePresenter(
 
     private fun firstPosted(target: KeyguardOrbSurfaceTarget, at: Long) {
         if (!isCurrent(target)) return
+        if (KeyguardOrbSurfaceWorkerTestHooks.ENABLED) {
+            runCatching { KeyguardOrbSurfaceWorkerTestHooks.afterCurrentFirstPosted?.invoke(target, at) }
+        }
         // The worker's successful post and delivery to this Main callback
         // are different observations. Preserve both original uptime values.
         observe(target, "FIRST_POST", "producerNotPhysicalPresentation", at)

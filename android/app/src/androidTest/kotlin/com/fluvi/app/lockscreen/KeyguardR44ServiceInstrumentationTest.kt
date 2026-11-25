@@ -15,8 +15,12 @@ import android.view.accessibility.AccessibilityWindowInfo
 import android.view.accessibility.AccessibilityEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.fluvi.app.lockscreen.material.KeyguardMaterialTime
+import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceTarget
+import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceWorkerTestHooks
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -72,10 +76,20 @@ class KeyguardR44ServiceInstrumentationTest {
         val sawRestriction = AtomicBoolean(false)
         val positiveApply = AtomicBoolean(false)
         val applyCount = AtomicInteger()
+        val positiveRequest = AtomicReference<KeyguardCardInspectionRequest?>()
+        val realPosts = ConcurrentHashMap<KeyguardOrbSurfaceTarget, Long>()
+        val currentFirst = AtomicReference<KeyguardOrbSurfaceTarget?>()
+        val postedPhase = AtomicReference<Pair<KeyguardOrbSurfaceTarget, KeyguardMaterialTime>?>()
+        val oldPostHook = KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost
+        val oldFirstHook = KeyguardOrbSurfaceWorkerTestHooks.afterCurrentFirstPosted
+        val oldPhaseHook = KeyguardOrbSurfaceWorkerTestHooks.postedMaterialTime
+        val oldFixedPhase = KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime
         val held = CountDownLatch(1)
         val release = CountDownLatch(1)
         var service: FluviKeyguardCardService? = null
         var pinSet = false
+        var calibration: KeyguardR22VisualCalibration? = null
+        var underlay: Bitmap? = null
         val evidence = StringBuilder("scope=controlled_snapshot service=real renderer=real capture=$capture physical=UNOBSERVED\n")
         val host = KeyguardR44Witness(KeyguardR44Markers.Marker.HOST, KeyguardR44Markers.Carrier.VIEW_ID, 1)
         val entry = KeyguardR44Witness(KeyguardR44Markers.Marker.DEVICE_ENTRY, KeyguardR44Markers.Carrier.VIEW_ID, 2)
@@ -106,6 +120,28 @@ class KeyguardR44ServiceInstrumentationTest {
             val owner = checkNotNull(service)
             assertTrue("NOT REACHED: unlocked synthetic trial", main { owner.setR44SyntheticTrial(true) })
             assertTrue(KeyguardR44Trial.active)
+            if (!staleControl) {
+                calibration = KeyguardR22VisualCalibration(ins, out, ui,
+                    checkNotNull(KeyguardR44Trial.profile(null)), discloseFull = false).also { it.calibrate() }
+                KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
+                KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = { target ->
+                    if (target.attachment > 0 && target.holder != null && realPosts.size < 8 &&
+                        realPosts.putIfAbsent(target, SystemClock.uptimeMillis()) == null) {
+                        android.util.Log.i("FluviR441Probe", "POST capture=$capture run=$uuid attach=${target.attachment} gen=${target.generation} holder=${System.identityHashCode(target.holder)} target=${System.identityHashCode(target)} revoked=${target.revoked}")
+                    }
+                }
+                KeyguardOrbSurfaceWorkerTestHooks.afterCurrentFirstPosted = { target, at ->
+                    if (realPosts.containsKey(target)) {
+                        currentFirst.set(target)
+                        android.util.Log.i("FluviR441Probe", "CURRENT_FIRST capture=$capture run=$uuid attach=${target.attachment} gen=${target.generation} holder=${System.identityHashCode(target.holder)} target=${System.identityHashCode(target)} at=$at")
+                    }
+                }
+                KeyguardOrbSurfaceWorkerTestHooks.postedMaterialTime = { target, time, _ ->
+                    postedPhase.set(target to time)
+                }
+                // Capture the actual background before allowing the synthetic positive read.
+                restrict.set(true)
+            }
             KeyguardCardDiagnostics.clearCapture(context)
             if (capture) KeyguardCardDiagnostics.startCapture(context, "r44-fixture", "debug", "FULL")
             owner.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
@@ -130,9 +166,11 @@ class KeyguardR44ServiceInstrumentationTest {
                     positiveApply.set(true)
                 }
                 override fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
+                    if (decision == KeyguardCardVisibility.SHOW_DISCREET && owner.inspectionStateForTest().attached)
+                        positiveRequest.compareAndSet(null, request)
                     if (applyCount.incrementAndGet() <= 100) {
                         val attached = owner.inspectionStateForTest().attached
-                        val submissions = owner.surfaceMetricsForInstrumentation()?.submissions ?: 0L
+                        val submissions = owner.surfaceMetricsForInstrumentation()?.submissions?.toString() ?: "UNOBSERVED"
                         synchronized(evidence) { evidence.append("apply=${request.id} decision=$decision attached=$attached submissions=$submissions\n") }
                     }
                 }
@@ -154,9 +192,25 @@ class KeyguardR44ServiceInstrumentationTest {
                 evidence.append("heldPositive=discarded newerRestriction=observed attached=false\n")
                 return
             }
+            waitFor("initial restricted scene has no overlay") { main { !owner.inspectionStateForTest().attached } }
+            underlay = checkNotNull(ui.takeScreenshot())
+            out.resolve("r44-underlay-full.png").outputStream().use {
+                check(underlay!!.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+            restrict.set(false)
+            main { schedule(owner, "r44-controlled-positive") }
             waitFor("controlled pair admitted and real ORB posted") {
-                sawPositive.get() && main { owner.inspectionStateForTest().attached &&
-                    (owner.surfaceMetricsForInstrumentation()?.submissions ?: 0L) > 0L }
+                sawPositive.get() && positiveRequest.get() != null && currentFirst.get() != null && main {
+                    val state = owner.inspectionStateForTest()
+                    val field = FluviKeyguardCardService::class.java.getDeclaredField("overlay").apply { isAccessible = true }
+                    val window = field.get(owner) as KeyguardCardWindow
+                    val target = currentFirst.get()
+                    val request = positiveRequest.get()
+                    state.attached && target != null && request != null && !target.revoked &&
+                        target.attachment == window.currentAttachGeneration &&
+                        target.holder === window.surfaceForTest()?.holder &&
+                        request.session == state.authority.serviceSession && request.wakeGeneration == state.authority.wakeGeneration
+                }
             }
             val bounds = main {
                 val field = FluviKeyguardCardService::class.java.getDeclaredField("overlay").apply { isAccessible = true }
@@ -173,20 +227,33 @@ class KeyguardR44ServiceInstrumentationTest {
                 } else null
             }
             assertNotNull("NOT REACHED: attached ORB bounds", bounds)
-            val first = checkNotNull(ui.takeScreenshot())
-            out.resolve("r44-frame-a.png").outputStream().use { first.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            SystemClock.sleep(350)
-            val second = checkNotNull(ui.takeScreenshot())
-            out.resolve("r44-frame-b.png").outputStream().use { second.compress(Bitmap.CompressFormat.PNG, 100, it) }
             val rect = checkNotNull(bounds)
-            val left = rect.left.coerceIn(0, first.width - 1); val right = rect.right.coerceIn(left + 1, first.width)
-            val top = rect.top.coerceIn(0, first.height - 1); val bottom = rect.bottom.coerceIn(top + 1, first.height)
-            var changed = 0
-            for (y in top until bottom step 2) for (x in left until right step 2)
-                if (first.getPixel(x, y) != second.getPixel(x, y)) changed++
-            first.recycle(); second.recycle()
-            evidence.append("orbBounds=$rect changedSamples=$changed\n")
-            assertTrue("NOT REACHED: distinct pixels in the controlled ORB bounds", changed > 20)
+            val target = checkNotNull(currentFirst.get())
+            val request = checkNotNull(positiveRequest.get())
+            if (!capture) assertNull("capture OFF must not infer zero from absent metrics", target.metrics)
+            val screen = checkNotNull(underlay)
+            assertTrue("NOT REACHED: valid screen-space bounds", rect.left >= 0 && rect.top >= 0 &&
+                rect.right <= screen.width && rect.bottom <= screen.height)
+            val background = Bitmap.createBitmap(screen, rect.left, rect.top, rect.width(), rect.height())
+            val references = checkNotNull(calibration)
+            try {
+                fun sample(label: String, phase: KeyguardMaterialTime, reference: Bitmap): Bitmap {
+                    KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = phase
+                    waitFor("matching current $label producer post") {
+                        val post = postedPhase.get()
+                        post != null && post.first === target && post.second == phase && !target.revoked
+                    }
+                    return references.awaitServiceMatch("service-$label", rect, reference, background)
+                }
+                val a = sample("a", KeyguardR22VisualCalibration.timeA, references.a)
+                val b = sample("b", KeyguardR22VisualCalibration.timeB, references.b)
+                val again = sample("return-a", KeyguardR22VisualCalibration.timeA, references.a)
+                assertTrue("calibrated A and B do not differ", KeyguardR22VisualCalibration.compare(a, b).meaningful())
+                assertTrue("return A differs", KeyguardR22VisualCalibration.compare(a, again).nearlyEqual())
+                evidence.append("request=${request.id} session=${request.session} wake=${request.wakeGeneration} " +
+                    "attachment=${target.attachment} generation=${target.generation} holder=${System.identityHashCode(target.holder)} " +
+                    "post=${realPosts[target]} firstCurrent=true bounds=$rect optical=A/B/A\n")
+            } finally { background.recycle() }
             restrict.set(true)
             main { schedule(owner, "r44-controlled-shade") }
             waitFor("controlled restriction withdrawn") { sawRestriction.get() && main { !owner.inspectionStateForTest().attached } }
@@ -198,6 +265,12 @@ class KeyguardR44ServiceInstrumentationTest {
             }
         } finally {
             release.countDown()
+            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = oldPostHook
+            KeyguardOrbSurfaceWorkerTestHooks.afterCurrentFirstPosted = oldFirstHook
+            KeyguardOrbSurfaceWorkerTestHooks.postedMaterialTime = oldPhaseHook
+            KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = oldFixedPhase
+            calibration?.close()
+            underlay?.recycle()
             out.resolve("r44-results.txt").writeText(synchronized(evidence) { evidence.toString() })
             service?.inspectionProbeForTest = null
             if (capture && KeyguardCardDiagnostics.activeCaptureId() != null) runCatching {

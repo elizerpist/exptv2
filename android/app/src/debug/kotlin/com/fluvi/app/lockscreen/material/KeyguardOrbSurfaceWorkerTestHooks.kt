@@ -15,6 +15,7 @@ internal object KeyguardOrbSurfaceWorkerTestHooks {
     @Volatile var dispatchRevealDone: ((Runnable) -> Unit)? = null
     @Volatile var afterCanvasLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
     @Volatile var afterCanvasPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+    @Volatile var afterCurrentFirstPosted: ((KeyguardOrbSurfaceTarget, Long) -> Unit)? = null
     @Volatile var afterPosterCreated: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
     @Volatile var afterWarmPosterCreated: ((Boolean) -> Unit)? = null
     @Volatile var afterFirstFrameDraw: ((KeyguardOrbSurfaceTarget, String) -> Unit)? = null

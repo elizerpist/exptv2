@@ -14,6 +14,7 @@ import com.fluvi.app.lockscreen.material.AndroidKeyguardShaderArtifactReader
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
 import com.fluvi.app.lockscreen.material.KeyguardMaterialScene
+import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.lockscreen.material.KeyguardMaterialTestActivity
 import com.fluvi.app.lockscreen.material.KeyguardMaterialTime
 import com.fluvi.app.lockscreen.material.KeyguardMaterialTimeSource
@@ -29,6 +30,8 @@ internal class KeyguardR22VisualCalibration(
     private val instrumentation: Instrumentation,
     private val directory: File,
     private val automation: UiAutomation,
+    private val profileOverride: KeyguardMaterialProfile? = null,
+    private val discloseFull: Boolean = true,
 ) : AutoCloseable {
     data class Delta(val changed: Int, val total: Long, val max: Int) {
         fun nearlyEqual(): Boolean = max <= 2 && total <= 2048L
@@ -87,7 +90,8 @@ internal class KeyguardR22VisualCalibration(
 
     fun calibrate() {
         val context = instrumentation.targetContext
-        val profile = checkNotNull(FluviKeyguardMaterialStore.read(context))
+        val original = profileOverride ?: checkNotNull(FluviKeyguardMaterialStore.read(context))
+        val profile = if (discloseFull) original else original.neutralized()
         val activity = instrumentation.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
         val fixed = AtomicReference(timeA)
@@ -101,7 +105,7 @@ internal class KeyguardR22VisualCalibration(
                 reference = KeyguardHeaderMaterialView(activity,
                     materialTimeSource = KeyguardMaterialTimeSource { _, _ -> fixed.get().also { returned.set(it) } })
                 reference.layoutParams = FrameLayout.LayoutParams(size, size).apply { leftMargin = 100; topMargin = 250 }
-                reference.setScene(KeyguardMaterialScene(profile, true, 0L), enabled = true)
+                reference.setScene(KeyguardMaterialScene(profile, discloseFull, 0L), enabled = true)
                 reference.setBootstrapActive(false)
                 assertEquals(KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED, reference.installPreparedShader(artifact))
                 val root = FrameLayout(activity).apply { setBackgroundColor(underlay); addView(reference) }
@@ -175,7 +179,8 @@ internal class KeyguardR22VisualCalibration(
             assertTrue("A/B motion not calibrated", compare(a, b).meaningful())
             assertTrue("return-A not calibrated", compare(a, again).nearlyEqual())
             instrumentation.runOnMainSync {
-                reference.setScene(KeyguardMaterialScene(profile.neutralized(), false, 0L), enabled = true)
+                val alternate = if (discloseFull) original.neutralized() else original
+                reference.setScene(KeyguardMaterialScene(alternate, !discloseFull, 0L), enabled = true)
                 reference.frame(System.nanoTime())
             }
             SystemClock.sleep(250)

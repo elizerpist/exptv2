@@ -14,6 +14,7 @@ internal object KeyguardOrbSurfaceWorkerTestHooks {
     val dispatchRevealDone: ((Runnable) -> Unit)? = null
     val afterCanvasLock: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
     val afterCanvasPost: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
+    val afterCurrentFirstPosted: ((KeyguardOrbSurfaceTarget, Long) -> Unit)? = null
     val afterPosterCreated: ((KeyguardOrbSurfaceTarget) -> Unit)? = null
     val afterWarmPosterCreated: ((Boolean) -> Unit)? = null
     val afterFirstFrameDraw: ((KeyguardOrbSurfaceTarget, String) -> Unit)? = null
