@@ -97,6 +97,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         val power = context.getSystemService(PowerManager::class.java)
         val postLatch = AtomicReference<CountDownLatch?>()
         val firstPostNs = AtomicLong(0)
+        val lastPostAttachment = AtomicLong(0)
+        val lastPostGeneration = AtomicLong(0)
         val savedPost = KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost
         val rows = mutableListOf<String>()
         val errors = mutableListOf<String>()
@@ -123,15 +125,26 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
             await("actual service connected", 10_000) { FluviKeyguardCardServiceRegistry.connected }
             val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
             KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = { target ->
-                if (target.attachment > 0 && target.full && !target.revoked) {
-                    firstPostNs.compareAndSet(0, System.nanoTime())
-                    postLatch.get()?.countDown()
+                val latch = postLatch.get()
+                // A late callback from the preceding wake must never satisfy
+                // the next trial. This is test observation only; it does not
+                // supply or change the application's presentation authority.
+                if (latch != null && target.attachment > 0 && target.full && !target.revoked &&
+                    (target.attachment != lastPostAttachment.get() || target.generation != lastPostGeneration.get()) &&
+                    firstPostNs.compareAndSet(0, System.nanoTime())) {
+                    lastPostAttachment.set(target.attachment)
+                    lastPostGeneration.set(target.generation)
+                    latch.countDown()
                 }
                 savedPost?.invoke(target)
             }
             repeat(20) { index ->
                 shell("input keyevent KEYCODE_SLEEP")
-                await("sleep and keyguard ${index + 1}", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+                await("sleep, keyguard and old window withdrawal ${index + 1}", 8_000) {
+                    var visible = true
+                    instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
+                    !power.isInteractive && keyguard.isKeyguardLocked && !visible
+                }
                 KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT"); capture = true
                 firstPostNs.set(0)
                 val latch = CountDownLatch(1)
@@ -152,7 +165,9 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 File(dir, "capture-${index + 1}.txt").writeText(report)
                 rows.add("trial=${index + 1} class=${if (index == 0) "fresh-service" else "warm"} " +
                     "commandNs=$wakeCommandNs workerPostNs=${firstPostNs.get().takeIf { it > 0 } ?: "UNOBSERVED"} " +
-                    "workerPost=$posted visible=$visible optical=UNOBSERVED verdict=INCOMPLETE")
+                    "workerPost=$posted attachment=${if (posted) lastPostAttachment.get() else "UNOBSERVED"} " +
+                    "generation=${if (posted) lastPostGeneration.get() else "UNOBSERVED"} " +
+                    "visible=$visible optical=UNOBSERVED verdict=INCOMPLETE")
                 File(dir, "trials.txt").writeText(rows.joinToString("\n", postfix = "\n"))
             }
         } catch (error: Throwable) {
