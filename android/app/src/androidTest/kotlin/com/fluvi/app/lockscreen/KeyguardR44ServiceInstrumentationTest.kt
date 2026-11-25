@@ -11,18 +11,16 @@ import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
-import android.view.View
 import android.view.accessibility.AccessibilityWindowInfo
 import android.view.accessibility.AccessibilityEvent
-import android.view.inspector.WindowInspector
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.fluvi.app.R
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.*
 import org.junit.Test
@@ -73,6 +71,7 @@ class KeyguardR44ServiceInstrumentationTest {
         val sawPositive = AtomicBoolean(false)
         val sawRestriction = AtomicBoolean(false)
         val positiveApply = AtomicBoolean(false)
+        val applyCount = AtomicInteger()
         val held = CountDownLatch(1)
         val release = CountDownLatch(1)
         var service: FluviKeyguardCardService? = null
@@ -130,6 +129,13 @@ class KeyguardR44ServiceInstrumentationTest {
                 override fun positiveApplyAttempt(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
                     positiveApply.set(true)
                 }
+                override fun afterApply(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
+                    if (applyCount.incrementAndGet() <= 100) {
+                        val attached = owner.inspectionStateForTest().attached
+                        val submissions = owner.surfaceMetricsForInstrumentation()?.submissions ?: 0L
+                        synchronized(evidence) { evidence.append("apply=${request.id} decision=$decision attached=$attached submissions=$submissions\n") }
+                    }
+                }
             }
             shell("input keyevent KEYCODE_SLEEP")
             waitFor("screen off and locked") { !power.isInteractive && keyguard.isKeyguardLocked }
@@ -153,11 +159,18 @@ class KeyguardR44ServiceInstrumentationTest {
                     (owner.surfaceMetricsForInstrumentation()?.submissions ?: 0L) > 0L }
             }
             val bounds = main {
-                val orb = WindowInspector.getGlobalWindowViews().asSequence()
-                    .mapNotNull { it.findViewById<View>(R.id.fluvi_financial_snapshot_orb) }
-                    .firstOrNull { it.isAttachedToWindow && it.isShown }
-                val rect = Rect()
-                if (orb != null && orb.getGlobalVisibleRect(rect)) rect else null
+                val field = FluviKeyguardCardService::class.java.getDeclaredField("overlay").apply { isAccessible = true }
+                val orb = (field.get(owner) as KeyguardCardWindow).surfaceForTest()
+                val visible = Rect()
+                if (orb != null && orb.isAttachedToWindow && orb.isShown && orb.holder.surface.isValid &&
+                    orb.getGlobalVisibleRect(visible)) {
+                    // Accessibility overlay windows have their own origin. The
+                    // global visible rect can be root-local, whereas UiAutomation
+                    // screenshots use physical screen coordinates.
+                    val screen = IntArray(2)
+                    orb.getLocationOnScreen(screen)
+                    Rect(screen[0], screen[1], screen[0] + orb.width, screen[1] + orb.height)
+                } else null
             }
             assertNotNull("NOT REACHED: attached ORB bounds", bounds)
             val first = checkNotNull(ui.takeScreenshot())
@@ -187,6 +200,9 @@ class KeyguardR44ServiceInstrumentationTest {
             release.countDown()
             out.resolve("r44-results.txt").writeText(synchronized(evidence) { evidence.toString() })
             service?.inspectionProbeForTest = null
+            if (capture && KeyguardCardDiagnostics.activeCaptureId() != null) runCatching {
+                out.resolve("r44-partial-report.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"] as String)
+            }
             KeyguardCardDiagnostics.clearCapture(context)
             secure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices)
             secure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
