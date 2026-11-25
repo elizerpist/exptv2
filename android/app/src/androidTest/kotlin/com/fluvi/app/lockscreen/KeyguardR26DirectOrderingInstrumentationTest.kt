@@ -93,6 +93,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val originalMain=AtomicLong(0); val originalExit=AtomicLong(0); val bStarted=AtomicLong(0); val bId=AtomicLong(0)
         val preReaderHeld=CountDownLatch(1); val preReaderRelease=CountDownLatch(1)
         val firstPhysical=AtomicLong(0); val firstPhysicalStarted=CountDownLatch(1)
+        val selectedC=AtomicLong(0); val selectedCCompleted=CountDownLatch(1); val selectedCOutcome=AtomicReference<String?>()
         val realPositive=AtomicBoolean(false); val positivePathEntries=AtomicInteger(0)
         val r25Evaluations=AtomicLong(0); val r25AtAExit=AtomicLong(-1)
         val order=AtomicLong(0); val oldProofAtExit=AtomicLong(0); val maxReaders=AtomicInteger(0); val readers=AtomicInteger(0)
@@ -171,6 +172,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         reason:KeyguardSurfaceReason, rootUnavailable:Boolean, walkTruncated:Boolean,
                         abortedStale:Boolean, startedAt:Long, finishedAt:Long) {
                         readers.decrementAndGet()
+                        if (preStart && request.id == selectedC.get()) {
+                            selectedCOutcome.set("$decision/$reason unavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale")
+                            selectedCCompleted.countDown()
+                        }
                         if (duringRead && candidate.get()?.id == request.id) {
                             realPositive.set(decision==KeyguardCardVisibility.SHOW_FULL && reason==KeyguardSurfaceReason.MAIN_CONFIRMED &&
                                 !rootUnavailable && !walkTruncated && !abortedStale)
@@ -267,11 +272,14 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 assertTrue("NOT REACHED: B and C must be distinct actual offers", c>b && b>a.id)
                 assertEquals("NOT REACHED: exact DIRECT owner changed", original, currentRoute(a))
                 records.add("PRE_START a=${a.id} b=$b c=$c route=$original aFreshness=${a.windowFreshness}")
+                selectedC.set(c)
                 preReaderRelease.countDown()
                 assertTrue("NOT REACHED: physical reader did not start", firstPhysicalStarted.await(20,TimeUnit.SECONDS))
                 records.add("FIRST_PHYSICAL id=${firstPhysical.get()} expected=$c")
                 assertFalse("NOT REACHED: reader barrier timed out", workerTimeout.get())
                 assertEquals("R42: the actual latest C must start, before any A or B physical read", c, firstPhysical.get())
+                assertTrue("NOT REACHED: selected C did not finish its own physical read", selectedCCompleted.await(20,TimeUnit.SECONDS))
+                records.add("C_OWN_READ id=$c result=${selectedCOutcome.get()} proofAndVisibleOutput=SEPARATE_CONTROLS")
                 return
             }
             assertTrue("NOT REACHED: complete positive with real DIRECT snapshot",held.await(20,TimeUnit.SECONDS))
