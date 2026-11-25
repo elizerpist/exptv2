@@ -30,6 +30,7 @@ permissions:
   contents: read
 jobs:
   service:
+    if: ${{ inputs.test_scope != 'update_probe' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -129,5 +130,63 @@ jobs:
         with:
           name: r40-service-${{ github.run_id }}
           path: ${{ runner.temp }}/r37-evidence/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  update-probe:
+    if: ${{ inputs.test_scope == 'update_probe' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      APP_SHA: ${{ inputs.app_sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: orchestrator
+          fetch-depth: 1
+      - name: Create ephemeral encryption key
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/r41-update" "$RUNNER_TEMP/r41-key"
+          umask 077
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$RUNNER_TEMP/r41-update/private.pem" 2>/dev/null
+          openssl pkey -in "$RUNNER_TEMP/r41-update/private.pem" -pubout -out "$RUNNER_TEMP/r41-key/public.pem"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r41-update-public-key-${{ github.run_id }}
+          path: ${{ runner.temp }}/r41-key/public.pem
+          retention-days: 1
+      - name: Retrieve encrypted exact APK
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r41-update-probe.sh" retrieve
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools build-tools;36.0.0'
+      - name: Verify downloaded APK identities
+        shell: bash
+        run: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r41-update-probe.sh" verify
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install R40 and update on disposable API 35
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          profile: pixel_7
+          emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
+          script: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r41-update-probe.sh" install
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r41-update-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/r41-update/evidence/**
           if-no-files-found: warn
           retention-days: 14
