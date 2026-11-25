@@ -45,6 +45,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun stableInitialFullUsesOneVirginOutputWithoutReadinessRead() = runService(false)
     @Test fun r40HeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() = runService(false, null, true)
     @Test fun r41WarmHeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() = runService(false, null, true, true)
+    @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
     @Test fun externalIngressWhileFirstPaintIsHeldCannotUseOldProof() = runService(true)
     @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
     @Test fun r21ExclusionRetiresSubmittedOrbWithMainAckHeld() = runService(false, true)
@@ -63,13 +64,14 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r22StableOpeningReadIsNotYielded() = KeyguardR22FirstInspectionFixture().run("stable")
     @Test fun r22UnstagedOpeningObservation() = KeyguardR22FirstInspectionFixture().run("natural")
 
-    private fun runService(changeScene: Boolean, r21Negative: Boolean? = null, r40: Boolean = false, r41Warm: Boolean = false) {
+    private fun runService(changeScene: Boolean, r21Negative: Boolean? = null, r40: Boolean = false,
+                           r41Warm: Boolean = false, r41Fallback: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
         require(source.matches(Regex("[0-9a-f]{40}")))
         val run = args.getString("runUuid")?.let { UUID.fromString(it).toString() } ?: UUID.randomUUID().toString()
-        val specimen = if (r21Negative == null) { if (changeScene) "changed" else "stable" }
+        val specimen = if (r41Fallback) "r41-fallback" else if (r21Negative == null) { if (changeScene) "changed" else "stable" }
             else if (r21Negative) "r21-negative" else "r21-positive"
         val dir = File(context.filesDir, "keyguard-service-probe/r19/$run/$specimen")
         check(!dir.exists() && dir.mkdirs())
@@ -310,6 +312,28 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 saveScreenshot(File(dir, "02-held-after-ingress.png"))
                 releasePaint.countDown()
             }
+            if (r41Fallback) {
+                var fallbackAttempt: String? = null
+                val posted = Regex(" winner=SURFACE_LIVE/[0-9]+/[0-9]+(?: |$)")
+                await("actual fallback post and distinct motion", 20_000) {
+                    val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                    fallbackAttempt = text.lineSequence().firstOrNull {
+                        it.startsWith(" R21_CORE ") && posted.containsMatchIn(it)
+                    }?.substringAfter("attempt=")?.substringBefore(' ')
+                    fallbackAttempt != null
+                }
+                report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+                File(dir, "capture.txt").writeText(checkNotNull(report))
+                val core = checkNotNull(report).lineSequence().firstOrNull {
+                    it.startsWith(" R41_CORE attempt=${checkNotNull(fallbackAttempt)} ")
+                }
+                assertNotNull("actual fallback attempt has no compact R41 row", core)
+                val fallbackCore = checkNotNull(core)
+                assertTrue("actual fallback candidate and same-show post receipt were not both retained: $core",
+                    !fallbackCore.contains("fallbackCandidateAndPostReceipt=UNOBSERVED"))
+                assertTrue("fallback observation must not be mislabelled as an effective grant: $core",
+                    fallbackCore.contains("fallbackGrant=UNOBSERVED"))
+            } else {
             if (r21Negative != true) await("actual service window", 20_000) {
                 var visible = false
                 instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
@@ -377,6 +401,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 val initial = currentRow.substringAfter("firstPositive=").substringBefore('@').toLong()
                 assertTrue("old proof was consumed after external ingress", consumed > initial)
                 assertTrue("consumed proof predates the injected event's real request", consumed >= injectedRequest.get())
+            }
             }
         } catch (error: Throwable) {
             errors += "${error.javaClass.simpleName}:${error.message}"
