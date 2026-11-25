@@ -45,6 +45,11 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR42SignedProfileProbeTest.kt
     sha256sum "$fixture" > "$out/fixture-r42-profile.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r43_api37 ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR43Api37BaselineTest.kt"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR43Api37BaselineTest.kt
+    sha256sum "$fixture" > "$out/fixture-r43.sha256"
+  fi
   if [[ "$TEST_SCOPE" == r42_stale_verbose ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR26DirectOrderingInstrumentationTest.kt"
     test -f "$fixture"
@@ -74,11 +79,12 @@ case "${1:-}" in
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r41/$uuid" > "$out/r41-$uuid.tar" 2> "$out/r41-$uuid.stderr" || true
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r42-profile/$uuid" > "$out/r42-profile-$uuid.tar" 2> "$out/r42-profile-$uuid.stderr" || true
       adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r15/$uuid" > "$out/r15-$uuid.tar" 2> "$out/r15-$uuid.stderr" || true
+      adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r43/$uuid" > "$out/r43-$uuid.tar" 2> "$out/r43-$uuid.stderr" || true
     done
   }
   trap collect EXIT
   { adb devices -l; adb shell getprop ro.build.version.sdk; adb shell getprop ro.product.cpu.abi; adb shell getprop ro.build.fingerprint; adb shell wm size; adb shell wm density; } > "$out/device.txt" 2>&1
-  test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 35
+  test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 37
   adb shell input keyevent KEYCODE_WAKEUP
   adb shell wm dismiss-keyguard || true
   adb install -r build/app/outputs/apk/debug/app-debug.apk > "$out/install-app.txt" 2>&1
@@ -87,6 +93,10 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r43_api37)
+      class=com.fluvi.app.lockscreen.KeyguardR43Api37BaselineTest
+      methods=(ordinaryFirstAndLaterWake)
+      ;;
     ordered)
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
       methods=(orderedDirectSkipsInapplicableR25Evaluation)

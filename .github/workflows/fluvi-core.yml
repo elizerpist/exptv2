@@ -1,4 +1,4 @@
-name: R41 ordered DIRECT real-service control
+name: R43 Android 17 real-service observation
 on:
   workflow_dispatch:
     inputs:
@@ -124,11 +124,12 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Compile and exercise real service on API 35
+      - name: Compile and exercise real service on API 37
         if: ${{ inputs.test_scope != 'units' }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 36
+          system-image-api-level: '37.0'
           disable-animations: false
           target: default
           arch: x86_64
