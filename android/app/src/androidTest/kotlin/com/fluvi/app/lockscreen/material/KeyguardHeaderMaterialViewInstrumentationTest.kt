@@ -3419,6 +3419,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                         intervals += start to end
                         frames += screen
                     }
+                    // Bind successor evidence to its real lease and child;
+                    // a matching requested phase on retired A is not B.
+                    val successor = runCatching { f.awaitReplacementToken(resized) }.getOrNull()
                     fun near(a: Bitmap, b: Bitmap) = wholeRoiDifference(a, b).nearlyEqual()
                     fun isSafe(b: Bitmap) = listOf(refs.standby, refs.neutral, refs.neutralAnimated, refsB.neutralAnimated)
                         .any { near(it, b) }
@@ -3465,8 +3468,16 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
                         "clock=uptimeMs ingress=$ingress return=$returned outcome=$outcome " +
                         "root=${System.identityHashCode(root)} attach=${resized.lease.attachment} " +
                         "generation=${resized.lease.generation} child=${System.identityHashCode(resized.child)} " +
-                        "slot=${resized.slotId}/${resized.useGeneration} retirements=${gate.retirementSnapshot()}\n" +
+                        "slot=${resized.slotId}/${resized.useGeneration} " +
+                        "successor=${successor?.lease?.attachment ?: "UNOBSERVED"}/${successor?.lease?.generation ?: "UNOBSERVED"} " +
+                        "successorChild=${successor?.let { System.identityHashCode(it.child) } ?: "UNOBSERVED"} " +
+                        "successorSlot=${successor?.slotId ?: "UNOBSERVED"}/${successor?.useGeneration ?: "UNOBSERVED"} " +
+                        "retirements=${gate.retirementSnapshot()}\n" +
                         rows.joinToString("\n", postfix = "\n"))
+                    assertNotNull("NOT REACHED: neutral successor first submission", successor)
+                    assertEquals("successor must be the neutral material", calibratedOrbProfile().neutralized().visualKey,
+                        successor?.lease?.visualKey)
+                    assertNotSame("privacy successor reused the old child", resized.child, successor?.child)
                     assertTrue("restriction did not complete: $outcome", outcome == KeyguardCardWindow.Result.REDACTED ||
                         outcome == KeyguardCardWindow.Result.CONTENT_UPDATED)
                     assertTrue("unsafe or unclassified immediately acquired images: $classes",
@@ -5070,7 +5081,7 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
             val gate = OrbSteadyGate(requestId, lease)
             gates += gate
             check(nextGate.compareAndSet(null, gate)) { "another steady gate is armed" }
-            submissions.expect(requestId, PHASE_A)
+            submissions.expect(requestId, PHASE_A, lease = lease)
             controlledTime.submit(requestId, calibratedMaterialTime(PHASE_A))
             return gate
         }
@@ -5671,16 +5682,19 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         private val latches = java.util.concurrent.ConcurrentHashMap<Long, CountDownLatch>()
         private val submitted = java.util.concurrent.ConcurrentHashMap<Long, KeyguardOrbBufferProducerFrame>()
         private val expectedAttachments = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+        private val expectedLeases = java.util.concurrent.ConcurrentHashMap<Long, KeyguardOrbBufferLease>()
 
-        fun expect(requestId: Long, phase: Float, attachment: Long? = null) {
+        fun expect(requestId: Long, phase: Float, attachment: Long? = null, lease: KeyguardOrbBufferLease? = null) {
             check(expectedPhases.putIfAbsent(requestId, phase) == null) { "duplicate request=$requestId" }
             check(latches.putIfAbsent(requestId, CountDownLatch(1)) == null) { "duplicate latch=$requestId" }
             if (attachment != null) expectedAttachments[requestId] = attachment
+            if (lease != null) expectedLeases[requestId] = lease
         }
 
         override fun onSubmitted(frame: KeyguardOrbBufferProducerFrame) {
             val requestId = frame.testRequestId ?: return
             if (expectedAttachments[requestId]?.let { it != frame.lease.attachment } == true) return
+            if (expectedLeases[requestId]?.let { it != frame.lease } == true) return
             val expectedPhase = expectedPhases[requestId] ?: return
             if (kotlin.math.abs(expectedPhase - frame.materialTime.phase) > .0001f) return
             if (submitted.putIfAbsent(requestId, frame) == null) latches[requestId]?.countDown()
