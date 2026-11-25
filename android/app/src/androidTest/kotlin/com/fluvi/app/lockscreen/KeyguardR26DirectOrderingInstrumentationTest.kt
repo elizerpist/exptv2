@@ -43,9 +43,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun readyWorkDoesNotWaitForDiagnosticPublication() = exercise(true, true, warmup = true, checkReport = true)
     @Test fun r42PreStartSelectsActualLatestRequest() = exercise(true, preStart = true)
     @Test fun r42StalePositiveExitsAfterOrderedRestrictions() = exercise(true, warmup = true, duringRead = true)
+    @Test fun r42StalePositiveAfterRealReadExitsBeforePositivePath() = exercise(true, afterRead = true)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
-    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false, preStart:Boolean = false, duringRead:Boolean = false) {
+    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false, preStart:Boolean = false, duringRead:Boolean = false, afterRead:Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -53,7 +54,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val source = requireNotNull(args.getString("sourceSha"))
         require(source.matches(Regex("[0-9a-f]{40}")))
         val uuid = UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
-        val name = if (preStart) "r42-pre-start" else if (duringRead) "r42-stale-positive" else if (checkReport) "r41-report" else if (warmup) "r41-warm-pending" else if (checkR41Bypass) "r41-pending" else if (pendingBefore) "pending" else "stable-later-offer"
+        val name = if (preStart) "r42-pre-start" else if (duringRead) "r42-stale-positive" else if (afterRead) "r42-stale-after-read" else if (checkReport) "r41-report" else if (warmup) "r41-warm-pending" else if (checkR41Bypass) "r41-pending" else if (pendingBefore) "pending" else "stable-later-offer"
         val dir = File(context.filesDir, "keyguard-service-probe/r26/$uuid/$name")
         check(dir.mkdirs())
         val automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
@@ -190,7 +191,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         if(request.id==candidate.get()?.id) { originalMain.set(order.incrementAndGet()); records.add("A_MAIN id=${request.id} seq=${originalMain.get()}") }
                     }
                     override fun positiveApplyAttempt(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility) {
-                        if (duringRead && request.id == candidate.get()?.id) positivePathEntries.incrementAndGet()
+                        if ((duringRead || afterRead) && request.id == candidate.get()?.id) positivePathEntries.incrementAndGet()
                     }
                     override fun beforeOptionalInspectionReport(request:KeyguardCardInspectionRequest) {
                         if (checkReport && request.id == candidate.get()?.id) {
@@ -289,6 +290,8 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             assertTrue("NOT REACHED: A did not complete ordered Main",done.await(20,TimeUnit.SECONDS))
             if (duringRead) {
                 assertTrue("NOT REACHED: held real tree did not finish complete SHOW_FULL/MAIN_CONFIRMED", realPositive.get())
+            }
+            if (duringRead || afterRead) {
                 records.add("A_POSITIVE_PATH_ENTRIES=${positivePathEntries.get()}")
                 assertEquals("R42: obsolete A must exit before positive-only handling",0,positivePathEntries.get())
             }
