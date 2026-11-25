@@ -1,5 +1,11 @@
 # Milestone commits
 
+## 2026-11-25 — R41: fastest lockscreen ORB opening observed by the owner
+
+- **Owner acceptance.** On the stock Nothing Phone (2a), A142, Android 15 / API 35, the owner tested R41 and reported “Ez eddig a leggyorsabb.” Use R41 as the primary comparison and rollback point for perceived ORB appearance on wake. R29.1 remains the earlier opening milestone. [Tested application commit `97f9704120e2ae997185ea6e35fbc053e1d7f0ab`](https://github.com/elizerpist/exptv2/commit/97f9704120e2ae997185ea6e35fbc053e1d7f0ab)
+- **Reproduction.** HUMAN_DIAGNOSTIC profile, ORB / orbOnly, full disclosure, keyguard only. FULL capture `fa37a6b8-c977-4bec-bb57-750557f0c272`, 2026-11-25 at 06:03 Europe/Budapest. Published APK SHA-256 `541c609c7e5fcdddf3a579ba30a42eaf5863c8db82a61406c0349a0b72aecd82`. [R41 APK](https://media.githubusercontent.com/media/elizerpist/exptv2/9264dfd1d79ce6e8034b72530362dfe1ab7fd871/fluvi_R41_HUMAN_97f9704120e2.apk)
+- **Measured endpoint.** Across the five wakes with matched R41 timestamps, app wake callback to the winning ORB authorization ranged from 175.13 to 776.46 ms (median 360.65 ms). The sixth wake has an approximate 311 ms interval from separate uptime records. Physical first-pixel timing, the 10 ms targets and withdrawal on unlock remain open. [Phone capture analysis](https://github.com/elizerpist/exptv2/blob/a2a229ff53d94d38a602d28b0ffa1c297a44bce9/docs/FLUVI_ENGINEERING_JOURNAL.md#L20018)
+
 ## 2026-11-23 — Faster lockscreen ORB appearance on the owner's stock Android phone
 
 - **Protected behavior.** The owner tested `de807259cd370d18e422772ed0943b8d65be4bca` on a Nothing A142 running Android API 35 and reported that the ORB appeared faster on wake. Use this exact build as the phone-tested comparison and rollback point for opening speed. The owner wants further improvement.
