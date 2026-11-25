@@ -45,6 +45,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun stableInitialFullUsesOneVirginOutputWithoutReadinessRead() = runService(false)
     @Test fun r40HeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() = runService(false, null, true)
     @Test fun r41WarmHeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() = runService(false, null, true, true)
+    @Test fun r41PreparedRouteHeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() =
+        runService(false, null, true, true, false, true)
     @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
     @Test fun externalIngressWhileFirstPaintIsHeldCannotUseOldProof() = runService(true)
     @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
@@ -65,7 +67,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r22UnstagedOpeningObservation() = KeyguardR22FirstInspectionFixture().run("natural")
 
     private fun runService(changeScene: Boolean, r21Negative: Boolean? = null, r40: Boolean = false,
-                           r41Warm: Boolean = false, r41Fallback: Boolean = false) {
+                           r41Warm: Boolean = false, r41Fallback: Boolean = false,
+                           r41WaitForPreparedRoute: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -232,6 +235,34 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
             }
             shell("input keyevent KEYCODE_SLEEP")
             await("sleep and keyguard", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+            if (r41WaitForPreparedRoute) {
+                // Safety fixture precondition only: observe the real detached
+                // route. Do not prepare it, change visibility or manufacture a
+                // reservation. A timeout is NOT REACHED, not a product pass.
+                val lock = service.javaClass.getDeclaredField("queueLock").apply { isAccessible = true }.get(service)
+                val route = service.javaClass.getDeclaredField("r18RouteSnapshot").apply { isAccessible = true }
+                val enabled = service.javaClass.getDeclaredField("r18RouteEnabled").apply { isAccessible = true }
+                val active = service.javaClass.getDeclaredField("r18Active").apply { isAccessible = true }
+                val provisional = service.javaClass.getDeclaredField("r18ProvisionalWake").apply { isAccessible = true }
+                val wakeOpen = service.javaClass.getDeclaredField("r18WakeOpen").apply { isAccessible = true }
+                var observed = "UNOBSERVED"
+                try {
+                    await("NOT REACHED: real detached prepared DIRECT route", 15_000) {
+                        val ready = synchronized(lock) {
+                            val hasRoute = route.get(service) != null
+                            val isEnabled = enabled.getBoolean(service)
+                            val activeOwner = active.get(service) != null
+                            val pendingOwner = provisional.get(service) != null
+                            val isWakeOpen = wakeOpen.getBoolean(service)
+                            observed = "route=$hasRoute enabled=$isEnabled active=$activeOwner provisional=$pendingOwner wakeOpen=$isWakeOpen"
+                            hasRoute && isEnabled && !activeOwner && !pendingOwner && !isWakeOpen
+                        }
+                        ready && !power.isInteractive && keyguard.isKeyguardLocked
+                    }
+                } finally {
+                    File(dir, "r41-prewake-route.txt").writeText("$observed\n")
+                }
+            }
             shell("input keyevent KEYCODE_WAKEUP")
             await("locked wake", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
             if (r21Negative != null) {
