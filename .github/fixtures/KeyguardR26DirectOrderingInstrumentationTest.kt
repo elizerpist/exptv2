@@ -249,13 +249,17 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                                 val ingress=live?.r14Ingress
                                 val scene=(gateField.get(actual) as KeyguardFirstAuthorizedOrb).sceneSerial()
                                 val freshness=live?.let { (freshnessField.get(actual) as KeyguardInspectionFreshness).beforeRead(it) }
+                                // The R41 baseline does not declare this R42-only field.
+                                // This witness runs only in the separate after-read test.
+                                val liveScene=live?.javaClass?.declaredFields?.firstOrNull { it.name=="r42SceneSerial" }
+                                    ?.let { it.isAccessible=true; it.get(live) as? Long }
                                 val external=live!=null && ingress!=null && ingress.displayId==Display.DEFAULT_DISPLAY &&
                                     (ingress.origin==KeyguardR14Origin.SYSTEM_UI || ingress.origin==KeyguardR14Origin.AMBIGUOUS) &&
                                     ingress.callbackAt<=live.queuedAtUptimeMs && (ingress.eventAt==null || ingress.eventAt<=ingress.callbackAt)
                                 val oldScene=sceneAtCompletion.get()
                                 val sameOwner=currentRoute(request)==route.get()
                                 val qualified=decision==KeyguardCardVisibility.SHOW_FULL && live!=null && live===pending &&
-                                    live.id>request.id && authority.matches(live) && live.r42SceneSerial==scene && external &&
+                                    live.id>request.id && authority.matches(live) && liveScene==scene && external &&
                                     freshness!=null && sameOwner && oldScene>=0 && scene>oldScene
                                 LatestPreconditionWitness(live,oldScene,scene,freshness,external,sameOwner,qualified)
                             }
