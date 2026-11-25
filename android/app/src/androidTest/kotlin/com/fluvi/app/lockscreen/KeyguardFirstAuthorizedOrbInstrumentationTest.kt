@@ -48,6 +48,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r41PreparedRouteHeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() =
         runService(false, null, true, true, false, true)
     @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
+    @Test fun r41ActualWarmFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, true, true)
     @Test fun externalIngressWhileFirstPaintIsHeldCannotUseOldProof() = runService(true)
     @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
     @Test fun r21ExclusionRetiresSubmittedOrbWithMainAckHeld() = runService(false, true)
