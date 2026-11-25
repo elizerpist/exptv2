@@ -4,6 +4,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeyguardR41AttemptLedgerTest {
+    @Test fun emptyAttemptKeepsIdentityLossAndUnknownEndpointsInACompactCore() {
+        val row = KeyguardR41AttemptLedger().core(8, 9, 10, 3)
+        assertTrue(row, row.contains("attempt=8 session=9 wake=10 systemEligible=UNOBSERVED eligible=UNOBSERVED"))
+        assertTrue(row, row.contains("outcome=UNOBSERVED owner=UNOBSERVED"))
+        assertTrue(row, row.contains("wakeNs=UNOBSERVED screenNs=UNOBSERVED grantNs=UNOBSERVED"))
+        assertTrue(row, row.contains("h2Claims=0 h2Enabled=false fallbackGrant=UNOBSERVED"))
+        assertTrue(row, row.contains("omitted=0 invalid=0 dropped=3 coverage=INCOMPLETE"))
+        assertFalse(row, row.contains("outcome=SUCCESS"))
+    }
     @Test fun outOfOrderBoundariesRemainBoundToTheSameWinningOwner() {
         val ledger = KeyguardR41AttemptLedger()
         ledger.record("WINNER", 12, 300, 4, 5)

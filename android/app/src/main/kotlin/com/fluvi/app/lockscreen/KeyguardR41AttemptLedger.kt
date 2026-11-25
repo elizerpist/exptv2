@@ -146,6 +146,20 @@ internal class KeyguardR41AttemptLedger {
     private fun value(value: Long): String = if (value == MISSING) "UNOBSERVED" else value.toString()
 
     fun core(attempt: Long, session: Long, wake: Long, captureLoss: Long): String {
+        // Older capture producers can create an attempt without recording any
+        // R41 boundary. Preserve its identity and explicit unknowns without
+        // spending the shared export budget on a long list of absent fields.
+        // Parsers treat every omitted endpoint as missing, never as zero.
+        if (count == 0 && wakeNs == MISSING && screenNs == MISSING && eligible == -1 &&
+            systemEligible == -1 && shadowOffers == 0L && orderedBypasses == 0L) {
+            val loss = captureLoss + omitted + invalid
+            return " R41_CORE attempt=$attempt session=$session wake=$wake systemEligible=UNOBSERVED eligible=UNOBSERVED" +
+                " outcome=UNOBSERVED owner=UNOBSERVED readOwner=UNOBSERVED dispatchOwner=UNOBSERVED grantOwner=UNOBSERVED" +
+                " request=UNOBSERVED wakeNs=UNOBSERVED screenNs=UNOBSERVED grantNs=UNOBSERVED" +
+                " winnerNs=UNOBSERVED cancelNs=UNOBSERVED missing=ALL_R41_BOUNDARIES" +
+                " h2Claims=0 h2Enabled=false fallbackGrant=UNOBSERVED requests=0 omitted=$omitted" +
+                " invalid=$invalid dropped=$loss coverage=INCOMPLETE clock=System.nanoTime physical=UNOBSERVED\n"
+        }
         val winner = (0 until count).filter { time(it, WINNER) != MISSING }.minByOrNull { time(it, WINNER) }
         val slot = winner ?: (0 until count).firstOrNull { time(it, READ_START) != MISSING } ?: -1
         val matching = winner != null && grantReservation[slot] != MISSING && grantOutput[slot] != MISSING &&

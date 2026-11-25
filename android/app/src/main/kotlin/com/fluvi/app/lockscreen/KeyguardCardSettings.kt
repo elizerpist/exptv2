@@ -3006,6 +3006,7 @@ internal object KeyguardCardDiagnostics {
                 } else {
                     append(" R13_FINANCIAL attempt=${attempt.id} coverage=keyguardScopesOnly")
                     append(" scopes=${financial.scopes} invalid=${financial.invalid} returned=${financial.returned} noops=${financial.noops}")
+                    append(" retainedEvicted=${financial.recentEvicted}")
                     append(" constructions=${financial.constructions} demands=${financial.demands} paints=${financial.paints} paintCompleted=${financial.paintCompletions} legacyBinds=${financial.binds}")
                     append(" pixelPayloadEstimateBytes=${financial.paintCompletions * 36_864L} wallNs=${financial.wallNs} cpuNs=${financial.cpuNs}")
                     append(" paintWallNs=${financial.paintWallNs} paintCpuNs=${financial.paintCpuNs} paintMaxWallNs=${financial.paintMaxWallNs} paintMaxCpuNs=${financial.paintMaxCpuNs}")
