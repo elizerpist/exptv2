@@ -408,6 +408,8 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         val queue=queueField.get(actual) as KeyguardCardInspectionQueue
                         records.add("AFTER_START controlled=$expected selected=$firstSelected d=$d active=${queue.activeRequest()?.id ?: 0} pending=${queue.pendingRequest()?.id ?: 0} at=${SystemClock.uptimeMillis()}")
                         assertEquals("selected owner changed during its held start",firstSelected,queue.activeRequest()?.id)
+                        val selectedOwner=checkNotNull(queue.activeRequest())
+                        assertTrue("NOT REACHED: selected reader no longer has current authority",actual.inspectionStateForTest().authority.matches(selectedOwner))
                         assertEquals("NOT REACHED: D was independently superseded before queue observation",d,queue.pendingRequest()?.id)
                     }
                     selectedReaderRelease.countDown()
