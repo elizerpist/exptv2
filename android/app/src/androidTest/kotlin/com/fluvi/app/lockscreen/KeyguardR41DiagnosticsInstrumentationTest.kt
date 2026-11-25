@@ -32,6 +32,60 @@ class KeyguardR41DiagnosticsInstrumentationTest {
     @Test fun twentyFiveRequestWakeSurvivesLightExport() = exportTwentyFiveRequests("LIGHT")
     @Test fun twentyFiveRequestWakeSurvivesFullExport() = exportTwentyFiveRequests("FULL")
 
+    @Test fun directAndWithdrawalEvidenceSurvivesR41LightPressure() = protectedDirectUnderPressure("LIGHT")
+    @Test fun directAndWithdrawalEvidenceSurvivesR41FullPressure() = protectedDirectUnderPressure("FULL")
+
+    private fun protectedDirectUnderPressure(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r41-direct-pressure", "profile", mode)
+        val capture = checkNotNull(KeyguardCardDiagnostics.activeCaptureId())
+        val receipt = KeyguardCardDiagnostics.r41Provisional(capture, 1, 941, 10, 10_000L)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 941, 1, "wake", 10))
+        KeyguardCardDiagnostics.r41Bind(owner, receipt)
+        fun edge(phase: String, time: Long, extra: Map<String, Any> = emptyMap()) {
+            KeyguardCardDiagnostics.captureEvent(context, "R18_PIPELINE", phase, serviceSession = 941,
+                wakeEpoch = 1, requestId = 77, attachGeneration = 2, diagnosticContext = owner,
+                observedUptimeMs = time, fields = mapOf<String, Any>("r18Host" to 2, "r18Output" to 3,
+                    "r18Privacy" to "full", "r19Intent" to "EMPTY") + extra)
+        }
+        edge("WAKE_ADOPTED", 10_000)
+        edge("BUFFER_READY", 10_003)
+        edge("GRANT", 10_005, mapOf("r18Proof" to 77))
+        edge("REVEAL_RECEIPT", 10_010, mapOf("r18ApplyBegin" to 10_008, "r18ApplyEnd" to 10_010))
+        val show = KeyguardCardDiagnostics.newShowOperation(owner, 2, 77)
+        KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "test", operation = show,
+            observedUptimeMs = 10_005)
+        val hide = KeyguardCardDiagnostics.newHideOperation(owner, 2, 10_020, 10_021)
+        KeyguardCardDiagnostics.captureEvent(context, "HIDE_DECIDED", "test", operation = hide,
+            observedUptimeMs = 10_022)
+        KeyguardCardDiagnostics.captureEvent(context, "LOCAL_HIDE_APPLIED", "test", operation = hide,
+            observedUptimeMs = 10_023)
+        KeyguardCardDiagnostics.captureEvent(context, "REMOVE_VIEW_RETURN", "test", operation = hide,
+            observedUptimeMs = 10_024)
+        KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.ELIGIBLE, owner, atNs = 10_001L)
+        for (id in 1L..29L) KeyguardCardDiagnostics.r41Mark(
+            KeyguardR41RawLedger.OFFER, owner, id, atNs = 1_234_567_890_000_000L + id)
+        for (id in 1L..60L) {
+            val sample = KeyguardSystemGateRequest(1_000 + id, KeyguardInspectionAuthority(941, 1, 1, 1, 1),
+                "wake", 10, 10, evaluate = true, wakeSource = "wake", diagnosticCaptureId = capture,
+                r41WakeOrdinal = receipt, r41ScreenOrdinal = receipt)
+            listOf(KeyguardR41RawLedger.SAMPLE_OFFER, KeyguardR41RawLedger.SAMPLE_SUBMIT,
+                KeyguardR41RawLedger.SAMPLE_WORKER, KeyguardR41RawLedger.SAMPLE_READ_START,
+                KeyguardR41RawLedger.SAMPLE_READ_END, KeyguardR41RawLedger.SAMPLE_DISPATCH,
+                KeyguardR41RawLedger.SAMPLE_MAIN, KeyguardR41RawLedger.SAMPLE_DELIVER).forEach {
+                KeyguardCardDiagnostics.r41SamplerMark(it, sample, 0)
+            }
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        retain("$mode-direct-pressure-frozen.txt", report)
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        assertTrue("$mode lost its R41 compact core", report.contains(" R41_CORE attempt=1 "))
+        assertTrue("$mode lost its prior R18 direct evidence", report.contains(" R18_PIPELINE attempt=1 "))
+        assertTrue("$mode lost its show", report.contains(" EPISODE attempt=1 "))
+        assertTrue("$mode lost its withdrawal", report.contains(" WITHDRAWAL hideOp="))
+        assertTrue("$mode must explicitly identify omitted details", report.contains("omittedCriticalRecordIds=") &&
+            !report.contains("omittedCriticalRecordIds=none"))
+    }
+
     private fun exportTwentyFiveRequests(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r41-25-requests", "profile", mode)
         val capture = checkNotNull(KeyguardCardDiagnostics.activeCaptureId())
