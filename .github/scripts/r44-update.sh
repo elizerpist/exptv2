@@ -5,12 +5,24 @@ mkdir -p "$out"
 case "$1" in
   prepare)
     [[ "$APP_SHA" =~ ^[0-9a-f]{40}$ && "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ && "$CANDIDATE_SIZE" =~ ^[0-9]+$ ]]
-    [[ "$CANDIDATE_URL" == https://media.githubusercontent.com/media/elizerpist/exptv2/*/*.apk ]]
     curl -fLsS --retry 3 'https://media.githubusercontent.com/media/elizerpist/exptv2/47ba86e432b7027ea9c786270211d1d8b5b8edf2/fluvi_R43_HUMAN_0732bee6a2bc.apk' -o "$out/r43.apk"
-    curl -fLsS --retry 3 "$CANDIDATE_URL" -o "$out/r44.apk"
     test "$(wc -c < "$out/r43.apk")" -eq 121039632
-    test "$(wc -c < "$out/r44.apk")" -eq "$CANDIDATE_SIZE"
     printf '%s  %s\n' 4abcfd4f0b929919c1102a76155d061a721112b8efac5c5ee7c293d3c198b166 "$out/r43.apk" | sha256sum -c -
+    case "$CANDIDATE_URL" in
+      https://media.githubusercontent.com/media/elizerpist/exptv2/*/*.zstpatch.enc)
+        [[ "$R44_STAGE_SHA256" =~ ^[0-9a-f]{64}$ && "$R44_STAGE_SIZE" =~ ^[0-9]+$ && -n "${FLUVI_R44_STAGE_KEY:-}" ]]
+        curl -fLsS --retry 3 "$CANDIDATE_URL" -o "$out/stage.enc"
+        test "$(wc -c < "$out/stage.enc")" -eq "$R44_STAGE_SIZE"
+        printf '%s  %s\n' "$R44_STAGE_SHA256" "$out/stage.enc" | sha256sum -c -
+        openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass env:FLUVI_R44_STAGE_KEY -in "$out/stage.enc" -out "$out/r44.zstpatch"
+        zstd -q -d --patch-from="$out/r43.apk" -f "$out/r44.zstpatch" -o "$out/r44.apk"
+        ;;
+      https://media.githubusercontent.com/media/elizerpist/exptv2/*/*.apk)
+        curl -fLsS --retry 3 "$CANDIDATE_URL" -o "$out/r44.apk"
+        ;;
+      *) printf '%s\n' 'unsupported candidate source' >&2; exit 2;;
+    esac
+    test "$(wc -c < "$out/r44.apk")" -eq "$CANDIDATE_SIZE"
     printf '%s  %s\n' "$CANDIDATE_SHA256" "$out/r44.apk" | sha256sum -c -
     signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
     for name in r43 r44; do

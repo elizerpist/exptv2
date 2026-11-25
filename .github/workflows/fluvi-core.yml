@@ -23,6 +23,12 @@ on:
       candidate_url:
         type: string
         default: ''
+      stage_sha256:
+        type: string
+        default: ''
+      stage_size:
+        type: string
+        default: '0'
       test_sha256:
         type: string
         default: ''
@@ -268,6 +274,9 @@ jobs:
       CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
       CANDIDATE_SIZE: ${{ inputs.candidate_size }}
       CANDIDATE_URL: ${{ inputs.candidate_url }}
+      R44_STAGE_SHA256: ${{ inputs.stage_sha256 }}
+      R44_STAGE_SIZE: ${{ inputs.stage_size }}
+      FLUVI_R44_STAGE_KEY: ${{ secrets.FLUVI_R44_UPDATE_STAGE_KEY }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -280,6 +289,8 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools build-tools;36.0.0'
+      - name: Ensure lossless patch tool is available
+        run: command -v zstd || (sudo apt-get update && sudo apt-get install -y zstd)
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
