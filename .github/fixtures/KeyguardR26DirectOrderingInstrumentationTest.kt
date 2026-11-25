@@ -46,6 +46,9 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun r42StalePositiveAfterRealReadExitsBeforePositivePath() = exercise(true, afterRead = true, platformWarm = true)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
+    private data class LatestPreconditionWitness(val pending:KeyguardCardInspectionRequest?, val oldScene:Long,
+        val currentScene:Long, val freshness:KeyguardInspectionFreshness.Ticket?, val external:Boolean,
+        val sameOwner:Boolean, val qualified:Boolean)
     private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false, preStart:Boolean = false, duringRead:Boolean = false, afterRead:Boolean = false, platformWarm:Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -239,22 +242,26 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                     }
                     override fun beforeDecision(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility,
                         pending:KeyguardCardInspectionRequest?, authority:KeyguardInspectionAuthority) {
-                        if (afterRead && request.id == candidate.get()?.id) synchronized(queueLock) {
-                            val live=(queueField.get(actual) as KeyguardCardInspectionQueue).pendingRequest()
-                            val ingress=live?.r14Ingress
-                            val scene=(gateField.get(actual) as KeyguardFirstAuthorizedOrb).sceneSerial()
-                            val freshness=live?.let { (freshnessField.get(actual) as KeyguardInspectionFreshness).beforeRead(it) }
-                            val external=live!=null && ingress!=null && ingress.displayId==Display.DEFAULT_DISPLAY &&
-                                (ingress.origin==KeyguardR14Origin.SYSTEM_UI || ingress.origin==KeyguardR14Origin.AMBIGUOUS) &&
-                                ingress.callbackAt<=live.queuedAtUptimeMs && (ingress.eventAt==null || ingress.eventAt<=ingress.callbackAt)
-                            val qualified=decision==KeyguardCardVisibility.SHOW_FULL && live!=null && live===pending &&
-                                live.id>request.id && authority.matches(live) && live.r42SceneSerial==scene && external &&
-                                freshness!=null && currentRoute(request)==route.get() && sceneAtCompletion.get()>=0 &&
-                                scene>sceneAtCompletion.get()
-                            latestPreconditions.set(qualified); decisionObserved.set(true)
-                            records.add("A_ORDERED_DECISION id=${request.id} decision=$decision boundaryPending=$pending actualPending=$live " +
-                                "oldScene=${sceneAtCompletion.get()} currentScene=$scene freshness=$freshness external=$external " +
-                                "sameOwner=${currentRoute(request)==route.get()} qualified=$qualified")
+                        if (afterRead && request.id == candidate.get()?.id) {
+                            val witness=synchronized(queueLock) {
+                                val live=(queueField.get(actual) as KeyguardCardInspectionQueue).pendingRequest()
+                                val ingress=live?.r14Ingress
+                                val scene=(gateField.get(actual) as KeyguardFirstAuthorizedOrb).sceneSerial()
+                                val freshness=live?.let { (freshnessField.get(actual) as KeyguardInspectionFreshness).beforeRead(it) }
+                                val external=live!=null && ingress!=null && ingress.displayId==Display.DEFAULT_DISPLAY &&
+                                    (ingress.origin==KeyguardR14Origin.SYSTEM_UI || ingress.origin==KeyguardR14Origin.AMBIGUOUS) &&
+                                    ingress.callbackAt<=live.queuedAtUptimeMs && (ingress.eventAt==null || ingress.eventAt<=ingress.callbackAt)
+                                val oldScene=sceneAtCompletion.get()
+                                val sameOwner=currentRoute(request)==route.get()
+                                val qualified=decision==KeyguardCardVisibility.SHOW_FULL && live!=null && live===pending &&
+                                    live.id>request.id && authority.matches(live) && live.r42SceneSerial==scene && external &&
+                                    freshness!=null && sameOwner && oldScene>=0 && scene>oldScene
+                                LatestPreconditionWitness(live,oldScene,scene,freshness,external,sameOwner,qualified)
+                            }
+                            latestPreconditions.set(witness.qualified); decisionObserved.set(true)
+                            records.add("A_ORDERED_DECISION id=${request.id} decision=$decision boundaryPending=$pending actualPending=${witness.pending} " +
+                                "oldScene=${witness.oldScene} currentScene=${witness.currentScene} freshness=${witness.freshness} external=${witness.external} " +
+                                "sameOwner=${witness.sameOwner} qualified=${witness.qualified}")
                         }
                     }
                     override fun beforeOptionalInspectionReport(request:KeyguardCardInspectionRequest) {
