@@ -81,7 +81,10 @@ class KeyguardR43Api37LiveProbeTest {
             until(start + 11_000); screenshot("pin")
             until(start + 12_000); shell("input keyevent KEYCODE_BACK")
             until(start + 17_000); screenshot("clock-2")
-            until(start + 18_000); shell("cmd statusbar expand-notifications")
+            until(start + 18_000)
+            shell("input swipe 180 12 180 1500 450")
+            shell("input swipe 180 32 180 1800 450")
+            out.resolve("shade-command.txt").writeText(shell("cmd statusbar expand-settings"))
             until(start + 23_000); screenshot("shade")
             until(start + 25_000)
             val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String; capture = false
