@@ -15,6 +15,24 @@ class KeyguardOpeningInspectionHandoffTest {
         hostSafe = true, grantNone = true, noPaint = true, noVisibleOrShowing = true,
         freshnessEstablished = true, noObservedDisqualifier = true, workRemaining = true,
     )
+
+    @Test fun `only the exact unstarted opening may be retired for R42 selection`() {
+        val token = Any()
+        val a = request(1)
+        val gate = KeyguardOpeningInspectionHandoff()
+        assertTrue(gate.arm(token, 5, a, authority, 7))
+        assertFalse(gate.canRetireUnstartedForR42(a, Any()))
+        assertTrue(gate.canRetireUnstartedForR42(a, token))
+        gate.retireUnstartedForR42(a, token)
+        assertEquals("r42PreStartReplaced", gate.snapshot(a.id)?.lastReason)
+        assertNull(gate.snapshot(a.id)?.startedAt)
+        assertNull(gate.snapshot(a.id)?.claimedId)
+
+        val started = KeyguardOpeningInspectionHandoff()
+        assertTrue(started.arm(token, 5, a, authority, 7))
+        started.readStarted(a, 10, 100)
+        assertFalse(started.canRetireUnstartedForR42(a, token))
+    }
     private class Fixture {
         val authority = KeyguardInspectionAuthority(1, 2, 3, 4, 5)
         val a = KeyguardCardInspectionRequest(1, "wake", 1, 2, 4, 5, 3, 1)

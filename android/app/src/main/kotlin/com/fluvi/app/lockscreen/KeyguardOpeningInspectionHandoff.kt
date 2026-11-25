@@ -205,6 +205,29 @@ internal class KeyguardOpeningInspectionHandoff {
         op.sceneAtRead = scene
     }
 
+    /** The original opening may have been armed before Main adopted the
+     * reservation. A pre-start replacement can retire that unused opportunity
+     * only while its exact reader has never begun and no transfer was made. */
+    fun canRetireUnstartedForR42(request: KeyguardCardInspectionRequest, token: Any): Boolean {
+        val op = current ?: return true
+        if (op.invalidated) return op.claimedId != request.id
+        if (op.opening != request) return op.completedAt != null && op.claimedId != request.id
+        return op.token === token && op.authority.matches(request) && op.startedAt == null &&
+            op.completedAt == null && !op.consumed && op.claimedId == null
+    }
+
+    fun retireUnstartedForR42(request: KeyguardCardInspectionRequest, token: Any) {
+        val op = current ?: return
+        if (op.invalidated || op.opening != request || op.token !== token ||
+            op.startedAt != null || op.completedAt != null || op.consumed || op.claimedId != null) return
+        op.lastReason = "r42PreStartReplaced"
+        op.invalidated = true
+        op.hint = null
+        hasHint = false
+        followHint = false
+        followObservedOffer = false
+    }
+
     /** Called at the same ordered scene advancement, before a real offer. */
     fun externalInvalidation(scene: Long, at: Long) {
         val op = current ?: return

@@ -7,6 +7,53 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class KeyguardCardInspectionQueueTest {
+    @Test fun `pre-start latest selection carries debt and a late offer remains pending`() {
+        val queue = KeyguardCardInspectionQueue()
+        val a = request(1, "wake").copy(windowFreshness = KeyguardWindowFreshness.LIFECYCLE_BOUNDARY)
+        val b = request(2, "window")
+        val c = request(3, "window").copy(eventTimeUptimeMs = 42, triggerReceivedUptimeMs = 43)
+        val d = request(4, "window")
+        val authority = KeyguardInspectionAuthority(1, 1, 1, 1, 1)
+        val freshness = KeyguardInspectionFreshness().also {
+            it.publish(authority)
+            it.require(authority, KeyguardWindowFreshness.LIFECYCLE_BOUNDARY)
+        }
+        assertTrue(queue.offer(a)); assertFalse(queue.offer(b)); assertFalse(queue.offer(c))
+        val selected = requireNotNull(queue.selectUnstartedLatest(a, c, KeyguardWindowFreshness.LIFECYCLE_BOUNDARY))
+        assertEquals(c.id, selected.id)
+        assertEquals(c.eventTimeUptimeMs, selected.eventTimeUptimeMs)
+        assertEquals(c.triggerReceivedUptimeMs, selected.triggerReceivedUptimeMs)
+        assertEquals(KeyguardWindowFreshness.LIFECYCLE_BOUNDARY, selected.windowFreshness)
+        assertFalse(queue.offer(d))
+        assertEquals(d, queue.pendingRequest())
+        assertNull(queue.complete(a))
+        assertEquals(d, queue.recoverUnwoundReader(selected)?.next)
+        assertEquals(d, queue.activeRequest())
+        assertNull(queue.pendingRequest())
+        assertEquals(KeyguardWindowFreshness.LIFECYCLE_BOUNDARY, freshness.beforeRead(d)?.reason)
+    }
+
+    @Test fun `pre-start selection refuses different owners and existing transfers`() {
+        val a = request(1, "wake"); val b = request(2, "window"); val c = request(3, "window")
+        val queue = KeyguardCardInspectionQueue()
+        assertTrue(queue.offer(a)); assertFalse(queue.offer(b))
+        assertNull(queue.selectUnstartedLatest(a.copy(), b, KeyguardWindowFreshness.FRAMEWORK_EVENT))
+        assertNull(queue.selectUnstartedLatest(a, b.copy(), KeyguardWindowFreshness.FRAMEWORK_EVENT))
+        assertEquals(b, queue.handoffOpening(a, b))
+        assertFalse(queue.offer(c))
+        assertNull(queue.selectUnstartedLatest(b, c, KeyguardWindowFreshness.FRAMEWORK_EVENT))
+        assertEquals(b, queue.activeRequest())
+        assertEquals(c, queue.pendingRequest())
+
+        val newerWake = KeyguardCardInspectionQueue()
+        assertTrue(newerWake.offer(a))
+        val other = b.copy(wakeGeneration = b.wakeGeneration + 1)
+        assertFalse(newerWake.offer(other))
+        assertNull(newerWake.selectUnstartedLatest(a, other, KeyguardWindowFreshness.LIFECYCLE_BOUNDARY))
+        assertEquals(a, newerWake.activeRequest())
+        assertEquals(other, newerWake.pendingRequest())
+    }
+
     @Test fun `withdrawal reacquires latest event without rewriting its origins`() {
         val owner = KeyguardInspectionAuthority(1, 1, 1, 1, 1)
         val withdrawn = owner.copy(visibilityEpoch = 2, interactionEpoch = 2)

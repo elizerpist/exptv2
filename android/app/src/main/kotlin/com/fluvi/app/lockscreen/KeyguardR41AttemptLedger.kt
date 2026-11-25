@@ -31,10 +31,31 @@ internal class KeyguardR41AttemptLedger {
     var shadowPartialMatches: Long = 0; private set
     private var shadowLastRequest: Long = MISSING
     private var shadowLastFlags: Long = MISSING
+    private var r42PreCount = 0L
+    private var r42PreFirstRequest = MISSING; private var r42PreFirstNext = MISSING; private var r42PreFirstNs = MISSING
+    private var r42PreLastRequest = MISSING; private var r42PreLastNext = MISSING; private var r42PreLastNs = MISSING
+    private var r42PreFreshness = MISSING
+    private var r42StaleCount = 0L
+    private var r42StaleFirstRequest = MISSING; private var r42StaleFirstNext = MISSING; private var r42StaleFirstNs = MISSING
+    private var r42StaleLastRequest = MISSING; private var r42StaleLastNext = MISSING; private var r42StaleLastNs = MISSING
+    private var r42StaleScene = MISSING
 
     fun record(phase: String, request: Long?, atNs: Long, reservation: Long? = null, output: Long? = null,
                tid: Long? = null, uptimeMs: Long? = null, source: Long? = null, eventTimeMs: Long? = null) {
         if (atNs == MISSING) { invalid++; return }
+        if (phase == "R42_PRESTART" || phase == "R42_STALE_POSITIVE") {
+            if (request == null || request <= 0 || reservation == null || reservation <= request) { invalid++; return }
+            if (phase == "R42_PRESTART") {
+                if (r42PreCount++ == 0L) { r42PreFirstRequest = request; r42PreFirstNext = reservation; r42PreFirstNs = atNs }
+                r42PreLastRequest = request; r42PreLastNext = reservation; r42PreLastNs = atNs
+                r42PreFreshness = output ?: MISSING
+            } else {
+                if (r42StaleCount++ == 0L) { r42StaleFirstRequest = request; r42StaleFirstNext = reservation; r42StaleFirstNs = atNs }
+                r42StaleLastRequest = request; r42StaleLastNext = reservation; r42StaleLastNs = atNs
+                r42StaleScene = output ?: MISSING
+            }
+            return
+        }
         if (phase == "ORDERED_SHADOW_OFFER") {
             if (request == null || request <= 0 || reservation == null || reservation <= 0) {
                 invalid++
@@ -151,7 +172,7 @@ internal class KeyguardR41AttemptLedger {
         // spending the shared export budget on a long list of absent fields.
         // Parsers treat every omitted endpoint as missing, never as zero.
         if (count == 0 && wakeNs == MISSING && screenNs == MISSING && eligible == -1 &&
-            systemEligible == -1 && shadowOffers == 0L && orderedBypasses == 0L) {
+            systemEligible == -1 && shadowOffers == 0L && orderedBypasses == 0L && r42PreCount == 0L && r42StaleCount == 0L) {
             val loss = captureLoss + omitted + invalid
             return " R41_CORE attempt=$attempt session=$session wake=$wake systemEligible=UNOBSERVED eligible=UNOBSERVED" +
                 " outcome=UNOBSERVED owner=UNOBSERVED missing=ALL_R41_BOUNDARIES" +
@@ -187,6 +208,9 @@ internal class KeyguardR41AttemptLedger {
             " orderedBypasses=$orderedBypasses h2ShadowOffers=$shadowOffers h2PartialMatches=$shadowPartialMatches" +
             " h2LastRequest=${value(shadowLastRequest)} h2LastFlags=${value(shadowLastFlags)} h2Claims=0 h2Enabled=false" +
             " h2ShadowCoverage=partialGuardsDispatchUnverified" +
+            " r42Pre=$r42PreCount/${value(r42PreFirstRequest)}/${value(r42PreFirstNext)}/${value(r42PreFirstNs)}/${value(r42PreLastRequest)}/${value(r42PreLastNext)}/${value(r42PreLastNs)}/${value(r42PreFreshness)}" +
+            " r42PreMeta=freshnessPlusOne_framework16_origin32" +
+            " r42Stale=$r42StaleCount/${value(r42StaleFirstRequest)}/${value(r42StaleFirstNext)}/${value(r42StaleFirstNs)}/${value(r42StaleLastRequest)}/${value(r42StaleLastNext)}/${value(r42StaleLastNs)}/${value(r42StaleScene)}" +
             " fallbackCandidateAndPostReceipt=$fallbackEvidence fallbackGrant=UNOBSERVED" +
             " requests=$count omitted=$omitted invalid=$invalid dropped=$loss" +
             " coverage=INCOMPLETE clock=System.nanoTime physical=UNOBSERVED\n"
@@ -214,6 +238,12 @@ internal class KeyguardR41AttemptLedger {
         copy.omitted = omitted; copy.invalid = invalid; copy.orderedBypasses = orderedBypasses
         copy.shadowOffers = shadowOffers; copy.shadowPartialMatches = shadowPartialMatches
         copy.shadowLastRequest = shadowLastRequest; copy.shadowLastFlags = shadowLastFlags
+        copy.r42PreCount = r42PreCount; copy.r42PreFirstRequest = r42PreFirstRequest; copy.r42PreFirstNext = r42PreFirstNext
+        copy.r42PreFirstNs = r42PreFirstNs; copy.r42PreLastRequest = r42PreLastRequest; copy.r42PreLastNext = r42PreLastNext
+        copy.r42PreLastNs = r42PreLastNs; copy.r42PreFreshness = r42PreFreshness
+        copy.r42StaleCount = r42StaleCount; copy.r42StaleFirstRequest = r42StaleFirstRequest; copy.r42StaleFirstNext = r42StaleFirstNext
+        copy.r42StaleFirstNs = r42StaleFirstNs; copy.r42StaleLastRequest = r42StaleLastRequest; copy.r42StaleLastNext = r42StaleLastNext
+        copy.r42StaleLastNs = r42StaleLastNs; copy.r42StaleScene = r42StaleScene
     }
 
     companion object {

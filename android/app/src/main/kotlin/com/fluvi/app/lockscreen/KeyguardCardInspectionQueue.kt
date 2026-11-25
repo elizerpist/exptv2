@@ -45,6 +45,10 @@ internal data class KeyguardCardInspectionRequest(
     val r32FrameworkIngressId: Long? = null,
     /** Scene assigned to this exact external framework offer; null for copied or synthetic work. */
     val r34SceneSerial: Long? = null,
+    /** Exact metadata-adapter scene, also retained for controlled test ingress.
+     * It is scheduling provenance only, never surface/show authority. */
+    val r42SceneSerial: Long? = null,
+    val r42FrameworkEvent: Boolean = false,
 ) {
     /** Carry an unserved event, never an acquired answer, across a local
      * withdrawal in the SAME service/wake. The new request must reacquire
@@ -66,6 +70,8 @@ internal data class KeyguardCardInspectionRequest(
             latestSamplerEvidence = null,
             r32FrameworkIngressId = null,
             r34SceneSerial = null,
+            r42SceneSerial = null,
+            r42FrameworkEvent = false,
             windowFreshness = if (windowFreshness.requiresCacheClear && !freshness.requiresCacheClear) windowFreshness else freshness,
         )
     }
@@ -284,6 +290,28 @@ internal class KeyguardCardInspectionQueue {
 
     fun canPublishCompleted(request: KeyguardCardInspectionRequest): Boolean =
         active == request && preceding == null
+
+    /** Before the single worker has entered any physical read, replace its
+     * exact scheduled owner once with the exact latest compatible pending
+     * request. The service validates the reservation and eligibility under
+     * its queue lock; this transition itself cannot grant disclosure. */
+    fun selectUnstartedLatest(
+        scheduled: KeyguardCardInspectionRequest,
+        latest: KeyguardCardInspectionRequest,
+        outstanding: KeyguardWindowFreshness,
+    ): KeyguardCardInspectionRequest? {
+        if (active !== scheduled || pending !== latest || preceding != null ||
+            openingTransferFrom != null || openingTransferTo != null || latest.id <= scheduled.id) return null
+        val sameAuthority = scheduled.session == latest.session && scheduled.wakeGeneration == latest.wakeGeneration &&
+            scheduled.visibilityEpoch == latest.visibilityEpoch && scheduled.interactionEpoch == latest.interactionEpoch &&
+            scheduled.attachGeneration == latest.attachGeneration
+        if (!sameAuthority) return null
+        val selected = if (outstanding.requiresCacheClear && !latest.windowFreshness.requiresCacheClear)
+            latest.copy(windowFreshness = outstanding) else latest
+        active = selected
+        pending = null
+        return selected
+    }
 
     /** A still-running opening walk may hand its one reader to an exact,
      * already offered successor. Unlike R12, no completed predecessor waits

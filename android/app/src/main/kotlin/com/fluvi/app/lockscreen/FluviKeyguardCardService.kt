@@ -2548,6 +2548,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             r14Ingress = ingress,
             r32FrameworkIngressId = ingress?.id?.takeIf { frameworkEvent && meta != null },
             r34SceneSerial = externalScene?.takeIf { frameworkEvent && meta != null && ingress != null },
+            r42SceneSerial = externalScene?.takeIf { meta != null && ingress != null },
+            r42FrameworkEvent = frameworkEvent && meta != null,
             wakeEligibility = wakeTiming?.takeIf { it.wakeGeneration == authority.wakeGeneration }?.eligibility
                 ?.takeIf { it.captureId == currentDiagnosticAttempt?.captureId && it.captureId == KeyguardCardDiagnostics.activeCaptureId() },
             latestSamplerEvidence = latestSamplerEvidence?.takeIf {
@@ -3173,6 +3175,37 @@ class FluviKeyguardCardService : AccessibilityService() {
             now.readAhead == original.readAhead
     }
 
+    /** Scheduling only: the selected request still needs its own physical
+     * read and every existing Main/final disclosure gate. No platform call or
+     * diagnostic formatting is performed while the queue lock is held. */
+    private fun r42SelectBeforeReadLocked(scheduled: KeyguardCardInspectionRequest): KeyguardCardInspectionRequest? {
+        val owner = r34EmptyDirectLocked(scheduled) ?: return null
+        val active = r18Active ?: return null
+        val state = r18Coordinator.snapshot()
+        if (r18ProvisionalWake != null || !state.adopted || active.token !== owner.reservation ||
+            !active.preparation.emptyAwaitingDisclosure || !active.preparation.full) return null
+        val latest = inspectionQueue.pendingRequest() ?: return null
+        val scene = firstAuthorizedOrb.sceneSerial()
+        if (!r42ActualLatestLocked(scheduled, latest, scene)) return null
+        val ticket = inspectionFreshness.beforeRead(scheduled) ?: return null
+        if (inspectionFreshness.beforeRead(latest) != ticket ||
+            !openingHandoff.canRetireUnstartedForR42(scheduled, owner.reservation)) return null
+        val selected = inspectionQueue.selectUnstartedLatest(scheduled, latest, ticket.reason) ?: return null
+        openingHandoff.retireUnstartedForR42(scheduled, owner.reservation)
+        return selected
+    }
+
+    private fun r42ActualLatestLocked(request: KeyguardCardInspectionRequest,
+                                      candidate: KeyguardCardInspectionRequest?, scene: Long): Boolean {
+        val next = candidate ?: return false
+        val event = next.r14Ingress ?: return false
+        return inspectionQueue.pendingRequest() === next && next.id > request.id &&
+            inspectionAuthority.matches(next) && next.r42SceneSerial == scene &&
+            event.displayId == Display.DEFAULT_DISPLAY &&
+            (event.origin == KeyguardR14Origin.SYSTEM_UI || event.origin == KeyguardR14Origin.AMBIGUOUS) &&
+            event.callbackAt <= next.queuedAtUptimeMs && (event.eventAt == null || event.eventAt <= event.callbackAt)
+    }
+
     private fun r34ActualLatestLocked(request: KeyguardCardInspectionRequest,
                                       candidate: KeyguardCardInspectionRequest?, scene: Long): Boolean {
         val next = candidate ?: return false
@@ -3459,7 +3492,20 @@ class FluviKeyguardCardService : AccessibilityService() {
         var r41DeferredReports: java.util.ArrayDeque<R41DeferredInspectionReport>? = null
         try {
         while (request != null) {
-            val active = request
+            val scheduled = request ?: break
+            val selected = synchronized(queueLock) { r42SelectBeforeReadLocked(scheduled) }
+            if (selected != null) {
+                // Publish the new exact owner before any observer or possible
+                // cancellation can unwind this coroutine.
+                request = selected
+                promotedOwner = selected
+                KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.R42_PRESTART,
+                    scheduled.diagnosticContext, scheduled.id, selected.id,
+                    selected.windowFreshness.ordinal.toLong() + 1L +
+                        (if (selected.r42FrameworkEvent) 16L else 0L) +
+                        32L * (selected.r14Ingress?.origin?.ordinal ?: 0))
+            }
+            val active = selected ?: scheduled
             val physical = readInspection(active)
             if (physical is PhysicalReadOutcome.Yielded) {
                 promotedOwner = physical.successor
