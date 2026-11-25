@@ -35,7 +35,7 @@ case "${1:-}" in
       printf '%s\n' "$expected" > "$out/source-$arm.txt"
     done
     ;;
-  run)
+  run|run-continuation)
     { adb devices -l; adb shell getprop ro.build.version.sdk; adb shell getprop ro.product.cpu.abi; adb shell getprop ro.build.fingerprint; adb shell wm size; adb shell wm density; } > "$out/device.txt" 2>&1
     test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 35
     adb shell input keyevent KEYCODE_WAKEUP
@@ -49,6 +49,12 @@ case "${1:-}" in
     # in-process permission or optical latency evidence.
     blocks+=(a b a b)
     modes+=(FULL FULL OFF OFF)
+    # Independent continuation after the first emulator became offline.
+    # Do not rerun or replace its ten recorded blocks.
+    if [[ "$1" == run-continuation ]]; then
+      blocks=(a b a b a b)
+      modes=(LIGHT LIGHT FULL FULL OFF OFF)
+    fi
     for index in "${!blocks[@]}"; do
       arm="${blocks[$index]}"; mode="${modes[$index]}"; number=$((index+1))
       if [[ "$arm" == a ]]; then app="$app_a"; source="$source_a"; else app="$app_b"; source="$source_b"; fi
