@@ -49,6 +49,7 @@ import com.fluvi.app.R
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import java.io.File
 import java.time.Duration
@@ -4098,6 +4099,67 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         }
     }
 
+    /** Independent witness for the original request-only assertion. The same
+     * controlled material-time request can still be sampled by replacement B;
+     * record every submission's real lease/slot/use instead of treating B as A. */
+    @Test fun r41RetiredReadyUsesExactAttachmentWitness() {
+        withOrbRetirementFixture("r41-retired-ready-witness") { fixture ->
+            val uuid = java.util.UUID.fromString(requireNotNull(
+                androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("runUuid"))).toString()
+            val directory = java.io.File(fixture.activity.filesDir, "keyguard-service-probe/r41/$uuid")
+            check(directory.mkdirs() || directory.isDirectory)
+            var attachmentA = 0L
+            fixture.instrumentation.runOnMainSync {
+                assertTrue(fixture.window.hide())
+                attachmentA = fixture.window.currentAttachGeneration + 1L
+            }
+            fixture.holdReady(attachmentA)
+            val requestA = fixture.prepareFirst(PHASE_A)
+            fixture.watchSubmitted(requestA)
+            fixture.instrumentation.runOnMainSync {
+                assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                    fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+            }
+            val pending = fixture.awaitReady(attachmentA)
+            assertEquals("NOT REACHED: held producer request is not A", requestA, pending.frame.testRequestId)
+            assertEquals(attachmentA, pending.frame.lease.attachment)
+            assertFalse("held A frame has already been submitted", fixture.hasSubmitted(requestA))
+            var attachmentB = 0L
+            try {
+                fixture.instrumentation.runOnMainSync {
+                    assertTrue(fixture.window.hide())
+                    assertEquals(KeyguardCardWindow.Result.ATTACHED,
+                        fixture.window.showOrUpdate(FluviFinancialCardPresenter.loading(), fixture.settings))
+                    attachmentB = fixture.window.currentAttachGeneration
+                }
+                fixture.deliverReady(attachmentA)
+                val replacement = fixture.awaitAttachment(attachmentB)
+                val frames = fixture.witnessedSubmissions()
+                val details = frames.joinToString("\n") {
+                    "request=${it.testRequestId} attachment=${it.lease.attachment} generation=${it.lease.generation} slot=${it.slotId} use=${it.useGeneration}"
+                }
+                java.io.File(directory, "retired-ready-witness.txt").writeText(
+                    "requestA=$requestA heldAttachment=${pending.frame.lease.attachment} " +
+                        "heldGeneration=${pending.frame.lease.generation} heldSlot=${pending.frame.slotId} " +
+                        "heldUse=${pending.frame.useGeneration} replacementAttachment=$attachmentB " +
+                        "replacementGeneration=${replacement.generation}\n$details\n")
+                assertFalse("retired A's actual lease submitted a buffer", frames.any { it.lease == pending.frame.lease })
+                assertTrue("a different old attachment submitted under A's request",
+                    frames.all { it.lease.attachment == attachmentB })
+                val drained = fixture.ownership.awaitLease("lease-drained", pending.frame.lease)
+                assertTrue(drained.slots.none { it.lease == pending.frame.lease && it.state != "FREE" })
+                fixture.ownership.assertBoundedSingleRenderer()
+            } finally {
+                if (!java.io.File(directory, "retired-ready-witness.txt").exists()) {
+                    java.io.File(directory, "retired-ready-witness.txt").writeText(
+                        "requestA=$requestA heldAttachment=${pending.frame.lease.attachment} " +
+                            "heldGeneration=${pending.frame.lease.generation} replacementAttachment=$attachmentB " +
+                            "outcome=PRECONDITION_OR_TEST_FAILURE\n")
+                }
+            }
+        }
+    }
+
     @Test fun isolatedOrbPreApplyFailureAndPostTransferObserverFailureHaveDifferentOwnership() {
         withOrbRetirementFixture("first-pre-apply-failure") { fixture ->
             var attachment = 0L
@@ -4957,6 +5019,8 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         fun prepareFirst(phase: Float): Long = request(phase)
         fun submitted(requestId: Long): KeyguardOrbBufferProducerFrame = submissions.await(requestId)
         fun hasSubmitted(requestId: Long): Boolean = submissions.hasSubmitted(requestId)
+        fun watchSubmitted(requestId: Long) = submissions.watch(requestId)
+        fun witnessedSubmissions(): List<KeyguardOrbBufferProducerFrame> = submissions.witnessed()
         fun holdReady(attachment: Long) { readyAttachment.set(attachment) }
         fun failBeforeApply(attachment: Long) { failBeforeAttachment.set(attachment) }
         fun failAfterTransfer(attachment: Long) { failAfterAttachment.set(attachment) }
@@ -5671,6 +5735,14 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
         private val latches = java.util.concurrent.ConcurrentHashMap<Long, CountDownLatch>()
         private val submitted = java.util.concurrent.ConcurrentHashMap<Long, KeyguardOrbBufferProducerFrame>()
         private val expectedAttachments = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+        private val witnessRequest = AtomicLong(-1L)
+        private val witnesses = java.util.Collections.synchronizedList(mutableListOf<KeyguardOrbBufferProducerFrame>())
+        private val witnessOverflow = AtomicInteger(0)
+        fun watch(requestId: Long) { check(witnessRequest.compareAndSet(-1L, requestId)) }
+        fun witnessed(): List<KeyguardOrbBufferProducerFrame> = synchronized(witnesses) {
+            check(witnessOverflow.get() == 0) { "submission witness overflow" }
+            witnesses.toList()
+        }
 
         fun expect(requestId: Long, phase: Float, attachment: Long? = null) {
             check(expectedPhases.putIfAbsent(requestId, phase) == null) { "duplicate request=$requestId" }
@@ -5680,6 +5752,9 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
 
         override fun onSubmitted(frame: KeyguardOrbBufferProducerFrame) {
             val requestId = frame.testRequestId ?: return
+            if (requestId == witnessRequest.get()) synchronized(witnesses) {
+                if (witnesses.size < 1024) witnesses += frame else witnessOverflow.incrementAndGet()
+            }
             if (expectedAttachments[requestId]?.let { it != frame.lease.attachment } == true) return
             val expectedPhase = expectedPhases[requestId] ?: return
             if (kotlin.math.abs(expectedPhase - frame.materialTime.phase) > .0001f) return
