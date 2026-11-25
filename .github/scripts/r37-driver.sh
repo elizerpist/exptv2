@@ -107,6 +107,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
       methods=(r44PerWakeEvidenceSurvivesLightPressure r44PerWakeEvidenceSurvivesFullPressure)
       ;;
+    r44_service)
+      class=com.fluvi.app.lockscreen.KeyguardR44ServiceInstrumentationTest
+      methods=(syntheticPairUsesRealServiceWithCaptureOff syntheticPairUsesRealServiceWithCaptureOn)
+      ;;
     r43_api37)
       class=com.fluvi.app.lockscreen.KeyguardR43Api37BaselineTest
       methods=(ordinaryFirstAndLaterWake)
