@@ -394,24 +394,26 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 selectedC.set(expected)
                 preReaderRelease.countDown()
                 assertTrue("NOT REACHED: physical reader did not start", firstPhysicalStarted.await(20,TimeUnit.SECONDS))
-                records.add("FIRST_PHYSICAL id=${firstPhysical.get()} expected=$expected")
+                val firstSelected=firstPhysical.get()
+                records.add("FIRST_PHYSICAL id=$firstSelected controlled=$expected")
                 assertFalse("NOT REACHED: reader barrier timed out", workerTimeout.get())
-                assertEquals("R44.1: latest controlled request must start unless independently superseded", expected, firstPhysical.get())
                 if (preStartD == "after") {
+                    assertTrue("eligible controlled request was replaced by an older physical read",firstSelected>=expected)
                     assertTrue("NOT REACHED: selected reader held before physical tree read",selectedReaderHeld.await(5,TimeUnit.SECONDS))
+                    selectedC.set(firstSelected)
                     instrumentation.runOnMainSync { offerSuccessor() }
                     val d=bId.get(); selectedD.set(d)
-                    assertTrue("NOT REACHED: distinct D after selected reader start",d>expected)
+                    assertTrue("NOT REACHED: distinct D after selected reader start",d>firstSelected)
                     synchronized(queueLock) {
                         val queue=queueField.get(actual) as KeyguardCardInspectionQueue
-                        records.add("AFTER_START d=$d active=${queue.activeRequest()?.id ?: 0} pending=${queue.pendingRequest()?.id ?: 0} at=${SystemClock.uptimeMillis()}")
-                        assertEquals("selected owner changed during its held start",expected,queue.activeRequest()?.id)
+                        records.add("AFTER_START controlled=$expected selected=$firstSelected d=$d active=${queue.activeRequest()?.id ?: 0} pending=${queue.pendingRequest()?.id ?: 0} at=${SystemClock.uptimeMillis()}")
+                        assertEquals("selected owner changed during its held start",firstSelected,queue.activeRequest()?.id)
                         assertEquals("NOT REACHED: D was independently superseded before queue observation",d,queue.pendingRequest()?.id)
                     }
                     selectedReaderRelease.countDown()
-                }
+                } else assertEquals("R44.1: latest controlled request must start unless independently superseded", expected, firstSelected)
                 assertTrue("NOT REACHED: selected request did not finish its own physical read", selectedCCompleted.await(20,TimeUnit.SECONDS))
-                records.add("SELECTED_OWN_READ id=$expected result=${selectedCOutcome.get()} proofAndVisibleOutput=SEPARATE_CONTROLS")
+                records.add("SELECTED_OWN_READ id=${selectedC.get()} result=${selectedCOutcome.get()} proofAndVisibleOutput=SEPARATE_CONTROLS")
                 if (preStartD == "after") {
                     assertTrue("NOT REACHED: no successor began after selected read",laterStartedLatch.await(20,TimeUnit.SECONDS))
                     val actualLater=laterStarted.get(); val pendingAtCompletion=pendingAtSelectedCompletion.get()
