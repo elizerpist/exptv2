@@ -216,6 +216,8 @@ private class KeyguardOrbPrivacyCover(
     val image: KeyguardOrbPrivacyImage,
 ) {
     val settled = AtomicBoolean(false)
+    var stageCommitted = false
+    var parentArmed = false
     var committed = false
     var visible = false
     var retiring = false
@@ -593,6 +595,7 @@ internal class KeyguardOrbBufferRenderer(
      * used after attachment.  This is observational only: a detached frame
      * remains without a parent layer and is never a visibility grant. */
     private val onDetachedBackendPrepared: (KeyguardOrbBufferLease, Long) -> Unit = { _, _ -> },
+    private val onPrivacyCoverStaged: (KeyguardOrbBufferLease) -> Boolean = { true },
     private val mainHandler: Handler = Handler(Looper.getMainLooper()),
     private val steadyPublicationBarrier: KeyguardOrbSteadyPublicationBarrier =
         KeyguardOrbBufferRendererTestHooks.steadyPublicationBarrier,
@@ -680,6 +683,12 @@ internal class KeyguardOrbBufferRenderer(
         if (!isSupported()) return false
         requireMainThread()
         return api34?.hasVisiblePrivacyCover(attachment) == true
+    }
+
+    fun hasPreparedPrivacyCover(lease: KeyguardOrbBufferLease): Boolean {
+        if (!isSupported()) return false
+        requireMainThread()
+        return api34?.hasPreparedPrivacyCover(lease) == true
     }
 
     /** Main verifies its root and scene before claiming; this checks the
@@ -957,11 +966,8 @@ internal class KeyguardOrbBufferRenderer(
                         } else runCatching { fence?.close() }
                     }).addTransactionCommittedListener(Executor { mainHandler.post(it) }) {
                         if (privacyCover === cover && !cover.retiring && cover.root.isAttachedToWindow) {
-                            cover.committed = true
-                            if (recoveryHook !== NoopKeyguardOrbRecoveryTestHook) runCatching {
-                                recoveryHook.onRetirementEvent(cover.lease, System.identityHashCode(cover.layer),
-                                    "privacy-cover-ready", SystemClock.uptimeMillis())
-                            }
+                            cover.stageCommitted = true
+                            armPrivacyCoverParent(cover)
                         }
                     }
                     applyStarted = true
@@ -995,6 +1001,34 @@ internal class KeyguardOrbBufferRenderer(
             }
         }
 
+        private fun armPrivacyCoverParent(cover: KeyguardOrbPrivacyCover) {
+            if (privacyCover !== cover || cover.retiring || cover.committed || cover.parentArmed ||
+                !cover.stageCommitted || layerLease != cover.lease || desired?.scene?.full != true ||
+                !cover.root.isAttachedToWindow || cover.orb.visibility != View.INVISIBLE) return
+            if (!runCatching { onPrivacyCoverStaged(cover.lease) }.getOrDefault(false)) return
+            val observer = cover.root.viewTreeObserver
+            if (!observer.isAlive) return
+            cover.parentArmed = true
+            val registered = runCatching {
+                observer.registerFrameCommitCallback {
+                    mainHandler.post {
+                        cover.parentArmed = false
+                        if (privacyCover === cover && !cover.retiring && layerLease == cover.lease &&
+                            desired?.scene?.full == true && cover.root.isAttachedToWindow &&
+                            cover.orb.visibility == View.INVISIBLE) {
+                            cover.committed = true
+                            if (recoveryHook !== NoopKeyguardOrbRecoveryTestHook) runCatching {
+                                recoveryHook.onRetirementEvent(cover.lease, System.identityHashCode(cover.layer),
+                                    "privacy-cover-ready", SystemClock.uptimeMillis())
+                            }
+                        }
+                    }
+                }
+                cover.root.invalidate()
+            }
+            if (registered.isFailure) cover.parentArmed = false
+        }
+
         private fun retirePrivacyCover() {
             preparingCover = null
             val cover = privacyCover ?: return
@@ -1007,6 +1041,10 @@ internal class KeyguardOrbBufferRenderer(
 
         fun hasVisiblePrivacyCover(attachmentId: Long): Boolean = privacyCover?.let {
             it.visible && !it.retiring && it.lease.attachment == attachmentId && it.root.isAttachedToWindow
+        } == true
+
+        fun hasPreparedPrivacyCover(lease: KeyguardOrbBufferLease): Boolean = privacyCover?.let {
+            !it.retiring && it.lease == lease && it.root.isAttachedToWindow
         } == true
 
         /** Keep the permitted static cover while the retained parent removes
@@ -1027,17 +1065,18 @@ internal class KeyguardOrbBufferRenderer(
                             attachment !== active || desired?.scene?.full != false ||
                             !ownsFirstPublication(token) || !active.root.isAttachedToWindow) return@post
                         val tx = SurfaceControl.Transaction()
-                        var applyStarted = false
                         try {
                             tx.setVisibility(token.child, true)
                                 .setBuffer(cover.layer, null as HardwareBuffer?)
                                 .setVisibility(cover.layer, false)
                             cover.retiring = true
-                            applyStarted = true
                             tx.apply()
                         } catch (error: Throwable) {
-                            if (!applyStarted) cover.retiring = false
-                            onFailure(token.lease, error)
+                            // Even an ambiguous apply can safely receive a
+                            // later idempotent hide/clear; never close its
+                            // buffer without the genuine release fence.
+                            cover.retiring = false
+                            runCatching { onFailure(token.lease, error) }
                         } finally { runCatching { tx.close() } }
                     }
                 }
@@ -1563,7 +1602,10 @@ internal class KeyguardOrbBufferRenderer(
                                 val delivered = runCatching { onFirstCommitted(token) }
                                     .onFailure { Log.w("FluviOrbFirstHandoff", "first commit delivery failed", it) }
                                 if (delivered.isSuccess && ownsFirstPublication(token)) {
-                                    if (desired?.scene?.full == true) preparePrivacyCover(token)
+                                    if (desired?.scene?.full == true) {
+                                        preparePrivacyCover(token)
+                                        privacyCover?.takeIf { it.lease == token.lease }?.let(::armPrivacyCoverParent)
+                                    }
                                     else if (privacyCover?.visible == true) switchPrivacyCoverAfterParentCommit(token)
                                 }
                             }

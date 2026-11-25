@@ -238,6 +238,13 @@ internal class KeyguardCardMaterialController(
             onPressure = ::onIsolatedOrbPressure,
             onCapacityRestored = ::onIsolatedOrbCapacityRestored,
             onSizeChanged = ::onIsolatedOrbSizeChanged,
+            onPrivacyCoverStaged = { lease ->
+                if (attached && activeOrbLease == lease && latestOrbScene?.full == true &&
+                    attachedRoot?.isAttachedToWindow == true) {
+                    disarmPassiveStandby("privacy-cover-staged")
+                    true
+                } else false
+            },
             barrier = isolatedOrbRenderBarrier,
             frameObserver = isolatedOrbFrameObserver,
             publicationObserver = isolatedOrbPublicationObserver,
@@ -1416,6 +1423,10 @@ internal class KeyguardCardMaterialController(
     }
 
     private fun reconcilePassiveStandby(root: View?, lease: KeyguardOrbBufferLease, scene: KeyguardMaterialScene) {
+        if (isolatedOrbRendererDelegate.isInitialized() && isolatedOrbRenderer.hasPreparedPrivacyCover(lease)) {
+            disarmPassiveStandby("privacy-cover-staged")
+            return
+        }
         val container = root as? KeyguardCardInteractionLayout
         val reason = when {
             !attached || activeAttachment != lease.attachment || root !== attachedRoot -> "OWNER_UNAVAILABLE"
