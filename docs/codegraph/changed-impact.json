@@ -1,20 +1,40 @@
 {
   "schema_version": 1,
-  "source_head": "14e05315520ff3282348838804ff6e004c677d30",
-  "base_head": "5b18235f261df24dcee06cf3050e3e20411612fa",
+  "source_head": "0ec4168240bcc7485763723fe06dc3f260884bb8",
+  "base_head": "78f634da7ca7824449ced806f3423d10bf6b3cf1",
   "changed_files": [
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardInspectionQueue.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR32OverlapPolicy.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR32OverlapPolicyTest.kt"
+    "test/core/debug/keyguard_timing_capture_console_test.dart"
   ],
-  "candidate_changed_symbols": [],
+  "candidate_changed_symbols": [
+    "scip-dart pub fluvi 0.1.0+1 test/core/debug/`keyguard_timing_capture_console_test.dart`/main().",
+    "scip-dart pub fluvi 0.1.0+1 test/core/debug/`keyguard_timing_capture_console_test.dart`/response()."
+  ],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
-  "direct_reference_consumers": [],
-  "affected_test_locations": [],
+  "direct_reference_consumers": [
+    {
+      "file": "test/core/debug/keyguard_timing_capture_console_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 test/core/debug/`keyguard_timing_capture_console_test.dart`/response()."
+      ],
+      "reference_count": 8,
+      "first_line": 44,
+      "first_column": 48,
+      "basis": "scip_reference"
+    }
+  ],
+  "affected_test_locations": [
+    {
+      "file": "test/core/debug/keyguard_timing_capture_console_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 test/core/debug/`keyguard_timing_capture_console_test.dart`/response()."
+      ],
+      "reference_count": 8,
+      "first_line": 44,
+      "first_column": 48,
+      "basis": "scip_reference"
+    }
+  ],
   "affected_production_locations": []
 }
