@@ -60,7 +60,10 @@ internal class KeyguardR44TreeReader(
             val eager = node.extras.getCharSequence(KeyguardR44Markers.EXTRA)
             val eagerMarker = KeyguardR44Markers.exact(eager)
             eagerMarker?.let { markers += it to KeyguardR44Markers.Carrier.EXTRA_EAGER }
-            if (eager != null && eagerMarker == null) { complete = false; unsupported += 1 }
+            if (eager != null && eagerMarker == null) {
+                unsupported += 1
+                if (KeyguardR44Markers.unknownMayRestrict(eager)) complete = false
+            }
             val hasDirectTag = markers.any { it.second == KeyguardR44Markers.Carrier.VIEW_ID &&
                 it.first != KeyguardR44Markers.Marker.DEVICE_ENTRY }
             val hasEagerTag = eager != null
@@ -98,7 +101,10 @@ internal class KeyguardR44TreeReader(
                         if (value == null) { complete = false; failed += 1 }
                         else {
                             val marker = KeyguardR44Markers.exact(value)
-                            if (marker == null) { complete = false; unsupported += 1 }
+                            if (marker == null) {
+                                unsupported += 1
+                                if (KeyguardR44Markers.unknownMayRestrict(value)) complete = false
+                            }
                             else markers += marker to KeyguardR44Markers.Carrier.EXTRA_LAZY
                         }
                     }

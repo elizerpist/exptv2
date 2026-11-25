@@ -269,7 +269,7 @@ class KeyguardR22ReaderHandoffTest {
             val unknown = Platform.node(null)
             checkNotNull(Platform.nodes[unknown]).apply {
                 advertised = true
-                lazyTag = "unrecognised"
+                lazyTag = "overlay:unrecognised"
                 refreshSucceeds = !failure
             }
             checkNotNull(Platform.nodes[host]).children.addAll(listOf(entry, unknown))
@@ -284,6 +284,22 @@ class KeyguardR22ReaderHandoffTest {
             assertEquals(if (failure) 1 else 0, facts.failed)
             assertEquals(if (failure) 0 else 1, facts.unsupported)
         }
+    }
+
+    @Test fun r44InspectedUnrelatedTagIsCountedWithoutBeingARestriction() {
+        val host = Platform.node("element:lockscreen")
+        val entry = Platform.node("com.android.systemui:id/device_entry_icon_view")
+        val unrelated = Platform.node(null)
+        checkNotNull(Platform.nodes[unrelated]).extras.putCharSequence(KeyguardR44Markers.EXTRA, "component:example")
+        checkNotNull(Platform.nodes[host]).children.addAll(listOf(entry, unrelated))
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 1, true, host))
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+            r44Enabled = true, r44DeviceEntryResourceVerified = true), { true })
+        assertEquals(1, read.snapshots.single().r44?.unsupported)
+        assertEquals(true, read.snapshots.single().r44?.complete)
+        assertEquals(KeyguardSurface.MAIN_KEYGUARD, KeyguardR44SurfaceClassifier.classify(
+            read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
     }
 
     private class Handoff {

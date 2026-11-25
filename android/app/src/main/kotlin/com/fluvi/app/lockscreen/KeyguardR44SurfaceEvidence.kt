@@ -28,6 +28,11 @@ internal object KeyguardR44Markers {
         Marker.QUICK_SETTINGS -> "scene:quick_settings"
         else -> null
     }
+
+    /** Unknown names never grant. An unresolved scene/overlay role may
+     * conceal a restriction; ordinary unrelated inspected tags are counted. */
+    fun unknownMayRestrict(value: CharSequence): Boolean =
+        value.startsWith("overlay:") || value.startsWith("scene:")
 }
 
 internal data class KeyguardR44Witness(
