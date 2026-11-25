@@ -27,6 +27,8 @@ class KeyguardR42SignedProfileProbeTest {
         val context = instrumentation.targetContext
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
+        val captureBuildMode = args.getString("captureBuildMode") ?: "debug"
+        require(captureBuildMode == "debug" || captureBuildMode == "profile")
         val run = UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
         val dir = File(context.filesDir, "keyguard-service-probe/r42-profile/$run")
         check(dir.mkdirs())
@@ -139,7 +141,7 @@ class KeyguardR42SignedProfileProbeTest {
                     }
                     !power.isInteractive && keyguard.isKeyguardLocked && !visible
                 }
-                call(diagnostics, "startCapture", context, source, "profile", "LIGHT")
+                call(diagnostics, "startCapture", context, source, captureBuildMode, "LIGHT")
                 capture = true
                 wakeNs = System.nanoTime()
                 shell("input keyevent KEYCODE_WAKEUP")

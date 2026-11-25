@@ -139,7 +139,7 @@ PY
   trial=$(cat /proc/sys/kernel/random/uuid)
   printf '%s\n' "$trial" > "$evidence/motion-trial.txt"
   rc=0
-  timeout -k 5s 300s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$trial" \
+  timeout -k 5s 300s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e runUuid "$trial" -e captureBuildMode profile \
     -e class 'com.fluvi.app.lockscreen.KeyguardR42SignedProfileProbeTest#signedProfileShowsCurrentGrantedOrbAndNaturalMotion' \
     com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$evidence/profile-motion.txt" 2>&1 || rc=$?
   adb exec-out run-as com.fluvi.app tar -cf - "files/keyguard-service-probe/r42-profile/$trial" > "$evidence/profile-motion.tar" 2> "$evidence/profile-motion-tar.stderr" || true
