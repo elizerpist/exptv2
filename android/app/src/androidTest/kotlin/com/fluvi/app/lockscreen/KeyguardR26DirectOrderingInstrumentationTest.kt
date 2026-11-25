@@ -41,9 +41,12 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun orderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true)
     @Test fun warmOrderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true, warmup = true)
     @Test fun readyWorkDoesNotWaitForDiagnosticPublication() = exercise(true, true, warmup = true, checkReport = true)
+    @Test fun systemWarmOrderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true, platformWarm = true)
+    @Test fun systemWarmReadyWorkDoesNotWaitForDiagnosticPublication() = exercise(true, true, checkReport = true, platformWarm = true)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
-    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false) {
+    private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false,
+                         checkReport:Boolean = false, platformWarm:Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -106,6 +109,18 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 FluviKeyguardCardSettings.update(context,mapOf("requested" to true,"showFinancialDetails" to true,"presentationMode" to "orb","animationMode" to "orbOnly"))
                 val epoch=maxOf(SystemClock.elapsedRealtimeNanos(),(prefs[1].second["publisherEpoch"] as? Long ?: -1L)+1L)
                 check(FluviKeyguardMaterialStore.publish(context,KeyguardR12ServiceTimingInstrumentationTest().materialProfile(),epoch))
+            }
+            if (platformWarm) {
+                // Warm only SystemUI before the real service is connected.
+                // Preserve all real DIRECT, ordering and freshness assertions.
+                shell("input keyevent KEYCODE_SLEEP")
+                await("platform warm-up sleeping") { !power.isInteractive && keyguard.isKeyguardLocked }
+                shell("input keyevent KEYCODE_WAKEUP")
+                await("platform warm-up locked wake") { power.isInteractive && keyguard.isKeyguardLocked }
+                File(dir, "platform-warm-windows.txt").writeText(shell("dumpsys window windows"))
+                shell("input keyevent KEYCODE_SLEEP")
+                await("platform warm-up withdrawal") { !power.isInteractive && keyguard.isKeyguardLocked }
+                check(!FluviKeyguardCardServiceRegistry.connected)
             }
             KeyguardCardDiagnostics.startCapture(context,source,"debug","LIGHT"); capture=true
             secure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,listOf(other,component.flattenToString()).filter(String::isNotBlank).joinToString(":"))

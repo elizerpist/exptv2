@@ -43,6 +43,19 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     private lateinit var automation: UiAutomation
 
     @Test fun stableInitialFullUsesOneVirginOutputWithoutReadinessRead() = runService(false)
+    @Test fun r40HeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() = runService(false, null, true)
+    @Test fun r41WarmHeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() = runService(false, null, true, true)
+    @Test fun r41PreparedRouteHeldOptionalWorkDoesNotBlockFirstCorrectOrbAndUnlock() =
+        runService(false, null, true, true, false, true)
+    @Test fun r41SystemWarmFreshServiceKeepsVisualAndUnlockControls() =
+        runService(false, null, true, false, false, false, true)
+    @Test fun r41SystemWarmBenignIngressBeforeRealMainAck() =
+        runService(false, false, false, false, false, false, true)
+    @Test fun r41SystemWarmExclusionBeforeRealMainAck() =
+        runService(false, true, false, false, false, false, true)
+    @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
+    @Test fun r41ActualWarmFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, true, true)
+    @Test fun r41TwentyUnheldWakeAttempts() = runNaturalWakeBatch()
     @Test fun externalIngressWhileFirstPaintIsHeldCannotUseOldProof() = runService(true)
     @Test fun r21SubmittedDirectOrbSurvivesBenignIngressBeforeMainAck() = runService(false, false)
     @Test fun r21ExclusionRetiresSubmittedOrbWithMainAckHeld() = runService(false, true)
@@ -61,13 +74,138 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
     @Test fun r22StableOpeningReadIsNotYielded() = KeyguardR22FirstInspectionFixture().run("stable")
     @Test fun r22UnstagedOpeningObservation() = KeyguardR22FirstInspectionFixture().run("natural")
 
-    private fun runService(changeScene: Boolean, r21Negative: Boolean? = null) {
+    /** Unheld disposable-device observation, not a privacy or latency pass.
+     * Every attempted wake has a separate frozen report, including timeouts.
+     * The test callback observes a canvas post, which can still be hidden. */
+    private fun runNaturalWakeBatch() {
+        assertEquals(35, Build.VERSION.SDK_INT)
+        val args = InstrumentationRegistry.getArguments()
+        val source = requireNotNull(args.getString("sourceSha"))
+        require(source.matches(Regex("[0-9a-f]{40}")))
+        val run = UUID.fromString(requireNotNull(args.getString("runUuid"))).toString()
+        val dir = File(context.filesDir, "keyguard-service-probe/r19/$run/r41-natural")
+        check(dir.mkdirs())
+        automation = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        val resolver = context.contentResolver
+        val savedServices = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        val savedEnabled = Settings.Secure.getString(resolver, Settings.Secure.ACCESSIBILITY_ENABLED)
+        val savedLock = shell("locksettings get-disabled").trim()
+        val savedSettings = preferences("fluvi_native_keyguard_card")
+        val savedMaterial = preferences("fluvi_keyguard_header_material")
+        val savedMode = preferences("fluvi_keyguard_orb_diagnostic_route")
+        val component = ComponentName(context, FluviKeyguardCardService::class.java)
+        val other = savedServices.orEmpty().split(':').filter {
+            it.isNotBlank() && ComponentName.unflattenFromString(it) != component
+        }.joinToString(":")
+        val keyguard = context.getSystemService(KeyguardManager::class.java)
+        val power = context.getSystemService(PowerManager::class.java)
+        val postLatch = AtomicReference<CountDownLatch?>()
+        val firstPostNs = AtomicLong(0)
+        val lastPostAttachment = AtomicLong(0)
+        val lastPostGeneration = AtomicLong(0)
+        val savedPost = KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost
+        val rows = mutableListOf<String>()
+        val errors = mutableListOf<String>()
+        var capture = false
+        try {
+            check(!FluviKeyguardCardServiceRegistry.connected && !keyguard.isDeviceSecure)
+            check(savedLock == "true" || savedLock == "false")
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, other)
+            shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard")
+            await("unlocked setup", 8_000) { power.isInteractive && !keyguard.isKeyguardLocked }
+            shell("locksettings set-disabled false")
+            check(context.getSharedPreferences("fluvi_keyguard_orb_diagnostic_route", Context.MODE_PRIVATE)
+                .edit().putString("mode", "SURFACE_LIVE").commit())
+            instrumentation.runOnMainSync {
+                FluviKeyguardCardSettings.update(context, mapOf("requested" to true, "showFinancialDetails" to true,
+                    "presentationMode" to "orb", "animationMode" to "orbOnly"))
+                val epoch = maxOf(SystemClock.elapsedRealtimeNanos(),
+                    (savedMaterial.second["publisherEpoch"] as? Long ?: -1L) + 1L)
+                check(FluviKeyguardMaterialStore.publish(context, KeyguardR12ServiceTimingInstrumentationTest().materialProfile(), epoch))
+            }
+            setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                listOf(other, component.flattenToString()).filter(String::isNotBlank).joinToString(":"))
+            setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
+            await("actual service connected", 10_000) { FluviKeyguardCardServiceRegistry.connected }
+            val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
+            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = { target ->
+                val latch = postLatch.get()
+                // A late callback from the preceding wake must never satisfy
+                // the next trial. This is test observation only; it does not
+                // supply or change the application's presentation authority.
+                if (latch != null && target.attachment > 0 && target.full && !target.revoked &&
+                    (target.attachment != lastPostAttachment.get() || target.generation != lastPostGeneration.get()) &&
+                    firstPostNs.compareAndSet(0, System.nanoTime())) {
+                    lastPostAttachment.set(target.attachment)
+                    lastPostGeneration.set(target.generation)
+                    latch.countDown()
+                }
+                savedPost?.invoke(target)
+            }
+            repeat(20) { index ->
+                shell("input keyevent KEYCODE_SLEEP")
+                await("sleep, keyguard and old window withdrawal ${index + 1}", 8_000) {
+                    var visible = true
+                    instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
+                    !power.isInteractive && keyguard.isKeyguardLocked && !visible
+                }
+                KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT"); capture = true
+                firstPostNs.set(0)
+                val latch = CountDownLatch(1)
+                postLatch.set(latch)
+                val wakeCommandNs = System.nanoTime()
+                shell("input keyevent KEYCODE_WAKEUP")
+                val posted = latch.await(7, TimeUnit.SECONDS)
+                var visible = false
+                if (posted) runCatching {
+                    await("service visible ${index + 1}", 3_000) {
+                        instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
+                        visible && power.isInteractive && keyguard.isKeyguardLocked
+                    }
+                }
+                postLatch.set(null)
+                val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+                capture = false
+                File(dir, "capture-${index + 1}.txt").writeText(report)
+                rows.add("trial=${index + 1} class=${if (index == 0) "fresh-service" else "warm"} " +
+                    "commandNs=$wakeCommandNs workerPostNs=${firstPostNs.get().takeIf { it > 0 } ?: "UNOBSERVED"} " +
+                    "workerPost=$posted attachment=${if (posted) lastPostAttachment.get() else "UNOBSERVED"} " +
+                    "generation=${if (posted) lastPostGeneration.get() else "UNOBSERVED"} " +
+                    "visible=$visible optical=UNOBSERVED verdict=INCOMPLETE")
+                File(dir, "trials.txt").writeText(rows.joinToString("\n", postfix = "\n"))
+            }
+        } catch (error: Throwable) {
+            errors.add("${error.javaClass.simpleName}:${error.message}")
+        } finally {
+            postLatch.set(null)
+            KeyguardOrbSurfaceWorkerTestHooks.afterCanvasPost = savedPost
+            if (capture) runCatching { File(dir, "interrupted.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"] as String) }
+            runCatching {
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, other)
+                await("service disconnected", 10_000) { !FluviKeyguardCardServiceRegistry.connected }
+                restore(savedSettings); restore(savedMaterial); restore(savedMode)
+                shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard")
+                if (savedLock == "true" || savedLock == "false") shell("locksettings set-disabled $savedLock")
+                setSecure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices)
+                setSecure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
+            }.onFailure { errors.add("cleanup:${it.javaClass.simpleName}:${it.message}") }
+            File(dir, "result.txt").writeText("source=$source attempts=${rows.size} errors=${errors.joinToString("|")} " +
+                "canvasPostIsNotVisiblePixel=true observerMainPollingAfterPost=true physical=UNOBSERVED\n")
+        }
+        assertEquals("natural batch interrupted: $errors", 20, rows.size)
+        assertTrue("natural batch cleanup failed: $errors", errors.isEmpty())
+    }
+
+    private fun runService(changeScene: Boolean, r21Negative: Boolean? = null, r40: Boolean = false,
+                           r41Warm: Boolean = false, r41Fallback: Boolean = false,
+                           r41WaitForPreparedRoute: Boolean = false,
+                           r41WarmSystemBeforeService: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
         require(source.matches(Regex("[0-9a-f]{40}")))
         val run = args.getString("runUuid")?.let { UUID.fromString(it).toString() } ?: UUID.randomUUID().toString()
-        val specimen = if (r21Negative == null) { if (changeScene) "changed" else "stable" }
+        val specimen = if (r41Fallback) "r41-fallback" else if (r21Negative == null) { if (changeScene) "changed" else "stable" }
             else if (r21Negative) "r21-negative" else "r21-positive"
         val dir = File(context.filesDir, "keyguard-service-probe/r19/$run/$specimen")
         check(!dir.exists() && dir.mkdirs())
@@ -101,6 +239,13 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         val negativeFinished = CountDownLatch(1)
         val negativeResult = AtomicReference<String?>()
         val savedDispatcher = KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone
+        val savedCross = KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross
+        val r40Calls = java.util.concurrent.atomic.AtomicInteger()
+        val r41WarmReady = AtomicBoolean(!r41Warm)
+        val callsAtFirstCross = java.util.concurrent.atomic.AtomicInteger(-1)
+        val r40Started = CountDownLatch(1)
+        val r40Release = CountDownLatch(1)
+        var r40Visual: KeyguardR22VisualCalibration? = null
         var captureStarted = false
         var report: String? = null
         val errors = mutableListOf<String>()
@@ -123,6 +268,36 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 val epoch = maxOf(SystemClock.elapsedRealtimeNanos(), (savedMaterial.second["publisherEpoch"] as? Long ?: -1L) + 1L)
                 check(FluviKeyguardMaterialStore.publish(context, KeyguardR12ServiceTimingInstrumentationTest().materialProfile(), epoch))
             }
+            if (r40) {
+                r40Visual = KeyguardR22VisualCalibration(instrumentation, dir, automation).also { it.calibrate() }
+                // The first trial showed the calibration Activity's actual
+                // window persisted until the sleep/wake transition. Wait for
+                // its platform removal; never substitute an app decision.
+                shell("input keyevent KEYCODE_HOME")
+                await("calibration Activity window removed before service wake", 12_000) {
+                    !shell("dumpsys window windows").contains("KeyguardMaterialTestActivity")
+                }
+                File(dir, "r40-before-service-windows.txt").writeText(shell("dumpsys window windows"))
+                KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = KeyguardR22VisualCalibration.timeA
+                KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = { output ->
+                    if (r41WarmReady.get()) callsAtFirstCross.compareAndSet(-1, r40Calls.get())
+                    savedCross?.invoke(output)
+                }
+            }
+            if (r41WarmSystemBeforeService) {
+                // Warm only the platform keyguard while Fluvi's service is
+                // still disconnected. The subsequent test starts the real
+                // service from fresh state and keeps every original visual,
+                // admission and unlock assertion unchanged.
+                shell("input keyevent KEYCODE_SLEEP")
+                await("platform warm-up sleeping", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+                shell("input keyevent KEYCODE_WAKEUP")
+                await("platform warm-up locked wake", 8_000) { power.isInteractive && keyguard.isKeyguardLocked }
+                File(dir, "r41-platform-warm-windows.txt").writeText(shell("dumpsys window windows"))
+                shell("input keyevent KEYCODE_SLEEP")
+                await("platform warm-up withdrawal", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+                check(!FluviKeyguardCardServiceRegistry.connected)
+            }
             KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT")
             captureStarted = true
             if (changeScene) KeyguardOrbSurfaceWorkerTestHooks.afterCanvasLock = { target ->
@@ -138,6 +313,14 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
             val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
             instrumentation.runOnMainSync {
                 service.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
+                    override fun r40ProvenanceStarted(request: KeyguardCardInspectionRequest) {
+                        if (r40 && r41WarmReady.get()) {
+                            r40Calls.incrementAndGet()
+                            reads.add("R40_OPTIONAL_STARTED id=${request.id} at=${SystemClock.uptimeMillis()}")
+                            r40Started.countDown()
+                            r40Release.await(20, TimeUnit.SECONDS)
+                        }
+                    }
                     override fun started(request: KeyguardCardInspectionRequest) {
                         reads.add("start id=${request.id} trigger=${request.trigger} wake=${request.wakeGeneration}")
                         if (request.id == injectedRequest.get() && request.id != 0L) secondRead.countDown()
@@ -170,8 +353,61 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                     else Handler(Looper.getMainLooper()).post(task)
                 }
             }
+            if (r41Warm) {
+                // Record the complete warm-up separately. The actual safety
+                // trial below retains every original assertion and threshold.
+                shell("input keyevent KEYCODE_SLEEP")
+                await("warm-up sleeping", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+                shell("input keyevent KEYCODE_WAKEUP")
+                val postedAndMoving = Regex(" winner=(?!R18_DIRECT_ATTEMPT/)[A-Z0-9_]+/[0-9]+/[0-9]+(?: |$)")
+                await("warm-up first post and distinct motion", 20_000) {
+                    val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                    power.isInteractive && keyguard.isKeyguardLocked && text.lineSequence().any {
+                        it.startsWith(" R21_CORE ") && postedAndMoving.containsMatchIn(it)
+                    }
+                }
+                File(dir, "r41-warm-up.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"] as String)
+                File(dir, "r41-warm-up-reads.txt").writeText(synchronized(reads) { reads.joinToString("\n", postfix = "\n") })
+                shell("input keyevent KEYCODE_SLEEP")
+                await("warm-up withdrawal", 8_000) {
+                    var visible = true
+                    instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
+                    !power.isInteractive && keyguard.isKeyguardLocked && !visible
+                }
+                synchronized(reads) { reads.clear() }
+                KeyguardCardDiagnostics.startCapture(context, source, "debug", "LIGHT")
+                r41WarmReady.set(true)
+            }
             shell("input keyevent KEYCODE_SLEEP")
             await("sleep and keyguard", 8_000) { !power.isInteractive && keyguard.isKeyguardLocked }
+            if (r41WaitForPreparedRoute) {
+                // Safety fixture precondition only: observe the real detached
+                // route. Do not prepare it, change visibility or manufacture a
+                // reservation. A timeout is NOT REACHED, not a product pass.
+                val lock = service.javaClass.getDeclaredField("queueLock").apply { isAccessible = true }.get(service)
+                val route = service.javaClass.getDeclaredField("r18RouteSnapshot").apply { isAccessible = true }
+                val enabled = service.javaClass.getDeclaredField("r18RouteEnabled").apply { isAccessible = true }
+                val active = service.javaClass.getDeclaredField("r18Active").apply { isAccessible = true }
+                val provisional = service.javaClass.getDeclaredField("r18ProvisionalWake").apply { isAccessible = true }
+                val wakeOpen = service.javaClass.getDeclaredField("r18WakeOpen").apply { isAccessible = true }
+                var observed = "UNOBSERVED"
+                try {
+                    await("NOT REACHED: real detached prepared DIRECT route", 15_000) {
+                        val ready = synchronized(lock) {
+                            val hasRoute = route.get(service) != null
+                            val isEnabled = enabled.getBoolean(service)
+                            val activeOwner = active.get(service) != null
+                            val pendingOwner = provisional.get(service) != null
+                            val isWakeOpen = wakeOpen.getBoolean(service)
+                            observed = "route=$hasRoute enabled=$isEnabled active=$activeOwner provisional=$pendingOwner wakeOpen=$isWakeOpen"
+                            hasRoute && isEnabled && !activeOwner && !pendingOwner && !isWakeOpen
+                        }
+                        ready && !power.isInteractive && keyguard.isKeyguardLocked
+                    }
+                } finally {
+                    File(dir, "r41-prewake-route.txt").writeText("$observed\n")
+                }
+            }
             shell("input keyevent KEYCODE_WAKEUP")
             await("locked wake", 5_000) { power.isInteractive && keyguard.isKeyguardLocked }
             if (r21Negative != null) {
@@ -252,6 +488,28 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 saveScreenshot(File(dir, "02-held-after-ingress.png"))
                 releasePaint.countDown()
             }
+            if (r41Fallback) {
+                var fallbackAttempt: String? = null
+                val posted = Regex(" winner=SURFACE_LIVE/[0-9]+/[0-9]+(?: |$)")
+                await("actual fallback post and distinct motion", 20_000) {
+                    val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                    fallbackAttempt = text.lineSequence().firstOrNull {
+                        it.startsWith(" R21_CORE ") && posted.containsMatchIn(it)
+                    }?.substringAfter("attempt=")?.substringBefore(' ')
+                    fallbackAttempt != null
+                }
+                report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+                File(dir, "capture.txt").writeText(checkNotNull(report))
+                val core = checkNotNull(report).lineSequence().firstOrNull {
+                    it.startsWith(" R41_CORE attempt=${checkNotNull(fallbackAttempt)} ")
+                }
+                assertNotNull("actual fallback attempt has no compact R41 row", core)
+                val fallbackCore = checkNotNull(core)
+                assertTrue("actual fallback candidate and same-show post receipt were not both retained: $core",
+                    !fallbackCore.contains("fallbackCandidateAndPostReceipt=UNOBSERVED"))
+                assertTrue("fallback observation must not be mislabelled as an effective grant: $core",
+                    fallbackCore.contains("fallbackGrant=UNOBSERVED"))
+            } else {
             if (r21Negative != true) await("actual service window", 20_000) {
                 var visible = false
                 instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
@@ -263,6 +521,36 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
                 text.lineSequence().any { it.startsWith(" R18_PIPELINE ") &&
                     !it.contains("revealApply=UNOBSERVED/") && !it.contains("bufferReady=UNOBSERVED") }
+            }
+            if (r40) {
+                assertEquals("first native boundary must precede any optional provenance work", 0, callsAtFirstCross.get())
+                var identity: KeyguardR22VisualIdentityForTest? = null
+                await("exact visible native owner with geometry", 8_000) {
+                    instrumentation.runOnMainSync { identity = service.r22VisualIdentityForTest() }
+                    identity != null
+                }
+                val visual = checkNotNull(r40Visual)
+                val crop = visual.captureCrop("r40-first-full", checkNotNull(identity).bounds)
+                assertTrue("NOT REACHED: compositor crop did not match the calibrated configured FULL orb",
+                    KeyguardR22VisualCalibration.compare(visual.a, crop).nearlyEqual())
+                if (r40Started.count > 0) instrumentation.runOnMainSync {
+                    val at = SystemClock.uptimeMillis()
+                    service.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
+                        AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, -1, Display.DEFAULT_DISPLAY, 0,
+                        "com.android.systemui", at))
+                }
+                assertTrue("NOT REACHED: subsequent real reader did not enter optional work", r40Started.await(10, TimeUnit.SECONDS))
+                // While the single reader remains held, unlock must still flow
+                // through the ordinary negative system/visibility owner.
+                shell("wm dismiss-keyguard")
+                await("unlock while optional read held", 10_000) { power.isInteractive && !keyguard.isKeyguardLocked }
+                await("ordinary privacy withdrawal while optional read held", 10_000) {
+                    var visible = true
+                    instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
+                    !visible
+                }
+                visual.captureCrop("r40-after-unlock", checkNotNull(identity).bounds)
+                r40Release.countDown()
             }
             saveScreenshot(File(dir, "03-visible-unclassified.png"))
             report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
@@ -290,9 +578,14 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 assertTrue("old proof was consumed after external ingress", consumed > initial)
                 assertTrue("consumed proof predates the injected event's real request", consumed >= injectedRequest.get())
             }
+            }
         } catch (error: Throwable) {
             errors += "${error.javaClass.simpleName}:${error.message}"
         } finally {
+            r40Release.countDown()
+            KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross = savedCross
+            KeyguardOrbSurfaceWorkerTestHooks.fixedMaterialTime = null
+            runCatching { r40Visual?.close() }
             KeyguardOrbSurfaceWorkerTestHooks.dispatchRevealDone = savedDispatcher
             acknowledgement.getAndSet(null)?.let { task -> Handler(Looper.getMainLooper()).post(task) }
             releasePaint.countDown()
