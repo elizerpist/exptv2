@@ -39,3 +39,11 @@ internal object KeyguardCardEventGate {
         eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
         eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
 }
+
+/** API 37 unknown external surface changes are not a fresh presentation grant.
+ * Withdraw visible content before a potentially blocking inspection. */
+internal object KeyguardR441RestrictionIngress {
+    fun mustWithdraw(api: Int, event: KeyguardAccessibilityEventMeta, ownWindow: Boolean, attached: Boolean): Boolean =
+        api >= 37 && attached && !ownWindow && (event.displayId == 0 || event.displayId < 0) &&
+            KeyguardCardEventGate.isSurfaceEvent(event.eventType)
+}

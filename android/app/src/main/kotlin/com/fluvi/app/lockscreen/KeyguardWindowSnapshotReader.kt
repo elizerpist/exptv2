@@ -860,6 +860,7 @@ internal class KeyguardWindowSnapshotReader(
                 KeyguardR44Markers.exact(id)?.let(KeyguardR44Markers::exclusion) != null
             if (!decisiveReported && (KeyguardSurfaceClassifier.isDecisiveExclusionMarker(id) || r44Restriction) && authorityIsCurrent()) {
                 decisiveReported = true
+                r44Window?.restrictionObserved()
                 if (timing.captureOpening) timing.decisiveMarker = true
                 if (onDecisiveSystemMarker != null) runCatching { onDecisiveSystemMarker() }
             }

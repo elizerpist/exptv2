@@ -789,6 +789,8 @@ internal object KeyguardCardDiagnostics {
         var screenOnReceivedAtUptimeMs: Long? = null,
         val r44Reads: ArrayDeque<KeyguardR44ReadObservation> = ArrayDeque(),
         var r44Last: KeyguardR44ReadObservation? = null,
+        var r44FirstGrant: KeyguardR44ReadObservation? = null,
+        var r44FirstRestriction: KeyguardR44ReadObservation? = null,
         var r44ReadsOmitted: Int = 0,
         var firstExclusionSignalAtUptimeMs: Long? = null,
         var firstExclusionSignalSource: String? = null,
@@ -1681,6 +1683,12 @@ internal object KeyguardCardDiagnostics {
                     return@synchronized
                 }
                 if (attempt.r44Reads.any { it.request == observation.request }) return@synchronized
+                if (!observation.stale && !observation.unavailable && !observation.truncated &&
+                    observation.verdict == KeyguardSurface.MAIN_KEYGUARD && attempt.r44FirstGrant == null)
+                    attempt.r44FirstGrant = observation
+                if (!observation.stale && observation.verdict in setOf(
+                        KeyguardSurface.CREDENTIAL, KeyguardSurface.SHADE, KeyguardSurface.OCCLUDED) &&
+                    attempt.r44FirstRestriction == null) attempt.r44FirstRestriction = observation
                 if (attempt.r44Reads.size < 12) attempt.r44Reads.addLast(observation)
                 else { attempt.r44ReadsOmitted += 1; attempt.r44Last = observation }
             }
@@ -3524,10 +3532,17 @@ internal object KeyguardCardDiagnostics {
             appendLine("R44_READ kind=$kind wake=${attempt.wakeEpoch} req=${read.request} epoch=${read.epoch} scene=${read.scene ?: "UNOBSERVED"} start=${read.start} end=${read.end} owner=${if (read.hostVerified) "verified" else "rejected"} hostWin=${read.hostWindow ?: "UNOBSERVED"} hostLayer=${read.hostLayer ?: "UNOBSERVED"} complete=${read.coverageComplete} legacy=${read.legacy} host=${host?.marker ?: "none"}/${host?.carrier ?: "none"} content=${content?.marker ?: "none"}/${content?.carrier ?: "none"} relation=${if (read.relation) "descendant" else "unknown"} extra=${read.advertised}/${read.fetched}/${read.failed} unsupported=${read.unsupported} budgetHit=${read.budgetHit} extraMs=${read.extraMs} stale=${read.stale} unavailable=${read.unavailable} truncated=${read.truncated}")
             appendLine("R44_DECISION wake=${attempt.wakeEpoch} req=${read.request} mode=${if (read.synthetic) "syntheticTrial" else "normal"} testProbeInjected=${read.testProbeInjected} verdict=${read.verdict} reason=${read.reason}")
         }
-        pre?.let { line("pre", it) }
         post?.let { line("firstPost", it) }
-        change?.let { line("change", it) }
-        if (last != null && last.request != pre?.request && last.request != post?.request && last.request != change?.request) line("last", last)
+        val emitted = mutableSetOf<Long>()
+        post?.let { emitted.add(it.request) }
+        fun unique(kind: String, read: KeyguardR44ReadObservation?) {
+            if (read != null && emitted.add(read.request)) line(kind, read)
+        }
+        unique("firstGrant", attempt.r44FirstGrant)
+        unique("firstRestriction", attempt.r44FirstRestriction)
+        unique("pre", pre)
+        unique("change", change)
+        unique("last", last)
         appendLine("R44_END wake=${attempt.wakeEpoch} last=${attempt.finalState} grant=${show?.decisionAtUptimeMs ?: "UNOBSERVED"} attach=${show?.addReturnAtUptimeMs ?: "UNOBSERVED"} post=${show?.r12Evidence?.get("firstPost") ?: "UNOBSERVED"} postDelivery=${show?.r12Evidence?.get("firstPostMain") ?: "UNOBSERVED"} ack=${show?.r11Evidence?.get("ack") ?: "UNOBSERVED"} remove=${hide?.removeReturnAtUptimeMs ?: "UNOBSERVED"} physicalPixels=UNOBSERVED")
     }
 

@@ -50,6 +50,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                     true, true, 1, 1, 0, 0, false, 2))
             record(base + 1, base + 10, KeyguardSurface.UNKNOWN)
             record(base + 2, base + 21, KeyguardSurface.MAIN_KEYGUARD)
+            repeat(16) { n -> record(base + 300 + n, base + 60 + n, KeyguardSurface.UNKNOWN) }
+            record(base + 400, base + 90, KeyguardSurface.SHADE)
+            record(base + 401, base + 95, KeyguardSurface.UNKNOWN)
             val show = KeyguardCardDiagnostics.newShowOperation(owner, wake + 10, base + 2)
             KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "test", operation = show,
                 observedUptimeMs = base + 30)
@@ -63,6 +66,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             val row = report.lineSequence().single { it.startsWith("R44_WAKE ") && it.contains("wake=$wake ") }
             assertTrue(row, row.contains("screenOn=${wake * 1000 + 20}"))
             assertTrue(row, row.contains("firstPostRead=${wake * 1000 + 2}"))
+            assertTrue(report, report.contains("kind=firstRestriction wake=$wake req=${wake * 1000 + 400} "))
         }
         assertEquals(6, report.lineSequence().count { it.startsWith("R44_HU ") })
         assertTrue(report.contains("physicalPixels=UNOBSERVED"))

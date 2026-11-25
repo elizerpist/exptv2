@@ -6,9 +6,23 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 /** One budget is shared by every window in a physical inspection. */
 internal class KeyguardR44ExtraBudget {
+    companion object { const val MAX_CALLS = 4; const val MAX_ELAPSED_MS = 50L }
     var fetched = 0
     var budgetHit = false
     var elapsedMs = 0L
+    var restrictionObserved = false
+
+    /** A synchronous platform IPC already in progress cannot be preempted.
+     * This limits additional optional IPC after it returns. */
+    fun reserve(): Boolean {
+        if (restrictionObserved) return false
+        if (fetched >= MAX_CALLS || elapsedMs >= MAX_ELAPSED_MS) {
+            budgetHit = true
+            return false
+        }
+        fetched += 1
+        return true
+    }
 }
 
 /** Worker-owned; finished snapshots contain only fixed enums and scalars. */
@@ -33,6 +47,8 @@ internal class KeyguardR44TreeReader(
 
     data class NodeResult(val hostAncestor: Int?, val excluded: Boolean, val exclusions: List<String>)
 
+    fun restrictionObserved() { budget.restrictionObserved = true }
+
     fun readNode(
         node: AccessibilityNodeInfo,
         expectedParent: AccessibilityNodeInfo?,
@@ -55,7 +71,13 @@ internal class KeyguardR44TreeReader(
             return NodeResult(ancestor, true, emptyList())
         }
         val markers = ArrayList<Pair<KeyguardR44Markers.Marker, KeyguardR44Markers.Carrier>>(2)
-        KeyguardR44Markers.exact(viewId)?.let { markers += it to KeyguardR44Markers.Carrier.VIEW_ID }
+        val directMarker = KeyguardR44Markers.exact(viewId)
+        directMarker?.let { markers += it to KeyguardR44Markers.Carrier.VIEW_ID }
+        if (viewId != null && directMarker == null &&
+            KeyguardR44Markers.unknownMayRestrict(viewId, ancestor != null)) {
+            unsupported += 1
+            complete = false
+        }
         try {
             val eager = node.extras.getCharSequence(KeyguardR44Markers.EXTRA)
             val eagerMarker = KeyguardR44Markers.exact(eager)
@@ -68,14 +90,17 @@ internal class KeyguardR44TreeReader(
             val hasDirectTag = markers.any { it.second == KeyguardR44Markers.Carrier.VIEW_ID &&
                 it.first != KeyguardR44Markers.Marker.DEVICE_ENTRY }
             val hasEagerTag = eager != null
-            if (!hasDirectTag && !hasEagerTag && node.availableExtraData.contains(KeyguardR44Markers.EXTRA)) {
+            val knownRestriction = markers.any { KeyguardR44Markers.exclusion(it.first) != null }
+            if (knownRestriction) restrictionObserved()
+            if (!excludedAncestor && !budget.restrictionObserved && !hasDirectTag && !hasEagerTag &&
+                node.availableExtraData.contains(KeyguardR44Markers.EXTRA)) {
                 advertised += 1
-                if (budget.fetched >= 4) {
+                if (!authorityIsCurrent()) {
+                    complete = false
+                } else if (!budget.reserve()) {
                     complete = false
                     budgetHit = true
-                    budget.budgetHit = true
-                } else if (authorityIsCurrent()) {
-                    budget.fetched += 1
+                } else {
                     fetched += 1
                     val begin = SystemClock.uptimeMillis()
                     val refreshed = try { node.refreshWithExtraData(KeyguardR44Markers.EXTRA, Bundle()) }
@@ -110,7 +135,7 @@ internal class KeyguardR44TreeReader(
                             else markers += marker to KeyguardR44Markers.Carrier.EXTRA_LAZY
                         }
                     }
-                } else complete = false
+                }
             }
         } catch (_: Exception) {
             complete = false

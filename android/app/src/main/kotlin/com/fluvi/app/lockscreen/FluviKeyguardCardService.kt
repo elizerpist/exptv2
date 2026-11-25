@@ -2041,6 +2041,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         val own = ::overlay.isInitialized && overlay.isOwnAccessibilityWindow(meta.windowId, meta.displayId)
         val r14Origin = KeyguardR14IngressClassifier.classify(meta, own)
         val action = KeyguardCardEventGate.decide(meta, own)
+        if (KeyguardR441RestrictionIngress.mustWithdraw(Build.VERSION.SDK_INT, meta, own,
+                ::overlay.isInitialized && overlay.isAttached)) {
+            // The existing owner is withdrawn before any optional lazy-extra
+            // IPC. A new read must independently regain current authority.
+            hideImmediately("r441UnresolvedSurfaceChange", terminalWake = false,
+                awaitingSurfaceWithdrawal = true, triggerReceivedUptimeMs = callbackReceivedAt)
+        }
         // No witness means ordinary reconciliation remains entirely in charge.
         // A matched framework event seals the exact owner before Main work.
         if (r40RemovalGate.hasWitness && frameworkEvent &&
