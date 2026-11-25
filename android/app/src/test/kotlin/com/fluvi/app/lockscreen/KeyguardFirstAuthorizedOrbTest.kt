@@ -25,6 +25,22 @@ class KeyguardFirstAuthorizedOrbTest {
         assertFalse(owner.isUnclaimedReadCurrent(2, null))
     }
 
+    @Test fun `obsolete positive cannot become successor permission after repeated ingress`() {
+        val owner = KeyguardFirstAuthorizedOrb()
+        owner.requireRead(135)
+        val oldScene = owner.sceneSerial()
+        owner.readCompleted(135)
+        repeat(3) { owner.externalIngress() }
+        owner.requireRead(139)
+        assertFalse(owner.isUnclaimedReadCurrent(135, oldScene))
+        assertNull(proof(owner, 135, oldScene))
+        assertNull(owner.current())
+        owner.readCompleted(139)
+        val fresh = requireNotNull(proof(owner, 139, owner.sceneSerial()))
+        assertEquals(139L, fresh.requestId)
+        assertTrue(owner.isCurrent(fresh))
+    }
+
     @Test fun preferenceIsIntentAndDoesNotAuthorizePaint() {
         assertEquals(KeyguardFirstAuthorizedOrb.Intent.EMPTY_AWAITING_DISCLOSURE,
             KeyguardFirstAuthorizedOrb.intent(true))

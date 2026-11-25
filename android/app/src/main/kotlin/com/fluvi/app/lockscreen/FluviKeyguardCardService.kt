@@ -2668,7 +2668,12 @@ class FluviKeyguardCardService : AccessibilityService() {
         // Frozen for the lifetime of this physical read. It selects queue
         // ordering only; current scene and disclosure are still checked on Main.
         val r38MilestoneOrdered: Boolean,
-    )
+        val r42ReadOwner: R32DirectSnapshot?,
+    ) {
+        // Main sets this only after all mandatory restriction checks. The
+        // worker uses it solely to recover if the promised successor vanished.
+        var r42SuppressedPositive = false
+    }
 
     private sealed interface InspectionOutcome {
         data class Completed(val inspection: Inspection) : InspectionOutcome
@@ -2773,8 +2778,10 @@ class FluviKeyguardCardService : AccessibilityService() {
                 R40Read(visibleOwner, identity, visibleBinding, inspectionAuthority, firstAuthorizedOrb.sceneSerial())
             else null
         } else null
+        var r42ReadOwner: R32DirectSnapshot? = null
         val r38MilestoneOrdered = synchronized(queueLock) {
-            r34EmptyDirectLocked(request) != null || r37EarlyStampLocked(request) != null
+            r42ReadOwner = r34EmptyDirectLocked(request)
+            r42ReadOwner != null || r37EarlyStampLocked(request) != null
         }
         val concurrent = activeInspectionCount.incrementAndGet()
         recordMaximum(maximumConcurrentInspections, concurrent)
@@ -2890,7 +2897,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         inspectionProbeForTest?.readCompleted(request, inspection.decision, inspection.surfaceReason,
             inspection.rootUnavailable, inspection.walkTruncated, inspection.abortedStale, started, finished)
-        return PhysicalReadOutcome.Completed(CompletedInspection(request, inspection, started, finished, r38MilestoneOrdered))
+        return PhysicalReadOutcome.Completed(CompletedInspection(request, inspection, started, finished,
+            r38MilestoneOrdered, r42ReadOwner))
     }
 
     private fun newInspectionHandoff(): InspectionHandoff {
@@ -3084,6 +3092,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             mainHandoffRequestedAtNs = handoff.requestedAtNs,
             mainApplyEnteredAtNs = enteredNs,
             disposition = disposition,
+            r42Read = read,
         )
         inspectionProbeForTest?.afterApply(request, read.result.decision)
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.MAIN_EXIT, request.id, request.attachGeneration)
@@ -3205,6 +3214,9 @@ class FluviKeyguardCardService : AccessibilityService() {
             (event.origin == KeyguardR14Origin.SYSTEM_UI || event.origin == KeyguardR14Origin.AMBIGUOUS) &&
             event.callbackAt <= next.queuedAtUptimeMs && (event.eventAt == null || event.eventAt <= event.callbackAt)
     }
+
+    private data class R42StaleSuccessor(val requestId: Long, val oldScene: Long,
+                                         val currentScene: Long, val cause: Long)
 
     private fun r34ActualLatestLocked(request: KeyguardCardInspectionRequest,
                                       candidate: KeyguardCardInspectionRequest?, scene: Long): Boolean {
@@ -3659,6 +3671,10 @@ class FluviKeyguardCardService : AccessibilityService() {
                     next
                 }
                 if (promotedOwner == active) promotedOwner = null
+                if (read.r42SuppressedPositive && request == null && serviceJob.isActive) mainHandler.post {
+                    if (serviceJob.isActive && inspectionAuthority.matches(active))
+                        requestSystemCheck("r42SuccessorLost", evaluate = true)
+                }
                 scheduleR19Join()
                 if (r41ReservedReport) {
                     val reports = r41DeferredReports ?: java.util.ArrayDeque<R41DeferredInspectionReport>().also { r41DeferredReports = it }
@@ -4566,6 +4582,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         mainHandoffRequestedAtNs: Long,
         mainApplyEnteredAtNs: Long,
         disposition: CompletedDisposition = CompletedDisposition.NORMAL,
+        r42Read: CompletedInspection? = null,
     ) {
         // Captured at Main entry before policy/diagnostic work. This can only
         // correlate Fluvi-owned spans; a missing or partial snapshot is not
@@ -4709,6 +4726,27 @@ class FluviKeyguardCardService : AccessibilityService() {
                 observedAt = decisionObservedAt, readStart = inspectionStartedAt, readEnd = inspectionFinishedAt)
         }
         KeyguardR14ForensicProbe.mark(KeyguardR14ForensicProbe.DECISION, request.id, request.attachGeneration, extra = decision.ordinal)
+        val r42OldOwner = r42Read?.r42ReadOwner
+        val r42OldScene = inspection.r19ReadSceneSerial
+        val r42Stale = if (disposition == CompletedDisposition.NORMAL && r42Read?.r38MilestoneOrdered == true &&
+            r42OldOwner != null && r42OldScene != null && inspection.freshnessRevision != null &&
+            completeMain && decision == KeyguardCardVisibility.SHOW_FULL && signals.systemStateAvailable) synchronized(queueLock) {
+            val pending = inspectionQueue.pendingRequest()
+            val scene = firstAuthorizedOrb.sceneSerial()
+            val freshness = pending?.let(inspectionFreshness::beforeRead)
+            if (!r34SameEmptyOwnerLocked(request, r42OldOwner) || pending == null || freshness == null ||
+                !r42ActualLatestLocked(request, pending, scene) ||
+                firstAuthorizedOrb.isUnclaimedReadCurrent(request.id, r42OldScene)) null
+            else R42StaleSuccessor(pending.id, r42OldScene, scene, if (r42OldScene != scene) 1L else 2L)
+        } else null
+        if (r42Stale != null) {
+            r42Read?.r42SuppressedPositive = true
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.R42_STALE_POSITIVE,
+                request.diagnosticContext, request.id, r42Stale.requestId, r42Stale.currentScene + 1L)
+            KeyguardCardDiagnostics.r41Mark(KeyguardR41RawLedger.R42_STALE_DETAIL,
+                request.diagnosticContext, request.id, r42Stale.oldScene + 1L, r42Stale.cause)
+            return
+        }
         if (decision == KeyguardCardVisibility.SHOW_FULL || decision == KeyguardCardVisibility.SHOW_DISCREET)
             inspectionProbeForTest?.positiveApplyAttempt(request, decision)
         val staged = r18Active

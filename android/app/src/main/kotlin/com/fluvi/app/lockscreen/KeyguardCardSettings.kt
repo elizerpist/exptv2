@@ -2693,6 +2693,7 @@ internal object KeyguardCardDiagnostics {
                         KeyguardR41RawLedger.FALLBACK_POST_RECEIPT -> "FALLBACK_POST_RECEIPT"
                     KeyguardR41RawLedger.R42_PRESTART -> "R42_PRESTART"
                     KeyguardR41RawLedger.R42_STALE_POSITIVE -> "R42_STALE_POSITIVE"
+                    KeyguardR41RawLedger.R42_STALE_DETAIL -> "R42_STALE_DETAIL"
                         else -> null
                     }
                     if (phase == null) active.r41RawUnmatched += 1 else attempt.r41.record(

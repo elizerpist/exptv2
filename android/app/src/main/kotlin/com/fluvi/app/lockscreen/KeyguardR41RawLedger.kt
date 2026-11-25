@@ -115,5 +115,6 @@ internal class KeyguardR41RawLedger(private val capacity: Int = 2048) {
         const val FALLBACK_POST_RECEIPT = 33
         const val R42_PRESTART = 34
         const val R42_STALE_POSITIVE = 35
+        const val R42_STALE_DETAIL = 36
     }
 }

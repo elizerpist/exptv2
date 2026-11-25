@@ -39,10 +39,21 @@ internal class KeyguardR41AttemptLedger {
     private var r42StaleFirstRequest = MISSING; private var r42StaleFirstNext = MISSING; private var r42StaleFirstNs = MISSING
     private var r42StaleLastRequest = MISSING; private var r42StaleLastNext = MISSING; private var r42StaleLastNs = MISSING
     private var r42StaleScene = MISSING
+    private var r42StaleOldScene = MISSING; private var r42StaleCause = MISSING
 
     fun record(phase: String, request: Long?, atNs: Long, reservation: Long? = null, output: Long? = null,
                tid: Long? = null, uptimeMs: Long? = null, source: Long? = null, eventTimeMs: Long? = null) {
         if (atNs == MISSING) { invalid++; return }
+        if (phase == "R42_STALE_DETAIL") {
+            if (request == null || request <= 0 || request != r42StaleLastRequest ||
+                reservation == null || reservation <= 0 || output == null || output <= 0) {
+                invalid++
+            } else {
+                r42StaleOldScene = reservation - 1L
+                r42StaleCause = output
+            }
+            return
+        }
         if (phase == "R42_PRESTART" || phase == "R42_STALE_POSITIVE") {
             if (request == null || request <= 0 || reservation == null || reservation <= request) { invalid++; return }
             if (phase == "R42_PRESTART") {
@@ -211,6 +222,7 @@ internal class KeyguardR41AttemptLedger {
             " r42Pre=$r42PreCount/${value(r42PreFirstRequest)}/${value(r42PreFirstNext)}/${value(r42PreFirstNs)}/${value(r42PreLastRequest)}/${value(r42PreLastNext)}/${value(r42PreLastNs)}/${value(r42PreFreshness)}" +
             " r42PreMeta=freshnessPlusOne_framework16_origin32" +
             " r42Stale=$r42StaleCount/${value(r42StaleFirstRequest)}/${value(r42StaleFirstNext)}/${value(r42StaleFirstNs)}/${value(r42StaleLastRequest)}/${value(r42StaleLastNext)}/${value(r42StaleLastNs)}/${value(r42StaleScene)}" +
+            " r42StaleOldScene=${value(r42StaleOldScene)} r42StaleCause=${value(r42StaleCause)} r42StaleSceneEncoding=currentPlusOne_causes1Scene2NewerRequest" +
             " fallbackCandidateAndPostReceipt=$fallbackEvidence fallbackGrant=UNOBSERVED" +
             " requests=$count omitted=$omitted invalid=$invalid dropped=$loss" +
             " coverage=INCOMPLETE clock=System.nanoTime physical=UNOBSERVED\n"
@@ -244,6 +256,7 @@ internal class KeyguardR41AttemptLedger {
         copy.r42StaleCount = r42StaleCount; copy.r42StaleFirstRequest = r42StaleFirstRequest; copy.r42StaleFirstNext = r42StaleFirstNext
         copy.r42StaleFirstNs = r42StaleFirstNs; copy.r42StaleLastRequest = r42StaleLastRequest; copy.r42StaleLastNext = r42StaleLastNext
         copy.r42StaleLastNs = r42StaleLastNs; copy.r42StaleScene = r42StaleScene
+        copy.r42StaleOldScene = r42StaleOldScene; copy.r42StaleCause = r42StaleCause
     }
 
     companion object {
