@@ -78,17 +78,18 @@ XML
     local label="$1" seen=false app_pid
     for _ in $(seq 1 60); do
       adb shell dumpsys activity services "$component" > "$evidence/service-$label.txt" 2>&1 || true
+      adb shell dumpsys accessibility > "$evidence/accessibility-$label.txt" 2>&1 || true
       adb shell pidof com.fluvi.app > "$evidence/pid-$label.txt" 2>&1 || true
       app_pid=$(tr -d '\r' < "$evidence/pid-$label.txt" | awk '{print $1}')
       if [[ "$app_pid" =~ ^[0-9]+$ ]] &&
          grep -Fq 'com.fluvi.app/.lockscreen.FluviKeyguardCardService' "$evidence/service-$label.txt" &&
-         grep -Eq "app=ProcessRecord\\{[^}]*[[:space:]]${app_pid}:com[.]fluvi[.]app/" "$evidence/service-$label.txt"; then
+         grep -Eq "app=ProcessRecord\\{[^}]*[[:space:]]${app_pid}:com[.]fluvi[.]app/" "$evidence/service-$label.txt" &&
+         grep -Eq 'Bound services:.*com[.]fluvi[.]app/' "$evidence/accessibility-$label.txt"; then
         seen=true; break
       fi
       sleep 0.5
     done
     adb shell settings get secure enabled_accessibility_services > "$evidence/enabled-$label.txt"
-    adb shell dumpsys accessibility > "$evidence/accessibility-$label.txt" 2>&1 || true
     "$seen" && grep -Fq "$component" "$evidence/enabled-$label.txt"
   }
   observe_service before
@@ -105,7 +106,7 @@ XML
   cmp "$dir/sentinel.txt" "$evidence/sentinel-after.txt"
   adb shell am start -n com.fluvi.app/.MainActivity > "$evidence/launch.txt" 2>&1
   adb shell dumpsys package com.fluvi.app > "$evidence/package-after.txt"
-  printf '%s\n' 'PASS: API 35 R40-to-R41 install -r, synthetic preferences/file preserved and enabled accessibility service has a live process before/after.' 'NOT TESTED: authorization, ORB pixels, animation, privacy and phone performance.' > "$evidence/result.txt"
+  printf '%s\n' 'PASS: API 35 R40-to-R41 install -r, synthetic preferences/file preserved and accessibility service is bound with a live process before/after.' 'NOT TESTED: authorization, ORB pixels, animation, privacy and phone performance.' > "$evidence/result.txt"
   ;;
  *) exit 2;;
 esac
