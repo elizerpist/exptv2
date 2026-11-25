@@ -111,7 +111,7 @@ case "${1:-}" in
       ;;
     export_priority)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
-      methods=(directAndWithdrawalEvidenceSurvivesR41LightPressure directAndWithdrawalEvidenceSurvivesR41FullPressure twentyFiveRequestWakeSurvivesLightExport twentyFiveRequestWakeSurvivesFullExport allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners burstOfPendingOffersPreservesWinningOwnerAndReportsLoss)
+      methods=(absentR22BoundariesRemainExplicitlyUnknown directAndWithdrawalEvidenceSurvivesR41LightPressure directAndWithdrawalEvidenceSurvivesR41FullPressure twentyFiveRequestWakeSurvivesLightExport twentyFiveRequestWakeSurvivesFullExport allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners burstOfPendingOffersPreservesWinningOwnerAndReportsLoss)
       ;;
     old_export)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
@@ -128,6 +128,10 @@ case "${1:-}" in
     old_r15_evidence)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
       methods=(r15PhoneShapeKeepsFinancialAndActualWithdrawalFull r15PhoneShapeKeepsFinancialAndActualWithdrawalLight)
+      ;;
+    r22_regression)
+      class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
+      methods=(r22PostClaimQueueEvidenceSurvivesLightPressureAndFreeze r22PostClaimQueueEvidenceSurvivesFullPressureAndFreeze r22CoreJoinsOnlyTheExactReservationWithinAnAttempt r22PassiveStandbySummarySurvivesLightExport r22PassiveStandbySummarySurvivesFullExport r21PhoneShapeProtectsDirectAndFinalWithdrawalCore)
       ;;
     all)
       class=""
