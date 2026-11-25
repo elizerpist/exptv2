@@ -149,6 +149,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
       methods=(r41SystemWarmPinBeforeRealMainAck)
       ;;
+    r21_system_warm_pin_menu)
+      class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
+      methods=(r41SystemWarmPinMenuBeforeRealMainAck)
+      ;;
     isolated_ready_witness)
       class=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest
       methods=(r41RetiredReadyUsesExactAttachmentWitness)
