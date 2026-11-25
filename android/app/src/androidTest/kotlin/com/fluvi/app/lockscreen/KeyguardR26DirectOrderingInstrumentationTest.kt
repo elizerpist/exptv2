@@ -42,7 +42,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun warmOrderedDirectSkipsInapplicableR25Evaluation() = exercise(true, true, warmup = true)
     @Test fun readyWorkDoesNotWaitForDiagnosticPublication() = exercise(true, true, warmup = true, checkReport = true)
     @Test fun r42PreStartSelectsActualLatestRequest() = exercise(true, preStart = true)
-    @Test fun r42StalePositiveExitsAfterOrderedRestrictions() = exercise(true, duringRead = true)
+    @Test fun r42StalePositiveExitsAfterOrderedRestrictions() = exercise(true, warmup = true, duringRead = true)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
     private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false, checkReport:Boolean = false, preStart:Boolean = false, duringRead:Boolean = false) {
