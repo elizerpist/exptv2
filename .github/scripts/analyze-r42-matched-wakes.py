@@ -126,10 +126,14 @@ def read_member(archive, name):
     return archive.extractfile(member).read()
 
 
-def analyze_directory(root):
+def analyze_directory(root, continuation=False):
     all_rows, blocks = [], []
-    plan = [('a' if i % 2 == 0 else 'b', 'LIGHT') for i in range(12)]
-    plan += [('a', 'FULL'), ('b', 'FULL'), ('a', 'OFF'), ('b', 'OFF')]
+    if continuation:
+        plan = [('a', 'LIGHT'), ('b', 'LIGHT'), ('a', 'FULL'),
+                ('b', 'FULL'), ('a', 'OFF'), ('b', 'OFF')]
+    else:
+        plan = [('a' if i % 2 == 0 else 'b', 'LIGHT') for i in range(12)]
+        plan += [('a', 'FULL'), ('b', 'FULL'), ('a', 'OFF'), ('b', 'OFF')]
     sources = {'a': '97f9704120e2ae997185ea6e35fbc053e1d7f0ab',
                'b': '1584ccb020a8500efd5f9c67eac8ebd4830b1271'}
     seen_blocks = set()
@@ -215,8 +219,10 @@ def main():
     parser.add_argument('artifact', type=Path)
     parser.add_argument('--csv', type=Path, required=True)
     parser.add_argument('--summary', type=Path, required=True)
+    parser.add_argument('--continuation', action='store_true',
+                        help='use the independently declared six-block continuation plan')
     args = parser.parse_args()
-    blocks, rows = analyze_directory(args.artifact)
+    blocks, rows = analyze_directory(args.artifact, continuation=args.continuation)
     columns = list(dict.fromkeys(k for row in rows for k in row))
     with args.csv.open('w', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=columns)
