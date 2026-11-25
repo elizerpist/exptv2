@@ -789,6 +789,7 @@ internal object KeyguardCardDiagnostics {
         var screenOnReceivedAtUptimeMs: Long? = null,
         val r44Reads: ArrayDeque<KeyguardR44ReadObservation> = ArrayDeque(),
         var r44Last: KeyguardR44ReadObservation? = null,
+        var r44FirstPostScreen: KeyguardR44ReadObservation? = null,
         var r44FirstGrant: KeyguardR44ReadObservation? = null,
         var r44FirstRestriction: KeyguardR44ReadObservation? = null,
         var r44ReadsOmitted: Int = 0,
@@ -1683,6 +1684,11 @@ internal object KeyguardCardDiagnostics {
                     return@synchronized
                 }
                 if (attempt.r44Reads.any { it.request == observation.request }) return@synchronized
+                val screenAt = attempt.screenOnReceivedAtUptimeMs
+                if (screenAt != null && observation.start >= screenAt && !observation.stale &&
+                    !observation.unavailable && !observation.truncated &&
+                    (attempt.r44FirstPostScreen == null || observation.start < attempt.r44FirstPostScreen!!.start))
+                    attempt.r44FirstPostScreen = observation
                 if (!observation.stale && !observation.unavailable && !observation.truncated &&
                     observation.verdict == KeyguardSurface.MAIN_KEYGUARD && attempt.r44FirstGrant == null)
                     attempt.r44FirstGrant = observation
@@ -3516,8 +3522,8 @@ internal object KeyguardCardDiagnostics {
     private fun r44Record(captureId: String, attempt: TimingAttempt): String = buildString {
         val reads = attempt.r44Reads.toList()
         val screen = attempt.screenOnReceivedAtUptimeMs
-        val post = screen?.let { t -> reads.filter { it.start >= t && !it.stale && !it.unavailable && !it.truncated }
-            .minByOrNull { it.start } }
+        val post = attempt.r44FirstPostScreen ?: screen?.let { t -> reads.filter {
+            it.start >= t && !it.stale && !it.unavailable && !it.truncated }.minByOrNull { it.start } }
         val pre = screen?.let { t -> reads.filter { it.start < t }.minByOrNull { it.start } }
         val last = attempt.r44Last ?: reads.lastOrNull()
         val change = post?.let { first -> reads.firstOrNull { it.start > first.start && it.verdict != first.verdict } }

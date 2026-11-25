@@ -643,6 +643,8 @@ internal class KeyguardCardMaterialController(
         isolatedTransitionStartedNanos = transitionStart
         orb.setStaticBitmap(staticOrb)
         orb.setScene(scene, enabled = canAnimate)
+        val coveredByNeutralGuard = attached && isolatedOrbRendererDelegate.isInitialized() &&
+            isolatedOrbRenderer.hasVisiblePrivacyCover(activeAttachment)
         // While the buffer producer obtains its first completed frame the
         // retained View supplies the same palette-correct bootstrap.  It is
         // not a commit dependency for the isolated route.
@@ -652,7 +654,7 @@ internal class KeyguardCardMaterialController(
             // it visible before any deferred callback can configure another
             // child; a pressure View stays on its permitted animated route.
             orb.setBootstrapActive(!recoveryView && canAnimate)
-            orb.visibility = View.VISIBLE
+            orb.visibility = if (coveredByNeutralGuard) View.INVISIBLE else View.VISIBLE
             orb.invalidate()
         }
         if (attached && isolatedOrbEffective &&
@@ -660,7 +662,7 @@ internal class KeyguardCardMaterialController(
         ) {
             // The View has already accepted the currently permitted scene.
             // In particular, a privacy downgrade cannot restore old colour.
-            orb.visibility = View.VISIBLE
+            if (!coveredByNeutralGuard) orb.visibility = View.VISIBLE
         }
         val backgroundVisible = selectedBackgroundVisible
         background.setScene(scene, enabled = canAnimate && backgroundVisible)

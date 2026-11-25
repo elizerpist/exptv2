@@ -48,6 +48,8 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                     KeyguardR44Witness(KeyguardR44Markers.Marker.HOST, KeyguardR44Markers.Carrier.VIEW_ID, 1),
                     KeyguardR44Witness(KeyguardR44Markers.Marker.DEVICE_ENTRY, KeyguardR44Markers.Carrier.EXTRA_EAGER, 2),
                     true, true, 1, 1, 0, 0, false, 2))
+            // Exhaust the verbose ring before the first post-screen read.
+            repeat(14) { n -> record(base + 500 + n, base + 1 + n, KeyguardSurface.UNKNOWN) }
             record(base + 1, base + 10, KeyguardSurface.UNKNOWN)
             record(base + 2, base + 21, KeyguardSurface.MAIN_KEYGUARD)
             repeat(16) { n -> record(base + 300 + n, base + 60 + n, KeyguardSurface.UNKNOWN) }
