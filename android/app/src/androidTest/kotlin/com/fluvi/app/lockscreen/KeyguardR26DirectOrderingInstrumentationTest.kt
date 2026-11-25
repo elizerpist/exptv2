@@ -151,7 +151,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         records.add("ORDER_SELECTED id=${request.id} milestone=$milestoneOrdered")
                     }
                     override fun started(request:KeyguardCardInspectionRequest) {
-                        if (preStart && firstPhysical.compareAndSet(0, request.id)) firstPhysicalStarted.countDown()
+                        if (preStart && armed.get() && firstPhysical.compareAndSet(0, request.id)) firstPhysicalStarted.countDown()
                         val count=readers.incrementAndGet(); maxReaders.updateAndGet { maxOf(it,count) }
                         val seq=order.incrementAndGet(); records.add("READ_START id=${request.id} seq=$seq")
                         if(request.id==bId.get() && request.id>0) { bStarted.set(seq); successorStarted.countDown() }
