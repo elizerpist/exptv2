@@ -161,9 +161,16 @@ class KeyguardR44ServiceInstrumentationTest {
             val bounds = main {
                 val field = FluviKeyguardCardService::class.java.getDeclaredField("overlay").apply { isAccessible = true }
                 val orb = (field.get(owner) as KeyguardCardWindow).surfaceForTest()
-                val rect = Rect()
+                val visible = Rect()
                 if (orb != null && orb.isAttachedToWindow && orb.isShown && orb.holder.surface.isValid &&
-                    orb.getGlobalVisibleRect(rect)) rect else null
+                    orb.getGlobalVisibleRect(visible)) {
+                    // Accessibility overlay windows have their own origin. The
+                    // global visible rect can be root-local, whereas UiAutomation
+                    // screenshots use physical screen coordinates.
+                    val screen = IntArray(2)
+                    orb.getLocationOnScreen(screen)
+                    Rect(screen[0], screen[1], screen[0] + orb.width, screen[1] + orb.height)
+                } else null
             }
             assertNotNull("NOT REACHED: attached ORB bounds", bounds)
             val first = checkNotNull(ui.takeScreenshot())
