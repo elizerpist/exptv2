@@ -51,6 +51,61 @@ class KeyguardR41DiagnosticsInstrumentationTest {
         }
     }
 
+    @Test fun duplicateFirstCauseReferencesOnlyTheExactSelectedShowingCause() {
+        for (mode in listOf("LIGHT", "FULL")) {
+            KeyguardCardDiagnostics.startCapture(context, "r41-shared-cause", "profile", mode)
+            val capture = checkNotNull(KeyguardCardDiagnostics.activeCaptureId())
+            val owners = (1L..2L).map { attempt ->
+                val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 941, attempt, "wake", attempt * 1000))
+                val first = attempt * 100 + 1
+                fun read(request: Long, at: Long) {
+                    KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "wake", requestId = request,
+                        diagnosticContext = owner, observedUptimeMs = at)
+                    KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_FINISHED", "MAIN_CONFIRMED", requestId = request,
+                        diagnosticContext = owner, observedUptimeMs = at + 1,
+                        fields = mapOf("activeRootFlags" to 0, "acceptedChildFlags" to 36,
+                            "surfaceClassification" to "SHOW_FULL", "surfaceReason" to "MAIN_CONFIRMED"))
+                }
+                read(first, attempt * 1000 + 1)
+                val showing = if (attempt == 1L) first else first + 1
+                if (showing != first) read(showing, attempt * 1000 + 3)
+                val show = KeyguardCardDiagnostics.newShowOperation(owner, attempt, showing)
+                KeyguardCardDiagnostics.captureEvent(context, "SHOW_FOR_ATTACH", "wake", operation = show,
+                    observedUptimeMs = attempt * 1000 + 5)
+                owner
+            }
+            for ((index, owner) in owners.withIndex()) {
+                for (request in 1L..29L) KeyguardCardDiagnostics.r41Mark(
+                    KeyguardR41RawLedger.OFFER, owner, 10_000L * (index + 1) + request,
+                    atNs = 1_234_567_890_000_000L + request)
+            }
+            for (id in 1L..60L) {
+                val sample = KeyguardSystemGateRequest(1000 + id, KeyguardInspectionAuthority(941, 1, 1, 1, 1),
+                    "wake", 10, 10, evaluate = true, wakeSource = "wake", diagnosticCaptureId = capture)
+                listOf(KeyguardR41RawLedger.SAMPLE_OFFER, KeyguardR41RawLedger.SAMPLE_SUBMIT,
+                    KeyguardR41RawLedger.SAMPLE_WORKER, KeyguardR41RawLedger.SAMPLE_READ_START,
+                    KeyguardR41RawLedger.SAMPLE_READ_END, KeyguardR41RawLedger.SAMPLE_DISPATCH,
+                    KeyguardR41RawLedger.SAMPLE_MAIN, KeyguardR41RawLedger.SAMPLE_DELIVER).forEach {
+                    KeyguardCardDiagnostics.r41SamplerMark(it, sample, 0)
+                }
+            }
+            val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+            retain("$mode-shared-cause-frozen.txt", report)
+            val summaries = report.substringAfter("ATTEMPT_SUMMARIES\n").substringBefore("EPISODES\n")
+            val first = summaries.substringAfter("attemptId=1 ").substringBefore("attemptId=2 ")
+                .lineSequence().single { it.startsWith(" FIRST_INSPECTION ") }
+            val second = summaries.substringAfter("attemptId=2 ")
+                .lineSequence().single { it.startsWith(" FIRST_INSPECTION ") }
+            assertTrue(first, first.contains("req=101 ") && first.contains("rootFlags=0 acceptedChildFlags=36"))
+            assertTrue(first, first.contains("sameAs=SHOWING_INSPECTION"))
+            assertTrue(report, report.lineSequence().any { it.startsWith(" SHOWING_INSPECTION req=101 ") &&
+                it.contains("rootFlags=0 acceptedChildFlags=36") })
+            assertTrue(second, second.contains("req=201 "))
+            assertFalse(second, second.contains("sameAs=SHOWING_INSPECTION"))
+            assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        }
+    }
+
     private fun protectedDirectUnderPressure(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r41-direct-pressure", "profile", mode)
         val capture = checkNotNull(KeyguardCardDiagnostics.activeCaptureId())

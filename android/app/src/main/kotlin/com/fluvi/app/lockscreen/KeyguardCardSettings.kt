@@ -3047,7 +3047,9 @@ internal object KeyguardCardDiagnostics {
             }
         }
         attemptsForCausalEvidence.forEach { attempt ->
-            select("a${attempt.id}:summary", compactAttemptSummary(attempt), attempt.id)
+            val show = firstPresentation(attempt)
+            val showingCauseSelected = show != null && "a${attempt.id}:show${show.operationId}" in selected
+            select("a${attempt.id}:summary", compactAttemptSummary(attempt, showingCauseSelected), attempt.id)
         }
         // R41 compact accounting was reserved above. Verbose per-request,
         // receipt and sampler rows must not crowd out an existing show/hide
@@ -3523,7 +3525,7 @@ internal object KeyguardCardDiagnostics {
 
     /** Compact cycle aggregates are independent of every attachment's own
      * evidence. Missing/omitted episodes never overwrite the earliest draw. */
-    private fun compactAttemptSummary(attempt: TimingAttempt): String = buildString {
+    private fun compactAttemptSummary(attempt: TimingAttempt, showingCauseSelected: Boolean): String = buildString {
         val show = firstPresentation(attempt)
         val firstRoot = firstDrawEpisode(attempt) { it.firstRootDrawAtUptimeMs }
         val firstShader = firstDrawEpisode(attempt) { it.firstShaderDrawAtUptimeMs }
@@ -3536,7 +3538,19 @@ internal object KeyguardCardDiagnostics {
         appendLine(" cycleFirstRootShowOp=${firstRoot?.operationId ?: "NA"} cycleFirstShaderShowOp=${firstShader?.operationId ?: "NA"} cycleFirstLiveShowOp=${firstLive?.operationId ?: "NA"} firstRootDrawObserved=${firstRoot != null} firstShaderDrawObserved=${firstShader != null} cycleToFirstLiveDrawMs=${delta(firstLive?.firstLiveDrawAtUptimeMs, attempt.startedUptimeMs)}")
         appendLine(" actualWithdrawalHideOp=${withdrawal?.operationId ?: "NA"} terminalCleanupHideOp=${attempt.hides.lastOrNull()?.operationId ?: "NA"} triggerToLocalHideMs=${delta(withdrawal?.localHideAppliedAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)} triggerToRemoveReturnMs=${delta(withdrawal?.removeReturnAtUptimeMs, withdrawal?.triggerReceivedAtUptimeMs)}")
         appendLine(" causalSpineComplete=${causalSpineComplete(attempt)} causalSpineIndependentOfRawRing=true retainedShowEpisodes=${attempt.shows.size} retainedHideEpisodes=${attempt.hides.size} omittedShowEpisodes=${attempt.omittedShowEpisodes} omittedHideEpisodes=${attempt.omittedHideEpisodes} omittedSpineEvents=${attempt.omittedSpineEvents}")
-        append(compactInspectionCause("FIRST_INSPECTION", firstInspection))
+        val firstCause = compactInspectionCause("FIRST_INSPECTION", firstInspection)
+        // A single physical inspection often both starts the wake and causes
+        // the first show. Reference its already-selected full compact cause
+        // only when all formatted values are identical and belong to this
+        // exact show operation. Otherwise retain the independent first cause.
+        val showingCause = show?.cause
+        val sharedCause = showingCauseSelected && firstInspection != null && showingCause != null &&
+            firstInspection.requestId == showingCause.requestId &&
+            firstCause == compactInspectionCause("FIRST_INSPECTION", showingCause)
+        if (sharedCause) {
+            appendLine(" FIRST_INSPECTION req=${firstInspection?.requestId} sameAs=SHOWING_INSPECTION showOp=${show?.operationId}" +
+                " rootFlags=${firstInspection?.activeRootFlags ?: "UNOBSERVED"} acceptedChildFlags=${firstInspection?.acceptedChildFlags ?: "UNOBSERVED"}")
+        } else append(firstCause)
     }
 
     private fun attemptSummary(attempt: TimingAttempt): String = buildString {
