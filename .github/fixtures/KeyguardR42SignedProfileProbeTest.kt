@@ -70,7 +70,11 @@ class KeyguardR42SignedProfileProbeTest {
             if (service() == null) {
                 enabledByProbe = true
                 check(prefs.edit().putBoolean("requested", true).putBoolean("details", true)
-                    .putString("presentationMode", "orb").putString("animationMode", "orbOnly").commit())
+                    .putString("presentationMode", "orb").putString("animationMode", "orbOnly")
+                    .putBoolean("focusMigrated", true).putString("focus.mode", "budget")
+                    .putString("focus.axis", "month").putString("focus.direction", "expense")
+                    .putString("focus.categoryId", "r42-synthetic-category")
+                    .putString("focus.eventLine", "related").putLong("focus.generation", 7L).commit())
                 shell("am start -n com.fluvi.app/.MainActivity")
                 shell("settings put secure enabled_accessibility_services com.fluvi.app/.lockscreen.FluviKeyguardCardService")
                 shell("settings put secure accessibility_enabled 1")
@@ -78,6 +82,34 @@ class KeyguardR42SignedProfileProbeTest {
             await("updated service connected") { service() != null }
             shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard")
             await("unlocked start") { power.isInteractive && !keyguard.isKeyguardLocked }
+            // This disposable emulator uses an explicitly synthetic material;
+            // update preservation was checked before this separate observation.
+            fun portal(enabled:Boolean):Map<String,Any> = mapOf("enabled" to enabled, "effectIndex" to 0,
+                "phase" to 0.0, "phaseSpeed" to .2, "paletteCenterPercent" to 50.0,
+                "paletteWindowPercent" to 68.0, "rotationEnabled" to false, "rotationSpeed" to 0.0,
+                "settings" to List(12) { .2 })
+            val material = mapOf<String,Any>("schemaVersion" to 1, "shaderAbiVersion" to 6,
+                "sourceShaderHash" to "6be3e84d3e3ae6bffde549171b7319524768d67dbab1d55b74d565a4c76d4e7f",
+                "publisherSession" to "r42-profile-fixture", "publisherRevision" to 1L,
+                "sceneIdentity" to "fixture|balance|month", "effectId" to "dualTide", "effectShaderId" to 1,
+                "phase" to .25, "elapsedSeconds" to 1.0, "phaseSpeed" to .4,
+                "colors" to listOf(0xff104f7c.toInt(),0xff62c7dc.toInt(),0xff8366dc.toInt()),
+                "stops" to listOf(0.0,.5,1.0), "opacity" to 1.0, "paletteSplitPercent" to 50.0,
+                "commonSettings" to List(40) { .2 }, "background" to portal(true), "interior" to portal(false),
+                "referenceWidth" to 390.0, "referenceHeight" to 220.0)
+            val store = singleton("com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore")
+            val oldEpoch = context.getSharedPreferences("fluvi_keyguard_header_material",Context.MODE_PRIVATE)
+                .getLong("publisherEpoch",-1L)
+            var materialAccepted=false
+            instrumentation.runOnMainSync {
+                materialAccepted = call(store,"publish",context,material,maxOf(SystemClock.elapsedRealtimeNanos(),oldEpoch+1L)) == true
+            }
+            assertTrue("NOT REACHED: synthetic material rejected",materialAccepted)
+            await("prepared DIRECT route") {
+                val current = service() ?: return@await false
+                val field = current.javaClass.getDeclaredField("r18RouteSnapshot").also { it.isAccessible=true }
+                field.get(current) != null
+            }
             shell("locksettings set-disabled false")
             call(diagnostics, "startCapture", context, source, "profile", "LIGHT")
             capture = true
@@ -99,7 +131,7 @@ class KeyguardR42SignedProfileProbeTest {
             val identity = requireNotNull(identityOf(firstOwner))
             val bounds = Rect(call(firstOwner, "getBounds") as Rect)
             assertTrue("NOT REACHED: empty ORB bounds", bounds.width() > 8 && bounds.height() > 8)
-            notes.add("source=$source wakeNs=$wakeNs owner=$identity bounds=$bounds physical=UNOBSERVED")
+            notes.add("source=$source material=SYNTHETIC_DEMO wakeNs=$wakeNs owner=$identity bounds=$bounds physical=UNOBSERVED")
             val frames = mutableListOf<Bitmap>()
             repeat(10) { index ->
                 if (index > 0) SystemClock.sleep(150)
