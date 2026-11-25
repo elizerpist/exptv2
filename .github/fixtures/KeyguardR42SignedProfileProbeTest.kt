@@ -49,6 +49,10 @@ class KeyguardR42SignedProfileProbeTest {
         val diagnostics = singleton("com.fluvi.app.lockscreen.KeyguardCardDiagnostics")
         fun service(): Any? = call(registry, "serviceForInstrumentation")
         fun report(): String = ((call(diagnostics, "captureSnapshot", context) as Map<*, *>)["report"] as String)
+        fun identityOf(obj: Any): List<Long>? {
+            val fields = listOf("ReservationId", "Attachment", "OutputGeneration", "WinningRequestId")
+            return fields.map { (call(obj, "get$it") as? Number)?.toLong() ?: return null }
+        }
         val keyguard = context.getSystemService(KeyguardManager::class.java)
         val power = context.getSystemService(PowerManager::class.java)
         val savedLock = shell("locksettings get-disabled").trim()
@@ -83,15 +87,15 @@ class KeyguardR42SignedProfileProbeTest {
             var owner: Any? = null
             await("current DIRECT owner and matching grant", 30_000) {
                 instrumentation.runOnMainSync { owner = service()?.let { call(it, "r22VisualIdentityForTest") } }
-                owner != null && report().lineSequence().any {
+                val id = owner?.let(::identityOf)
+                val expected = id?.let { "${it[0]}/${it[2]}/${it[3]}" }
+                expected != null && report().lineSequence().any {
                     it.startsWith(" R41_CORE ") && it.contains("outcome=SUCCESS") &&
-                        Regex(" owner=[0-9]+/[0-9]+/[0-9]+").containsMatchIn(it)
+                        it.contains(" owner=$expected ")
                 }
             }
             val firstOwner = requireNotNull(owner)
-            fun value(obj: Any, name: String): Long = (call(obj, "get$name") as Number).toLong()
-            val identity = listOf(value(firstOwner,"ReservationId"), value(firstOwner,"Attachment"),
-                value(firstOwner,"OutputGeneration"), value(firstOwner,"WinningRequestId"))
+            val identity = requireNotNull(identityOf(firstOwner))
             val bounds = Rect(call(firstOwner, "getBounds") as Rect)
             assertTrue("NOT REACHED: empty ORB bounds", bounds.width() > 8 && bounds.height() > 8)
             notes.add("source=$source wakeNs=$wakeNs owner=$identity bounds=$bounds physical=UNOBSERVED")
@@ -101,14 +105,15 @@ class KeyguardR42SignedProfileProbeTest {
                 var current: Any? = null
                 instrumentation.runOnMainSync { current = service()?.let { call(it, "r22VisualIdentityForTest") } }
                 val now = checkNotNull(current) { "NOT REACHED: ORB owner detached while sampling" }
-                assertEquals(identity, listOf(value(now,"ReservationId"), value(now,"Attachment"),
-                    value(now,"OutputGeneration"), value(now,"WinningRequestId")))
+                assertEquals(identity, identityOf(now))
+                val acquireStartNs = System.nanoTime()
                 val screen = checkNotNull(automation.takeScreenshot())
+                val acquireEndNs = System.nanoTime()
                 assertTrue("NOT REACHED: bounds outside compositor image", bounds.left >= 0 && bounds.top >= 0 &&
                     bounds.right <= screen.width && bounds.bottom <= screen.height)
                 val crop = Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
                 File(dir, "sample-$index.png").outputStream().use { crop.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                notes.add("sample=$index startNs=${System.nanoTime()} width=${crop.width} height=${crop.height}")
+                notes.add("sample=$index acquireStartNs=$acquireStartNs acquireEndNs=$acquireEndNs width=${crop.width} height=${crop.height}")
                 frames.add(crop); screen.recycle()
             }
             fun changed(a: Bitmap, b: Bitmap): Int {
