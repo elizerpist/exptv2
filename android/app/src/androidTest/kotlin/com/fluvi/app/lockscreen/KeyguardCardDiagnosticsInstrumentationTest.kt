@@ -2,7 +2,9 @@ package com.fluvi.app.lockscreen
 
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.lockscreen.material.KeyguardOrbSurfaceMetrics
+import java.io.File
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -573,6 +575,14 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             }
         }
         val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        // Keep the exact synthetic frozen report when the test driver supplies
+        // a run identity, including on a failed assertion. This does not alter
+        // the original export or its required assertions.
+        InstrumentationRegistry.getArguments().getString("runUuid")?.let { uuid ->
+            val dir = File(context.filesDir, "keyguard-service-probe/r41/$uuid")
+            check(dir.mkdirs() || dir.isDirectory)
+            File(dir, "legacy-r18-$mode.txt").writeText(report, Charsets.UTF_8)
+        }
         assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
         for (attempt in 1..4) assertTrue("missing R18 attempt $attempt in $mode", report.contains("R18_PIPELINE attempt=$attempt"))
         assertTrue(report.contains("proof=10077"))
