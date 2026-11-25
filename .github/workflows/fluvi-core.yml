@@ -1,9 +1,9 @@
-name: R43 Android 17 exact-source code graph
+name: R44 Android 17 exact-source code graph
 on:
   workflow_dispatch:
     inputs:
       app_sha:
-        description: Exact R43 application source SHA
+        description: Exact R44 application source SHA
         type: string
         required: true
       native_diagnostic:
@@ -63,7 +63,7 @@ jobs:
           for symbol in KeyguardTimingCaptureBridge KeyguardTimingCaptureSnapshot DebugConsoleDialog; do
             printf '\n## %s\n' "$symbol"
             dart run bin/fluvi_codegraph.dart query --graph "$tooling_dir/docs/codegraph" --symbol "$symbol"
-          done > "$tooling_dir/docs/codegraph-r43-android17-query.txt"
+          done > "$tooling_dir/docs/codegraph-r44-android17-query.txt"
           python3 - "$tooling_dir/docs/codegraph" "$APP_SHA" "$source_dir/index.scip" > "$out/verification.txt" <<'PY'
           import hashlib,json,pathlib,sys
           root=pathlib.Path(sys.argv[1]); m=json.loads((root/'manifest.json').read_text())
@@ -81,10 +81,10 @@ jobs:
                   shards+=1
           print('source=',sys.argv[2],'shards=',shards,'documents=',m['document_count'],'repo_symbols=',m['repository_defined_symbol_count'])
           PY
-          report="$tooling_dir/docs/codegraph-r43-android17-inventory.md"
-          printf '# R42 exact-source authorization inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
+          report="$tooling_dir/docs/codegraph-r44-android17-inventory.md"
+          printf '# R44 exact-source authorization inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
           printf 'The SCIP graph covers Dart only. Kotlin lines below are direct source navigation, not generated edges or proof of runtime behavior. Native submission and transaction receipts are not physical pixels.\n\n```text\n' >> "$report"
-          (cd "$source_dir" && git grep -n -E 'KeyguardR43|r43[A-Z_]|R43_|KeyguardWindowSnapshotReader|KeyguardSurfaceClassifier|inspectSurface|readSystemWindows|recordR43|armR43Capture|scheduleR43Holds|startCapture|freezeCapture|formatReport' -- android/app/src/main/kotlin/com/fluvi/app/lockscreen android/app/src/test/kotlin/com/fluvi/app/lockscreen android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen) >> "$report"
+          (cd "$source_dir" && git grep -n -E 'KeyguardR44|r44[A-Z_]|R44_|KeyguardWindowSnapshotReader|KeyguardSurfaceClassifier|inspectSurface|readSystemWindows|recordR44|KeyguardCardVisibilityPolicy|setR44SyntheticTrial|startCapture|freezeCapture|formatReport' -- android/app/src/main/kotlin/com/fluvi/app/lockscreen android/app/src/test/kotlin/com/fluvi/app/lockscreen android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen) >> "$report"
           printf '\n```\n' >> "$report"
           sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$out/manifest-sha256.txt"
           printf 'source_dir=%s\ntooling_dir=%s\n' "$source_dir" "$tooling_dir" > "$out/paths.txt"
@@ -95,11 +95,11 @@ jobs:
           cd tooling
           git config user.name 'Fluvi Graph Bot'
           git config user.email 'fluvi-graph@users.noreply.github.com'
-          git add docs/codegraph docs/codegraph-r43-android17-inventory.md docs/codegraph-r43-android17-query.txt
+          git add docs/codegraph docs/codegraph-r44-android17-inventory.md docs/codegraph-r44-android17-query.txt
           git diff --cached --check
-          git commit -m 'graph: index R43 Android 17 exact source [skip ci]'
+          git commit -m 'graph: index R44 Android 17 exact source [skip ci]'
           git rev-parse HEAD > "$RUNNER_TEMP/r34-graph/graph-commit.txt"
-          graph_ref="tooling/r43-android17-${APP_SHA:0:12}"
+          graph_ref="tooling/r44-android17-${APP_SHA:0:12}"
           test -z "$(git ls-remote origin "refs/heads/$graph_ref")"
           git push origin "HEAD:refs/heads/$graph_ref"
       - name: Preserve graph receipts
@@ -109,7 +109,7 @@ jobs:
           name: r34-stock-graph-${{ github.run_id }}
           path: |
             tooling/docs/codegraph/**
-            tooling/docs/codegraph-r43-android17-*
+            tooling/docs/codegraph-r44-android17-*
             ${{ runner.temp }}/r34-graph/**
           if-no-files-found: warn
           retention-days: 30
