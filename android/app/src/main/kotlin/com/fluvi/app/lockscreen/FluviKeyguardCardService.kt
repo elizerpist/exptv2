@@ -4590,9 +4590,19 @@ class FluviKeyguardCardService : AccessibilityService() {
                 } } else null,
                 pauseOpeningAfterYieldAttempt = if (r34Eligible) { { r34PausedForOffer } } else null,
                 onDecisiveSystemMarker = {
-                    if (authorityIsCurrent(request)) sealR18(
-                        KeyguardInspectionAuthority(request.session, request.visibilityEpoch, request.wakeGeneration,
+                    if (authorityIsCurrent(request)) {
+                        sealR18(KeyguardInspectionAuthority(request.session, request.visibilityEpoch, request.wakeGeneration,
                             request.interactionEpoch, request.attachGeneration), request.id, "decisiveSystemMarker")
+                        if (Build.VERSION.SDK_INT >= 37) mainHandler.post {
+                            // Never let a stale reader hide a newer attachment.
+                            if (authorityIsCurrent(request) && ::overlay.isInitialized && overlay.isAttached)
+                                hideImmediately("r441DecisiveMarker", terminalWake = false,
+                                    awaitingSurfaceWithdrawal = true,
+                                    triggerReceivedUptimeMs = request.triggerReceivedUptimeMs,
+                                    diagnosticContext = request.diagnosticContext,
+                                    causingInspectionRequestId = request.id)
+                        }
+                    }
                 },
                 r43Evidence = r43Evidence,
             ),

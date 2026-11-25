@@ -3,11 +3,15 @@ package com.fluvi.app.lockscreen.material
 import android.annotation.SuppressLint
 import android.graphics.Color
 import android.graphics.ColorSpace
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.HardwareBufferRenderer
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.PorterDuff
 import android.graphics.RenderNode
+import android.graphics.Shader
 import android.hardware.HardwareBuffer
 import android.hardware.SyncFence
 import android.os.Build
@@ -197,6 +201,21 @@ private data class KeyguardOrbBufferAttachment(
     val orb: View,
     val attachment: Long,
 )
+
+/** One immutable, nonfinancial image. Its buffer is not a renderer slot and
+ * is never reused while the compositor owns it. Main owns the layer. */
+private class KeyguardOrbPrivacyCover(
+    val lease: KeyguardOrbBufferLease,
+    val root: View,
+    val orb: View,
+    val layer: SurfaceControl,
+    val bitmap: Bitmap,
+    val buffer: HardwareBuffer,
+) {
+    var committed = false
+    var visible = false
+    var retiring = false
+}
 
 /** Test-only gate at the real worker submission boundary.  It is intentionally
  * not a visibility gate: Main can hide/revoke while a renderer thread waits. */
@@ -692,6 +711,9 @@ internal class KeyguardOrbBufferRenderer(
         private var positionSuppressions = 0
         private var firstPublishedLease: KeyguardOrbBufferLease? = null
         private var firstPublishedToken: KeyguardOrbFirstPublicationToken? = null
+        // At most one static cover may be outstanding, including retirement.
+        private var privacyCover: KeyguardOrbPrivacyCover? = null
+        private var preparingCover: KeyguardOrbBufferLease? = null
         private var firstOfferToken: FirstOfferToken? = null
         private var attachListener: View.OnAttachStateChangeListener? = null
         private var layoutListener: View.OnLayoutChangeListener? = null
@@ -825,6 +847,7 @@ internal class KeyguardOrbBufferRenderer(
                 preserveOffer == null || it.attachment == oldAttachment?.attachment
             }
             if (firstOfferToken !== preserveOffer) revokeFirstOffer(reason)
+            if (reason != "privacy-tightening") retirePrivacyCover()
             removeAttachmentListeners(oldAttachment)
             attachment = null
             hideLayer(onLayerHideCommitted, reason, onRetirementEvent)
@@ -837,6 +860,105 @@ internal class KeyguardOrbBufferRenderer(
             retire("dispose")
             disposed = true
             worker.dispose()
+        }
+
+        /** Prepare after the first FULL transaction has committed. The image
+         * contains only the existing neutral standby colors, never profile
+         * or financial material, and preparation does not delay first show. */
+        private fun preparePrivacyCover(token: KeyguardOrbFirstPublicationToken) {
+            if (privacyCover != null || preparingCover != null || desired?.scene?.full != true ||
+                !ownsFirstPublication(token)) return
+            val active = attachment ?: return
+            val lease = token.lease
+            preparingCover = lease
+            worker.preparePrivacyCover(lease) deliver@{ bitmap ->
+                if (preparingCover == lease) preparingCover = null
+                if (bitmap == null) return@deliver
+                if (disposed || privacyCover != null || attachment !== active || desired?.lease != lease ||
+                    desired?.scene?.full != true || !ownsFirstPublication(token) ||
+                    !active.root.isAttachedToWindow || !active.orb.isAttachedToWindow ||
+                    active.orb.width != lease.width || active.orb.height != lease.height) {
+                    bitmap.recycle()
+                    return@deliver
+                }
+                installPrivacyCover(active, lease, bitmap)
+            }
+        }
+
+        private fun installPrivacyCover(active: KeyguardOrbBufferAttachment, lease: KeyguardOrbBufferLease, bitmap: Bitmap) {
+            val parent = runCatching { active.root.rootSurfaceControl }.getOrNull()
+            val buffer = runCatching { bitmap.hardwareBuffer }.getOrNull()
+            if (parent == null || buffer == null) { buffer?.close(); bitmap.recycle(); return }
+            val coverLayer = runCatching { SurfaceControl.Builder().setName("FluviKeyguardNeutralPrivacyCover")
+                .setBufferSize(lease.width, lease.height).setFormat(PixelFormat.RGBA_8888)
+                .setOpaque(false).setHidden(true).build() }.getOrElse {
+                buffer.close(); bitmap.recycle(); return
+            }
+            val reparent = runCatching { parent.buildReparentTransaction(coverLayer) }.getOrNull()
+            if (reparent == null) { coverLayer.release(); buffer.close(); bitmap.recycle(); return }
+            val position = IntArray(2)
+            active.orb.getLocationInSurface(position)
+            val prepared = runCatching {
+                try { reparent.setPosition(coverLayer, position[0].toFloat(), position[1].toFloat())
+                    .setLayer(coverLayer, Int.MAX_VALUE).setVisibility(coverLayer, false).apply() }
+                finally { reparent.close() }
+            }
+            if (prepared.isFailure) { coverLayer.release(); buffer.close(); bitmap.recycle(); return }
+            val cover = KeyguardOrbPrivacyCover(lease, active.root, active.orb, coverLayer, bitmap, buffer)
+            privacyCover = cover
+            worker.retainPrivacyCover()
+            var applyStarted = false
+            val staged = runCatching {
+                val tx = SurfaceControl.Transaction()
+                try {
+                    tx.setBuffer(coverLayer, buffer, null, Consumer<SyncFence> { fence ->
+                        worker.releasePrivacyCover(fence) {
+                            runCatching { cover.buffer.close() }
+                            runCatching { cover.bitmap.recycle() }
+                            mainHandler.post {
+                                runCatching { SurfaceControl.Transaction().use { it.reparent(cover.layer, null).apply() } }
+                                runCatching { cover.layer.release() }
+                                if (privacyCover === cover) privacyCover = null
+                            }
+                        }
+                    }).addTransactionCommittedListener(Executor { mainHandler.post(it) }) {
+                        if (privacyCover === cover && !cover.retiring && cover.root.isAttachedToWindow) {
+                            cover.committed = true
+                            if (recoveryHook !== NoopKeyguardOrbRecoveryTestHook) runCatching {
+                                recoveryHook.onRetirementEvent(cover.lease, System.identityHashCode(cover.layer),
+                                    "privacy-cover-ready", SystemClock.uptimeMillis())
+                            }
+                        }
+                    }
+                    applyStarted = true
+                    tx.apply()
+                } finally { tx.close() }
+            }
+            if (staged.isFailure && !applyStarted) {
+                // No transaction transferred the buffer. This is the only
+                // case in which local disposal does not require a receipt.
+                privacyCover = null
+                worker.discardUnsubmittedPrivacyCover { buffer.close(); bitmap.recycle() }
+                runCatching { SurfaceControl.Transaction().use { it.reparent(coverLayer, null).apply() } }
+                runCatching { coverLayer.release() }
+            }
+            if (staged.isFailure && applyStarted) {
+                // Apply exceptions do not establish transfer ownership.
+                // Retain this bounded cover until a genuine receipt arrives.
+                cover.retiring = true
+                runCatching { SurfaceControl.Transaction().use { it.setBuffer(coverLayer, null as HardwareBuffer?)
+                    .setVisibility(coverLayer, false).apply() } }
+            }
+        }
+
+        private fun retirePrivacyCover() {
+            preparingCover = null
+            val cover = privacyCover ?: return
+            if (cover.retiring) return
+            cover.retiring = true
+            // The real release receipt, followed by its fence, owns cleanup.
+            runCatching { SurfaceControl.Transaction().use { it.setBuffer(cover.layer, null as HardwareBuffer?)
+                .setVisibility(cover.layer, false).apply() } }
         }
 
         fun snapshot(): KeyguardOrbBufferRendererSnapshot {
@@ -1057,6 +1179,7 @@ internal class KeyguardOrbBufferRenderer(
         private fun hideLayer(onCommitted: ((Long) -> Unit)? = null, reason: String = "reconfigure",
                               observer: ((KeyguardOrbRetirementEvent) -> Unit)? = null) {
             val child = layer ?: return
+            if (reason != "privacy-tightening") retirePrivacyCover()
             val lease = layerLease
             val retirement = lease?.let {
                 KeyguardOrbRetiringLayer(it, ++nextRetirementId, child, System.identityHashCode(child), reason, observer).also { record ->
@@ -1070,6 +1193,17 @@ internal class KeyguardOrbBufferRenderer(
             val transactionApplied = runCatching {
                 val transaction = SurfaceControl.Transaction()
                 try {
+                    val cover = privacyCover?.takeIf {
+                        reason == "privacy-tightening" && it.lease == lease && it.committed && !it.retiring &&
+                            it.root.isAttachedToWindow && it.orb.isAttachedToWindow &&
+                            it.orb.width == it.lease.width && it.orb.height == it.lease.height && it.layer.isValid
+                    }
+                    if (cover != null) {
+                        val position = IntArray(2)
+                        cover.orb.getLocationInSurface(position)
+                        transaction.setPosition(cover.layer, position[0].toFloat(), position[1].toFloat())
+                            .setVisibility(cover.layer, true)
+                    }
                     transaction
                     // SurfaceControl's null-buffer form releases the last
                     // displayed buffer and invokes its release callback.  A
@@ -1096,6 +1230,13 @@ internal class KeyguardOrbBufferRenderer(
                         }.onFailure { Log.w("FluviOrbFirstHandoff", "hide commit listener registration failed", it) }
                     }
                     transaction.apply()
+                    if (cover != null) {
+                        cover.visible = true
+                        if (recoveryHook !== NoopKeyguardOrbRecoveryTestHook) runCatching {
+                            recoveryHook.onRetirementEvent(cover.lease, System.identityHashCode(cover.layer),
+                                "privacy-cover-show-submitted", SystemClock.uptimeMillis())
+                        }
+                    }
                     applyReturnedAtUptimeMs = SystemClock.uptimeMillis()
                 } finally {
                     runCatching { transaction.close() }
@@ -1331,8 +1472,12 @@ internal class KeyguardOrbBufferRenderer(
                             .onFailure { Log.w("FluviOrbFirstHandoff", "first commit observation failed", it) }
                         val deliver = {
                             if (ownsFirstPublication(token)) {
-                                runCatching { onFirstCommitted(token) }
+                                val delivered = runCatching { onFirstCommitted(token) }
                                     .onFailure { Log.w("FluviOrbFirstHandoff", "first commit delivery failed", it) }
+                                if (delivered.isSuccess && ownsFirstPublication(token)) {
+                                    if (desired?.scene?.full == true) preparePrivacyCover(token)
+                                    else if (privacyCover?.visible == true) retirePrivacyCover()
+                                }
                             }
                         }
                         runCatching { firstPublicationHook.dispatchCommit(token, received, deliver) }
@@ -1375,6 +1520,7 @@ internal class KeyguardOrbBufferRenderer(
             val times = KeyguardOrbFirstPublicationTimes(frame.readyAtUptimeMs, postedAt, enteredAt, applyBegin, applyEnd)
             runCatching { onFirstPublished(token, times) }
                 .onFailure { Log.w("FluviOrbFirstHandoff", "first output observer failed after transfer", it) }
+            if (desired?.scene?.full == true && ownsFirstPublication(token)) preparePrivacyCover(token)
             if (publicationObserver !== NoopKeyguardOrbBufferPublicationObserver) {
                 runCatching { publicationObserver.onSubmitted(frame.producerFrame) }
                     .onFailure { Log.w("FluviOrbFirstHandoff", "submission observer failed after transfer", it) }
@@ -1474,10 +1620,61 @@ internal class KeyguardOrbBufferRenderer(
          * exist because the pool is globally fixed at three slots. */
         private val fenceThread = HandlerThread("fluvi-keyguard-orb-fence").apply { start() }
         private val fenceHandler = Handler(fenceThread.looper)
+        private val retainedPrivacyCovers = AtomicInteger()
         private val executor = Executor { command -> handler.post(command) }
         private var choreographer: Choreographer? = null
         private var callbackPosted = false
         private var desired: KeyguardOrbBufferRenderSpec? = null
+
+        fun preparePrivacyCover(lease: KeyguardOrbBufferLease, deliver: (Bitmap?) -> Unit) {
+            if (!handler.post {
+                val bitmap = if (!disposed && desired?.lease == lease && desired?.scene?.full == true) runCatching {
+                    val software = Bitmap.createBitmap(lease.width, lease.height, Bitmap.Config.ARGB_8888)
+                    try {
+                        val canvas = Canvas(software)
+                        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+                        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            shader = LinearGradient(0f, lease.height.toFloat(), lease.width.toFloat(), 0f,
+                                intArrayOf(0xff657489.toInt(), 0xff8592a4.toInt(), 0xff657489.toInt()),
+                                floatArrayOf(0f, .5f, 1f), Shader.TileMode.CLAMP)
+                        }
+                        canvas.drawCircle(lease.width / 2f, lease.height / 2f,
+                            (min(lease.width, lease.height) / 2f - 2f).coerceAtLeast(0f), paint)
+                        checkNotNull(software.copy(Bitmap.Config.HARDWARE, false))
+                    } finally { software.recycle() }
+                }.getOrNull() else null
+                if (!mainHandler.post { deliver(bitmap) }) bitmap?.recycle()
+            }) mainHandler.post { deliver(null) }
+        }
+
+        fun retainPrivacyCover() { retainedPrivacyCovers.incrementAndGet() }
+
+        fun discardUnsubmittedPrivacyCover(cleanup: () -> Unit) {
+            handler.post {
+                runCatching(cleanup)
+                retainedPrivacyCovers.decrementAndGet()
+                finishDisposeIfReleased()
+            }
+        }
+
+        fun releasePrivacyCover(fence: SyncFence?, cleanup: () -> Unit) {
+            fun completed() {
+                runCatching { fence?.close() }
+                handler.post {
+                    runCatching(cleanup)
+                    retainedPrivacyCovers.decrementAndGet()
+                    finishDisposeIfReleased()
+                }
+            }
+            if (fence?.isValid != true) { completed(); return }
+            val poll = object : Runnable {
+                override fun run() {
+                    if (runCatching { fence.await(Duration.ofMillis(16)) }.getOrDefault(false)) completed()
+                    else fenceHandler.postDelayed(this, 16L)
+                }
+            }
+            fenceHandler.post(poll)
+        }
         private var desiredFirstOffer: FirstOfferToken? = null
         private data class PrimeKey(
             val program: String, val visual: String, val full: Boolean,
@@ -2921,7 +3118,7 @@ internal class KeyguardOrbBufferRenderer(
          * not close a live HardwareBuffer from Main or quit before that
          * owner-side cleanup can run. */
         private fun finishDisposeIfReleased() {
-            if (disposed && slots.isEmpty()) {
+            if (disposed && slots.isEmpty() && retainedPrivacyCovers.get() == 0) {
                 fenceThread.quitSafely()
                 thread.quitSafely()
             }

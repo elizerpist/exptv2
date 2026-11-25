@@ -54,6 +54,8 @@ import java.io.File
 import java.time.Duration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
@@ -3302,6 +3304,31 @@ class KeyguardHeaderMaterialViewInstrumentationTest {
 
     @Test fun r22_4BoundedResizedPrivacyStripBlack() =
         boundedResizedPrivacyStrip(android.graphics.Color.BLACK)
+
+    @Test fun r441PrivacyCoverSwitchesWithExactRetiredChild() {
+        val gate = RealReleaseGate().apply { releaseAll(); allowContinuous = true }
+        withOrbRetirementFixture("r441-privacy-cover", gate) { fixture ->
+            val full = fixture.awaitFirstToken(fixture.initialLease.attachment)
+            val ready = gate.awaitRetirement(full.lease, "privacy-cover-ready")
+            assertTrue("cover must be a separate child", ready.child != System.identityHashCode(full.child))
+            var result = KeyguardCardWindow.Result.NO_OP
+            val begin = SystemClock.uptimeMillis()
+            fixture.instrumentation.runOnMainSync {
+                result = fixture.window.showOrUpdate(FluviFinancialCardPresenter.discreet(),
+                    fixture.settings.copy(showFinancialDetails = false))
+            }
+            assertTrue("restriction was not applied", result == KeyguardCardWindow.Result.REDACTED ||
+                result == KeyguardCardWindow.Result.CONTENT_UPDATED)
+            val show = gate.awaitRetirement(full.lease, "privacy-cover-show-submitted")
+            assertEquals("wrong cover was switched", ready.child, show.child)
+            assertTrue("cover submission preceded restriction", show.at >= begin)
+            assertTrue("exact old child was not hidden", gate.retirementSnapshot().any {
+                it.lease == full.lease && it.child == System.identityHashCode(full.child) &&
+                    it.event == "main-hide-attempt-finished"
+            })
+            fixture.ownership.assertBoundedSingleRenderer()
+        }
+    }
 
     /** Separate observer: retain the immediate image and acquire all six full
      * screens before encoding or comparing any of them. */
