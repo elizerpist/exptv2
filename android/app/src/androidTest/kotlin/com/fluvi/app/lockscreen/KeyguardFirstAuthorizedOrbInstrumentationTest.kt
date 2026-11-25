@@ -66,6 +66,9 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         runService(false, true, false, false, false, false, true, false, false, true)
     @Test fun r41SystemWarmPinMenuBeforeRealMainAck() =
         runService(false, true, false, false, false, false, true, false, false, true, true)
+    @Test fun r41SystemWarmPreparedPinMenuBeforeRealMainAck() =
+        runService(changeScene = false, r21Negative = true, r41WaitForPreparedRoute = true,
+            r41WarmSystemBeforeService = true, r21Pin = true, r21PinUseMenu = true)
     @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
     @Test fun r41ActualWarmFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, true, true)
     @Test fun r41TwentyUnheldWakeAttempts() = runNaturalWakeBatch()
