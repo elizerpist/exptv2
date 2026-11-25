@@ -95,6 +95,8 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val firstPhysical=AtomicLong(0); val firstPhysicalStarted=CountDownLatch(1)
         val selectedC=AtomicLong(0); val selectedCCompleted=CountDownLatch(1); val selectedCOutcome=AtomicReference<String?>()
         val realPositive=AtomicBoolean(false); val positivePathEntries=AtomicInteger(0)
+        val sceneAtCompletion=AtomicLong(-1); val decisionObserved=AtomicBoolean(false)
+        val latestPreconditions=AtomicBoolean(false)
         val openingId=AtomicLong(0); val claimedB=AtomicLong(0); val openingHeld=CountDownLatch(1)
         val openingRelease=CountDownLatch(1); val openingGateUsed=AtomicBoolean(false)
         val r25Evaluations=AtomicLong(0); val r25AtAExit=AtomicLong(-1)
@@ -142,6 +144,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             val snapshot=actual.javaClass.getDeclaredMethod("r25SnapshotLocked",KeyguardCardInspectionRequest::class.java).also { it.isAccessible=true }
             val gateField=actual.javaClass.getDeclaredField("firstAuthorizedOrb").also { it.isAccessible=true }
             val queueField=actual.javaClass.getDeclaredField("inspectionQueue").also { it.isAccessible=true }
+            val freshnessField=actual.javaClass.getDeclaredField("inspectionFreshness").also { it.isAccessible=true }
             val emptyDirect=actual.javaClass.getDeclaredMethod("r34EmptyDirectLocked",KeyguardCardInspectionRequest::class.java).also { it.isAccessible=true }
             val queueLock=checkNotNull(lockField.get(actual))
             fun currentRoute(request:KeyguardCardInspectionRequest):Route? = synchronized(queueLock) {
@@ -222,6 +225,7 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                             rootUnavailable || walkTruncated || abortedStale) return
                         val found=currentRoute(request) ?: return
                         if(found.backend!="R18_DIRECT" || !candidate.compareAndSet(null,request)) return
+                        sceneAtCompletion.set((gateField.get(actual) as KeyguardFirstAuthorizedOrb).sceneSerial())
                         r25Evaluations.set(0)
                         route.set(found); records.add("A_HELD id=${request.id} route=$found end=$finishedAt")
                         held.countDown()
@@ -235,8 +239,23 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                     }
                     override fun beforeDecision(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility,
                         pending:KeyguardCardInspectionRequest?, authority:KeyguardInspectionAuthority) {
-                        if ((duringRead || afterRead) && request.id == candidate.get()?.id)
-                            records.add("A_ORDERED_DECISION id=${request.id} decision=$decision pending=$pending currentScene=${(gateField.get(actual) as KeyguardFirstAuthorizedOrb).sceneSerial()}")
+                        if (afterRead && request.id == candidate.get()?.id) synchronized(queueLock) {
+                            val live=(queueField.get(actual) as KeyguardCardInspectionQueue).pendingRequest()
+                            val ingress=live?.r14Ingress
+                            val scene=(gateField.get(actual) as KeyguardFirstAuthorizedOrb).sceneSerial()
+                            val freshness=live?.let { (freshnessField.get(actual) as KeyguardInspectionFreshness).beforeRead(it) }
+                            val external=live!=null && ingress!=null && ingress.displayId==Display.DEFAULT_DISPLAY &&
+                                (ingress.origin==KeyguardR14Origin.SYSTEM_UI || ingress.origin==KeyguardR14Origin.AMBIGUOUS) &&
+                                ingress.callbackAt<=live.queuedAtUptimeMs && (ingress.eventAt==null || ingress.eventAt<=ingress.callbackAt)
+                            val qualified=decision==KeyguardCardVisibility.SHOW_FULL && live!=null && live===pending &&
+                                live.id>request.id && authority.matches(live) && live.r42SceneSerial==scene && external &&
+                                freshness!=null && currentRoute(request)==route.get() && sceneAtCompletion.get()>=0 &&
+                                scene>sceneAtCompletion.get()
+                            latestPreconditions.set(qualified); decisionObserved.set(true)
+                            records.add("A_ORDERED_DECISION id=${request.id} decision=$decision boundaryPending=$pending actualPending=$live " +
+                                "oldScene=${sceneAtCompletion.get()} currentScene=$scene freshness=$freshness external=$external " +
+                                "sameOwner=${currentRoute(request)==route.get()} qualified=$qualified")
+                        }
                     }
                     override fun beforeOptionalInspectionReport(request:KeyguardCardInspectionRequest) {
                         if (checkReport && request.id == candidate.get()?.id) {
@@ -367,6 +386,8 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             }
             if (duringRead || afterRead) {
                 records.add("A_POSITIVE_PATH_ENTRIES=${positivePathEntries.get()}")
+                if (afterRead && (!decisionObserved.get() || !latestPreconditions.get()))
+                    throw AssertionError("NOT REACHED: no independently qualified latest pending request on the same stale DIRECT owner")
                 assertEquals("R42: obsolete A must exit before positive-only handling",0,positivePathEntries.get())
             }
             assertTrue("NOT REACHED: later B was not queued",bId.get()>a.id)
