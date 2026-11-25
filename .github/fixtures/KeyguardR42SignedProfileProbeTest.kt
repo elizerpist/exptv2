@@ -133,7 +133,11 @@ class KeyguardR42SignedProfileProbeTest {
             assertTrue("NOT REACHED: empty ORB bounds", bounds.width() > 8 && bounds.height() > 8)
             notes.add("source=$source material=SYNTHETIC_DEMO wakeNs=$wakeNs owner=$identity bounds=$bounds physical=UNOBSERVED")
             val frames = mutableListOf<Bitmap>()
-            repeat(10) { index ->
+            // Preserve the first ten observations as well as a longer strip:
+            // the calibrated fixture has a deliberately flat early plateau,
+            // so a short strip cannot prove that naturally advancing pixels
+            // ever reach the distinct B phase.
+            repeat(30) { index ->
                 if (index > 0) SystemClock.sleep(150)
                 var current: Any? = null
                 instrumentation.runOnMainSync { current = service()?.let { call(it, "r22VisualIdentityForTest") } }
