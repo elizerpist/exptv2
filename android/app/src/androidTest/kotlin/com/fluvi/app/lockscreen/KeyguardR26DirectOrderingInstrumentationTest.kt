@@ -46,10 +46,15 @@ class KeyguardR26DirectOrderingInstrumentationTest {
     @Test fun systemWarmLatestDirectPreservesOrdering() = exercise(true, true, platformWarm = true, followLatest = true)
     @Test fun systemWarmLatestReadyWorkDoesNotWaitForDiagnosticPublication() =
         exercise(true, true, checkReport = true, platformWarm = true, followLatest = true)
+    @Test fun systemWarmOrderedCandidateLatestPreservesOrdering() =
+        exercise(true, true, platformWarm = true, followLatest = true, orderedCandidateOnly = true)
+    @Test fun systemWarmOrderedCandidateReadyWorkPrecedesReport() =
+        exercise(true, true, checkReport = true, platformWarm = true, followLatest = true, orderedCandidateOnly = true)
 
     private data class Route(val backend:String, val reservation:Long, val host:Long, val output:Long)
     private fun exercise(pendingBefore:Boolean, checkR41Bypass:Boolean = false, warmup:Boolean = false,
-                         checkReport:Boolean = false, platformWarm:Boolean = false, followLatest:Boolean = false) {
+                         checkReport:Boolean = false, platformWarm:Boolean = false, followLatest:Boolean = false,
+                         orderedCandidateOnly:Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -190,6 +195,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                         readers.decrementAndGet()
                         if(!armed.get() || decision!=KeyguardCardVisibility.SHOW_FULL || reason!=KeyguardSurfaceReason.MAIN_CONFIRMED ||
                             rootUnavailable || walkTruncated || abortedStale) return
+                        if (orderedCandidateOnly && !orderedReads.contains(request.id)) {
+                            records.add("SKIPPED_NON_MILESTONE_POSITIVE id=${request.id}")
+                            return
+                        }
                         val found=currentRoute(request) ?: return
                         if(found.backend!="R18_DIRECT" || !candidate.compareAndSet(null,request)) return
                         r25Evaluations.set(0)
