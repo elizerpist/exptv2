@@ -212,6 +212,7 @@ private class KeyguardOrbPrivacyCover(
     val bitmap: Bitmap,
     val buffer: HardwareBuffer,
 ) {
+    val settled = AtomicBoolean(false)
     var committed = false
     var visible = false
     var retiring = false
@@ -912,15 +913,17 @@ internal class KeyguardOrbBufferRenderer(
                 val tx = SurfaceControl.Transaction()
                 try {
                     tx.setBuffer(coverLayer, buffer, null, Consumer<SyncFence> { fence ->
-                        worker.releasePrivacyCover(fence) {
-                            runCatching { cover.buffer.close() }
-                            runCatching { cover.bitmap.recycle() }
-                            mainHandler.post {
-                                runCatching { SurfaceControl.Transaction().use { it.reparent(cover.layer, null).apply() } }
-                                runCatching { cover.layer.release() }
-                                if (privacyCover === cover) privacyCover = null
+                        if (cover.settled.compareAndSet(false, true)) {
+                            worker.releasePrivacyCover(fence) {
+                                runCatching { cover.buffer.close() }
+                                runCatching { cover.bitmap.recycle() }
+                                mainHandler.post {
+                                    runCatching { SurfaceControl.Transaction().use { it.reparent(cover.layer, null).apply() } }
+                                    runCatching { cover.layer.release() }
+                                    if (privacyCover === cover) privacyCover = null
+                                }
                             }
-                        }
+                        } else runCatching { fence.close() }
                     }).addTransactionCommittedListener(Executor { mainHandler.post(it) }) {
                         if (privacyCover === cover && !cover.retiring && cover.root.isAttachedToWindow) {
                             cover.committed = true
@@ -937,10 +940,16 @@ internal class KeyguardOrbBufferRenderer(
             if (staged.isFailure && !applyStarted) {
                 // No transaction transferred the buffer. This is the only
                 // case in which local disposal does not require a receipt.
-                privacyCover = null
-                worker.discardUnsubmittedPrivacyCover { buffer.close(); bitmap.recycle() }
-                runCatching { SurfaceControl.Transaction().use { it.reparent(coverLayer, null).apply() } }
-                runCatching { coverLayer.release() }
+                if (cover.settled.compareAndSet(false, true)) {
+                    worker.discardUnsubmittedPrivacyCover {
+                        runCatching { buffer.close() }; runCatching { bitmap.recycle() }
+                        mainHandler.post {
+                            runCatching { SurfaceControl.Transaction().use { it.reparent(coverLayer, null).apply() } }
+                            runCatching { coverLayer.release() }
+                            if (privacyCover === cover) privacyCover = null
+                        }
+                    }
+                }
             }
             if (staged.isFailure && applyStarted) {
                 // Apply exceptions do not establish transfer ownership.
