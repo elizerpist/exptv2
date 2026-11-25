@@ -58,11 +58,12 @@ def analyzed_rows(block, arm, mode, source, trial, report, capture_hash):
         owner_parts = owner.split('/')
         same_owner = owner != 'UNOBSERVED' and all(row.get(key) == owner for key in ('readOwner', 'dispatchOwner', 'grantOwner'))
         same_output = (len(owner_parts) == 3 and owner_parts[1] == trial.get('generation') and
-                       trial.get('workerPost') == 'true')
+                       trial.get('workerPost') == 'true' and trial.get('visible') == 'true')
         same_pipeline = (len(owner_parts) == 3 and any(
             pipe.get('attempt') == row.get('attempt') and pipe.get('attach') == trial.get('attachment') and
             pipe.get('output') == owner_parts[1] and pipe.get('proof') == owner_parts[2] and
-            pipe.get('consumedReq') == owner_parts[2] and pipe.get('backend') == 'R18_DIRECT_ATTEMPT' and
+            pipe.get('consumedReq') == owner_parts[2] and pipe.get('privacy') == 'full' and
+            pipe.get('backend') == 'R18_DIRECT_ATTEMPT' and
             integer(pipe.get('grant')) is not None
             for pipe in pipelines))
         grant, winner = (integer(row.get(k)) for k in ('grantNs', 'winnerNs'))
