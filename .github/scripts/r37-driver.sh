@@ -87,6 +87,10 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r44_1_cover)
+      class=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest
+      methods=(r441PrivacyCoverSwitchesWithExactRetiredChild)
+      ;;
     r44_1_privacy_black)
       class=com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialViewInstrumentationTest
       methods=(r22_4BoundedResizedPrivacyStripBlack)
@@ -293,7 +297,7 @@ case "${1:-}" in
     printf '%s %s\n' "$method" "$uuid" >> "$out/trials.txt"
     rc=0
     timeout -k 5s 260s adb shell am instrument -w -r -e sourceSha "$APP_SHA" -e harnessSha "$HARNESS_SHA" -e runUuid "$uuid" -e class "$class#$method" com.fluvi.app.test/androidx.test.runner.AndroidJUnitRunner > "$out/$method.txt" 2>&1 || rc=$?
-    if [[ "$TEST_SCOPE" == r44_1_privacy_* ]]; then
+    if [[ "$TEST_SCOPE" == r44_1_privacy_* || "$TEST_SCOPE" == r44_1_cover ]]; then
       # Preserve sample zero and every calibration/control even if the assertion fails.
       adb exec-out run-as com.fluvi.app tar -cf - files/keyguard-material-smoke > "$out/$method-images.tar" 2> "$out/$method-images.stderr" || true
     fi
