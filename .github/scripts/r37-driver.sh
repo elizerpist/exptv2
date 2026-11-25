@@ -17,7 +17,7 @@ case "${1:-}" in
       cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
     fi
     case "$TEST_SCOPE" in
-      r42_raw_pressure)
+      r42_raw_pressure|r42_late_winner)
         second="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR41DiagnosticsInstrumentationTest.kt"
         test -f "$second"
         cp "$second" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR41DiagnosticsInstrumentationTest.kt
@@ -198,6 +198,10 @@ case "${1:-}" in
     r42_raw_pressure)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
       methods=(r42LateCriticalWakeSurvivesRawLightPressure r42LateCriticalWakeSurvivesRawFullPressure)
+      ;;
+    r42_late_winner)
+      class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
+      methods=(r42LateWinnerOfferAndReadSurviveRawPressure)
       ;;
     r42_prestart)
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
