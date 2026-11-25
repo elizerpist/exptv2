@@ -95,6 +95,8 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val firstPhysical=AtomicLong(0); val firstPhysicalStarted=CountDownLatch(1)
         val selectedC=AtomicLong(0); val selectedCCompleted=CountDownLatch(1); val selectedCOutcome=AtomicReference<String?>()
         val realPositive=AtomicBoolean(false); val positivePathEntries=AtomicInteger(0)
+        val openingId=AtomicLong(0); val claimedB=AtomicLong(0); val openingHeld=CountDownLatch(1)
+        val openingRelease=CountDownLatch(1); val openingGateUsed=AtomicBoolean(false)
         val r25Evaluations=AtomicLong(0); val r25AtAExit=AtomicLong(-1)
         val order=AtomicLong(0); val oldProofAtExit=AtomicLong(0); val maxReaders=AtomicInteger(0); val readers=AtomicInteger(0)
         val r25Posts=AtomicInteger(0); val earlyReveal=AtomicInteger(0); val records=Collections.synchronizedList(mutableListOf<String>())
@@ -102,6 +104,9 @@ class KeyguardR26DirectOrderingInstrumentationTest {
         val directAtStart=Collections.synchronizedSet(mutableSetOf<Long>())
         val offeredAfterA=Collections.synchronizedSet(mutableSetOf<Long>())
         val originalCross=KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross
+        val originalR15Observer=KeyguardR15AcquisitionTestHooks.observer
+        val originalR15Before=KeyguardR15AcquisitionTestHooks.beforeChildCall
+        val originalR15Ineligible=KeyguardR15AcquisitionTestHooks.observeIneligible
         var service:FluviKeyguardCardService?=null; var failure:Throwable?=null; var capture=false
         try {
             check(!FluviKeyguardCardServiceRegistry.connected && !keyguard.isDeviceSecure)
@@ -162,6 +167,9 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             instrumentation.runOnMainSync {
                 actual.r41R25EvaluationsForTest = r25Evaluations
                 actual.inspectionProbeForTest=object:KeyguardInspectionProbeForTest {
+                    override fun openingReserved(request:KeyguardCardInspectionRequest, reservationId:Long, armed:Boolean) {
+                        if (duringRead && armed) { openingId.set(request.id); records.add("R22_OPENING id=${request.id} reservation=$reservationId") }
+                    }
                     override fun queueOffered(request:KeyguardCardInspectionRequest, previous:KeyguardCardInspectionRequest?,
                         pending:KeyguardCardInspectionRequest?, startsWorker:Boolean) {
                         val a=candidate.get()
@@ -187,15 +195,12 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                             if (bStarted.compareAndSet(0,seq)) { records.add("ACTUAL_SUCCESSOR id=${request.id}"); successorStarted.countDown() }
                         }
                     }
-                    override fun yielded(request:KeyguardCardInspectionRequest, successor:KeyguardCardInspectionRequest, startedAt:Long, finishedAt:Long, visited:Int) { readers.decrementAndGet() }
-                    override fun openingChildBefore(request:KeyguardCardInspectionRequest, windowId:Int, index:Int) {
-                        if (!duringRead || !armed.get() || candidate.get() != null || !directAtStart.contains(request.id)) return
-                        val found=currentRoute(request) ?: return
-                        if (found.backend != "R18_DIRECT" || !candidate.compareAndSet(null,request)) return
-                        route.set(found); r25Evaluations.set(0)
-                        records.add("A_REAL_CHILD_HELD id=${request.id} window=$windowId index=$index route=$found")
-                        held.countDown()
-                        if (!release.await(20,TimeUnit.SECONDS)) workerTimeout.set(true)
+                    override fun yielded(request:KeyguardCardInspectionRequest, successor:KeyguardCardInspectionRequest, startedAt:Long, finishedAt:Long, visited:Int) {
+                        readers.decrementAndGet()
+                        if (duringRead && request.id == openingId.get()) {
+                            claimedB.set(successor.id)
+                            records.add("R22_CLAIM opening=${request.id} successor=${successor.id} visited=$visited")
+                        }
                     }
                     override fun readCompleted(request:KeyguardCardInspectionRequest, decision:KeyguardCardVisibility,
                         reason:KeyguardSurfaceReason, rootUnavailable:Boolean, walkTruncated:Boolean,
@@ -252,6 +257,27 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 actual.r25MainDispatchForTest={ request, task ->
                     if(request.id==candidate.get()?.id) r25Posts.incrementAndGet()
                     Handler(Looper.getMainLooper()).post(task)
+                }
+                if (duringRead) {
+                    KeyguardR15AcquisitionTestHooks.observeIneligible = true
+                    KeyguardR15AcquisitionTestHooks.observer = { }
+                    KeyguardR15AcquisitionTestHooks.beforeChildCall = { request, windowId, index ->
+                        if (armed.get() && request.id == openingId.get() && openingGateUsed.compareAndSet(false,true)) {
+                            records.add("R22_OPENING_CHILD_HELD id=${request.id} window=$windowId index=$index")
+                            openingHeld.countDown()
+                            if (!openingRelease.await(20,TimeUnit.SECONDS)) workerTimeout.set(true)
+                        } else if (armed.get() && request.id == claimedB.get() && request.id > 0 &&
+                            candidate.get() == null && directAtStart.contains(request.id)) {
+                            val found=currentRoute(request)
+                            if (found?.backend == "R18_DIRECT" && candidate.compareAndSet(null,request)) {
+                                route.set(found); r25Evaluations.set(0)
+                                records.add("B_REAL_CHILD_HELD id=${request.id} window=$windowId index=$index route=$found")
+                                held.countDown()
+                                if (!release.await(20,TimeUnit.SECONDS)) workerTimeout.set(true)
+                            }
+                        }
+                        originalR15Before?.invoke(request,windowId,index)
+                    }
                 }
             }
             if (warmup) {
@@ -317,6 +343,11 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                 records.add("C_OWN_READ id=$c result=${selectedCOutcome.get()} proofAndVisibleOutput=SEPARATE_CONTROLS")
                 return
             }
+            if (duringRead) {
+                assertTrue("NOT REACHED: original R22 opening at a real child", openingHeld.await(20,TimeUnit.SECONDS))
+                instrumentation.runOnMainSync { offerSuccessor() }
+                openingRelease.countDown()
+            }
             assertTrue("NOT REACHED: complete positive with real DIRECT snapshot",held.await(20,TimeUnit.SECONDS))
             val a=checkNotNull(candidate.get()); val original=checkNotNull(route.get())
             assertEquals("R18_DIRECT",original.backend)
@@ -368,7 +399,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
             records.add("PASS a=${a.id} b=${bId.get()} route=$original main=${originalMain.get()}/${originalExit.get()} bStart=${bStarted.get()} earlyReveal=${earlyReveal.get()}")
         } catch(t:Throwable) { failure=t; records.add("FAIL ${t.javaClass.simpleName}:${t.message}") }
         finally {
-            release.countDown(); reportRelease.countDown(); preReaderRelease.countDown(); KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross=originalCross
+            release.countDown(); reportRelease.countDown(); preReaderRelease.countDown(); openingRelease.countDown(); KeyguardOrbSurfaceWorkerTestHooks.afterRevealCross=originalCross
+            KeyguardR15AcquisitionTestHooks.beforeChildCall=originalR15Before
+            KeyguardR15AcquisitionTestHooks.observer=originalR15Observer
+            KeyguardR15AcquisitionTestHooks.observeIneligible=originalR15Ineligible
             runCatching { instrumentation.runOnMainSync { service?.inspectionProbeForTest=null; service?.r25MainDispatchForTest=null; service?.r41R25EvaluationsForTest=null } }
             if(capture) runCatching { File(dir,"frozen.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"] as String) }
             runCatching {
