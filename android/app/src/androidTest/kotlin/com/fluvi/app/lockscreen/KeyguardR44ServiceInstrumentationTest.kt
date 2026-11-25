@@ -193,7 +193,26 @@ class KeyguardR44ServiceInstrumentationTest {
                 return
             }
             waitFor("initial restricted scene has no overlay") { main { !owner.inspectionStateForTest().attached } }
-            underlay = checkNotNull(ui.takeScreenshot())
+            var backgroundSamples = 0
+            waitFor("non-protected visible lockscreen underlay") {
+                val candidate = checkNotNull(ui.takeScreenshot())
+                // A black protected/pre-render screenshot is not an underlay
+                // reference. Use a sparse screen-wide check away from navbar.
+                var visible = 0
+                for (y in candidate.height / 10 until candidate.height * 9 / 10 step candidate.height / 10)
+                    for (x in candidate.width / 10 until candidate.width * 9 / 10 step candidate.width / 10) {
+                        val color = candidate.getPixel(x, y)
+                        if ((color shr 16 and 255) + (color shr 8 and 255) + (color and 255) > 8) visible++
+                    }
+                if (backgroundSamples < 8) out.resolve("underlay-probe-${backgroundSamples}.png").outputStream().use {
+                    check(candidate.compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+                backgroundSamples++
+                if (visible >= 16 && main { !owner.inspectionStateForTest().attached }) {
+                    underlay = candidate
+                    true
+                } else { candidate.recycle(); false }
+            }
             out.resolve("r44-underlay-full.png").outputStream().use {
                 check(underlay!!.compress(Bitmap.CompressFormat.PNG, 100, it))
             }
