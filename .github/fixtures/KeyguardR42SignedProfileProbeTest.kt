@@ -141,7 +141,7 @@ class KeyguardR42SignedProfileProbeTest {
                     }
                     !power.isInteractive && keyguard.isKeyguardLocked && !visible
                 }
-                call(diagnostics, "startCapture", context, source, captureBuildMode, "LIGHT")
+                call(diagnostics, "startCapture", context, source, captureBuildMode, "LIGHT", false)
                 capture = true
                 wakeNs = System.nanoTime()
                 shell("input keyevent KEYCODE_WAKEUP")
