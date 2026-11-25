@@ -23,7 +23,7 @@ case "${1:-}" in
         cp "$second" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR41DiagnosticsInstrumentationTest.kt
         sha256sum "$second" > "$out/fixture-r41-diagnostics.sha256"
         ;;
-      system_warm_report|system_warm_ordered|system_warm_latest_report|system_warm_latest_ordered|system_warm_target_report|system_warm_target_ordered)
+      r42_prestart|r42_stale|system_warm_report|system_warm_ordered|system_warm_latest_report|system_warm_latest_ordered|system_warm_target_report|system_warm_target_ordered)
         second="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt"
         test -f "$second"
         cp "$second" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt
@@ -198,6 +198,14 @@ case "${1:-}" in
     r42_raw_pressure)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
       methods=(r42LateCriticalWakeSurvivesRawLightPressure r42LateCriticalWakeSurvivesRawFullPressure)
+      ;;
+    r42_prestart)
+      class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
+      methods=(r42PreStartSelectsActualLatestRequest)
+      ;;
+    r42_stale)
+      class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
+      methods=(r42StalePositiveExitsAfterOrderedRestrictions)
       ;;
     capacity_pressure)
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
