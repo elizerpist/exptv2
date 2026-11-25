@@ -163,6 +163,17 @@ PY
     printf '%s\n' 'FAIL or NOT REACHED: no matching owner-bound R41 grant/winner in profile capture.' >> "$evidence/result.txt"
     exit 1
   fi
+  # Android force-stops the target when `am instrument` finishes. That is a
+  # test-runner teardown, not the package update: the bound service before and
+  # immediately after the update was already verified above. Preserve the
+  # pre-cleanup dumps and explicitly request a normal rebind for teardown.
+  if grep -Eq 'Force stopping com[.]fluvi[.]app .*: finished inst' "$evidence/profile-motion-logcat.txt"; then
+    printf '%s\n' 'Instrumentation force-stopped target at finish; requesting ordinary accessibility-service rebind.' > "$evidence/post-instrumentation-rebind.txt"
+    adb shell settings put secure enabled_accessibility_services ''
+    adb shell settings put secure accessibility_enabled 0
+    adb shell settings put secure enabled_accessibility_services "$component"
+    adb shell settings put secure accessibility_enabled 1
+  fi
   observe_service post-motion
   adb exec-out run-as com.fluvi.app cat files/r41-update-sentinel.txt > "$evidence/sentinel-post-motion.txt"
   cmp "$dir/sentinel.txt" "$evidence/sentinel-post-motion.txt"
