@@ -302,6 +302,20 @@ class KeyguardR22ReaderHandoffTest {
             read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
     }
 
+    @Test fun r44NestedClockSceneDoesNotDisqualifyTheVerifiedHost() {
+        val host = Platform.node("element:lockscreen")
+        val localScene = Platform.node(null)
+        val clock = Platform.node("element:LargeClock")
+        checkNotNull(Platform.nodes[localScene]).extras.putCharSequence(KeyguardR44Markers.EXTRA, "scene:localClock")
+        checkNotNull(Platform.nodes[localScene]).children.add(clock)
+        checkNotNull(Platform.nodes[host]).children.add(localScene)
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 1, true, host))
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true), { true })
+        assertEquals(KeyguardSurface.MAIN_KEYGUARD, KeyguardR44SurfaceClassifier.classify(
+            read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+    }
+
     private class Handoff {
         val safe = KeyguardOpeningInspectionHandoff.Conditions(
             true, true, true, true, true, true, true, true, true, true)

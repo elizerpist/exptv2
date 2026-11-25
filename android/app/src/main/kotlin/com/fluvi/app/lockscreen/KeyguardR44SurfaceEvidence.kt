@@ -31,8 +31,8 @@ internal object KeyguardR44Markers {
 
     /** Unknown names never grant. An unresolved scene/overlay role may
      * conceal a restriction; ordinary unrelated inspected tags are counted. */
-    fun unknownMayRestrict(value: CharSequence): Boolean =
-        value.startsWith("overlay:") || value.startsWith("scene:")
+    fun unknownMayRestrict(value: CharSequence, nestedInHost: Boolean): Boolean =
+        value.startsWith("overlay:") || (!nestedInHost && value.startsWith("scene:"))
 }
 
 internal data class KeyguardR44Witness(
