@@ -104,5 +104,11 @@ class KeyguardR41AttemptLedgerTest {
         different.record("FALLBACK_CANDIDATE", 20, 100, 30, 40)
         different.record("FALLBACK_POST_RECEIPT", 20, 200, 31, 50)
         assertTrue(different.core(1, 1, 1, 0).contains("fallbackCandidateAndPostReceipt=UNOBSERVED"))
+        // A DIRECT or otherwise unmatched receipt must not become a fallback
+        // candidate or authorization merely because its callback was observed.
+        val receiptOnly = KeyguardR41AttemptLedger()
+        receiptOnly.record("FALLBACK_POST_RECEIPT", 20, 200, 30, 50)
+        assertTrue(receiptOnly.core(1, 1, 1, 0).contains("fallbackCandidateAndPostReceipt=UNOBSERVED"))
+        assertTrue(receiptOnly.core(1, 1, 1, 0).contains("fallbackGrant=UNOBSERVED"))
     }
 }

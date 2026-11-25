@@ -1768,16 +1768,17 @@ class FluviKeyguardCardService : AccessibilityService() {
             armSurfaceDiagnostic = { attach ->
                 val operation = activeWindowDiagnosticOperation
                 val owner = KeyguardCardDiagnostics.drawEvidenceOwner()
-                val r41FallbackOperation = operation?.context?.let {
-                    it.captureId != null && r18FallbackWake == it.originWakeEpoch
-                } == true
                 if (operation?.context?.captureId == null || owner == null) null
                 else { observation ->
                     if (KeyguardCardDiagnostics.drawEvidenceOwner() === owner) {
                         // This is the callback receipt, not a compositor or
                         // physical-pixel timestamp. It is linked to the exact
                         // original show operation and output generation.
-                        if (r41FallbackOperation && observation.stage == "FIRST_POST" && observation.full && observation.attachment == attach) {
+                        // A non-DIRECT show can also occur without a failed
+                        // R18 reservation. Record the actual receipt for its
+                        // original operation; only the reducer may pair it
+                        // with that operation's non-DIRECT candidate.
+                        if (observation.stage == "FIRST_POST" && observation.full && observation.attachment == attach) {
                             val request = operation.causingInspectionRequestId
                             val show = operation.showOperationId
                             if (request != null && show != null) KeyguardCardDiagnostics.r41Mark(
@@ -5231,7 +5232,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             // A candidate at the real fallback display call is not yet a
             // proven effective authorization. A matching first-post callback
             // is recorded separately and never fabricates a grant.
-            if (directOwner == null && r18FallbackWake == wakeEpoch && presentation.full &&
+            if (directOwner == null && presentation.full &&
                 showOperation?.context?.captureId != null) {
                 val request = showOperation.causingInspectionRequestId
                 val show = showOperation.showOperationId
