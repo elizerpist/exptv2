@@ -134,6 +134,25 @@ class KeyguardR22ReaderHandoffTest {
         assertEquals(2, window.systemId)
     }
 
+    @Test fun r44ExplicitLockscreenAndDeviceEntryNeedAnOrdinarySurfaceDecision() {
+        // Controlled structural replay of the API-37 source shape.  This is
+        // not evidence that an OEM exposes either marker on a real handset.
+        val root = Platform.node("element:lockscreen")
+        val entry = Platform.node("com.android.systemui:id/device_entry_icon_view")
+        checkNotNull(Platform.nodes[root]).children.add(entry)
+        Platform.activeRoot = root
+        Platform.inventory = listOf(Platform.window(10, 1, true, root))
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5), { true })
+        assertFalse("the real walker must complete", read.rootUnavailable)
+        assertFalse("the real walker must not truncate", read.walkTruncated)
+        assertEquals(2, read.visitedNodeCount)
+        assertEquals(10, read.snapshots.single().windowId)
+        val decision = KeyguardSurfaceClassifier.classifyDetailed(read.snapshots,
+            unavailableRoot = read.rootUnavailable, walkTruncated = read.walkTruncated)
+        assertEquals("a qualified R44 path must recognise this distinct pair",
+            KeyguardSurface.MAIN_KEYGUARD, decision.surface)
+    }
+
     private class Handoff {
         val safe = KeyguardOpeningInspectionHandoff.Conditions(
             true, true, true, true, true, true, true, true, true, true)
