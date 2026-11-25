@@ -84,7 +84,8 @@ XML
       if [[ "$app_pid" =~ ^[0-9]+$ ]] &&
          grep -Fq 'com.fluvi.app/.lockscreen.FluviKeyguardCardService' "$evidence/service-$label.txt" &&
          grep -Eq "app=ProcessRecord\\{[^}]*[[:space:]]${app_pid}:com[.]fluvi[.]app/" "$evidence/service-$label.txt" &&
-         grep -Eq 'Bound services:.*com[.]fluvi[.]app/' "$evidence/accessibility-$label.txt"; then
+         grep -Fq 'Bound services:{Service[label=Fluvi' "$evidence/accessibility-$label.txt" &&
+         grep -Fq 'Binding services:{}' "$evidence/accessibility-$label.txt"; then
         seen=true; break
       fi
       sleep 0.5
