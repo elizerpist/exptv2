@@ -100,6 +100,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
       methods=(allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners burstOfPendingOffersPreservesWinningOwnerAndReportsLoss)
       ;;
+    capacity_pressure)
+      class=com.fluvi.app.lockscreen.KeyguardR41DiagnosticsInstrumentationTest
+      methods=(twentyFiveRequestWakeSurvivesLightExport twentyFiveRequestWakeSurvivesFullExport allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners burstOfPendingOffersPreservesWinningOwnerAndReportsLoss)
+      ;;
     all)
       class=""
       methods=(orderedDirectSkipsInapplicableR25Evaluation allAttemptsSurviveVerboseLightPressure allAttemptsSurviveVerboseFullPressure rawWinnerAndCancellationRetainTheirCaptureAndRequestOwners)
