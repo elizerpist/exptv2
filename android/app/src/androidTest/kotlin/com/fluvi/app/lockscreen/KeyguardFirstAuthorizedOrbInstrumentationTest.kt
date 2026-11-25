@@ -61,6 +61,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         runService(false, true, false, false, false, false, true, false, true)
     @Test fun r41SystemWarmPinBeforeRealMainAck() =
         runService(false, true, false, false, false, false, true, false, false, true)
+    @Test fun r41SystemWarmPinMenuBeforeRealMainAck() =
+        runService(false, true, false, false, false, false, true, false, false, true, true)
     @Test fun r41ActualFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, false, true)
     @Test fun r41ActualWarmFallbackRetainsCandidateAndPostReceipt() = runService(false, null, false, true, true)
     @Test fun r41TwentyUnheldWakeAttempts() = runNaturalWakeBatch()
@@ -210,7 +212,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                            r41WarmSystemBeforeService: Boolean = false,
                            r41LiveMotion: Boolean = false,
                            r21SwipeShade: Boolean = false,
-                           r21Pin: Boolean = false) {
+                           r21Pin: Boolean = false,
+                           r21PinUseMenu: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -466,13 +469,18 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 } else {
                     negativeEnabled.set(true)
                     if (r21Pin) {
-                        val screen = context.getSystemService(android.view.WindowManager::class.java).currentWindowMetrics.bounds
-                        // Avoid the actual ORB hit region while opening bouncer.
-                        val x = screen.left + screen.width() / 5
-                        val fromY = screen.top + screen.height() * 85 / 100
-                        val toY = screen.top + screen.height() / 4
-                        File(dir, "pin-gesture.txt").writeText("bounds=$screen from=$x,$fromY to=$x,$toY durationMs=400\n")
-                        shell("input swipe $x $fromY $x $toY 400")
+                        if (r21PinUseMenu) {
+                            File(dir, "pin-gesture.txt").writeText("input keyevent KEYCODE_MENU\n")
+                            shell("input keyevent KEYCODE_MENU")
+                        } else {
+                            val screen = context.getSystemService(android.view.WindowManager::class.java).currentWindowMetrics.bounds
+                            // Avoid the actual ORB hit region while opening bouncer.
+                            val x = screen.left + screen.width() / 5
+                            val fromY = screen.top + screen.height() * 85 / 100
+                            val toY = screen.top + screen.height() / 4
+                            File(dir, "pin-gesture.txt").writeText("bounds=$screen from=$x,$fromY to=$x,$toY durationMs=400\n")
+                            shell("input swipe $x $fromY $x $toY 400")
+                        }
                     } else if (r21SwipeShade) {
                         val screen = context.getSystemService(android.view.WindowManager::class.java).currentWindowMetrics.bounds
                         val x = screen.centerX()
@@ -503,6 +511,10 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                 val task = checkNotNull(acknowledgement.getAndSet(null))
                 instrumentation.runOnMainSync { task.run() }
                 if (r21Negative) {
+                    if (r21PinUseMenu) {
+                        File(dir, "after-ack-windows.txt").writeText(shell("dumpsys window windows"))
+                        saveScreenshot(File(dir, "04-after-ack.png"))
+                    }
                     var visible = true
                     instrumentation.runOnMainSync { visible = service.renderModeStatus().visible }
                     assertFalse("late acknowledgement resurrected a withdrawn host", visible)
