@@ -1,20 +1,134 @@
 {
   "schema_version": 1,
-  "source_head": "14e05315520ff3282348838804ff6e004c677d30",
-  "base_head": "5b18235f261df24dcee06cf3050e3e20411612fa",
+  "source_head": "25c876b244dbb3e0415d7b89c1c4e2e511048738",
+  "base_head": "96c943fb24e897cc5b2b1af0672e1ff886a207cd",
   "changed_files": [
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt",
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44LazyProviderInstrumentationTest.kt",
+    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardInspectionQueue.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR32OverlapPolicy.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR32OverlapPolicyTest.kt"
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR44SurfaceEvidence.kt",
+    "lib/core/debug/debug_console.dart"
   ],
-  "candidate_changed_symbols": [],
+  "candidate_changed_symbols": [
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#automationPermissions.",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#createState().",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#diagnosticStatusProvider.",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#keyguardTimingCapture.",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#physicalReportProvider.",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugDiagnosticStatusProvider#",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleDialogState#build().",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleDialogState#dispose().",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleDialogState#initState().",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#all.",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#balanceWave.",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#ghost.",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#mindHeatmap.",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#keyguard.",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#logs.",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#push.",
+    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#report."
+  ],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
-  "direct_reference_consumers": [],
-  "affected_test_locations": [],
-  "affected_production_locations": []
+  "direct_reference_consumers": [
+    {
+      "file": "lib/core/debug/debug_console.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#automationPermissions.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#diagnosticStatusProvider.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#keyguardTimingCapture.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#physicalReportProvider.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugDiagnosticStatusProvider#",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#all.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#balanceWave.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#ghost.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#mindHeatmap.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#keyguard.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#logs.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#push.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#report."
+      ],
+      "reference_count": 52,
+      "first_line": 16,
+      "first_column": 9,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "lib/core/debug/debug_floating_button.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugDiagnosticStatusProvider#"
+      ],
+      "reference_count": 2,
+      "first_line": 21,
+      "first_column": 8,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/core/debug/keyguard_timing_capture_console_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`()."
+      ],
+      "reference_count": 5,
+      "first_line": 58,
+      "first_column": 29,
+      "basis": "scip_reference"
+    }
+  ],
+  "affected_test_locations": [
+    {
+      "file": "test/core/debug/keyguard_timing_capture_console_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`()."
+      ],
+      "reference_count": 5,
+      "first_line": 58,
+      "first_column": 29,
+      "basis": "scip_reference"
+    }
+  ],
+  "affected_production_locations": [
+    {
+      "file": "lib/core/debug/debug_console.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#automationPermissions.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#diagnosticStatusProvider.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#keyguardTimingCapture.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#physicalReportProvider.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugDiagnosticStatusProvider#",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#all.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#balanceWave.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#ghost.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#mindHeatmap.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#keyguard.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#logs.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#push.",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#report."
+      ],
+      "reference_count": 52,
+      "first_line": 16,
+      "first_column": 9,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "lib/core/debug/debug_floating_button.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugDiagnosticStatusProvider#"
+      ],
+      "reference_count": 2,
+      "first_line": 21,
+      "first_column": 8,
+      "basis": "scip_reference"
+    }
+  ]
 }
