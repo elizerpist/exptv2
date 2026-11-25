@@ -43,8 +43,25 @@ void main() {
     expect(received?.method, 'startKeyguardDiagnosticCapture');
     expect((received?.arguments as Map)['build'], isNotEmpty);
     expect((received?.arguments as Map)['captureMode'], 'LIGHT');
+    expect((received?.arguments as Map)['r43Evidence'], isFalse);
     expect(snapshot.recording, isTrue);
     expect(snapshot.captureId, 'capture-1');
+  });
+
+  test('R43 evidence must be explicitly requested', () async {
+    MethodCall? received;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          received = call;
+          return <String, Object?>{'available': true, 'captureState': 'REC'};
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: channel,
+      isAndroid: () => true,
+    );
+    await bridge.start(r43Evidence: true);
+    expect(received?.method, 'startKeyguardDiagnosticCapture');
+    expect((received?.arguments as Map)['r43Evidence'], isTrue);
   });
 
   test('can explicitly request the full native causal capture', () async {

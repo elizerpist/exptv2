@@ -74,7 +74,36 @@ void main() {
     await tester.pump();
     expect(calls, contains('startKeyguardDiagnosticCapture'));
     expect((startArguments as Map)['captureMode'], 'LIGHT');
+    expect((startArguments as Map)['r43Evidence'], isFalse);
     expect(find.textContaining('REC'), findsOneWidget);
+  });
+
+  testWidgets('Android 17 evidence is explicitly armed', (tester) async {
+    Object? startArguments;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(runtime, (call) async {
+          if (call.method == 'startKeyguardDiagnosticCapture') {
+            startArguments = call.arguments;
+          }
+          return response('REC', 'LIVE');
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: runtime,
+      isAndroid: () => true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
+    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('debug-console-r43-start')),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-console-r43-start')));
+    await tester.pump();
+    expect((startArguments as Map)['r43Evidence'], isTrue);
   });
 
   testWidgets(

@@ -83,10 +83,12 @@ class KeyguardTimingCaptureBridge {
 
   Future<KeyguardTimingCaptureSnapshot> start({
     KeyguardTimingCaptureMode mode = KeyguardTimingCaptureMode.light,
+    bool r43Evidence = false,
   }) => _invoke('startKeyguardDiagnosticCapture', <String, Object?>{
     'build': buildCommit,
     'buildMode': buildMode,
     'captureMode': mode.wireValue,
+    'r43Evidence': r43Evidence,
   });
 
   Future<KeyguardTimingCaptureSnapshot> freeze() =>

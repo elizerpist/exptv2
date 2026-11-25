@@ -397,6 +397,7 @@ class MainActivity : FlutterActivity() {
                                     "startKeyguardDiagnosticCapture" -> KeyguardCardDiagnostics.startCapture(
                                         applicationContext, values?.get("build") as? String,
                                         values?.get("buildMode") as? String, values?.get("captureMode") as? String,
+                                        values?.get("r43Evidence") == true,
                                     )
                                     "getKeyguardDiagnosticCapture" -> KeyguardCardDiagnostics.captureSnapshot(applicationContext)
                                     "freezeKeyguardDiagnosticCapture" -> KeyguardCardDiagnostics.freezeCapture(applicationContext)

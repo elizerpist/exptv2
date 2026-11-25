@@ -33,6 +33,7 @@ import com.fluvi.app.lockscreen.material.KeyguardR19FirstPaintTicket
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicIntegerArray
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
@@ -232,6 +233,95 @@ class FluviKeyguardCardService : AccessibilityService() {
     private val surfaceDispatcher = Dispatchers.IO.limitedParallelism(1)
     private val financialDispatcher = Dispatchers.IO.limitedParallelism(1)
     private val inspectionScope = CoroutineScope(serviceJob + surfaceDispatcher)
+    private class R43Plan(val captureId: String) {
+        @Volatile var wakeAt = 0L
+        val holds = AtomicIntegerArray(4)
+        private val lastPassiveAt = AtomicLong(Long.MIN_VALUE)
+        fun allowPassive(now: Long): Boolean {
+            while (true) {
+                val old = lastPassiveAt.get()
+                if (old != Long.MIN_VALUE && now - old < 1_000L) return false
+                if (lastPassiveAt.compareAndSet(old, now)) return true
+            }
+        }
+    }
+    @Volatile private var r43Plan: R43Plan? = null
+    @Volatile private var r43EffectiveFlags: Int? = null
+    private val r43Labels = arrayOf("CLOCK_1", "PIN", "CLOCK_2", "SHADE")
+
+    /** One explicit opt-in, four bounded observations after the next wake.
+     * The labels describe the owner's schedule, never a display permission. */
+    internal fun armR43Capture(captureId: String) {
+        mainHandler.post {
+            if (Build.VERSION.SDK_INT >= 37 && KeyguardCardDiagnostics.r43Enabled(captureId))
+                r43Plan = R43Plan(captureId)
+        }
+    }
+
+    private fun scheduleR43Holds(wakeAt: Long) {
+        val plan = r43Plan ?: return
+        if (!KeyguardCardDiagnostics.r43Enabled(plan.captureId) || plan.wakeAt != 0L) return
+        plan.wakeAt = wakeAt
+        r43Labels.indices.forEach { index ->
+            mainHandler.postDelayed({
+                if (r43Plan === plan && KeyguardCardDiagnostics.r43Enabled(plan.captureId)) {
+                    inspectionScope.launch {
+                        if (!plan.holds.compareAndSet(index, 0, 2) ||
+                            !KeyguardCardDiagnostics.r43Enabled(plan.captureId)) return@launch
+                        val authority = inspectionAuthority
+                        val scene = firstAuthorizedOrb.sceneHint()
+                        val evidence = KeyguardR43SurfaceEvidence()
+                        val observation = runCatching {
+                            val result = windowSnapshotReader.read(
+                                KeyguardWindowSnapshotReader.Request(knownOwnOverlayIdentity,
+                                    authority.attachGeneration, r43Evidence = evidence),
+                                authorityIsCurrent = {
+                                    serviceJob.isActive && r43Plan === plan &&
+                                        KeyguardCardDiagnostics.r43Enabled(plan.captureId) &&
+                                        inspectionAuthority == authority && firstAuthorizedOrb.sceneHint() == scene
+                                },
+                            )
+                            val classification = KeyguardSurfaceClassifier.classifyDetailed(result.snapshots,
+                                unavailableRoot = result.rootUnavailable, walkTruncated = result.walkTruncated)
+                            evidence.attachMarkers(result.snapshots)
+                            KeyguardR43Observation(plan.captureId, authority.serviceSession, authority.wakeGeneration,
+                                null, scene, SystemClock.uptimeMillis(), "OBSERVER", r43Labels[index], r43EffectiveFlags,
+                                result.timing.ownAttributionAmbiguous,
+                                classification, result.rootUnavailable, result.walkTruncated, result.abortedStale,
+                                result.windowsReadMs, result.treeScanMs, result.visitedNodeCount, evidence)
+                        }.getOrElse {
+                            KeyguardR43Observation(plan.captureId, authority.serviceSession, authority.wakeGeneration,
+                                null, scene, SystemClock.uptimeMillis(), "OBSERVER_ERROR", r43Labels[index], r43EffectiveFlags, true,
+                                KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.ROOT_UNAVAILABLE),
+                                true, false, true, 0, 0, 0, KeyguardR43SurfaceEvidence())
+                        }
+                        KeyguardCardDiagnostics.recordR43(applicationContext, observation)
+                    }
+                }
+            }, 4_000L + 6_000L * index)
+        }
+    }
+
+    private fun recordR43Passive(request: KeyguardCardInspectionRequest, read: SystemWindowsRead,
+                                 classification: KeyguardSurfaceClassification, scene: Long?) {
+        val plan = r43Plan ?: return
+        val evidence = read.r43Evidence ?: return
+        if (!KeyguardCardDiagnostics.r43Enabled(plan.captureId) || request.diagnosticContext?.captureId != plan.captureId) return
+        val at = SystemClock.uptimeMillis()
+        val stale = scene == null || scene != firstAuthorizedOrb.sceneHint()
+        evidence.attachMarkers(read.snapshots)
+        val elapsed = at - plan.wakeAt
+        val index = if (plan.wakeAt > 0L && elapsed >= 2_500L) (elapsed / 6_000L).toInt() else -1
+        val inHold = index in r43Labels.indices && elapsed - index * 6_000L in 2_500L..4_000L &&
+            !read.rootUnavailable && !read.walkTruncated && !read.abortedStale && !stale
+        val label = if (inHold && plan.holds.get(index) == 0) r43Labels[index] else null
+        val accepted = KeyguardCardDiagnostics.recordR43(applicationContext, KeyguardR43Observation(
+            plan.captureId, request.session, request.wakeGeneration, request.id, scene, at, "PASSIVE", label,
+            r43EffectiveFlags, read.timing.ownAttributionAmbiguous, classification,
+            read.rootUnavailable, read.walkTruncated, read.abortedStale || stale,
+            read.windowsReadMs, read.treeScanMs, read.visitedNodeCount, evidence))
+        if (accepted && label != null) plan.holds.compareAndSet(index, 0, 1)
+    }
     private val financialScope = CoroutineScope(serviceJob + financialDispatcher)
     private val queueLock = Any()
     private val inspectionQueue = KeyguardCardInspectionQueue()
@@ -1616,8 +1706,10 @@ class FluviKeyguardCardService : AccessibilityService() {
                     if (owner != null) traceKeyguard("USER_PRESENT_RECEIVED", "broadcast", observedUptimeMs = receivedAt,
                         diagnosticContext = owner, fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true))
                 }
-                Intent.ACTION_SCREEN_ON -> beginOrJoinWakeCycle("wake", receivedAt,
-                    r41CaptureId = r41Capture, r41Ordinal = r41Ordinal)
+                Intent.ACTION_SCREEN_ON -> {
+                    scheduleR43Holds(receivedAt)
+                    beginOrJoinWakeCycle("wake", receivedAt, r41CaptureId = r41Capture, r41Ordinal = r41Ordinal)
+                }
             }
         }
     }
@@ -1651,6 +1743,10 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        r43EffectiveFlags = runCatching { serviceInfo?.flags }.getOrNull()
+        KeyguardCardDiagnostics.activeCaptureId()?.let { id ->
+            if (KeyguardCardDiagnostics.r43Enabled(id)) armR43Capture(id)
+        }
         initializeReferenceOwnership()
         session.incrementAndGet()
         mainWorkEvidence.resetSession(session.get(), android.os.Process.myTid().toLong())
@@ -4006,6 +4102,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val r34PausedForOffer: Boolean = false,
         val r37Boundary: String? = null,
         val r37ClaimAt: Long? = null,
+        val r43Evidence: KeyguardR43SurfaceEvidence? = null,
     )
 
     /** Technical-only operation timing. It measures API call duration, not
@@ -4122,6 +4219,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             strictOwnAttribution = r18Active != null ||
                 r18ProvisionalWake?.targetAuthority?.matches(request) == true,
         )
+        if (read.r43Evidence != null) runCatching { recordR43Passive(request, read, classification, sceneAtRead) }
         val signals = quickSignals(settings, classification.surface)
         return InspectionOutcome.Completed(Inspection(
             signals,
@@ -4193,6 +4291,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         val captureOpening = request.diagnosticContext?.captureId != null &&
             request.diagnosticContext.captureId == KeyguardCardDiagnostics.activeCaptureId()
+        val r43CurrentPlan = r43Plan?.takeIf { it.captureId == request.diagnosticContext?.captureId &&
+            KeyguardCardDiagnostics.r43Enabled(it.captureId) }
+        val r43Evidence = if (r43CurrentPlan?.allowPassive(SystemClock.uptimeMillis()) == true)
+            KeyguardR43SurfaceEvidence() else {
+            if (r43CurrentPlan != null) KeyguardCardDiagnostics.r43PassiveSkipped(r43CurrentPlan.captureId)
+            null
+        }
         val (r34Eligible, r37EarlyStamp) = synchronized(queueLock) {
             val adopted = !r38MilestoneOrdered && r34EmptyDirectLocked(request) != null
             adopted to if (adopted || r38MilestoneOrdered) null else r37EarlyStampLocked(request)
@@ -4396,6 +4501,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         KeyguardInspectionAuthority(request.session, request.visibilityEpoch, request.wakeGeneration,
                             request.interactionEpoch, request.attachGeneration), request.id, "decisiveSystemMarker")
                 },
+                r43Evidence = r43Evidence,
             ),
             authorityIsCurrent = { freshness != null && authorityIsCurrent(request) },
             onFreshnessEstablished = { freshness?.let(inspectionFreshness::boundaryEstablished) },
@@ -4423,6 +4529,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             r34PausedForOffer = r34PausedForOffer && result.abortedStale,
             r37Boundary = r37Boundary,
             r37ClaimAt = r37ClaimAt,
+            r43Evidence = r43Evidence,
         )
     }
 

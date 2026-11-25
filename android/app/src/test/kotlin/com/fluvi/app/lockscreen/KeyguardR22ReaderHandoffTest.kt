@@ -114,6 +114,26 @@ class KeyguardR22ReaderHandoffTest {
         return Triple(root, childA, childB)
     }
 
+    @Test fun r43CaptureObservesTheSameWalkWithoutChangingClassification() {
+        tree(first = mainMarker, second = shadeMarker)
+        val baseline = reader.read(KeyguardWindowSnapshotReader.Request(null, 5), { true })
+        val originalCalls = Platform.childCalls.toList()
+        val originalClass = KeyguardSurfaceClassifier.classifyDetailed(baseline.snapshots)
+        Platform.childCalls.clear()
+        tree(first = mainMarker, second = shadeMarker)
+        val evidence = KeyguardR43SurfaceEvidence()
+        val observed = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r43Evidence = evidence), { true })
+        assertEquals(originalCalls, Platform.childCalls)
+        assertEquals(baseline.visitedNodeCount, observed.visitedNodeCount)
+        assertEquals(originalClass, KeyguardSurfaceClassifier.classifyDetailed(observed.snapshots))
+        assertEquals(KeyguardSurface.SHADE, originalClass.surface)
+        val window = evidence.windows().single()
+        assertTrue(window.verified)
+        assertEquals(3, window.visited)
+        assertEquals(1, window.nullId)
+        assertEquals(2, window.systemId)
+    }
+
     private class Handoff {
         val safe = KeyguardOpeningInspectionHandoff.Conditions(
             true, true, true, true, true, true, true, true, true, true)

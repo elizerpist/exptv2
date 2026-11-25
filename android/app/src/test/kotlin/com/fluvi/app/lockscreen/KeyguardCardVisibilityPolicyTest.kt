@@ -41,6 +41,17 @@ class KeyguardCardVisibilityPolicyTest {
         assertEquals(KeyguardCardVisibility.SHOW_FULL, KeyguardCardVisibilityPolicy.decide(signals(full = true)))
     }
 
+    @Test fun `R43 all-zero unknown remains hidden for full and discreet`() {
+        val read = KeyguardSurfaceClassifier.classifyDetailed(listOf(
+            KeyguardWindowSnapshot("com.android.systemui", 3, 1, 0, visibleViewIds = emptySet()),
+        ))
+        assertEquals(KeyguardSurface.UNKNOWN, read.surface)
+        assertEquals(KeyguardSurfaceReason.NO_MAIN_MARKER, read.reason)
+        assertEquals(KeyguardSurfaceMarkers(), read.markers)
+        assertEquals(KeyguardCardVisibility.HIDDEN_UNKNOWN, KeyguardCardVisibilityPolicy.decide(signals(surface = read.surface, full = true)))
+        assertEquals(KeyguardCardVisibility.HIDDEN_UNKNOWN, KeyguardCardVisibilityPolicy.decide(signals(surface = read.surface, full = false)))
+    }
+
     @Test fun `classifier gives pin shade and foreign occlusion priority`() {
         val mainAndPin = listOf(
             system("com.android.systemui:id/keyguard_carrier_text", "com.android.systemui:id/keyguard_security_container"),

@@ -485,7 +485,10 @@ internal object KeyguardCardDiagnostics {
         val mode: KeyguardDiagnosticCaptureMode,
         val droppedAtStart: Long,
         val failuresAtStart: Long,
+        val r43Enabled: Boolean,
     ) {
+        val r43Dropped = AtomicLong()
+        val r43Skipped = AtomicLong()
         val nextAttempt = AtomicLong(1L)
         val hiddenNoops = AtomicLong()
         val producerTotalNs = AtomicLong()
@@ -934,6 +937,14 @@ internal object KeyguardCardDiagnostics {
         val startedWallMs: Long,
         val configuration: Map<String, String>,
         val captureMode: KeyguardDiagnosticCaptureMode,
+        val r43Enabled: Boolean = false,
+        var r43First: String? = null,
+        var r43Last: String? = null,
+        var r43LastSignature: String? = null,
+        var r43Samples: Long = 0,
+        val r43Holds: LinkedHashMap<String, String> = linkedMapOf(),
+        var r43Dropped: Long = 0,
+        var r43Skipped: Long = 0,
         val r41StartMonoBeforeNs: Long? = null,
         val r41StartElapsedNs: Long? = null,
         val r41StartMonoAfterNs: Long? = null,
@@ -1424,6 +1435,7 @@ internal object KeyguardCardDiagnostics {
         build: String?,
         buildMode: String?,
         mode: String? = null,
+        r43Enabled: Boolean = false,
     ): Map<String, Any?> = reduction.read {
         val export = synchronized(captureLock) {
         ensureRecoveredLoadedLocked(context)
@@ -1459,13 +1471,14 @@ internal object KeyguardCardDiagnostics {
                 "notificationTimeoutMs" to "0",
             ),
             captureMode = captureMode,
+            r43Enabled = r43Enabled && Build.VERSION.SDK_INT >= 37,
             r41StartMonoBeforeNs = r41MonoBefore,
             r41StartElapsedNs = r41ElapsedNs,
             r41StartMonoAfterNs = r41MonoAfter,
             coldPreparation = coldPreparation?.let { it.copy(stages = LinkedHashMap(it.stages)) },
         )
         capture = created
-        CaptureIngress(id, captureMode, reduction.dropped.get(), reduction.failed.get()).also {
+        CaptureIngress(id, captureMode, reduction.dropped.get(), reduction.failed.get(), created.r43Enabled).also {
             lastIngress = it
             ingress = it
         }
@@ -1474,6 +1487,7 @@ internal object KeyguardCardDiagnostics {
         persistLocked(context, created, force = true)
             snapshotForExportLocked(created)
         }
+        if (export.r43Enabled) FluviKeyguardCardServiceRegistry.armR43Capture(export.id)
         snapshotMap(export, null)
     }
 
@@ -1635,6 +1649,71 @@ internal object KeyguardCardDiagnostics {
 
     /** Capture-qualified scalar for observations already made by the service. */
     fun activeCaptureId(): String? = ingress?.id
+
+    internal fun r43Enabled(captureId: String?): Boolean =
+        captureId != null && ingress?.let { it.r43Enabled && it.id == captureId } == true
+
+    internal fun r43PassiveSkipped(captureId: String) {
+        ingress?.takeIf { it.r43Enabled && it.id == captureId }?.r43Skipped?.incrementAndGet()
+    }
+
+    /** Bounded capture-only evidence. Resource verification/formatting run on
+     * the existing reducer, after the reader has recycled all node objects. */
+    internal fun recordR43(context: Context, observation: KeyguardR43Observation): Boolean {
+        val token = ingress ?: return false
+        if (!token.r43Enabled || token.id != observation.captureId) return false
+        val accepted = reduction.offer {
+            val resources = runCatching { context.packageManager.getResourcesForApplication("com.android.systemui") }.getOrNull()
+            val version = runCatching {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo("com.android.systemui", 0).longVersionCode
+            }.getOrNull()
+            val windows = observation.evidence.windows().map { window ->
+                val verified = observation.evidence.verifiedEntries(window) { entry ->
+                    val r = resources ?: return@verifiedEntries false
+                    val id = r.getIdentifier(entry, "id", "com.android.systemui")
+                    id != 0 && r.getResourceName(id) == "com.android.systemui:id/$entry"
+                }
+                val ids = verified.joinToString(",") { "${it.entry}@${it.ordinal}:${it.parent}:${it.depth}" }.ifEmpty { "none" }
+                "win=${window.id}/${window.type}/${window.layer}/${window.display}/${window.active}/${window.own}" +
+                    " root=${window.root}/${window.verified} nodes=${window.visited}/${window.visible}/${window.nullId}/${window.systemId}/${window.otherId}/${window.foreignNode}" +
+                    " markers=${window.markers.compact()}" +
+                    " ids=$ids unverified=${window.candidates.size - verified.size} idOverflow=${window.candidatesOmitted}"
+            }
+            val classification = observation.classification
+            val signature = "${classification.surface}/${classification.reason}/${observation.rootUnavailable}/${observation.truncated}/${observation.stale}/" + windows.joinToString("|")
+            val row = buildString {
+                append(" R43_SCENE hold=${observation.hold ?: "PASSIVE"} source=${observation.source}")
+                append(" session=${observation.session} wake=${observation.wake} req=${observation.request ?: "OBSERVER"}")
+                append(" scene=${observation.scene ?: "UNOBSERVED"} up=${observation.observedAt}")
+                append(" flags=${observation.serviceFlags ?: "UNOBSERVED"} api=${Build.VERSION.SDK_INT}")
+                append(" reportIds=${observation.serviceFlags?.let { it and android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS != 0 } ?: "UNOBSERVED"}")
+                append(" retrieveWindows=${observation.serviceFlags?.let { it and android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS != 0 } ?: "UNOBSERVED"}")
+                append(" sysuiVersion=${version ?: "UNOBSERVED"} resourceLookup=${if (resources == null) "UNAVAILABLE" else "AVAILABLE"}")
+                append(" classification=${classification.surface}/${classification.reason} markers=${classification.markers.compact()}")
+                append(" ownAmbiguous=${observation.ownAmbiguous}")
+                append(" unavailable=${observation.rootUnavailable} truncated=${observation.truncated} stale=${observation.stale}")
+                append(" windowsMs=${observation.windowsMs} scanMs=${observation.scanMs} visited=${observation.visited}")
+                append(" windowOmitted=${observation.evidence.omittedWindows} labelIsNotAuthority=true\n")
+                windows.forEach { append("  R43_WINDOW ").append(it).append('\n') }
+            }
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                active.r43Samples++
+                if (!observation.rootUnavailable && !observation.truncated && !observation.stale) {
+                    if (active.r43First == null) active.r43First = row
+                    if (active.r43LastSignature != signature) {
+                        active.r43Last = row
+                        active.r43LastSignature = signature
+                    }
+                }
+                if (observation.hold in setOf("CLOCK_1", "PIN", "CLOCK_2", "SHADE"))
+                    active.r43Holds.putIfAbsent(requireNotNull(observation.hold), row)
+            }
+        }
+        if (!accepted) token.r43Dropped.incrementAndGet()
+        return accepted
+    }
 
     /** Called under queueLock immediately after the actual queue transition.
      * A bounded atomic slot coalesces offers without enqueueing a producer
@@ -2761,6 +2840,9 @@ internal object KeyguardCardDiagnostics {
         coldPreparation = coldPreparation?.let { it.copy(stages = LinkedHashMap(it.stages)) }
             ?: active.coldPreparation?.let { it.copy(stages = LinkedHashMap(it.stages)) },
         firstAttempt = active.firstAttempt?.let(::copyAttempt),
+        r43Holds = LinkedHashMap(active.r43Holds),
+        r43Dropped = r41Token?.r43Dropped?.get() ?: active.r43Dropped,
+        r43Skipped = r41Token?.r43Skipped?.get() ?: active.r43Skipped,
         events = ArrayDeque(active.events.map { it.copy(fields = it.fields.toMap()) }),
         attempts = ArrayDeque(active.attempts.map(::copyAttempt)),
         r41Receipts = ArrayDeque(active.r41Receipts.map { it.copy() }),
@@ -2884,6 +2966,13 @@ internal object KeyguardCardDiagnostics {
             appendLine("androidApi=${Build.VERSION.SDK_INT}")
             appendLine("manufacturer=${technicalValue(Build.MANUFACTURER)}")
             appendLine("model=${technicalValue(Build.MODEL)}")
+            if (active.r43Enabled) {
+                appendLine("R43_DEVICE buildId=${technicalValue(Build.ID)} incremental=${technicalValue(Build.VERSION.INCREMENTAL)} fingerprint=${technicalValue(Build.FINGERPRINT)}")
+                appendLine("R43_CAPTURE enabled=true samples=${active.r43Samples} dropped=${active.r43Dropped} passiveRateSkipped=${active.r43Skipped} labels=timeAnnotations_notAuthority")
+                val expected = listOf("CLOCK_1", "PIN", "CLOCK_2", "SHADE")
+                appendLine("R43_HOLDS anchor=SCREEN_ON offsetsMs=4000/10000/16000/22000 present=${active.r43Holds.keys.joinToString(",").ifEmpty { "none" }} missing=${expected.filterNot { it in active.r43Holds }.joinToString(",").ifEmpty { "none" }}")
+                appendLine("R43_FIELDS win=id/type/layer/display/active/own root=category/verified nodes=visited/visible/nullId/systemId/otherId/nonSystemUiOwner idPath=entry@ordinal:parent:depth stable=not_proven")
+            }
             appendLine("startedAt=${SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ", Locale.US).format(Date(active.startedWallMs))}")
             val durationEndElapsedMs = active.endedElapsedMs ?: SystemClock.elapsedRealtime()
             appendLine("durationElapsedMs=${durationEndElapsedMs - active.startedElapsedMs}")
@@ -2995,6 +3084,11 @@ internal object KeyguardCardDiagnostics {
             bytes += size
             return true
         }
+        // These bounded scene records are the purpose of the opted-in R43
+        // capture and precede verbose per-request and raw-event detail.
+        active.r43First?.let { select("r43:first", it) }
+        active.r43Last?.takeIf { it != active.r43First }?.let { select("r43:last", it) }
+        active.r43Holds.forEach { (hold, row) -> select("r43:hold:$hold", row) }
         // Compact R41 accounting is reserved for every retained attempt
         // before first/last verbose selections compete for the same budget.
         val r41Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
@@ -4024,6 +4118,7 @@ internal object FluviKeyguardCardServiceRegistry {
         private set
     @Volatile private var service: FluviKeyguardCardService? = null
     internal fun serviceForInstrumentation(): FluviKeyguardCardService? = service
+    internal fun armR43Capture(captureId: String) { service?.armR43Capture(captureId) }
 
     fun connected(service: FluviKeyguardCardService) {
         this.service = service

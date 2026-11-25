@@ -216,6 +216,8 @@ internal class KeyguardWindowSnapshotReader(
         val claimOpeningYield: ((String, KeyguardOpeningYieldReason, Boolean, Boolean, Int, Int, Int) -> KeyguardCardInspectionRequest?)? = null,
         /** Checked only after the returned node's own exclusion markers. */
         val pauseOpeningAfterYieldAttempt: (() -> Boolean)? = null,
+        /** Optional capture-only observer of this exact existing traversal. */
+        val r43Evidence: KeyguardR43SurfaceEvidence? = null,
     )
 
     /** One immutable, bounded original-A observation; never owns a node. */
@@ -662,6 +664,10 @@ internal class KeyguardWindowSnapshotReader(
                     windowId = window.id, packageName = ownPackageName, type = window.type,
                     layer = window.layer, displayId = displayId(window), ownOverlay = true,
                 )
+                request.r43Evidence?.let { evidence -> runCatching {
+                    evidence.window(window.id, window.type, window.layer, displayId(window),
+                        window.isActive, true, null, false)
+                } }
                 continue
             }
             val root = if (window.id == activeWindowId) {
@@ -708,6 +714,11 @@ internal class KeyguardWindowSnapshotReader(
             }
             val own = !request.strictOwnAttribution && rootPackage == ownPackageName &&
                 window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY
+            val r43Window = request.r43Evidence?.let { evidence -> runCatching {
+                evidence.window(window.id, window.type, window.layer, displayId(window), window.isActive,
+                    own, rootPackage, rootPackage == "com.android.systemui" &&
+                        window.type == AccessibilityWindowInfo.TYPE_SYSTEM && root?.windowId == window.id)
+            }.getOrNull() }
             val rootNext = if (request.r37YieldHint?.invoke() == true && root != null &&
                 !unavailableRoot && !walkTruncated && !timing.ownAttributionAmbiguous)
                 maybeR37("AFTER_WINDOW_ROOT", r37SafeRoot(root, window.id), visited) else null
@@ -757,7 +768,7 @@ internal class KeyguardWindowSnapshotReader(
                     if (request.claimR37Yield != null && r37SafeRoot(root, window.id) &&
                         !unavailableRoot && !walkTruncated && !timing.ownAttributionAmbiguous) {
                         { count -> maybeR37("AFTER_NODE", true, visited + count) }
-                    } else null).also {
+                    } else null, r43Window).also {
                     if (timing.firstIncompleteReason == null) timing.firstIncompleteReason = it.firstIncompleteReason
                     if (it.yieldReason != null) timing.openingYieldReason = it.yieldReason
                     walkTruncated = walkTruncated || it.truncated
@@ -819,6 +830,7 @@ internal class KeyguardWindowSnapshotReader(
         tryOpeningYield: ((String, KeyguardOpeningYieldReason, Int) -> KeyguardCardInspectionRequest?)?,
         pauseOpeningAfterYieldAttempt: (() -> Boolean)?,
         tryR37AfterNode: ((Int) -> KeyguardCardInspectionRequest?)?,
+        r43Window: KeyguardR43SurfaceEvidence.Window?,
     ): VisibleIds {
         val ids = linkedSetOf<String>()
         var decisiveReported = false
@@ -856,8 +868,17 @@ internal class KeyguardWindowSnapshotReader(
             visited += 1
             val nodeOrdinal = visited
             try {
-                if (!node.isVisibleToUser) return
-                node.viewIdResourceName?.let(::recordId)
+                val visibleNode = node.isVisibleToUser
+                if (!visibleNode) {
+                    r43Window?.node(false, false, null, nodeOrdinal, parentOrdinal, depth)
+                    return
+                }
+                val viewId = node.viewIdResourceName
+                if (r43Window != null) runCatching {
+                    r43Window.node(true, node.packageName?.toString() == "com.android.systemui",
+                        viewId, nodeOrdinal, parentOrdinal, depth)
+                }
+                viewId?.let(::recordId)
                 node.className?.toString()?.takeIf { it.contains("BouncerContent") }?.let { recordId("element:BouncerContent") }
                 // The returned node's own restrictive markers must be read
                 // first, including when this is the final child or a leaf.

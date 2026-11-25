@@ -306,7 +306,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     }
   }
 
-  Future<void> _startKeyguardCapture() async {
+  Future<void> _startKeyguardCapture({bool r43Evidence = false}) async {
     final bridge = widget.keyguardTimingCapture;
     if (bridge == null || _loadingKeyguard) return;
     setState(() {
@@ -315,7 +315,10 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
       _keyguardCopied = false;
     });
     try {
-      final snapshot = await bridge.start(mode: _keyguardCaptureMode);
+      final snapshot = await bridge.start(
+        mode: _keyguardCaptureMode,
+        r43Evidence: r43Evidence,
+      );
       if (mounted) setState(() => _keyguardSnapshot = snapshot);
     } on Object catch (error) {
       if (mounted) setState(() => _keyguardError = '$error');
@@ -944,7 +947,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
                   child: Text(
-                    'Indítsd el a rögzítést, zárd le és ébreszd fel a telefont, majd oldd fel. Ismételd meg háromszor, térj vissza ide, és másold a riportot.',
+                    'Android 17 próbához válaszd a külön gombot, zárd le és ébreszd fel a telefont. Tartsd kb. 6 másodpercig az órát, majd a PIN-képernyőt kód beírása nélkül, ismét az órát, végül a teljesen lehúzott panelt. Oldd fel, állítsd le a rögzítést és másold a riportot. A minták időzített jelölések, nem kijelzőazonosítások.',
                     key: const ValueKey('debug-console-keyguard-help'),
                     style: const TextStyle(
                       color: Color(0xFFBAC2DE),
@@ -1018,9 +1021,16 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                         key: const ValueKey('debug-console-keyguard-start'),
                         onPressed: _loadingKeyguard || unavailable
                             ? null
-                            : _startKeyguardCapture,
+                            : () => _startKeyguardCapture(),
                         icon: const Icon(Icons.fiber_manual_record, size: 15),
                         label: const Text('Rögzítés indítása'),
+                      ),
+                      OutlinedButton(
+                        key: const ValueKey('debug-console-r43-start'),
+                        onPressed: _loadingKeyguard || unavailable
+                            ? null
+                            : () => _startKeyguardCapture(r43Evidence: true),
+                        child: const Text('Android 17 zárképernyőpróba'),
                       ),
                       OutlinedButton.icon(
                         key: const ValueKey('debug-console-keyguard-freeze'),
