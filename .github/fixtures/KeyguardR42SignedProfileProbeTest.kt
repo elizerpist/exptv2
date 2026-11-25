@@ -2,6 +2,7 @@ package com.fluvi.app.lockscreen
 
 import android.app.KeyguardManager
 import android.app.UiAutomation
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Rect
@@ -67,6 +68,7 @@ class KeyguardR42SignedProfileProbeTest {
         var failure: Throwable? = null
         try {
             check(!keyguard.isDeviceSecure && (savedLock == "true" || savedLock == "false"))
+            assertTrue("NOT REACHED: Android animations are disabled", ValueAnimator.areAnimatorsEnabled())
             if (service() == null) {
                 enabledByProbe = true
                 check(prefs.edit().putBoolean("requested", true).putBoolean("details", true)
@@ -76,6 +78,12 @@ class KeyguardR42SignedProfileProbeTest {
                     .putString("focus.categoryId", "r42-synthetic-category")
                     .putString("focus.eventLine", "related").putLong("focus.generation", 7L).commit())
                 shell("am start -n com.fluvi.app/.MainActivity")
+                // Instrumentation can restart the target process while its
+                // secure setting still names the old service. Force a real
+                // platform rebind only after the update probe has recorded
+                // that the service survived the installation.
+                shell("settings put secure enabled_accessibility_services ''")
+                shell("settings put secure accessibility_enabled 0")
                 shell("settings put secure enabled_accessibility_services com.fluvi.app/.lockscreen.FluviKeyguardCardService")
                 shell("settings put secure accessibility_enabled 1")
             }
