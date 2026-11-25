@@ -4887,6 +4887,14 @@ class FluviKeyguardCardService : AccessibilityService() {
             signals = signalsFromSystemState(settings, signals.surface, admission)
             decision = KeyguardCardVisibilityPolicy.decide(signals)
         }
+        if (Build.VERSION.SDK_INT == 37 && settings.presentationMode == KeyguardCardPresentationMode.ORB &&
+            (decision == KeyguardCardVisibility.SHOW_FULL || decision == KeyguardCardVisibility.SHOW_DISCREET) &&
+            !synchronized(queueLock) { firstAuthorizedOrb.isUnclaimedReadCurrent(request.id, inspection.r19ReadSceneSerial) }) {
+            traceKeyguard("INSPECTION_REJECTED", "r44SceneChanged", request,
+                fields = mapOf("rejectionReason" to "r44SceneChanged"))
+            requestSystemCheck("r44SceneChanged")
+            return
+        }
         // An obsolete predecessor may reconcile restrictions and own-window
         // identity, but its historical positive can never schedule disclosure.
         if (disposition == CompletedDisposition.R32_RESTRICTION_ONLY &&

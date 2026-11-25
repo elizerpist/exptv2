@@ -10,14 +10,15 @@ internal object KeyguardR44Markers {
     enum class Marker { HOST, DEVICE_ENTRY, LARGE_CLOCK, SMALL_CLOCK, BOUNCER, SHADE, QUICK_SETTINGS }
     enum class Carrier { VIEW_ID, EXTRA_EAGER, EXTRA_LAZY }
 
-    fun exact(value: CharSequence?): Marker? = when (value?.toString()) {
-        "element:lockscreen" -> Marker.HOST
-        "com.android.systemui:id/device_entry_icon_view" -> Marker.DEVICE_ENTRY
-        "element:LargeClock" -> Marker.LARGE_CLOCK
-        "element:SmallClock" -> Marker.SMALL_CLOCK
-        "overlay:bouncer" -> Marker.BOUNCER
-        "overlay:notifications_shade", "scene:shade" -> Marker.SHADE
-        "overlay:quick_settings_shade", "scene:quick_settings" -> Marker.QUICK_SETTINGS
+    fun exact(value: CharSequence?): Marker? = when {
+        value == null -> null
+        value.contentEquals("element:lockscreen") -> Marker.HOST
+        value.contentEquals("com.android.systemui:id/device_entry_icon_view") -> Marker.DEVICE_ENTRY
+        value.contentEquals("element:LargeClock") -> Marker.LARGE_CLOCK
+        value.contentEquals("element:SmallClock") -> Marker.SMALL_CLOCK
+        value.contentEquals("overlay:bouncer") -> Marker.BOUNCER
+        value.contentEquals("overlay:notifications_shade") || value.contentEquals("scene:shade") -> Marker.SHADE
+        value.contentEquals("overlay:quick_settings_shade") || value.contentEquals("scene:quick_settings") -> Marker.QUICK_SETTINGS
         else -> null
     }
 

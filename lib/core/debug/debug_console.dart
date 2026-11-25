@@ -286,11 +286,12 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
       if (mounted) setState(() => _keyguardRenderMode = mode);
       try {
         final trial = await bridge.r44SyntheticTrial();
-        if (mounted)
+        if (mounted) {
           setState(() {
             _r44TrialAvailable = trial['available'] == true;
             _r44TrialEnabled = trial['enabled'] == true;
           });
+        }
       } on Object catch (_) {
         if (mounted) setState(() => _r44TrialAvailable = false);
       }

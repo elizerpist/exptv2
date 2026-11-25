@@ -13,12 +13,15 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.view.View
 import android.view.accessibility.AccessibilityWindowInfo
+import android.view.accessibility.AccessibilityEvent
 import android.view.inspector.WindowInspector
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.fluvi.app.R
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.*
@@ -32,8 +35,9 @@ import org.junit.runner.RunWith
 class KeyguardR44ServiceInstrumentationTest {
     @Test fun syntheticPairUsesRealServiceWithCaptureOff() = exercise(false)
     @Test fun syntheticPairUsesRealServiceWithCaptureOn() = exercise(true)
+    @Test fun supersededSyntheticReadCannotGrantAfterRestriction() = exercise(false, staleControl = true)
 
-    private fun exercise(capture: Boolean) {
+    private fun exercise(capture: Boolean, staleControl: Boolean = false) {
         assertEquals(37, Build.VERSION.SDK_INT)
         val ins = InstrumentationRegistry.getInstrumentation()
         val context = ins.targetContext
@@ -68,6 +72,9 @@ class KeyguardR44ServiceInstrumentationTest {
         val restrict = AtomicBoolean(false)
         val sawPositive = AtomicBoolean(false)
         val sawRestriction = AtomicBoolean(false)
+        val positiveApply = AtomicBoolean(false)
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
         var service: FluviKeyguardCardService? = null
         var pinSet = false
         val evidence = StringBuilder("scope=controlled_snapshot service=real renderer=real capture=$capture physical=UNOBSERVED\n")
@@ -111,15 +118,36 @@ class KeyguardR44ServiceInstrumentationTest {
                     abortedStale: Boolean, startedAt: Long, finishedAt: Long) {
                     synchronized(evidence) { evidence.append("req=${request.id} decision=$decision reason=$reason unavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale\n") }
                     if (!rootUnavailable && !walkTruncated && !abortedStale &&
-                        decision == KeyguardCardVisibility.SHOW_DISCREET && reason == KeyguardSurfaceReason.MAIN_CONFIRMED)
+                        decision == KeyguardCardVisibility.SHOW_DISCREET && reason == KeyguardSurfaceReason.MAIN_CONFIRMED) {
                         sawPositive.set(true)
+                        if (staleControl && held.count > 0) {
+                            held.countDown()
+                            check(release.await(20, TimeUnit.SECONDS)) { "NOT REACHED: release stale read" }
+                        }
+                    }
                     if (decision == KeyguardCardVisibility.HIDDEN_SHADE) sawRestriction.set(true)
+                }
+                override fun positiveApplyAttempt(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility) {
+                    positiveApply.set(true)
                 }
             }
             shell("input keyevent KEYCODE_SLEEP")
             waitFor("screen off and locked") { !power.isInteractive && keyguard.isKeyguardLocked }
             shell("input keyevent KEYCODE_WAKEUP")
             waitFor("screen on and locked") { power.isInteractive && keyguard.isKeyguardLocked }
+            if (staleControl) {
+                assertTrue("NOT REACHED: complete positive on worker", held.await(20, TimeUnit.SECONDS))
+                restrict.set(true)
+                main { owner.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
+                    eventType = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED, windowId = 10, displayId = 0,
+                    windowChanges = 0, packageName = "com.android.systemui", eventTimeUptimeMs = SystemClock.uptimeMillis())) }
+                release.countDown()
+                waitFor("successor restriction") { sawRestriction.get() }
+                assertFalse("stale positive reached apply", positiveApply.get())
+                assertFalse("stale positive attached a root", main { owner.inspectionStateForTest().attached })
+                evidence.append("heldPositive=discarded newerRestriction=observed attached=false\n")
+                return
+            }
             waitFor("controlled pair admitted and real ORB posted") {
                 sawPositive.get() && main { owner.inspectionStateForTest().attached &&
                     (owner.surfaceMetricsForInstrumentation()?.submissions ?: 0L) > 0L }
@@ -156,6 +184,7 @@ class KeyguardR44ServiceInstrumentationTest {
                 assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
             }
         } finally {
+            release.countDown()
             out.resolve("r44-results.txt").writeText(synchronized(evidence) { evidence.toString() })
             service?.inspectionProbeForTest = null
             KeyguardCardDiagnostics.clearCapture(context)
