@@ -15,7 +15,7 @@ case "${1:-}" in
     test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt
     case "$TEST_SCOPE" in
-      system_warm_report|system_warm_ordered)
+      system_warm_report|system_warm_ordered|system_warm_latest_report|system_warm_latest_ordered)
         second="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt"
         test -f "$second"
         cp "$second" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt
@@ -80,6 +80,14 @@ case "${1:-}" in
     system_warm_ordered)
       class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
       methods=(systemWarmOrderedDirectSkipsInapplicableR25Evaluation)
+      ;;
+    system_warm_latest_report)
+      class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
+      methods=(systemWarmLatestReadyWorkDoesNotWaitForDiagnosticPublication)
+      ;;
+    system_warm_latest_ordered)
+      class=com.fluvi.app.lockscreen.KeyguardR26DirectOrderingInstrumentationTest
+      methods=(systemWarmLatestDirectPreservesOrdering)
       ;;
     r40_safety)
       class=com.fluvi.app.lockscreen.KeyguardFirstAuthorizedOrbInstrumentationTest
