@@ -53,6 +53,9 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
         runService(false, null, true, false, false, false, true, true)
     @Test fun r41SystemWarmPreparedLiveOrbShowsCalibratedFramesThenWithdraws() =
         runService(false, null, true, false, false, true, true, true)
+    @Test fun r41SystemWarmPreparedLiveOrbRecordsArrivalAndMotionThenWithdraws() =
+        runService(changeScene = false, r40 = true, r41WaitForPreparedRoute = true,
+            r41WarmSystemBeforeService = true, r41LiveMotion = true, r41LiveWaitForA = true)
     @Test fun r41SystemWarmBenignIngressBeforeRealMainAck() =
         runService(false, false, false, false, false, false, true)
     @Test fun r41SystemWarmExclusionBeforeRealMainAck() =
@@ -213,7 +216,8 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                            r41LiveMotion: Boolean = false,
                            r21SwipeShade: Boolean = false,
                            r21Pin: Boolean = false,
-                           r21PinUseMenu: Boolean = false) {
+                           r21PinUseMenu: Boolean = false,
+                           r41LiveWaitForA: Boolean = false) {
         assertEquals(35, Build.VERSION.SDK_INT)
         val args = InstrumentationRegistry.getArguments()
         val source = requireNotNull(args.getString("sourceSha"))
@@ -578,9 +582,32 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                     identity != null
                 }
                 val visual = checkNotNull(r40Visual)
-                val crop = visual.captureCrop("r40-first-full", checkNotNull(identity).bounds)
+                fun assertSameVisualOwner() {
+                    if (!r41LiveWaitForA) return
+                    var current: KeyguardR22VisualIdentityForTest? = null
+                    instrumentation.runOnMainSync { current = service.r22VisualIdentityForTest() }
+                    val before = checkNotNull(identity)
+                    val after = checkNotNull(current) { "NOT REACHED: visual owner disappeared during sampling" }
+                    assertEquals("reservation changed during sampling", before.reservationId, after.reservationId)
+                    assertEquals("attachment changed during sampling", before.attachment, after.attachment)
+                    assertEquals("output generation changed during sampling", before.outputGeneration, after.outputGeneration)
+                    assertEquals("child changed during sampling", before.childIdentity, after.childIdentity)
+                    assertEquals("bounds changed during sampling", before.bounds, after.bounds)
+                }
+                var crop = visual.captureCrop("r40-first-full", checkNotNull(identity).bounds)
+                if (r41LiveWaitForA && !KeyguardR22VisualCalibration.compare(visual.a, crop).nearlyEqual()) {
+                    // Keep the immediate sample and each later compositor sample.
+                    // This separate witness does not turn the original immediate
+                    // crop assertion into an initial-frame or latency pass.
+                    for (sample in 0 until 30) {
+                        SystemClock.sleep(100)
+                        crop = visual.captureCrop("r41-arrival-a-$sample", checkNotNull(identity).bounds)
+                        if (KeyguardR22VisualCalibration.compare(visual.a, crop).nearlyEqual()) break
+                    }
+                }
                 assertTrue("NOT REACHED: compositor crop did not match the calibrated configured FULL orb",
                     KeyguardR22VisualCalibration.compare(visual.a, crop).nearlyEqual())
+                assertSameVisualOwner()
                 if (r41LiveMotion) {
                     // Advance only the test's material clock; do not inject a
                     // new scene, permission, frame or presentation callback.
@@ -597,6 +624,7 @@ class KeyguardFirstAuthorizedOrbInstrumentationTest {
                         }
                     }
                     assertTrue("NOT REACHED: real live ORB never reached the calibrated B compositor frame", matched)
+                    assertSameVisualOwner()
                 }
                 if (r40Started.count > 0) instrumentation.runOnMainSync {
                     val at = SystemClock.uptimeMillis()
