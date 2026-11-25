@@ -14,6 +14,12 @@ on:
       test_scope:
         type: string
         default: ordered
+      candidate_sha256:
+        type: string
+        default: '26315d180d094392ef0c7e14f1f39b1c596e2938ce5c127e3d463dfc576f7428'
+      candidate_size:
+        type: string
+        default: '121006864'
       native_diagnostic:
         type: boolean
         default: true
@@ -139,6 +145,8 @@ jobs:
     timeout-minutes: 40
     env:
       APP_SHA: ${{ inputs.app_sha }}
+      CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+      CANDIDATE_SIZE: ${{ inputs.candidate_size }}
     steps:
       - uses: actions/checkout@v5
         with:

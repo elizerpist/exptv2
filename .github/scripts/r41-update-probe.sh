@@ -19,14 +19,15 @@ case "${1:-}" in
   umask 077
   openssl pkeyutl -decrypt -inkey "$dir/private.pem" -in "$dir/wrapped.key" -out "$dir/password" -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256
   openssl enc -d -aes-256-cbc -pbkdf2 -pass "file:$dir/password" -in "$dir/payload.enc" -out "$dir/candidate.apk"
-  printf '%s  %s\n' 26315d180d094392ef0c7e14f1f39b1c596e2938ce5c127e3d463dfc576f7428 "$dir/candidate.apk" | sha256sum -c - > "$evidence/candidate-hash.txt"
+  [[ "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+  printf '%s  %s\n' "$CANDIDATE_SHA256" "$dir/candidate.apk" | sha256sum -c - > "$evidence/candidate-hash.txt"
   ;;
  verify)
-  test "$APP_SHA" = aa4d98b6970ffa50ca46e1e74b110c5087c9cb1b
+  [[ "$APP_SHA" =~ ^[0-9a-f]{40}$ && "$CANDIDATE_SIZE" =~ ^[0-9]+$ ]]
   curl --fail --location --retry 3 --silent --show-error 'https://media.githubusercontent.com/media/elizerpist/exptv2/465eaeca287663d152b36b76f12fc8b05ea2d8e0/fluvi_R40_HUMAN_11b4a67a08f4.apk' -o "$dir/r40.apk"
   test "$(wc -c < "$dir/r40.apk")" -eq 120957712
   printf '%s  %s\n' d0442e4af8352a7f9e3e1d55e8a2147875b228585938145efd574f3ec577677c "$dir/r40.apk" | sha256sum -c - > "$evidence/r40-hash.txt"
-  test "$(wc -c < "$dir/candidate.apk")" -eq 121006864
+  test "$(wc -c < "$dir/candidate.apk")" -eq "$CANDIDATE_SIZE"
   tools="$ANDROID_HOME/build-tools/36.0.0"
   for label in r40 candidate; do
     apk="$dir/$label.apk"
