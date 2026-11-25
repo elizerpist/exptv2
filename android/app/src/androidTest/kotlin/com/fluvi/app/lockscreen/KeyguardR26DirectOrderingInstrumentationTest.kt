@@ -196,6 +196,10 @@ class KeyguardR26DirectOrderingInstrumentationTest {
                             "RECEIPT" -> h2Receipt.countDown()
                             "CLAIMED" -> h2Claimed.countDown()
                             "RECONCILED" -> { if (successor != null) bId.set(successor.id); h2Reconciled.countDown() }
+                            // Replacements may arrive while the original Main
+                            // continuation is held. Follow the queue's actual
+                            // selected owner, not the first framework offer.
+                            "FIFO_RELEASED" -> if (successor != null) bId.set(successor.id)
                             "FIFO_NOOP" -> h2FifoNoop.countDown()
                         }
                     }

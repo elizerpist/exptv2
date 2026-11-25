@@ -3767,6 +3767,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                     if (next != null) r41ReservedReport = KeyguardCardDiagnostics.r41ReserveReport(active.diagnosticContext)
                     next
                 }
+                if (fixtureReceipt != null)
+                    runCatching { inspectionProbeForTest?.r41H2Boundary(active, "FIFO_RELEASED", request) }
                 if (promotedOwner == active) promotedOwner = null
                 scheduleR19Join()
                 if (r41ReservedReport) {
