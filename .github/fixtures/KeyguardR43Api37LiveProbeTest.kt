@@ -75,11 +75,13 @@ class KeyguardR43Api37LiveProbeTest {
             await("screen on and locked") { power.isInteractive && keyguard.isKeyguardLocked }
             val start = SystemClock.uptimeMillis()
             until(start + 5_000); screenshot("clock-1")
-            until(start + 6_000); shell("input swipe 540 2050 540 550 350")
+            // The orb occupies the centre bottom of the lock screen. Begin
+            // outside it so the gesture reaches SystemUI, not Fluvi's panel.
+            until(start + 6_000); shell("input swipe 200 2200 200 500 350")
             until(start + 11_000); screenshot("pin")
             until(start + 12_000); shell("input keyevent KEYCODE_BACK")
             until(start + 17_000); screenshot("clock-2")
-            until(start + 18_000); shell("input swipe 540 10 540 1900 350")
+            until(start + 18_000); shell("cmd statusbar expand-notifications")
             until(start + 23_000); screenshot("shade")
             until(start + 25_000)
             val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String; capture = false
