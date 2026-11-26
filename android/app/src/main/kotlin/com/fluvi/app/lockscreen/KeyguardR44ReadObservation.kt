@@ -1,5 +1,22 @@
 package com.fluvi.app.lockscreen
 
+internal data class KeyguardR448FrameObservation(
+    val context: KeyguardDiagnosticContext, val owner: KeyguardR448WidgetsAnywhereFrame.Owner,
+    val stage: String, val at: Long, val detail: String?,
+)
+
+/** Bounded first-boundary evidence; all timestamps are uptime observations. */
+internal data class KeyguardR448FrameTrace(
+    val owner: KeyguardR448WidgetsAnywhereFrame.Owner,
+    var firstAllowed: Long? = null, var scheduled: Long? = null, var fired: Long? = null,
+    var canceled: Long? = null,
+    var secondAllowed: Long? = null, var addBegin: Long? = null, var addReturn: Long? = null,
+    var attached: Long? = null, var firstShader: Long? = null, var hide: Long? = null,
+    var removeReturn: Long? = null, var detached: Long? = null, var coalesced: Int = 0,
+    var geometry: String? = null,
+    var terminal: String? = null, var terminalAt: Long? = null,
+)
+
 internal data class KeyguardR448BoundaryObservation(
     val context: KeyguardDiagnosticContext, val arm: Long, val screenAt: Long,
     val active: Long?, val pending: Long?, val started: Long?,

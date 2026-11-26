@@ -227,6 +227,11 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Optional fixed-sample-only owner diagnostic. Normal builds keep
+        // the existing financial route; the build invocation records this
+        // immutable variant decision in Android resources.
+        resValue("bool", "fluvi_r448_sample_only",
+            (System.getenv("FLUVI_R448_SAFE_SAMPLE_ONLY") == "true").toString())
     }
 }
 

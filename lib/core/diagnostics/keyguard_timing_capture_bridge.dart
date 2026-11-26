@@ -45,6 +45,7 @@ class KeyguardDisplayRouteStatus {
     required this.configured,
     required this.active,
     required this.reason,
+    this.sampleOnly = false,
   });
 
   factory KeyguardDisplayRouteStatus.fromMap(Map<Object?, Object?> map) =>
@@ -58,6 +59,7 @@ class KeyguardDisplayRouteStatus {
         configured: KeyguardDisplayRoute.fromWire(map['configured']),
         active: map['active']?.toString() ?? 'NONE',
         reason: map['reason']?.toString() ?? 'UNOBSERVED',
+        sampleOnly: map['sampleOnly'] == true,
       );
 
   final bool available;
@@ -65,6 +67,7 @@ class KeyguardDisplayRouteStatus {
   final KeyguardDisplayRoute configured;
   final String active;
   final String reason;
+  final bool sampleOnly;
 }
 
 @immutable

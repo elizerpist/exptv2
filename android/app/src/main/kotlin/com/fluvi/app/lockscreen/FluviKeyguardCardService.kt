@@ -149,8 +149,9 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     @Volatile private var r448DisplayRoute = KeyguardR448DisplayRoute.FLUVI_STREAM
     private var r448RouteGeneration = 0L
+    private val r448SampleOnly by lazy { KeyguardR448Safety.sampleOnly(applicationContext) }
 
-    private fun localPresentationAllowed(): Boolean = r444ConfigurationReady &&
+    private fun localPresentationAllowed(): Boolean = !r448SampleOnly && r444ConfigurationReady &&
         referenceOwnership?.appMayShow() != false && r448DisplayRoute == KeyguardR448DisplayRoute.FLUVI_STREAM &&
         r448Frame == null
 
@@ -185,6 +186,7 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     /** The reference host is discovered while unlocked, never by a wake path. */
     private fun startReferenceEnrollmentIfEligible() {
+        if (r448SampleOnly) return
         val owner = referenceOwnership ?: return
         if (!referenceFirstFreshService || !owner.appMayShow() || referencePublisher != null) return
         val settings = lastSettings ?: return
@@ -281,6 +283,9 @@ class FluviKeyguardCardService : AccessibilityService() {
         else KeyguardOrbRenderModeStatus(configured, configured, visible = false)
     }
 
+    internal fun r448SafetyForInstrumentation(): Triple<Boolean, Boolean, Boolean> =
+        Triple(r448SampleOnly, localPresentationAllowed(), lastMaterialProfile != null)
+
     /** Selection revokes the previous route before accepting a new owner. */
     internal fun setR448DisplayRoute(route: KeyguardR448DisplayRoute): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
@@ -307,11 +312,14 @@ class FluviKeyguardCardService : AccessibilityService() {
         check(Looper.myLooper() == Looper.getMainLooper())
         val active = when {
             r448DisplayRoute == KeyguardR448DisplayRoute.WIDGETS_ANYWHERE && r448Frame?.isAttached() == true -> "WIDGETS_ANYWHERE"
-            ::overlay.isInitialized && overlay.isAttached && r448DisplayRoute == KeyguardR448DisplayRoute.FLUVI_STREAM -> "FLUVI_STREAM"
+            r448DisplayRoute == KeyguardR448DisplayRoute.FLUVI_STREAM &&
+                ((::overlay.isInitialized && overlay.isAttached) ||
+                    (r446Owner.state == KeyguardR446PrintOwner.State.ISSUED && r446Observation?.submittedAt != null)) -> "FLUVI_STREAM"
             else -> "NONE"
         }
         return mapOf("configured" to r448DisplayRoute.name, "active" to active,
             "generation" to r448RouteGeneration,
+            "sampleOnly" to r448SampleOnly,
             "reason" to if (r448DisplayRoute == KeyguardR448DisplayRoute.WIDGETS_ANYWHERE) "PUBLIC_SAMPLE_ONLY" else "NONE")
     }
 
@@ -565,6 +573,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             "REMOVE_FAILED" -> r448RetireError = event.detail ?: "UNKNOWN"
         }
         val previous = r446Observation
+        if (previous != null) runCatching {
+            KeyguardCardDiagnostics.recordR448Frame(KeyguardR448FrameObservation(
+                previous.context, event.owner, event.stage, event.at, event.detail))
+        }
         if (previous != null && r446Owner.state == KeyguardR446PrintOwner.State.ISSUED) {
             val next = when (event.stage) {
                 "ADD_BEGIN" -> previous.copy(backend = "WA_ADD_BEGIN", attachBegin = event.at)
@@ -2651,7 +2663,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val settings = FluviKeyguardCardSettings.read(applicationContext)
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "SETTINGS_LOAD_END")
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "PROFILE_LOAD_START")
-        val profile = if (r444ConfigurationReady) FluviKeyguardMaterialStore.read(applicationContext) else null
+        val profile = if (r444ConfigurationReady && !r448SampleOnly) FluviKeyguardMaterialStore.read(applicationContext) else null
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "PROFILE_LOAD_END")
         lastSettings = settings
         lastMaterialProfile = profile
@@ -2985,7 +2997,9 @@ class FluviKeyguardCardService : AccessibilityService() {
     /** Profile publication is a retained-view mutation only. It must not
      * cause an inspection, financial resolve, or WindowManager operation. */
     internal fun onMaterialProfileChangedFromApplication(profile: KeyguardMaterialProfile) {
+        if (r448SampleOnly) return
         mainHandler.post {
+            if (r448SampleOnly) return@post
             if (r18Active != null) sealR18(inspectionAuthority, Long.MAX_VALUE, "materialChanged")
             synchronized(queueLock) { firstAcquisition.invalidate() }
             clearR14Recovery("materialChanged")
@@ -5917,6 +5931,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)
         if (r446Preparing) return
+        // This build variant exists solely for the explicit fixed sample. It
+        // never resolves or presents a normal financial lockscreen scene.
+        if (r448SampleOnly && !KeyguardR44Trial.active) {
+            if ((::overlay.isInitialized && overlay.isAttached) || r18Active != null)
+                hideImmediately("r448SampleOnly")
+            return
+        }
         val printCapture = r446CaptureId != null && r446CaptureId == request.diagnosticContext?.captureId
         if (printCapture) {
             if (r446Owner.state == KeyguardR446PrintOwner.State.ISSUED) return
@@ -6314,7 +6335,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         diagnosticContext: KeyguardDiagnosticContext?,
         causingInspectionRequestId: Long?,
     ) {
-        if (!r444ConfigurationReady || KeyguardR44Trial.active) return
+        if (r448SampleOnly || !r444ConfigurationReady || KeyguardR44Trial.active) return
         val focusChanged = activeFocusGeneration != focusGeneration
         if (focusChanged) {
             showEvent = false
@@ -6362,7 +6383,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         diagnosticContext: KeyguardDiagnosticContext?,
         causingInspectionRequestId: Long?,
     ) {
-        if (!r444ConfigurationReady || KeyguardR44Trial.active) return
+        if (r448SampleOnly || !r444ConfigurationReady || KeyguardR44Trial.active) return
         if (coreObservation?.isActive == true && observedFocusGeneration == focusGeneration) return
         stopFinancialObservation(keepRenderedContent = true)
         observedFocusGeneration = focusGeneration
@@ -6396,7 +6417,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
         // A queued core-revision callback can outlive the subscription that
         // produced it.  It must not start private work in the sample domain.
-        if (!r444ConfigurationReady || KeyguardR44Trial.active) return
+        if (r448SampleOnly || !r444ConfigurationReady || KeyguardR44Trial.active) return
         if (contentJob?.isActive == true) {
             if (resolvingFocusGeneration == focusGeneration) {
                 // A core observer's initial emission commonly follows the
@@ -7341,7 +7362,7 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     internal fun materialDiagnostics(): Map<String, Any?> {
         val values = if (::overlay.isInitialized) overlay.materialDiagnostics() else null
-        val profile = FluviKeyguardMaterialStore.read(applicationContext)
+        val profile = if (r448SampleOnly) null else FluviKeyguardMaterialStore.read(applicationContext)
         val focus = FluviKeyguardCardSettings.read(applicationContext).focus
         return mapOf(
             "overlayAttached" to (::overlay.isInitialized && overlay.isAttached),

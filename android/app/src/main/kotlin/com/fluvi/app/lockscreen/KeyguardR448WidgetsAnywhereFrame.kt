@@ -115,13 +115,16 @@ internal class KeyguardR448WidgetsAnywhereFrame(
             geometry.width <= 0 || geometry.height <= 0) return false
         if (pending != null) { emit(owner, "COALESCED"); return true }
         if (!runCatching(valid).getOrDefault(false)) { emit(owner, "DENIED_FIRST_CHECK"); return false }
+        emit(owner, "FIRST_CHECK_ALLOWED")
         val task = Runnable {
             pending = null
+            emit(owner, "DEBOUNCE_FIRED")
             if (view !== material || viewOwner != owner || !leaseLive || attached || removalFailed ||
                 !runCatching(valid).getOrDefault(false)) {
                 emit(owner, "DENIED_SECOND_CHECK")
                 return@Runnable
             }
+            emit(owner, "SECOND_CHECK_ALLOWED")
             @Suppress("DEPRECATION")
             val params = WindowManager.LayoutParams(
                 geometry.width, geometry.height,
@@ -193,7 +196,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         check(Looper.myLooper() == Looper.getMainLooper())
         if (viewOwner != owner) return false
         leaseLive = false
-        pending?.let { main.removeCallbacks(it) }
+        pending?.let { main.removeCallbacks(it); emit(owner, "DEBOUNCE_CANCELED") }
         pending = null
         frame?.let { Choreographer.getInstance().removeFrameCallback(it) }
         frame = null

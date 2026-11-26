@@ -229,6 +229,7 @@ void main() {
                 'connected': true,
                 'configured': configured,
                 'active': 'NONE',
+                'sampleOnly': true,
                 'reason': configured == 'WIDGETS_ANYWHERE'
                     ? 'PUBLIC_SAMPLE_ONLY'
                     : 'NONE',
@@ -252,6 +253,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Orb megjelenítési útvonala'), findsOneWidget);
+      expect(find.textContaining('csak a fix mintaorbot'), findsOneWidget);
       final route = find.byKey(
         const ValueKey('debug-console-route-WIDGETS_ANYWHERE'),
       );

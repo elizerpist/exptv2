@@ -6,7 +6,11 @@ import android.content.Context
 internal object KeyguardR448ComparisonStore {
     private const val PREFS = "fluvi_keyguard_r448_comparison"
     private const val MAX_BYTES = 4800
-    private val prefixes = listOf("R44_8_READ_BOUNDARY ", "R44_8_SYSTEM_VETO ", "R44_6_SAMPLE ", "attemptId=")
+    private val prefixes = listOf(
+        "build=", "buildMode=", "captureState=", "captureMode=", "processInstance=", "pid=",
+        "startedAt=", "durationElapsedMs=", "r448DisplayRoute=", "r448SampleOnly=", "r448WaSource=",
+        "R44_8_READ_BOUNDARY ", "R44_8_SYSTEM_VETO ", "R44_8_WA ", "R44_6_SAMPLE ", "attemptId=",
+    )
     @Volatile private var fluviWriteFailed = false
     @Volatile private var widgetsWriteFailed = false
 
@@ -44,7 +48,7 @@ internal object KeyguardR448ComparisonStore {
         val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val a = prefs.getString(KeyguardR448DisplayRoute.FLUVI_STREAM.name, null)
         val b = prefs.getString(KeyguardR448DisplayRoute.WIDGETS_ANYWHERE.name, null)
-        if (a == null && b == null) return ""
+        if (a == null && b == null && !fluviWriteFailed && !widgetsWriteFailed) return ""
         return "FLUVI_R44_8_AB_SUMMARY fluviWriteFailure=$fluviWriteFailed widgetsWriteFailure=$widgetsWriteFailed\nFLUVI_STREAM\n${a ?: "UNOBSERVED\n"}" +
             "WIDGETS_ANYWHERE\n${b ?: "UNOBSERVED\n"}END_FLUVI_R44_8_AB_SUMMARY\n"
     }

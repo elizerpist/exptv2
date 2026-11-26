@@ -1279,6 +1279,10 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Orb megjelenítési útvonala'),
+                        if (_keyguardDisplayRoute!.sampleOnly)
+                          const Text(
+                            'Ez a diagnosztikai build csak a fix mintaorbot jeleníti meg; a pénzügyi orb le van tiltva.',
+                          ),
                         Wrap(
                           spacing: 8,
                           runSpacing: 6,

@@ -805,6 +805,7 @@ internal object KeyguardCardDiagnostics {
         var r448SystemVeto: KeyguardR448SystemVeto? = null,
         var r448Boundary: KeyguardR448BoundaryObservation? = null,
         var r448Worker: KeyguardR448WorkerObservation? = null,
+        var r448Frame: KeyguardR448FrameTrace? = null,
         var r447LatestOrdinal: Long = 0,
         var r447DecisionCount: Int = 0,
         var firstExclusionSignalAtUptimeMs: Long? = null,
@@ -1497,6 +1498,7 @@ internal object KeyguardCardDiagnostics {
                 "privacyMode" to if (settings.showFinancialDetails) "full" else "discreet",
                 "r12ConfiguredRoute" to KeyguardOrbRenderModeStore.read(context).name,
                 "r448DisplayRoute" to KeyguardR448DisplayRouteStore.read(context).name,
+                "r448SampleOnly" to KeyguardR448Safety.sampleOnly(context).toString(),
                 "r448WaSource" to "9c7fed25ec833197656dec57427be4c26fc66138",
                 "notificationTimeoutMs" to "0",
                 "r442TrialRequested" to (r442ExpectedSession != null).toString(),
@@ -1732,6 +1734,49 @@ internal object KeyguardCardDiagnostics {
                     attempt.r44FirstRestriction == null) attempt.r44FirstRestriction = observation
                 if (attempt.r44Reads.size < 12) attempt.r44Reads.addLast(observation)
                 else { attempt.r44ReadsOmitted += 1; attempt.r44Last = observation }
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
+    internal fun recordR448Frame(observation: KeyguardR448FrameObservation) {
+        val token = ingress ?: return
+        val owner = observation.context
+        if (owner.captureId != token.id || owner.attemptId == null ||
+            observation.owner.wake != owner.originWakeEpoch) return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
+                    ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
+                if (attempt == null || attempt.serviceSession != owner.serviceSession ||
+                    attempt.wakeEpoch != owner.originWakeEpoch) return@synchronized
+                val trace = attempt.r448Frame ?: KeyguardR448FrameTrace(observation.owner).also { attempt.r448Frame = it }
+                if (trace.owner != observation.owner) return@synchronized
+                val at = observation.at
+                when (observation.stage) {
+                    "FIRST_CHECK_ALLOWED" -> if (trace.firstAllowed == null) trace.firstAllowed = at
+                    "DEBOUNCE_SCHEDULED" -> if (trace.scheduled == null) trace.scheduled = at
+                    "DEBOUNCE_FIRED" -> if (trace.fired == null) trace.fired = at
+                    "DEBOUNCE_CANCELED" -> if (trace.canceled == null) trace.canceled = at
+                    "SECOND_CHECK_ALLOWED" -> if (trace.secondAllowed == null) trace.secondAllowed = at
+                    "COALESCED" -> trace.coalesced = (trace.coalesced + 1).coerceAtMost(9999)
+                    "ADD_BEGIN" -> if (trace.addBegin == null) {
+                        trace.addBegin = at
+                        trace.geometry = observation.detail?.let(::technicalValue)?.take(120)
+                    }
+                    "ADD_RETURN" -> if (trace.addReturn == null) trace.addReturn = at
+                    "ATTACHED" -> if (trace.attached == null) trace.attached = at
+                    "FIRST_SHADER_DRAW" -> if (trace.firstShader == null) trace.firstShader = at
+                    "HIDE" -> if (trace.hide == null) trace.hide = at
+                    "REMOVE_RETURN" -> if (trace.removeReturn == null) trace.removeReturn = at
+                    "DETACHED" -> if (trace.detached == null) trace.detached = at
+                    "DENIED_FIRST_CHECK", "DENIED_SECOND_CHECK", "ADD_FAILED", "REMOVE_FAILED", "DEBOUNCE_POST_FAILED" ->
+                        if (trace.terminal == null) {
+                            trace.terminal = observation.stage + (observation.detail?.let { ":${technicalValue(it).take(48)}" } ?: "")
+                            trace.terminalAt = at
+                        }
+                }
             }
         }
         if (!accepted) token.r44Dropped.incrementAndGet()
@@ -3096,6 +3141,7 @@ internal object KeyguardCardDiagnostics {
     }
 
     private fun copyAttempt(attempt: TimingAttempt): TimingAttempt = attempt.copy(
+        r448Frame = attempt.r448Frame?.copy(),
         r44Reads = ArrayDeque(attempt.r44Reads),
         r13Work = attempt.r13Work?.let { work -> work.copy(
             first = work.first?.let { it.copy(fields = it.fields.toMap()) },
@@ -3336,6 +3382,9 @@ internal object KeyguardCardDiagnostics {
         }
         val r44Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
         r44Attempts.forEach { attempt ->
+            attempt.r448Frame?.let { f ->
+                select("a${attempt.id}:r448frame", "R44_8_WA wake=${attempt.wakeEpoch} routeGeneration=${f.owner.route} materialGeneration=${f.owner.material} firstAllowed=${f.firstAllowed ?: "UNOBSERVED"} debounceScheduled=${f.scheduled ?: "UNOBSERVED"} requestedDue=${f.scheduled?.plus(50) ?: "UNOBSERVED"} debounceFired=${f.fired ?: "UNOBSERVED"} debounceCanceled=${f.canceled ?: "UNOBSERVED"} coalesced=${f.coalesced} secondAllowed=${f.secondAllowed ?: "UNOBSERVED"} addBegin=${f.addBegin ?: "UNOBSERVED"} addReturn=${f.addReturn ?: "UNOBSERVED"} attached=${f.attached ?: "UNOBSERVED"} firstShader=${f.firstShader ?: "UNOBSERVED"} hide=${f.hide ?: "UNOBSERVED"} removeReturn=${f.removeReturn ?: "UNOBSERVED"} detached=${f.detached ?: "UNOBSERVED"} geometry=${f.geometry ?: "UNOBSERVED"} terminal=${f.terminal ?: "UNOBSERVED"} terminalAt=${f.terminalAt ?: "UNOBSERVED"} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
+            }
             attempt.r448Boundary?.let { b ->
                 val w = attempt.r448Worker
                 select("a${attempt.id}:r448boundary", "R44_8_READ_BOUNDARY wake=${attempt.wakeEpoch} arm=${b.arm} screenOn=${b.screenAt} active=${b.active ?: "UNOBSERVED"} pending=${b.pending ?: "UNOBSERVED"} started=${b.started ?: "UNOBSERVED"} startedForArm=${b.startedForArm} boundaryDecision=${b.decision} workerRequest=${w?.request ?: "UNOBSERVED"} workerQueued=${w?.queued ?: "UNOBSERVED"} workerStart=${w?.started ?: "UNOBSERVED"} workerEnd=${w?.finished ?: "UNOBSERVED"} workerOutcome=${w?.outcome ?: "UNOBSERVED"} eligibility=${w?.eligibility ?: "UNOBSERVED"} authorityAtEnd=${w?.authorityAtEnd ?: "UNOBSERVED"} clock=uptimeMs\n", attempt.id)
