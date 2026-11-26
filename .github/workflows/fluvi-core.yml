@@ -1,4 +1,4 @@
-name: R44.8 fixed-sample-only phone candidate builder (orchestration only)
+name: R47 current-header Human phone candidate builder (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 45
     env:
       FLUVI_R18_APP_SHA: ${{ inputs.app_sha }}
-      FLUVI_R448_SAFE_SAMPLE_ONLY: 'true'
+      FLUVI_R448_SAFE_SAMPLE_ONLY: 'false'
     steps:
       - name: Require a full immutable source SHA
         shell: bash
