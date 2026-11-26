@@ -21432,3 +21432,120 @@ The owner was given the replacement candidate `31df90e7dc8316fe57d030ce00ef85c72
 **Verified direct APK:** https://media.githubusercontent.com/media/elizerpist/exptv2/d8c099290874ea2c9b8b4b88615acb993aeb281e/fluvi_R44_2_HUMAN_31df90e7dc83.apk . Complete anonymous HTTP 200 GET, 121170704 bytes, SHA-256 `e62fa8ce52aae4ee1b06fe3705fe57c24ff5a6b70bee5004d4ab1cb25906eb76`, signer SHA-256 `faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`. Exact source and HUMAN_DIAGNOSTIC purpose verified in all packaged AOT ABIs. Build https://github.com/elizerpist/exptv2/actions/runs/45780190192 . Exact-source graph plus direct Kotlin ownership inventory `58ac8563c230adcda5356315fb2534c8a0ebbe9e`, graph manifest index SHA-256 `0616d99bf52e93cb35a6d859cdb593bc239ac77591627bbe902e0a5c18b809c9`; Kotlin is source navigation, not SCIP coverage.
 
 The held real-service reader gate on the replacement did not reach its ordering assertion because the Android 17 emulator process crashed in RenderThread/GraphicBuffer https://github.com/elizerpist/exptv2/actions/runs/45780226296 . This is not a pass and does not establish a handset crash. Normal CI and a signed R44.1-to-replacement update/control run remain in progress. R44.1's first restricted-frame privacy failure and the emulator graphics failures remain open; the owner authorizes this diagnostic with fixed sample data only. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+## 2026-11-26 — R44.3 failed armed phone trial and R44.4 reviewer handoff
+
+# Fluvi R44.4 — Find the missing lockscreen witness and identify the second window on Android 17
+
+## 1. Task intent
+
+IMPLEMENTATION in elizerpist/exptv2. Ship an update-compatible signed HUMAN_DIAGNOSTIC APK for the owner's Nothing Phone (2a) A142. Repair the input to the stock lockscreen recognizer under an explicit fixed-sample trial. Independently correct the report that currently displays a potential cover as the applied reason for hiding. The positive target is the familiar animated sample ORB on the ordinary clock screen. Preserve immediate withdrawal on a forbidden scene. The owner has already supplied an armed R44.3 capture. Start implementation without asking for a repeat.
+
+## 2. Authoritative state
+
+The handset capture identifies 7dd17596cf2be61e410c7da5852a9c21d36586e8, the verified head of implement/r44-3-android17-orb at review. Its parent is f70e3577d9873e047fb801d7ea489bee183b6c56. Create implement/r44-4-android17-orb from the tested source, preserving any compatible later descendant explicitly identified during preflight. R44.3 artifact commit 86d98402ff3f72be47fa52a29e97bfff025843e0 identifies 121203472 bytes and SHA-256 4831c948c5db7416d921f7bb67f9fd541ea2e1758006a41f33885d0ebdcdbfdf. The application hash in the capture establishes source identity; the artifact hash comes from the delivery record. Coordination head before this entry was aa526182e2b99c8fda43697405b866286e1d6a63. R41 at 97f9704120e2ae997185ea6e35fbc053e1d7f0ab remains the owner's API 35 perceived-opening milestone.
+
+## 3. Hard preflight
+
+Read the full FLUVI_PROMPT_WRITER_RULES v2.1, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM v1.2, overriding DEBUGGING_LOOP_VERY_IMPORTANT.txt, shared docs/FLUVI_ENGINEERING_JOURNAL.md, MILESTONE_COMMITS.md and docs/ORB következtetések.md. The portable instructions are in the coordination journal at 161f63675121302432be2026898bed07b23d7ded around lines 5900, 7352 and 9601. Read the R44.3 handoff, APK record and this phone result. Verify fetched branch, source/parent, worktree, graph, builder and signer. Work on the implementation branch and preserve concurrent journal entries.
+
+## 4. Physical owner evidence
+
+Owner reports failure. LIGHT capture 489ae846-4fed-4020-8631-8a0dcc22f57a, 26 November 2026 at 10:09:33 Europe/Budapest, Android API 37, A142, 48.672 seconds. Service connected, ORB requested, SURFACE_LIVE, requested trial session 1. Eight wake generations ended HIDE_DECIDED with showRequest=none and no recorded grant, attach or post. Five have matching first post-SCREEN_ON reads with requested=true, receipt=armed, domain=fixedSample, mode=syntheticTrial, testProbeInjected=false. Wakes 5/11/15 have no matched SCREEN_ON or first read. Their missing receipt fields are unobserved. The phone provides no optical timestamp or transition-specific privacy verdict. The input here is pasted text, not a byte-verified file. The producer reports 31609 export bytes, 884 omitted evidence records and incomplete raw coverage.
+
+## 5. Log audit
+
+| Wake / request | SCREEN_ON to start | Read interval | SCREEN_ON to end | Extra outcome | Applied decision |
+| --- | ---: | ---: | ---: | --- | --- |
+| 3 / 30 | 388 ms | 24 ms | 412 ms | 1 read, HOST | UNKNOWN / NO_MAIN_MARKER |
+| 7 / 138 | 13 ms | 57 ms | 70 ms | 1 read, HOST | UNKNOWN / NO_MAIN_MARKER |
+| 9 / 200 | 425 ms | 87 ms | 512 ms | 1 read, EMPTY | UNKNOWN / WALK_TRUNCATED |
+| 13 / 339 | 186 ms | 136 ms | 322 ms | 1 read, HOST | UNKNOWN / NO_MAIN_MARKER |
+| 17 / 449 | 25 ms | 293 ms | 318 ms | 1 read, HOST | UNKNOWN / NO_MAIN_MARKER |
+
+All five fresh reads saw verified active host 969 at layer 0, rawEntry=0, rawClock=0, no accepted content and budgetHit=false. The HOST extra had ordinal 20. A carrier count of two does not prove two independent host nodes. In request 200 the extra was empty, failed count was one and the per-window overflow was zero. All five reads independently report at least one other unqualified same/higher-layer primary window, with varying recorded secondary IDs 972/976/978/982/986. Its role and optical coverage are missing. Three scheduling boundaries report NON_SINGLETON (wakes 3, 9 and 13); do not use a queue decision as a display decision. The 167 ms extra on request 377 belongs to a later stale read. R44.2 measured seven eligible extras and a four-call limit in a *different* capture. R44.3's eligible-candidate selection also differs. Do not assume six specific nodes disappeared from the device.
+
+## 6. Commit, test and previous conclusions
+
+7dd17596 guards both potential positive routes against ambiguous multiple hosts. Retain it and the preceding fixes for parent identity, unknown restrictions and cross-request yield. On this app the 599 JVM and 15 focused Flutter/bridge tests passed, including fixtures placing clock and forbidden markers at positions 5–7. The uninjected API 37 emulator job 45787830381 reached clock read and PIN decision, with attached=false, no proven post and shade decision unreached. Capture-on graphics control 45787829666 and held-reader control 45787829936 encountered native graphics crashes. Capture-off 45787829045 failed to reach attached bounds. Pressure run 45787338532 failed its LIGHT and FULL evidence cases. Signed update from the R44.2 replacement exercised binding and receipt in 45788588757; the original R44.2 upgrade in 45788588724 did not verify binding or receipt. Check final status of exact-source normal CI 45788327266 (in progress at review), preserve every failure and scope each claim to what its assertions reached. Prior API 35 synthetic first-restriction-frame failures remain production concerns.
+
+## 7. Graph provenance and impact
+
+Graph commit 6706fba6a152f955944bc47e77a452725520e251, manifest source_head 7dd17596 and source_parent f70e3577. SCIP covers Dart; follow Kotlin calls directly. Inspect the debug-console start, timing bridge, service registry, FluviKeyguardCardService.setR44SyntheticTrial/startR442SampleCapture, receipt invalidation, service lifecycle, readSystemWindows/inspectSurface/recordR44Read, KeyguardWindowSnapshotReader, KeyguardR443Inventory, KeyguardR44TreeReader, KeyguardR44SurfaceClassifier, KeyguardSurfaceClassifier in KeyguardCardSurface.kt, and KeyguardCardSettings.r44Record. Trace both admission routes, early withdrawal and capture export before edits.
+
+## 8. Exact source findings
+
+fluvi_keyguard_card_service.xml asks for flagRetrieveInteractiveWindows and flagReportViewIds. The connection snapshots the service flags for R43; this R44.3 export contains no effective flags readback. Android can expose additional nodes and deliver additional events when the service explicitly sets FLAG_INCLUDE_NOT_IMPORTANT_VIEWS. It cannot make a virtual Compose node exist. Accessibility importance and actual user visibility are different properties. The existing walker returns at an invisible node, has explicit exclusion branches, and uses exact host/entry/clock markers. Keep hidden nodes ineligible. Preserve the cap of seven for the existing fixed-sample resolver and its existing time/lineage checks.
+
+The real classifier returns UNKNOWN/WALK_TRUNCATED on incomplete evidence; the no-content path returns the legacy UNKNOWN before its final cover check. Separately, recordR44Read derives VETO_UNKNOWN_OR_COVER if another unverified window is at or above the host. The Hungarian reason currently prioritizes this second result over the applied decision. Real-window evidence defaults verifiedPassive to false. Neither the numeric ID nor the role of a window in an older R43 scene identifies these five windows.
+
+Platform references: [AccessibilityServiceInfo flags](https://developer.android.com/reference/android/accessibilityservice/AccessibilityServiceInfo#FLAG_INCLUDE_NOT_IMPORTANT_VIEWS), [dynamic service configuration](https://developer.android.com/reference/android/accessibilityservice/AccessibilityService#setServiceInfo(android.accessibilityservice.AccessibilityServiceInfo)), [window touchable region](https://developer.android.com/reference/android/view/accessibility/AccessibilityWindowInfo#getRegionInScreen(android.graphics.Region)).
+
+## 9. Hypotheses and falsifiers
+
+| Hypothesis | Concrete observation to distinguish it |
+| --- | --- |
+| H1. Framework accessibility filtering hides a visible, genuine clock or device-entry descendant. | A real provider control reveals a known node only when the flag is effective. On the phone, an exact independent visible marker under the verified host is seen under the new configuration. Effective flags with no such node in complete reads weaken H1 for this firmware. |
+| H2. What the phone publishes is only the host, a duplicate carrier on the same node, an excluded/hidden candidate or a clock outside the required relationship. | Per-host ordinal/parent/role and bounded exclusion counts distinguish these cases. An EMPTY return stays separate from a complete host-only read. |
+| H3. An unqualified second window would independently prevent admission even after a good clock witness. | On the exact same request, record the secondary window's verified role and layer relation. Only a read with an accepted pair and an applied cover verdict can identify cover as the operative gate. A second UDFPS-shaped window can exist on several scenes. |
+| H4. A long previous read delays the decision. | Compare existing old-read boundary, ingress, pending request and successor on matched timestamps. The 70 ms first return still had no witness. Earlier queue dispatch alone cannot correct that decision. |
+| H5. The owner sees the wrong reason, and concise evidence disappears under pressure. | Reproduce requests 30 and 200: preserve two different applied reasons plus the same structural warning, and retain both under the existing export limit. |
+
+## 10. Reviewer-selected implementation
+
+Make the existing unlocked **„Mintaorb kipróbálása és rögzítés”** action in the Human diagnostic build run a reversible expanded *structural* read profile for this trial. Explain in one short UI line that this trial reads more SystemUI view identifiers using fixed demo material. Preserve a standard-profile control on a separate start for matched lab comparisons. No additional setup or new Android permission. Configure the service once before locking, read back the actual mask and bind the read profile to the service/process/capture and a configuration revision. Perform the normal read and render pipeline on that single current profile; never join positive facts from two configurations.
+
+For the expanded trial apply the existing exact independent clock/entry rules. Also admit the exact installed SystemUI id/keyguard_clock_switch as a *distinct* visible owned descendant of the positively identified host, after native resource verification and all remaining restrictions, ancestry, unique-host and cover checks. This concrete Android view ID already exists in the repository's clock classifier. Its existence on this phone is unverified. Do not promote keyguard_status_view, carrier text, generic buttons, text resembling a time, or a newly exposed legacy-only positive into an expanded-mode grant. Feed all expanded negative evidence to immediate withdrawal. A valid current pair with independently clear cover can take the existing prepared sample/animation path. A still-unqualified upper window keeps the ORB hidden, even after a new witness is found.
+
+## 11. Protected scope
+
+Keep normal financial behavior, normal accessibility settings, private material, launcher widgets, shader, capture limits, API 35/R41 scheduling, upper-window rules and restricted-scene precedence. The R36 widget-picker experiment was previously closed. Leave it closed. The recipient asked about the stock clock screen. Do not use an app-owned replacement lockscreen, screenshots of the owner's content, raw text/descriptions, notification data, PIN contents, gestures, hidden APIs, forced permission grants, or a firmware/window-ID allowlist. The debug profile may observe more incoming events; keep all non-SystemUI content out of the new collector and retain existing foreign-window vetoes.
+
+## 12. Ownership and lifecycle contract
+
+Use the Android service owner to save the previous value of only the flag bit being changed. Preserve concurrent unrelated flags/settings. Perform reconfiguration with the prior visible material hidden and all grants/requests invalidated. Verify the getServiceInfo readback before acknowledging the expanded profile; report the previous and actual masks. If the bit was already active, label the control accordingly. Readback establishes configuration only. A real provider test must establish a difference in accessible contents.
+
+Fence queued events, inventories, lazy completions, stored positive observations, sample receipts and late bridge replies by service owner and profile revision. Reuse existing freshness/invalidation facilities. No reconfiguration/lookup in the wake callback. Stop/freeze, failed start, replacement, rebind, process recreation and service loss must release the owned change. On a live service restore the previous bit without overwriting unrelated updates. If teardown prevents confirmation, revoke the trial and verify the normal configuration on the next service connection before financial observation/presentation. Persist no expanded preference or authorization. Keep normal capture-off controls, and verify the stop action works when no capture is open.
+
+## 13. Required red tests
+
+1. Use a real Android accessibility provider/host fixture with a deliberately unimportant but visible clock view. Assert the actual node's presence/absence and effective mask in distinct sessions on the same controlled layout. Keep the system-owner/role checks real on the real service path; if a lab provider uses its own package, label that as collection-only. Never call a provider fixture a Nothing SystemUI result.
+2. Feed the real reader/classifier a matching SystemUI-owned host/visible clock descendant. Cover clean disclosure, late entry, identical HOST from two carriers on one node, distinct duplicate hosts, hidden parent/child, wrong owner/window, same-node/sibling “clock”, inactive root, and coexisting AOD, PIN, shade, camera or unknown upper window. Place a clock *behind* a forbidden panel. A legacy-positive-only button or generic container must not authorize the expanded domain.
+3. Exercise an actual sample grant, attach and current post with independent calibrated pixel observation in the positive system-level fixture. Cover an unknown upper window independently from missing content. Same-layer foreign, intervening camera, spoofed UDFPS resource, stale/retired owned layer and unverified touch bounds must stay restrictive. No test may fabricate a passive bit to prove a real-window path.
+4. Cover duplicate starts, switch/restore, changed unrelated flags, service rebind during configuration, failed readback, callback arriving after rollback, stale inventory and a lost binder during freeze. Verify no private-data subscription or FULL buffer crosses the expanded interval. Pressure-test LIGHT and FULL with eight wakes, three missing first reads, working copy/export, both primary reasons and distinct missing values.
+
+## 14. Reporting repair and phone discriminator
+
+Carry the *applied decision gate* from the classifier as typed evidence, separately from (a) whether a cover check was actually reached and (b) what a separate structural cover check would do. Preserve known negative/legacy results. Do not reconstruct the applied reason from the presence of an upper window. For the req30 fixture the Hungarian summary must convey “Hiányzik a külön óra- vagy belépési jel. Van egy további, nem minősített ablak.” For req200 it must indicate “Üres kiegészítő adat miatt hiányos az olvasás” plus that separate window fact. A real qualified pair rejected at cover must say so. For a missing first read, show UNOBSERVED.
+
+From the *same read*, pin the current flags/revision, receipt, verified host/unique node count and its observed carriers; separate exact clock/entry presence, eligibility, parent/host relation, hidden/excluded counts, distinct EMPTY and stale results. For the host and each actual blocking primary window, record only bounded technical fields: per-read ID and relative layer, type, active/focused, own attribution/attach generation, classifier owner category and verified root, coarse node count, and an enum for any genuinely verified, installed allowlisted root identity (including UDFPS if actually observed). Use ephemeral IDs only to join that observation. A touchable region, if used for diagnosis, cannot certify visible pixels. Cap window details, retain total/overflow and one decisive blocker. Do not fetch a second tree solely to log this. Apply disclosure/formatting work on the diagnostic consumer. Store no raw user-facing strings.
+
+## 15. Performance and visibility gates
+
+Do not expand the four/seven lookup limits, the allowed IPC window or node/depth caps. Record role acquisition, inspected nodes, event volume, truncation, stale rate, read-to-decision and existing post/removal observations by profile. Compare equivalent clock/negative scenes in separate epochs on the same fixture, including standard capture OFF. Test restored normal-profile overhead. No extra work on API 35 or normal wake. Keep clock bases and matched endpoints explicit. Physical wake-to-first-visible ≤10 ms and first-forbidden-frame disappearance remain owner targets, unverified in this capture. One successful read, frame post or emulator assertion cannot establish either physical endpoint.
+
+## 16. Fixed execution order
+
+First reproduce the false Hungarian reason on the parent and the filtering discriminator using a real configured service. Implement profile ownership/rollback, the narrowed pair rule and independent cover reporting. Add focused failure/withdrawal tests and pressure-check the summary. Run the uninjected API 37 stock scene and the actual signed upgrade. Continue to build and hand off the authorized diagnostic candidate when broader qualification is red. If real SystemUI still publishes only a host, show that precisely; if a valid witness is found and a second window still vetoes it, identify that exact branch. Neither outcome authorizes guessing a new marker or marking a window passive. After a clean, complete, expanded host-only handset result, return that limitation to the reviewer instead of proposing another budget increment.
+
+## 17. Validation and regression
+
+Run repository boundary/format checks, Android JVM and instrumentation compilation, Flutter console/bridge tests, actual-provider, receipt, capture-on/off, R443 late-candidate, privacy/withdrawal and pressure suites. Exercise uninjected API 37 clock, PIN, shade/QS, camera and unlock; distinguish actually reached states from timed labels. Run normal CI and API 35 first-restriction-frame controls on both backgrounds. Preserve the first old-FULL, ambiguous or calibration-failed sample, all graphics failures and any zero-test selectors. Test unchanged animation and home-widget paths as regression controls. Record exact commands, jobs, counts, fixture/app hashes, PASS/FAIL/NOT RUN and unreached observations. Correct in-scope packaging/fixture errors, avoid rerunning the same failed boundary without discriminating evidence.
+
+## 18. Commit discipline
+
+Use focused commits with observed problem, exact source/graph, proof boundary, change, tests, protected invariants and remaining limits. Push implementation separately from graph and binary. Append the owner evidence, implementation results, direct job links, current test failures, graph and signed artifact identity to docs/FLUVI_ENGINEERING_JOURNAL.md on fix/orb-v4-latency-lockscreen. Preserve concurrent entries and R41. Keep signer and private data outside the repo.
+
+## 19. Build and deliver
+
+Use the established HUMAN_DIAGNOSTIC profile for com.fluvi.app with update signer SHA-256 faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. Verify version, embedded new source/profile, archive, apksigner certificate, size and SHA-256. Install the actual new APK over the published signed R44.3. Verify sentinel, settings, bound service, unlocked primary action, active fixed-sample receipt/profile, freeze/restore, and retained settings after reopening. Repair any identity, update, or material-domain isolation fault before delivery. Regenerate the graph for the exact new application commit.
+
+Provide an owner-accessible attachment or immutable direct binary link. Fetch the complete delivered bytes through the recipient's access path and match hash/length. Use the alternate authorized binary channel if the first transfer fails. A previous APK, build dashboard, source page, LFS pointer or private held candidate does not satisfy this handoff. Known broad test failures block production approval and must be disclosed; the owner explicitly requests the fixed-sample diagnostic file for testing.
+
+## 20. Completion report
+
+First line in Hungarian: the actual **R44.4 mintaadatos teszt-APK letöltése** link or actual APK attachment. Include update check, source, exact graph, signed size/SHA-256, tests, failed/unreached gates and remaining phone questions. State implementation, automated qualification, verified delivery and physical acceptance separately. Owner first test: update over R44.3, open the unlocked console, tap **„Mintaorb kipróbálása és rögzítés”** once, verify the active expanded sample receipt, lock and wake once to the usual clock, observe the ORB, unlock, freeze and copy the short report. Capture starts through that same action. No widget installation, additional accessibility permission or multi-hold routine.
+
+## 21. Definition of done
+
+Deliver the retrievable, signed R44.4 update with the selected input-path change, an independently tested rollback, a retained one-wake explanation and honest visual evidence. Valid current clock/clear-cover fixtures must exercise the real sample presentation path. Forbidden, uncertain or stale scenes remain hidden. The owner alone can qualify the ordinary Nothing clock, actual first pixel and first forbidden frame. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
