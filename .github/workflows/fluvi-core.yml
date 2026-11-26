@@ -289,7 +289,7 @@ jobs:
       R44_STAGE_SIZE: ${{ inputs.stage_size }}
       FLUVI_R44_STAGE_KEY: ${{ secrets.FLUVI_R44_UPDATE_STAGE_KEY }}
       R44_STAGE_NONCE: ${{ inputs.stage_nonce }}
-      R44_PRIVATE: ${{ inputs.test_scope == 'r44_update_private' }}
+      R44_PRIVATE: ${{ inputs.test_scope == 'r44_update_private' || startsWith(inputs.test_scope, 'r47_ui_') }}
       R44_REOPEN_ONLY: ${{ inputs.test_scope == 'r44_update_reopen' }}
       R446_UI_PROBE: ${{ inputs.test_scope == 'r446_update_once' || inputs.test_scope == 'r446_update_arm' }}
       R446_ARM_ONLY: ${{ inputs.test_scope == 'r446_update_arm' }}
@@ -318,7 +318,7 @@ jobs:
       - name: Ensure lossless patch tool is available
         run: command -v zstd || (sudo apt-get update && sudo apt-get install -y zstd)
       - name: Prepare private signed update fixture
-        if: ${{ inputs.test_scope == 'r44_update_private' }}
+        if: ${{ inputs.test_scope == 'r44_update_private' || startsWith(inputs.test_scope, 'r47_ui_') }}
         run: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r44-private-handshake.sh"
       - name: Enable KVM
         run: |

@@ -46,8 +46,15 @@ openssl pkeyutl -decrypt -inkey "$out/private.pem" -in "$out/key.enc" -out "$out
   -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256
 chmod 600 "$out/key.txt"
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass "file:$out/key.txt" -in "$out/stage.enc" -out "$out/r44.zstpatch"
-curl -fLsS --retry 3 'https://media.githubusercontent.com/media/elizerpist/exptv2/47ba86e432b7027ea9c786270211d1d8b5b8edf2/fluvi_R43_HUMAN_0732bee6a2bc.apk' -o "$out/r43.apk"
-printf '%s  %s\n' 4abcfd4f0b929919c1102a76155d061a721112b8efac5c5ee7c293d3c198b166 "$out/r43.apk" | sha256sum -c -
+if [[ "${R44_BASELINE:-}" == r46 ]]; then
+  base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/87149a537c3cb4ccfa730d8838a36b4242595e7a/fluvi_R46_SAMPLE_ONLY_HUMAN_fd74df605779.apk'
+  base_sha=6a4fecb359ce8de81035366a12e93dafe027689d2226a84d0091ee14d6cdca1f
+else
+  base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/47ba86e432b7027ea9c786270211d1d8b5b8edf2/fluvi_R43_HUMAN_0732bee6a2bc.apk'
+  base_sha=4abcfd4f0b929919c1102a76155d061a721112b8efac5c5ee7c293d3c198b166
+fi
+curl -fLsS --retry 3 "$base_url" -o "$out/r43.apk"
+printf '%s  %s\n' "$base_sha" "$out/r43.apk" | sha256sum -c -
 zstd -q -d --patch-from="$out/r43.apk" -f "$out/r44.zstpatch" -o "$out/r44.apk"
 test "$(wc -c < "$out/r44.apk")" -eq "$CANDIDATE_SIZE"
 printf '%s  %s\n' "$CANDIDATE_SHA256" "$out/r44.apk" | sha256sum -c -
