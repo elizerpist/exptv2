@@ -57,6 +57,9 @@ class KeyguardR44SurfaceClassifierTest {
     @Test fun duplicateVerifiedHostIsAmbiguousEvenIfOneIsInactive() {
         assertEquals(KeyguardSurface.UNKNOWN, decide(window(),
             window(id = 11, layer = 9, e = evidence(active = false))))
+        assertEquals(KeyguardSurface.UNKNOWN, decide(
+            window(ids = setOf("com.android.systemui:id/keyguard_status_view")),
+            window(id = 11, layer = 9, e = evidence(active = false))))
     }
 
     @Test fun higherFingerprintDoesNotHideAnInterveningCamera() {

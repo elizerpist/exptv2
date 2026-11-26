@@ -103,6 +103,11 @@ internal object KeyguardR44SurfaceClassifier {
         val observed = primary.mapNotNull { it.r44 }
         if (observed.any { !it.complete }) return KeyguardSurfaceClassification(
             KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.WALK_TRUNCATED, legacy.markers)
+        // A duplicate host is ambiguous for either positive route. The
+        // restriction applies only to the explicitly enabled sample.
+        if (syntheticTrial && observed.count { it.verifiedRoot && it.host != null } > 1)
+            return KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN,
+                KeyguardSurfaceReason.WALK_TRUNCATED, legacy.markers)
         // A legacy positive also has to survive new global restriction and
         // occlusion checks relative to the active host on API 37.
         if (legacy.surface == KeyguardSurface.MAIN_KEYGUARD) {
@@ -117,10 +122,6 @@ internal object KeyguardR44SurfaceClassifier {
             return legacy
         }
         if (!syntheticTrial) return legacy
-        // Multiple verified lockscreen hosts are ambiguous even if only one
-        // is currently marked active. Do not infer ownership from the layer.
-        if (observed.count { it.verifiedRoot && it.host != null } > 1) return KeyguardSurfaceClassification(
-            KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.WALK_TRUNCATED, legacy.markers)
         val hosts = primary.filter { w ->
             w.type == AccessibilityWindowInfo.TYPE_SYSTEM && w.packageName == "com.android.systemui" &&
                 w.r44?.let { it.verifiedRoot && it.active && it.host != null } == true

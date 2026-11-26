@@ -4634,8 +4634,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                         if (screen != null && screen.session == request.session && startedAt < screen.uptime) {
                             val pending = inspectionQueue.pendingRequest()
                             val reason = when {
-                                structuralReason != "ELIGIBLE" -> structuralReason
                                 pending == null -> "NO_PENDING"
+                                structuralReason != "ELIGIBLE" -> structuralReason
                                 r442PendingLocked(screen) == null -> "OWNER_MISMATCH"
                                 else -> "ELIGIBLE_PENDING"
                             }
