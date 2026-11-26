@@ -1,0 +1,109 @@
+
+## KeyguardTimingCaptureBridge
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureBridge#
+DEFINITION
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:106
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureBridge#
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureBridge#`<constructor>`().
+REFERENCES
+total=25 production=3 tests=22
+CONSUMER FILES
+lib/app/shell/fluvi_app_shell.dart
+lib/core/debug/debug_console.dart
+lib/core/debug/debug_floating_button.dart
+test/core/debug/keyguard_timing_capture_console_test.dart
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart
+PRODUCTION REFERENCES
+lib/app/shell/fluvi_app_shell.dart:1421:38 reference
+lib/core/debug/debug_console.dart:25:8 reference
+lib/core/debug/debug_floating_button.dart:23:8 reference
+TEST REFERENCES
+test/core/debug/keyguard_timing_capture_console_test.dart:52:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:89:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:137:21 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:196:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:239:21 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:293:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:356:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:421:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:473:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:507:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:541:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:595:19 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:631:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:36:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:57:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:85:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:95:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:118:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:134:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:156:21 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:189:19 reference
+test/core/diagnostics/keyguard_timing_capture_bridge_test.dart:207:19 reference
+
+## KeyguardTimingCaptureSnapshot
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#
+DEFINITION
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:274
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#`<constructor>`().
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#fromMap().
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`keyguard_timing_capture_bridge.dart`/KeyguardTimingCaptureSnapshot#unavailable().
+REFERENCES
+total=14 production=14 tests=0
+CONSUMER FILES
+lib/core/debug/debug_console.dart
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart
+PRODUCTION REFERENCES
+lib/core/debug/debug_console.dart:56:2 reference
+lib/core/debug/debug_console.dart:424:12 reference
+lib/core/debug/debug_console.dart:424:42 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:129:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:139:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:142:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:145:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:258:9 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:262:30 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:262:60 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:267:11 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:267:41 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:294:11 reference
+lib/core/diagnostics/keyguard_timing_capture_bridge.dart:311:12 reference
+TEST REFERENCES
+
+## DebugConsoleDialog
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#
+DEFINITION
+lib/core/debug/debug_console.dart:13
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`().
+REFERENCES
+total=16 production=3 tests=13
+CONSUMER FILES
+lib/core/debug/debug_console.dart
+lib/core/debug/debug_floating_button.dart
+test/core/debug/keyguard_timing_capture_console_test.dart
+PRODUCTION REFERENCES
+lib/core/debug/debug_console.dart:28:8 reference
+lib/core/debug/debug_console.dart:37:45 reference
+lib/core/debug/debug_floating_button.dart:41:28 reference
+TEST REFERENCES
+test/core/debug/keyguard_timing_capture_console_test.dart:58:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:95:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:144:18 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:202:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:246:18 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:299:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:362:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:427:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:479:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:513:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:547:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:601:29 reference
+test/core/debug/keyguard_timing_capture_console_test.dart:637:29 reference
