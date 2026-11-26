@@ -222,6 +222,24 @@ class KeyguardR22ReaderHandoffTest {
         }
     }
 
+    @Test fun r442DoesNotYieldPastAnUnknownPotentialRestriction() {
+        val host = Platform.node("element:lockscreen")
+        val unknown = Platform.node(null)
+        checkNotNull(Platform.nodes[unknown]).extras.putCharSequence(KeyguardR44Markers.EXTRA, "overlay:unrecognised")
+        checkNotNull(Platform.nodes[host]).children.add(unknown)
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 1, true, host))
+        var offered = false
+        Platform.afterChild = { offered = true }
+        val successor = KeyguardCardInspectionRequest(2, "window", 1, 2, 3, 4, 5, 20)
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true,
+            r37YieldHint = { offered }, claimR37Yield = { _, _, _, _, _ -> successor }), { true })
+        assertNull("an observed unknown overlay must remain fail-closed before transfer", read.yieldedTo)
+        assertFalse(checkNotNull(read.snapshots.single().r44).complete)
+        assertEquals(KeyguardSurface.UNKNOWN, KeyguardR44SurfaceClassifier.classify(
+            read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+    }
+
     @Test fun r44EagerAndLazyTagsTraverseTheActualReader() {
         for (lazy in listOf(false, true)) {
             Platform.reset()
