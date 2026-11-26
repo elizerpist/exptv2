@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate pasted bytes; software draw receipts are not optical evidence."""
 import hashlib
+import os
 import re
 import sys
 from pathlib import Path
@@ -31,4 +32,11 @@ print(f'route={route} expectedWakes={expected} observedWakeIds={sorted(events)} 
 for wake, stages in sorted(events.items()): print(f'wake={wake} stages={sorted(stages)}')
 assert len(qualified) >= expected, 'NOT REACHED: fewer same-wake software reveal/shader receipts than requested'
 assert 'spoolDropped=0' in text and 'spoolFailure=none' in text, 'spool incomplete'
+if os.environ.get('R47_REQUIRE_ACTIVE_HEADER') == 'true':
+    source = set(re.findall(r'R47_MATERIAL origin=active_header_semantic token=([a-f0-9-]+)', text))
+    draws = set(re.findall(r'origin=active_header_semantic token=([a-f0-9-]+)', '\n'.join(
+        line for line in text.splitlines() if 'MOTION' in line)))
+    assert source and source.intersection(draws), 'NOT REACHED: no matching current-header source and draw token'
+    assert 'palette=compiled_public_v1' not in text, 'FAIL: public fixture was used by the owner recording'
+    print('matchingCurrentHeaderReceipt=PASS')
 print('softwareWakeReceipts=PASS')

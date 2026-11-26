@@ -84,7 +84,13 @@ for wakes in "${trials[@]}"; do
     stream=$!
     sleep 0.5
     adb shell input keyevent KEYCODE_WAKEUP
-    sleep 5
+    if [[ "${R47_REQUIRE_ACTIVE_HEADER:-false}" == true ]]; then
+      sleep 7
+      mkdir -p "$out/r46frames/$wakes-$cycle"
+      adb exec-out screencap -p > "$out/r46frames/$wakes-$cycle/after-seven-seconds.png" || true
+    else
+      sleep 5
+    fi
     adb shell wm dismiss-keyguard || true
     wait "$stream" || true
     printf 'after_wake_%s ' "$cycle" >> "$out/r46-$route-$wakes-clock.txt"
