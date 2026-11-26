@@ -66,7 +66,6 @@ class KeyguardR442SystemUiObservationTest {
         val prefs = ctx.getSharedPreferences("fluvi_native_keyguard_card", android.content.Context.MODE_PRIVATE)
         val savedSettings = HashMap(prefs.all)
         val component = ComponentName(ctx, FluviKeyguardCardService::class.java)
-        val entries = mutableListOf<String>()
         var owner: FluviKeyguardCardService? = null
         var pinSet = false
         var frozen = false
@@ -88,14 +87,6 @@ class KeyguardR442SystemUiObservationTest {
             assertTrue("NOT REACHED: service", waitFor { FluviKeyguardCardServiceRegistry.connected })
             owner = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
             val service = checkNotNull(owner)
-            service.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
-                override fun readCompleted(request: KeyguardCardInspectionRequest, decision: KeyguardCardVisibility,
-                    reason: KeyguardSurfaceReason, rootUnavailable: Boolean, walkTruncated: Boolean,
-                    abortedStale: Boolean, startedAt: Long, finishedAt: Long) {
-                    synchronized(entries) { if (entries.size < 100) entries +=
-                        "req=${request.id} wake=${request.wakeGeneration} decision=$decision reason=$reason unavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale start=$startedAt end=$finishedAt" }
-                }
-            }
             val receipt = AtomicReference<Map<String, Any?>>()
             val done = CountDownLatch(1)
             ins.runOnMainSync { CoroutineScope(Dispatchers.Main.immediate).launch {
@@ -109,7 +100,8 @@ class KeyguardR442SystemUiObservationTest {
             assertTrue("NOT REACHED: sleeping locked device", waitFor { !power.isInteractive && keyguard.isKeyguardLocked })
             shell("input keyevent KEYCODE_WAKEUP")
             assertTrue("NOT REACHED: actual clock wake", waitFor { power.isInteractive && keyguard.isKeyguardLocked })
-            val readReached = waitFor(10_000) { synchronized(entries) { entries.isNotEmpty() } }
+            fun report() = KeyguardCardDiagnostics.captureSnapshot(ctx)["report"] as? String ?: ""
+            val readReached = waitFor(10_000) { report().contains("R44_READ ") }
             screenshot("clock")
             val clockState = main { service.inspectionStateForTest() }
             val posts = main { service.surfaceMetricsForInstrumentation()?.submissions }
@@ -118,14 +110,13 @@ class KeyguardR442SystemUiObservationTest {
             // Retain the real scene commands and evidence even when the clock
             // did not authorize an ORB; those cases cannot pass W-HIDE.
             shell("input swipe 200 2000 200 500 350")
-            val pinSeen = waitFor(8_000) { synchronized(entries) { entries.any { it.contains("CREDENTIAL") } } }
+            val pinSeen = waitFor(8_000) { report().contains("verdict=CREDENTIAL") }
             screenshot("pin-attempt")
             shell("input keyevent KEYCODE_BACK")
             shell("input swipe 180 12 180 1500 450")
             shell("cmd statusbar expand-settings")
-            val shadeSeen = waitFor(8_000) { synchronized(entries) { entries.any { it.contains("SHADE") } } }
+            val shadeSeen = waitFor(8_000) { report().contains("verdict=SHADE") }
             screenshot("shade-attempt")
-            out.resolve("real-reads.txt").writeText(synchronized(entries) { entries.joinToString("\n", postfix = "\n") })
             out.resolve("scenes.txt").writeText("clockRead=$readReached pinDecision=$pinSeen shadeDecision=$shadeSeen opticalFirstPixel=UNOBSERVED firstForbiddenFrame=UNOBSERVED\n")
             val report = KeyguardCardDiagnostics.freezeCapture(ctx)["report"] as String
             frozen = true
@@ -133,9 +124,9 @@ class KeyguardR442SystemUiObservationTest {
             assertTrue("NOT REACHED: actual first inspection", readReached)
             assertTrue("NOT REACHED: trial's first wake report", report.contains("R44_2_TRIAL requested=true"))
             assertTrue("NOT REACHED: synthetic trial classifier", report.contains("mode=syntheticTrial"))
+            assertTrue("NOT REACHED: unmodified system tree", report.contains("testProbeInjected=false"))
             // Passing this observation does not pass W-SHOW or W-HIDE.
         } finally {
-            owner?.inspectionProbeForTest = null
             if (!frozen && KeyguardCardDiagnostics.activeCaptureId() != null) runCatching {
                 out.resolve("partial.txt").writeText(KeyguardCardDiagnostics.freezeCapture(ctx)["report"] as String)
             }
