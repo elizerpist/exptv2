@@ -39,6 +39,46 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r448BoundaryAndVetoSurviveLightPressure() = r448Pressure("LIGHT")
     @Test fun r448BoundaryAndVetoSurviveFullPressure() = r448Pressure("FULL")
 
+    @Test fun r448TwoFrozenRouteSummariesRemainDistinct() {
+        val routePrefs = context.getSharedPreferences("fluvi_keyguard_r448_display_route", android.content.Context.MODE_PRIVATE)
+        val summaryPrefs = context.getSharedPreferences("fluvi_keyguard_r448_comparison", android.content.Context.MODE_PRIVATE)
+        val oldRoute = routePrefs.getString("route", null)
+        val hadRoute = routePrefs.contains("route")
+        val oldA = summaryPrefs.getString("FLUVI_STREAM", null)
+        val oldB = summaryPrefs.getString("WIDGETS_ANYWHERE", null)
+        fun capture(route: KeyguardR448DisplayRoute, session: Long, wake: Long): String {
+            assertTrue(KeyguardR448DisplayRouteStore.write(context, route))
+            val started = KeyguardCardDiagnostics.startCapture(context, "r448-ab", "profile", "LIGHT",
+                r442ExpectedSession = session, r446PrintRequested = true)
+            val id = started["captureId"] as String
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, session, wake, "wake", 1000))
+            KeyguardCardDiagnostics.recordR446(KeyguardR446Observation(owner, 990, wake, 11,
+                "UNKNOWN", "ELIGIBLE_SAMPLE", route.name, null, null, null, null, null,
+                null, null, null, "UNOBSERVED"))
+            KeyguardCardDiagnostics.freezeCapture(context)
+            return id
+        }
+        try {
+            val a = capture(KeyguardR448DisplayRoute.FLUVI_STREAM, 9448, 1)
+            val b = capture(KeyguardR448DisplayRoute.WIDGETS_ANYWHERE, 9449, 2)
+            assertFalse(a == b)
+            val combined = KeyguardR448ComparisonStore.export(context)
+            assertTrue(combined, combined.contains("FLUVI_STREAM\ncapture=$a"))
+            assertTrue(combined, combined.contains("WIDGETS_ANYWHERE\ncapture=$b"))
+            assertTrue(combined.toByteArray(Charsets.UTF_8).size <= 32_768)
+            KeyguardCardDiagnostics.clearCapture(context)
+            assertEquals(combined, KeyguardR448ComparisonStore.export(context))
+        } finally {
+            val routeEdit = routePrefs.edit()
+            if (hadRoute) routeEdit.putString("route", oldRoute) else routeEdit.remove("route")
+            assertTrue(routeEdit.commit())
+            val summaries = summaryPrefs.edit()
+            if (oldA == null) summaries.remove("FLUVI_STREAM") else summaries.putString("FLUVI_STREAM", oldA)
+            if (oldB == null) summaries.remove("WIDGETS_ANYWHERE") else summaries.putString("WIDGETS_ANYWHERE", oldB)
+            assertTrue(summaries.commit())
+        }
+    }
+
     private fun r448Pressure(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r448-pressure", "profile", mode,
             r442ExpectedSession = 9448, r446PrintRequested = true)

@@ -264,6 +264,50 @@ void main() {
     },
   );
 
+  testWidgets('copies the two native frozen route summaries together', (
+    tester,
+  ) async {
+    String? clipboard;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboard =
+                (call.arguments as Map<Object?, Object?>)['text'] as String?;
+          }
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(runtime, (call) async {
+          if (call.method == 'getR448Comparison') {
+            return <String, Object?>{
+              'report': 'FLUVI_STREAM\ncapture=a\nWIDGETS_ANYWHERE\ncapture=b',
+            };
+          }
+          return response('IDLE', '');
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: runtime,
+      isAndroid: () => true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
+    await tester.pumpAndSettle();
+    final copy = find.byKey(const ValueKey('debug-console-r448-comparison'));
+    await tester.ensureVisible(copy);
+    await tester.tap(copy);
+    await tester.pumpAndSettle();
+    expect(clipboard, contains('capture=a'));
+    expect(clipboard, contains('capture=b'));
+  });
+
   testWidgets('one action requests an acknowledged sample capture', (
     tester,
   ) async {

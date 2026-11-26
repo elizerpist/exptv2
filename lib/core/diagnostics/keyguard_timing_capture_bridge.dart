@@ -192,6 +192,14 @@ class KeyguardTimingCaptureBridge {
   Future<KeyguardDisplayRouteStatus> getDisplayRoute() =>
       _invokeDisplayRoute('getR448DisplayRoute');
 
+  Future<String> getDisplayComparison() async {
+    if (!_isAndroid()) return '';
+    final raw = await _channel.invokeMapMethod<Object?, Object?>(
+      'getR448Comparison',
+    );
+    return raw?['report']?.toString() ?? '';
+  }
+
   Future<KeyguardDisplayRouteStatus> setDisplayRoute(
     KeyguardDisplayRoute route,
   ) => _invokeDisplayRoute('setR448DisplayRoute', {'route': route.wireValue});

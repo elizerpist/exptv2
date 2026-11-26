@@ -1496,6 +1496,8 @@ internal object KeyguardCardDiagnostics {
                 "animationMode" to settings.animationMode.wireValue,
                 "privacyMode" to if (settings.showFinancialDetails) "full" else "discreet",
                 "r12ConfiguredRoute" to KeyguardOrbRenderModeStore.read(context).name,
+                "r448DisplayRoute" to KeyguardR448DisplayRouteStore.read(context).name,
+                "r448WaSource" to "9c7fed25ec833197656dec57427be4c26fc66138",
                 "notificationTimeoutMs" to "0",
                 "r442TrialRequested" to (r442ExpectedSession != null).toString(),
                 "r442TrialSession" to (r442ExpectedSession?.toString() ?: "none"),
@@ -1556,7 +1558,16 @@ internal object KeyguardCardDiagnostics {
             }
             (active?.frozenExport ?: active?.let(::snapshotForExportLocked)) to recovered
         }
-        snapshotMap(read.first, read.second)
+        val result = snapshotMap(read.first, read.second)
+        val frozen = read.first
+        if (frozen != null && frozen.state == "FROZEN" && frozen.configuration["r446PrintRequested"] == "true") {
+            val route = frozen.configuration["r448DisplayRoute"]
+            val report = result["report"] as? String
+            if (route != null && report != null) runCatching {
+                KeyguardR448ComparisonStore.save(context, route, frozen.id, report)
+            }
+        }
+        result
     }
 
     fun captureSnapshot(context: Context): Map<String, Any?> = reduction.read {

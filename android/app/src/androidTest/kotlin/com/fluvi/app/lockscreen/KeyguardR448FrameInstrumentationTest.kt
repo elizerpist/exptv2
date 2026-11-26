@@ -139,8 +139,18 @@ class KeyguardR448FrameInstrumentationTest {
             shell("input tap ${bounds.centerX()} ${bounds.centerY()}")
             waitFor("input reaches foreground beneath non-touchable overlay") { touches.get() > 0 }
             main { assertTrue(checkNotNull(frame).retire(owner, "CONTROL_REMOVE")) }
-            val after = reference.captureCrop("r448-controlled-after", bounds)
-            assertTrue("removed crop returns to underlay", KeyguardR22VisualCalibration.compare(stableUnderlay, after).nearlyEqual())
+            // Preserve the immediate and later compositor samples even if the
+            // first one fails; a local remove return is not physical removal.
+            val samples = (0 until 6).map { index ->
+                if (index > 0) SystemClock.sleep(50)
+                reference.captureCrop("r448-controlled-after-$index", bounds)
+            }
+            File(out, "r448-controlled-withdrawal.txt").writeText(samples.mapIndexed { index, sample ->
+                "index=$index underlay=${KeyguardR22VisualCalibration.compare(stableUnderlay, sample)} " +
+                    "referenceB=${KeyguardR22VisualCalibration.compare(reference.b, sample)}"
+            }.joinToString("\n", postfix = "\n"))
+            assertTrue("first removed crop returns to underlay",
+                KeyguardR22VisualCalibration.compare(stableUnderlay, samples.first()).nearlyEqual())
         } finally {
             main { frame?.retire(owner, "CLEANUP"); activity?.finish() }
             calibration?.close()

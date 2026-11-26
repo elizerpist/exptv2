@@ -75,6 +75,7 @@ import com.fluvi.app.lockscreen.KeyguardOrbRenderModeStatus
 import com.fluvi.app.lockscreen.KeyguardOrbRenderModeStore
 import com.fluvi.app.lockscreen.KeyguardR448DisplayRoute
 import com.fluvi.app.lockscreen.KeyguardR448DisplayRouteStore
+import com.fluvi.app.lockscreen.KeyguardR448ComparisonStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
@@ -453,6 +454,14 @@ class MainActivity : FlutterActivity() {
                         val native = service?.r448DisplayRouteStatus() ?: mapOf(
                             "configured" to configured.name, "active" to "NONE", "reason" to "DISCONNECTED", "generation" to 0L)
                         result.success(mapOf("available" to true, "connected" to (service != null)) + native)
+                    }
+                    return@setMethodCallHandler
+                }
+                if (call.method == "getR448Comparison") {
+                    scope.launch(Dispatchers.IO) {
+                        val text = if (KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext))
+                            KeyguardR448ComparisonStore.export(applicationContext) else ""
+                        withContext(Dispatchers.Main.immediate) { result.success(mapOf("report" to text)) }
                     }
                     return@setMethodCallHandler
                 }

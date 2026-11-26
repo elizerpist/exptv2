@@ -93,6 +93,7 @@ class KeyguardR447HandoffServiceInstrumentationTest {
         val invocations = mutableListOf<Long>()
         val note = StringBuilder("controlled=subset-of-real-inventory stock=false external=$external widgetsAnywhere=$widgetsAnywhere physical=UNOBSERVED\n")
         var service: FluviKeyguardCardService? = null
+        var savedEventTypes: Int? = null
         try {
             shell("input keyevent KEYCODE_WAKEUP")
             shell("wm dismiss-keyguard")
@@ -130,7 +131,8 @@ class KeyguardR447HandoffServiceInstrumentationTest {
                     if (!stale && eligibility?.target != null && first.compareAndSet(0, request.id)) {
                         host.set(eligibility.target.windowId)
                         acquired.countDown()
-                        check(release.await(20, TimeUnit.SECONDS)) { "NOT REACHED: release physical read" }
+                        if (!widgetsAnywhere)
+                            check(release.await(20, TimeUnit.SECONDS)) { "NOT REACHED: release physical read" }
                     }
                 }
                 override fun queueOffered(request: KeyguardCardInspectionRequest, previous: KeyguardCardInspectionRequest?,
@@ -141,12 +143,34 @@ class KeyguardR447HandoffServiceInstrumentationTest {
                     synchronized(invocations) { invocations.add(request) }
                 }
             }
+            if (widgetsAnywhere) main {
+                val info = owner.serviceInfo
+                savedEventTypes = info.eventTypes
+                info.eventTypes = 0
+                owner.serviceInfo = info
+                check(owner.serviceInfo.eventTypes == 0) { "NOT REACHED: controlled event subscription" }
+                synchronized(note) { note.append("eventSubscription=disabledForControlledSample\n") }
+            }
             shell("locksettings set-disabled false")
             shell("input keyevent KEYCODE_SLEEP")
             waitFor("screen off") { !power.isInteractive }
             shell("input keyevent KEYCODE_WAKEUP")
             waitFor("real lockscreen") { power.isInteractive && keyguard.isKeyguardLocked }
             assertTrue("NOT REACHED: real eligible inventory and reader/Main boundary", acquired.await(20, TimeUnit.SECONDS))
+            if (widgetsAnywhere) {
+                waitFor("selected independent sample frame draws") {
+                    val report = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
+                    report.lineSequence().any { it.startsWith("R44_6_SAMPLE ") &&
+                        it.contains("backend=WA_SHADER_DRAW") && !it.contains("frame=UNOBSERVED") }
+                }
+                assertEquals("original target presenter remains absent", null,
+                    main { owner.r446PresenterForInstrumentation() })
+                ui.takeScreenshot()?.let { shot ->
+                    File(out, "r448-controlled-service.png").outputStream().use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    shot.recycle()
+                }
+                return
+            }
             waitFor("sampler idle") { main { owner.r447SamplerIdleForTest() } }
             main { owner.r447ScheduleOutputReadyForTest() }
             waitFor("internal successor queued") { offered.get() > 0 }
@@ -184,6 +208,11 @@ class KeyguardR447HandoffServiceInstrumentationTest {
         } finally {
             release.countDown()
             service?.inspectionProbeForTest = null
+            savedEventTypes?.let { old -> runCatching { main {
+                val info = checkNotNull(service).serviceInfo
+                info.eventTypes = old
+                checkNotNull(service).serviceInfo = info
+            } } }
             if (KeyguardCardDiagnostics.activeCaptureId() != null) {
                 runCatching { File(out, "r447-report.txt").writeText(KeyguardCardDiagnostics.freezeCapture(context)["report"] as String) }
                 KeyguardCardDiagnostics.clearCapture(context)

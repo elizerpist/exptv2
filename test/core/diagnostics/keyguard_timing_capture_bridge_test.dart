@@ -179,6 +179,22 @@ void main() {
     expect(status.configured, KeyguardDisplayRoute.fluviStream);
   });
 
+  test('retrieves the two native frozen route summaries', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          expect(call.method, 'getR448Comparison');
+          return <String, Object?>{
+            'report': 'FLUVI_STREAM\ncapture=a\nWIDGETS_ANYWHERE\ncapture=b',
+          };
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: channel,
+      isAndroid: () => true,
+    );
+    expect(await bridge.getDisplayComparison(), contains('capture=a'));
+    expect(await bridge.getDisplayComparison(), contains('capture=b'));
+  });
+
   test('R44 synthetic trial changes only after an explicit request', () async {
     final calls = <MethodCall>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

@@ -606,6 +606,44 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
     }
   }
 
+  Future<void> _copyKeyguardComparison() async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _copyingKeyguard) return;
+    setState(() {
+      _copyingKeyguard = true;
+      _keyguardError = null;
+    });
+    try {
+      if (_keyguardSnapshot?.recording == true) {
+        final snapshot = await bridge.freeze();
+        if (mounted) {
+          setState(() {
+            _keyguardSnapshot = snapshot;
+            _r44TrialEnabled = false;
+            _r442Active = false;
+            _r446Armed = false;
+            _r442Reason = 'captureStopped';
+          });
+        }
+      }
+      final report = await bridge.getDisplayComparison();
+      if (report.isEmpty) {
+        if (mounted) {
+          setState(
+            () => _keyguardError = 'Még nincs mentett A/B összefoglaló.',
+          );
+        }
+      } else {
+        await Clipboard.setData(ClipboardData(text: report));
+        if (mounted) setState(() => _keyguardCopied = true);
+      }
+    } on Object catch (error) {
+      if (mounted) setState(() => _keyguardError = '$error');
+    } finally {
+      if (mounted) setState(() => _copyingKeyguard = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final count = FluviDiagnosticLogger.retainedEntryCount;
@@ -1394,6 +1432,14 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                         onPressed: _loadingKeyguard ? null : _refreshKeyguard,
                         icon: const Icon(Icons.refresh, size: 15),
                         label: const Text('Frissítés'),
+                      ),
+                      OutlinedButton.icon(
+                        key: const ValueKey('debug-console-r448-comparison'),
+                        onPressed: _copyingKeyguard || unavailable
+                            ? null
+                            : _copyKeyguardComparison,
+                        icon: const Icon(Icons.compare_arrows, size: 15),
+                        label: const Text('A/B összefoglaló másolása'),
                       ),
                       TextButton(
                         key: const ValueKey('debug-console-keyguard-clear'),
