@@ -22058,3 +22058,127 @@ Actual signed R44.6 (`398a5389`, SHA-256 `2d1d0721cb09ef3742b00850cd570471097d54
 No second independent Android 17 environment or Nothing handset was available. PHYSICAL VALIDATION — PENDING, USER ONLY. The owner's earlier `398a5389` records cannot establish that redundant scheduling was the cause; the candidate's new causal reason is to be read from the next owner capture. The first clock-to-orb 10 ms and actual restricted-frame disappearance remain unverified.
 
 Qualification coverage limits: the unchanged-parent service-race RED and independent second Android 17 environment were NOT RUN. The three added unit order controls cover duplicate, coalesced barrier and completed/changed scene. The new real-reader controlled-topology service fixture covers one same-state scheduling duplicate and a same-host test-injected accessibility metadata event; it does not individually prove every requested race for cache-clear, mismatched capture/authority epochs, restrictive-only predecessor, PIN/shade or every issue-to-attach transition. Existing presenter/window fixture controls provide separately scoped evidence, not a substitute for unexecuted individual reader→Main scenarios. A corrected SystemUI restriction fixture [45843097022](https://github.com/elizerpist/exptv2/actions/runs/45843097022) and normal exact-source CI [45841804029](https://github.com/elizerpist/exptv2/actions/runs/45841804029) were still running at this journal checkpoint; their final states must be appended after completion. The final CI core and Flutter jobs passed and dashboard-profile failed; the API 35 native material job was still running. Cold R41 versus candidate performance comparison was NOT RUN; API 35 warm gate above passed, which is not a phone speed result.
+
+## 2026-11-26 — R44.7 Nothing A142 physical one-shot cancellation and R44.8 handoff
+
+Owner result: no visible ORB on tested app ee852850. The 15:59 ordinary recording and the 16:01 genuine one-shot complete the two earlier control captures. The earlier request for a one-shot recording is satisfied. Wake 27, generation 5 ended before any recorded renderer attempt. The rules below preserve actual exclusions while making the accepted system sample and the separate window inspection independently traceable. Physical R44.7 outcome failed on this handset. R44.8 is a reviewer handoff, implementation and APK pending.
+
+# Fluvi R44.8 — Reach the first safe app-drawn sample and explain every system veto
+
+## 1. Task intent
+
+Implement and deliver an installable Android 17 HUMAN_DIAGNOSTIC update. The immediate target is one visible, app-drawn, fixed public ORB on an ordinary locked screen. Repair the first-read scheduling gap below if reproduced. Instrument the confirmed cancellation on the real service path in all cases. The phone owner already exercised the right action. Keep the ordinary financial path protected. Use the same implementation on Android 17 devices, including those with no visible clock, fingerprint sensor or known SystemUI layout.
+
+## 2. Source and handoff
+
+Repository `elizerpist/exptv2`. Actual tested source `ee85285017585b340864963016007025773418f0` on `implement/r44-7-android17-orb`, parent `f812613d30712efc68bc89eb3d3ceab6d9d44216`. Base the new app branch `implement/r44-8-android17-orb` on the tested source. Resolve refs again before editing. Read the separate coordination branch `fix/orb-v4-latency-lockscreen` including entries at `fabcfcf9` and `ff3a9e4d`. R41 `97f9704120e2ae997185ea6e35fbc053e1d7f0ab` is already the owner's fastest API 35 milestone. Preserve it.
+
+## 3. Preflight and roles
+
+Before execution, read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md, docs/FLUVI_ENGINEERING_JOURNAL.md, and relevant MILESTONE_COMMITS.md entries using the versions and access paths supplied in this handoff. Explicitly report missing material. The prompt writer owns diagnosis, causal interpretation, the repair concept and any refactor decision. Implement only the specified technical contract or execute only the specified evidence-collection experiment; do not select a new root cause or repair strategy. If source, logs or tests contradict the plan, preserve and report exact evidence and return the affected decision to the reviewer. Continue independent authorized work. Follow the supplied risk-to-test matrix and the verified focused-validation route. Record every relevant failure and every diagnostic repetition. Start full delivery only after the specified entry conditions; diagnostic selection does not satisfy full required gates. Do not repeat a rejected repair without new evidence and a reviewer decision. Resolve the exact physically tested application source separately from documentation-only HEAD commits. Preserve the dashboard contracts and verify the specified native lockscreen and launcher-widget boundaries.
+
+The current project assets are writer rules v2.1 and widget addendum v1.2, with DEBUGGING_LOOP_VERY_IMPORTANT.txt taking precedence. Portable copies begin around journal lines 5900, 7352 and 9601 at `161f63675121302432be2026898bed07b23d7ded`. Also read `docs/ORB következtetések.md`, repository instructions, the R44.6/R44.7 handbacks, linked failures and exact graph. Fetch, inspect status, worktrees, refs, ancestry and diff before changing files. Preserve other work.
+
+## 4. Owner evidence
+
+The owner saw no ORB. All four frozen LIGHT captures below came from the tested APK on a Nothing A142/API 37, process 20286-bece2546, session 1, local Budapest times on 2026-11-26. The device is the reproduction environment. Its identifiers are not a feature requirement.
+
+| Time | Capture ID | Owner action and result |
+| --- | --- | --- |
+| 15:57:07 | 9464529a-8973-4d00-897a-652d843924c2 | STANDARD ordinary sample, print=false. Four wakes. First post-screen decisions were INCOMPLETE once and NO_CONTENT three times. |
+| 15:58:05 | fab673ec-59a0-4ec8-9228-8759aada9ab0 | EXPANDED ordinary sample, print=false. Three first reads returned NO_CONTENT. |
+| 15:59:40 | ba56f01a-476f-4f75-89bb-9463c09d15f4 | Ordinary sample, print=false. Wake 21 req673 had an unavailable secondary root. Wake 23 lacks a retained post-screen read. The pre-screen req709 handoff to Main took 1,570 ms. |
+| 16:01:27 | b4185ae6-4a36-4ef1-920e-144652d7d291 | One-shot, print=true. Generation 5 was armed on wake 27 and terminated at 90701999/systemGate. Physical owner test failed. |
+
+The last file is 31,523 bytes, SHA-256 `d9326e6cc4982b4748527eebb0c7041048349d293019d1684baddc8a7a6b155d`. Its 17,075 ms capture includes later wakes, 721 omitted evidence records and explicitly unobserved physical pixels. The earlier two-capture journal entry is historical. This upload supplies its missing one-shot.
+
+## 5. Causal timeline
+
+Use uptime ms. Early display callback 90700793. SCREEN_ON joined at 90701390. Pre-screen accessibility inspection 783 overlapped SCREEN_ON. The independent first post-screen accessibility inspection 821 ran 90701561–90701985, or +171 to +595 ms. It found a verified focused SystemUI host 1414 and an upper inactive, verified UDFPS window 1467. The ordinary classifier returned NO_CONTENT / NO_MAIN_MARKER. Cover evaluation was NOT_REACHED. For the one-shot, the protected terminal gives backend=NOT_ATTEMPTED, firstReq/firstEligible/issue/attach/submit/frame all UNOBSERVED. The exclusion occurred at +609 ms. Hide returned at 90702002 and release at 90702037. Those are local cleanup endpoints. A separate hideOp18 records trigger=90701987 and attachedBefore=false with no causing request. Its proximity makes a current post-screen exclusion plausible, but no shared ID establishes the sampler request. Wake 29 has no recorded SCREEN_ON. Wakes 31/33/35 are NOT_ARMED. There was one exercised one-shot, not four failed draws. Neither the 3-second UI wording nor these timestamps establish a presentation timeout.
+
+## 6. Commit and automation review
+
+R44.6 was able to report ELIGIBLE_SAMPLE without issue on a different phone run. R44.7 typed the reader-to-Main disposition, guarded duplicate scheduling, retained first eligibility, and recorded cancellation only after real invalidation/hide. Those fixes address a later stage than the first observed R44.7 terminal. At exact source, 626/626 JVM checks passed (45841803085), controlled service handoff passed (45841802786), reducer pressure passed (45841803987). API 37 composition and retirement have separate ON/OFF positives. The apparent optical pass in 45841802577 used an underlay acquired across SCREEN_ON and is invalid as same-wake optical proof. Corrected stock run 45842320379 refused FOREIGN_ABOVE. Original API 37 service 45841802821 hit an emulator EGL crash. SystemUI selection 45841804459 ran zero. API 35 black/white controls 45841804061/45841804537 saw FULL in the first post-exclusion sample. The warm control passed. Signed upgrade/UI controls include 45843385704 and 45843386117. Corrected SystemUI run 45843097022 also ended in failure. Exact-source CI 45841804029 was still running at review, with a dashboard-profile failure already reported. Recheck job conclusions at execution. Preserve all failed, invalid, zero-selected and unavailable outcomes.
+
+## 7. Source and graph impact
+
+Exact graph commit `560daaadbd1d1d69963be05288c7897cd7ee9609`, index SHA-256 `ffb4548091eb67e068070aee33e7bc1c28bca8c10d671124e4a51ae283451cb1`. Its SCIP index covers 809 Dart documents. Trace the native edges directly under `android/app/src/main/kotlin/com/fluvi/app/lockscreen/`.
+
+| Existing owner | Read or change |
+| --- | --- |
+| FluviKeyguardCardService | SCREEN_ON, beginOrJoinWakeCycle, requestSystemCheck, applySystemState, printAtRead, r446Apply, r446Cancel and hideImmediately |
+| AndroidKeyguardSystemStateReader and KeyguardSystemStateSampler | Actual acquisition times, immutable state and admission identity, one active/one pending |
+| KeyguardR446PrintPolicy and existing window presenter | Reuse target policy, final publication checks, fixed material, issue/withdrawal and callbacks |
+| KeyguardCardSettings diagnostics and R44 read observations | Bounded pressure-proof export using the existing capture worker |
+| Existing Flutter bridge/console and owner upgrade | Existing one-shot entry point and same-capture copy; ordinary action stays distinct |
+
+## 8. What the tested code does
+
+The recurring worker reads default display, interactivity, keyguard and user-unlocked state. The sole systemGate cancellation in applySystemState fires for WAIT_READ or ISSUED when available && (!interactive || displayOff || !keyguardLocked). Missing root, missing clock, userUnlocked=false alone and non-ON alone do not satisfy that predicate. The sampler already rechecks full authority and revocation on delivery. SCREEN_ON can join a display-started wake without changing that authority. An already-running inspection may count as compatible even though it started before the one-shot screen boundary. The one-shot requires a read starting at or after that boundary. Normal R44_READ is recorded before the separate print eligibility result. A completed ordinary read alone does not prove the print policy or Main handoff ran. hideImmediately can clear pending work, retire the wake and advance epochs. Preserve those invariants.
+
+## 9. Hypotheses and falsifiers
+
+1. A current, legitimate negative reached Main before any print ticket. The recorded terminal proves an accepted excluded state; it omits the bits and sample provenance. A post-screen acquisition with a current negative bit and matching lifecycle supports this explanation. Preserve its immediate veto.
+2. An acquisition from before the screen boundary was delivered late under the same authority. A system sample starting after the boundary rules out this particular explanation for that terminal. The timestamp of inspection 783 or 821 cannot answer it. A negative seen in transition is insufficient to call it false.
+3. A pre-boundary inspection occupied the reader, or its successor lost print ownership before worker-to-Main delivery. The exported ordinary inspection is compatible with either an evaluated or an unevaluated print. Correlate capture, arm, wake and both request namespaces. Prompt dispatch followed by genuine exclusion shifts priority to event ordering; no post-screen attempt on a stable eligible wake supports the scheduling repair.
+4. A compositor or rendering defect remains testable only after actual issue/attach. No evidence in this phone attempt reached that stage. Treat the other capture's 1,570 ms handoff and the owner's occasional locking stutter as secondary observations.
+
+## 10. Selected change
+
+Provide a first post-SCREEN_ON sample inspection for the armed fixed-sample path under stable eligible system state. At the existing one-shot transition to WAIT_READ, register one obligation identified by capture/session/arm/wake/screen boundary. Count an already scheduled suitable post-boundary acquisition toward it. If the only compatible inspection started before the boundary, retain/coalesce one successor on the existing reader. Service it at the first legal opportunity after the existing safety barriers. Resolve it on the first qualifying acquisition or record the precise cancellation before acquisition. Do not replay pre-boundary tree data or use an ordinary grant as a sample grant. If a parent regression test already proves this scheduling contract, keep its existing scheduling behavior and deliver the missing protected causal evidence. Test that condition before adding any second scheduler. Req821 was already read on the reported wake; this change alone does not establish the phone's root cause.
+
+## 11. Scope and protected behavior
+
+Only the explicitly armed, fixed public sample may gain this scheduling obligation. Keep production financial admission, normal synthetic observation, privacy mode, dashboard, launcher widgets, permission UX, renderer and Nothing-specific widget work outside the change. Avoid extra privileges, global overlay fallback, fake targets, hard-coded IDs, polling or waiting for a clock. Follow existing PIN, shade, foreign-window, screen-off, unlock, service loss, profile change and physical-host rules. Do not convert UNKNOWN into a private-data grant or suppress an exclusion to obtain a picture.
+
+## 12. Lifecycle and concurrency
+
+Every actual exclusion continues to revoke synchronously, invalidate before disposal, retire the old wake and clear its obligation. This includes an accepted negative received while waiting for the first read. Record its relation to SCREEN_ON; never assume an ambiguous negative is stale, resurrect a consumed arm, carry a request across a terminal hide, or introduce a grace timer. A fresh read can proceed only while its original fully identified arm is still current. Keep all existing genuinely newer barriers and the publication-time recheck. The sampler already drops revoked/foreign authority results. Never promote a worker result after a concurrent veto. Bound a qualified wake to at most one coalesced successor for this purpose, using the existing serial worker. Missing roots/uncertain restrictions stay hidden.
+
+## 13. Red tests and acceptance matrix
+
+| Parent reproduction / risk | Candidate evidence |
+| --- | --- |
+| Early display opens a wake, tree read starts pre-SCREEN_ON and stays busy; no unrelated accessibility event follows | Stable eligible post-boundary acquisition exactly once, verified real target, one ticket and submit, no new poll; prove whether parent already passes scheduling |
+| Same-authority system sample spans SCREEN_ON or waits on Main; genuine negative is delivered | Frozen row identifies actual request, acquisition interval, delivery and every true exclusion bit; no stale issue. Current and revoked authorities tested separately |
+| Genuine screen-off, unlock, PIN or shade wins before attach; another restriction arrives immediately after issue | At most one use, no late frame from old owner, immediate withdrawal and real negative controls |
+| Ordinary req821-shaped summary exists; arm vanishes before print evaluation, after worker evaluation, or before Main delivery | The frozen generation names the observed stage, result and loser. Future wake cannot replace its first terminal |
+| Omission pressure matches the real export; diagnostics disabled, slow or throwing | Protected row survives in LIGHT and FULL; hide precedes instrumentation, no additional platform calls in production |
+
+Use deterministic barriers in tests with the real service owners and production call sites. Inject timing at the boundary, retain a separate uninjected stock control, and report fixture limitations. Unit booleans or a direct call to the presenter do not cover service wiring.
+
+## 14. Protected owner report
+
+Emit a compact record for the armed generation, including capture/session/wake IDs, SCREEN_ON time, owner state, first eligible or first terminal, and explicit stage when no eligible result exists. Give the *system* request ID/source, received/queued/read start/end/Main apply times, actual available, primary display, interactive, displayOn, displayOff, keyguardLocked and userUnlocked flags, exclusion mask, matching authority and boundary ordering. Keep unknown distinct from false. Label display-ON/OFF exactly as observed, without guessing other display states. Separately record the *window inspection* ID, start/end, arm match at start and completion, policy result, enqueue/Main arrival or concrete discard reason, issue, attach result, transaction submit and shader receipt. Use distinct IDs and a single monotonic domain for comparisons. Rendering and physical sighting are separate endpoints.
+
+Reserve bounded space in the current export before lossy detail, store first terminal exactly once after invalidation/hide, and allow late observations only as labelled immutable evidence for the original arm. No UI text, financial amounts, PIN input, raw node dumps or screenshot contents in diagnostics. Format off the critical path. Make the first Hungarian line usable on a phone, e.g. “Próba élesítve. A rendszer visszavonta. Ok: kijelző kikapcsolva. Rajzolásig nem jutott el.” Report multiple active bits, unavailable input or genuinely unknown causes truthfully. Preserve capture copying and reopening semantics.
+
+## 15. Performance
+
+Time existing callbacks and queues. Compare screen→first post-screen read, read duration, worker finish→Main, Main→issue, issue→submit and submit→shader. Record main-thread diagnostic cost, replacements and max active/pending. For the physical wake-to-first-pixel goal of ≤10 ms and disappearance by the first forbidden frame, obtain an independent measurement with matching endpoints or mark it unmeasured. Sample-based first frame time is separate from user-visible latency. No speculative render refactor or additional tree scan per framework event.
+
+## 16. Execution order
+
+Preserve the baseline evidence and run the new deterministic controls at the parent, including a real negative and a stable allowed wake. Add the protected system/print receipts and verify export under pressure. If parent misses the qualifying successor, implement section 10 and repeat the same tests. Keep unconditional restrictions and do not use a handoff timeout to force an issue. Run stock, optical, upgrade and regression gates. On contradiction, record it and continue independent validation, diagnostic build and delivery. Never label a launch, a calibrated fixture, or a frame callback as handset acceptance.
+
+## 17. Validation commands and cross-checks
+
+Run `git diff --check`, `bash scripts/verify-fluvi-boundaries.sh`, `python3 scripts/test-r40-opening-contract.py` and `python3 scripts/test-r41-opening-contract.py`. From android run focused Gradle `:app:testDebugUnitTest` selectors for KeyguardSystemStateSamplerTest, KeyguardR446PrintPolicyTest, KeyguardR447ReadOrderTest and the new protected receipt/first-read controls, then `:app:compileDebugAndroidTestKotlin` and the full Android JVM suite. Run `flutter test test/core/debug/keyguard_timing_capture_console_test.dart test/core/diagnostics/keyguard_timing_capture_bridge_test.dart`, relevant boundary tests and `flutter analyze`. Reuse the verified Linux runner and protected signing workflow.
+
+Exercise API 37 controlled service and real stock lockscreen, capture OFF/ON as applicable, PIN/shade/unlock, parent replacement and API 35 black/white/warm controls. A stock optical result requires independent underlay acquisition wholly after this wake's SCREEN_ON and before the matching issue, plus subsequent matching pixels. Keep ordinary capture, launcher and dashboard regression outputs plus full CI jobs. Record counts, source and fixture hashes, action URLs, failures and selected-test counts. Compare cold/warm only on like-for-like endpoints. Test a second independent Android 17 environment if available; record actual device coverage.
+
+## 18. Git and coordination
+
+Commit focused changes to the implementation branch. Include Why, Evidence, Changed, Validation, Known limitations and physical status. Keep the actual source separate from graph, APK and journal commits. Append results, failure evidence, exact SHA and immutable links to docs/FLUVI_ENGINEERING_JOURNAL.md on the coordination branch. Preserve all concurrent writes, R41 milestone and earlier negative results. No unrelated source or private owner logs in public artifacts.
+
+## 19. Build and deliver a signed owner APK
+
+Produce a new HUMAN_DIAGNOSTIC profile `com.fluvi.app` via `scripts/build-human-diagnostic-apk.sh`, bound to final app SHA using FLUVI_BUILD_COMMIT and the existing authorized signer SHA-256 `faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`. Test an upgrade over the actual R44.7 binary from artifact commit `32f179cc771e430487a045b7b7d034dd6a297d13`, 121301776 bytes, SHA-256 `776c6297f34a2bd1d0c74f2a04ff431c0f883a33bb7b6fd7fbda6700e5c099d8`. Preserve settings, test data and service binding, and exercise the signed Flutter button through the native code. Regenerate the graph at the final application SHA. Deliver a standalone APK accessible to the owner. Retrieve the complete binary through the actual recipient link and verify file size, SHA-256, signer, package and embedded commit. Report release safety separately. If a real-data path is unsafe, keep it closed; provide the independently verified fixed-sample-only diagnostic APK. An unrelated red CI job is reported and investigated within scope; it must not withhold that isolated update. A CI page, source link or private builder copy is not APK delivery.
+
+## 20. Completion report and owner check
+
+First line of the executor's Hungarian reply is the verified download link for the new signed APK. Separately report source implementation, parent/candidate evidence, automation, artifact delivery and physical status. Distinguish the sample's appearance, disappearance, app drawing, and end-to-end latency. State whether the earlier-read scheduling defect reproduced and whether a stable stock wake reached submit, shader and same-wake matching pixels. One owner action sequence on the new build: tap “Egyszeri rajzpróba” while unlocked, lock, wake once and stay on the ordinary lockscreen briefly, then report visible/absent and copy the compact result. Do not ask to repeat the already valid R44.7 capture.
+
+## 21. Definition of done
+
+A stable eligible wake has a protected first post-screen acquisition or an exact termination record. A genuine restricted wake has no unsafe publication. A reported systemGate terminal identifies its sampled exclusion inputs and timing even under export pressure. The new signed, downloadable upgrade is verified from the recipient side. State any failing checks and distinguish diagnostic delivery from a fixed physical bug. PHYSICAL VALIDATION — PENDING, USER ONLY.
