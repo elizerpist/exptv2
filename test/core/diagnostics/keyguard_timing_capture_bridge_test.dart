@@ -206,6 +206,27 @@ void main() {
     },
   );
 
+  test('bounded sample session is a distinct explicit action', () async {
+    MethodCall? received;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          received = call;
+          return <String, Object?>{'active': true, 'actionKind': 'SESSION'};
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: channel,
+      isAndroid: () => true,
+    );
+    final receipt = await bridge.startR449SampleCapture(
+      route: KeyguardDisplayRoute.fluviStream,
+      session: true,
+    );
+    expect(received?.method, 'startR449SampleCapture');
+    expect((received?.arguments as Map)['routeRequested'], 'FLUVI_STREAM');
+    expect((received?.arguments as Map)['actionKind'], 'SESSION');
+    expect(receipt['actionKind'], 'SESSION');
+  });
+
   test('retrieves the two native frozen route summaries', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {

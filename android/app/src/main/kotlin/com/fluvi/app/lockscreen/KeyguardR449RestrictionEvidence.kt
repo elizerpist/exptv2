@@ -7,6 +7,31 @@ import android.view.accessibility.AccessibilityWindowInfo
  * and all its SystemUI roots were actually read to completion. */
 internal object KeyguardR449RestrictionEvidence {
     data class Result(val exclusions: KeyguardR448Admission.Exclusions, val reason: String)
+    data class UnresolvedUpper(val host: Int, val upper: Int)
+
+    /** A scheduling hint, never permission to draw. It is only produced when
+     * one upper root is the sole unresolved member of this real inventory. */
+    fun unresolvedUpper(windows: List<KeyguardWindowSnapshot>, classification: KeyguardSurfaceClassification,
+                        truncated: Boolean): UnresolvedUpper? {
+        if (truncated || classification.r444Gate != KeyguardR444Gate.INCOMPLETE) return null
+        val primary = windows.filter { it.displayId == 0 && !it.ownOverlay }
+        val hosts = primary.filter { it.packageName == "com.android.systemui" &&
+            it.type == AccessibilityWindowInfo.TYPE_SYSTEM && it.r444Active == true && it.r444Focused == true &&
+            it.r44?.let { e -> e.verifiedRoot && e.active && e.complete && !e.foreignNode } == true }
+        val host = hosts.singleOrNull() ?: return null
+        val unresolved = primary.filter { it !== host && it.layer >= host.layer &&
+            (it.packageName == null || it.r44?.verifiedRoot != true) }
+        val upper = unresolved.singleOrNull() ?: return null
+        if (host.windowId < 0 || upper.windowId < 0 || primary.any {
+                it !== upper && (it.packageName != "com.android.systemui" ||
+                    it.type != AccessibilityWindowInfo.TYPE_SYSTEM ||
+                    it.r44?.let { e -> !e.verifiedRoot || !e.complete || e.foreignNode } != false)
+            }) return null
+        val excludes = fromInventory(primary, 0L, unavailable = true, truncated = false).exclusions
+        if (listOf(excludes.credential, excludes.shade, excludes.foreign, excludes.powerMenu)
+                .any { it == KeyguardR448Admission.Presence.PRESENT }) return null
+        return UnresolvedUpper(host.windowId, upper.windowId)
+    }
 
     fun fromInventory(windows: List<KeyguardWindowSnapshot>, at: Long,
                       unavailable: Boolean, truncated: Boolean): Result {

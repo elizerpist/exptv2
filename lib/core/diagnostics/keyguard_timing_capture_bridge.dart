@@ -193,6 +193,7 @@ class KeyguardTimingCaptureBridge {
   Future<Map<Object?, Object?>> startR449SampleCapture({
     required KeyguardDisplayRoute route,
     KeyguardTimingCaptureMode mode = KeyguardTimingCaptureMode.light,
+    bool session = false,
   }) async {
     if (!_isAndroid()) {
       return const {'active': false, 'reason': 'unsupportedBuild'};
@@ -203,7 +204,7 @@ class KeyguardTimingCaptureBridge {
             'build': buildCommit,
             'buildMode': buildMode,
             'captureMode': mode.wireValue,
-            'actionKind': 'ONE_WAKE',
+            'actionKind': session ? 'SESSION' : 'ONE_WAKE',
             'routeRequested': route.wireValue,
           },
         ) ??

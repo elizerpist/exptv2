@@ -1,6 +1,8 @@
 package com.fluvi.app.lockscreen
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 
 class KeyguardR449RestrictionEvidenceTest {
@@ -42,5 +44,17 @@ class KeyguardR449RestrictionEvidenceTest {
         val other = KeyguardWindowSnapshot("other.app", 1, 2, 0, windowId = 7)
         val result = KeyguardR449RestrictionEvidence.fromInventory(listOf(host(), other), 50, false, false)
         assertEquals(KeyguardR448Admission.Presence.PRESENT, result.exclusions.foreign)
+    }
+
+    @Test fun oneUnknownUpperIsARefreshHintOnly() {
+        val upper = KeyguardWindowSnapshot(null, 3, 2, 0, windowId = 8)
+        val incomplete = KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.ROOT_UNAVAILABLE,
+            r444Gate = KeyguardR444Gate.INCOMPLETE)
+        assertNotNull(KeyguardR449RestrictionEvidence.unresolvedUpper(listOf(host(), upper), incomplete, false))
+        assertNull(KeyguardR449RestrictionEvidence.unresolvedUpper(listOf(host(), upper), incomplete, true))
+        assertNull(KeyguardR449RestrictionEvidence.unresolvedUpper(listOf(host(), upper, upper.copy(windowId = 9)), incomplete, false))
+        assertNull(KeyguardR449RestrictionEvidence.unresolvedUpper(
+            listOf(host(setOf("element:BouncerContent")), upper), incomplete, false))
+        assertNull(KeyguardR449RestrictionEvidence.unresolvedUpper(listOf(host(), upper.copy(layer = 0)), incomplete, false))
     }
 }

@@ -9,6 +9,14 @@ internal data class KeyguardR449AdmissionObservation(
     val decision: KeyguardR448Admission.Decision, val issueAt: Long?,
 )
 
+/** A bounded scheduling observation for the targeted Fluvi presenter. It is
+ * not a surface authorization and contains no accessibility content. */
+internal data class KeyguardR449RecoveryObservation(
+    val context: KeyguardDiagnosticContext, val arm: Long, val wake: Long, val initialRequest: Long,
+    val host: Int, val upper: Int, val inventoryAt: Long, val stage: String, val at: Long,
+    val successor: Long? = null,
+)
+
 internal data class KeyguardR448FrameObservation(
     val context: KeyguardDiagnosticContext, val owner: KeyguardR448WidgetsAnywhereFrame.Owner,
     val stage: String, val at: Long, val detail: String?,

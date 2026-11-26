@@ -108,12 +108,23 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         frame("FIRST_SHADER_DRAW", 7070)
         frame("HIDE", 7080)
         frame("REMOVE_RETURN", 7082)
+        val clear = KeyguardR448Admission.Presence.CLEAR
+        val exclusions = KeyguardR448Admission.Exclusions(7028, clear, clear, clear, clear)
+        val admission = KeyguardR449AdmissionObservation(owner, 5, 3, 8, 4, "ONE_WAKE", 7010,
+            7011, 7028, KeyguardSystemState(7012, 7015, true, true, true, true, false, true, true),
+            exclusions, "CLEAR", KeyguardR448Admission.Decision.ALLOW, 7029)
+        KeyguardCardDiagnostics.recordR449Admission(admission)
+        val waOutput = KeyguardR446Observation(owner, 6990, 7, 0, "NOT_REQUIRED", "CLEAR", "WA_SHADER_DRAW",
+            null, null, 7029, 7066, 7068, null, 7070, null, "UNOBSERVED", armGeneration = 5)
+        KeyguardCardDiagnostics.recordR446(waOutput)
         repeat(150) { n -> KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure",
             diagnosticContext = owner, requestId = 1000L + n, observedUptimeMs = 7100L + n) }
         val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
         val read = report.lineSequence().single { it.startsWith("R44_8_READ_BOUNDARY ") }
         val gate = report.lineSequence().single { it.startsWith("R44_8_SYSTEM_VETO ") }
         val wa = report.lineSequence().single { it.startsWith("R44_8_WA ") }
+        val admitted = report.lineSequence().single { it.startsWith("R44_9_ADMISSION ") }
+        val sample = report.lineSequence().single { it.startsWith("R44_6_SAMPLE ") }
         assertTrue(read, read.contains("active=40 pending=UNOBSERVED"))
         assertTrue(read, read.contains("boundaryDecision=OFFER workerRequest=41"))
         assertTrue(read, read.contains("workerStart=7012 workerEnd=7030 workerOutcome=COMPLETED"))
@@ -123,8 +134,11 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(wa, wa.contains("routeGeneration=3 materialGeneration=8"))
         assertTrue(wa, wa.contains("debounceScheduled=7013 requestedDue=7063 debounceFired=7064 debounceCanceled=UNOBSERVED coalesced=1"))
         assertTrue(wa, wa.contains("firstShader=7070 hide=7080 removeReturn=7082"))
+        assertTrue(admitted, admitted.contains("routeConfirmed=WIDGETS_ANYWHERE") && admitted.contains("decision=ALLOW"))
+        assertTrue(sample, sample.contains("req=0") && sample.contains("issue=7029") && sample.contains("frame=7070"))
         assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
         KeyguardCardDiagnostics.recordR448SystemVeto(veto.copy(requestId = 101))
+        KeyguardCardDiagnostics.recordR449Admission(admission.copy(reason = "LATE"))
         frame("FIRST_SHADER_DRAW", 9999)
         assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
     }

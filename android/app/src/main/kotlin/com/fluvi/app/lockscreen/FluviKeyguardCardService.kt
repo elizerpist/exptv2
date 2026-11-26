@@ -392,6 +392,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     internal fun stopR444Trial(reason: String = "captureStopped"): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (Build.VERSION.SDK_INT != 37) return true
+        r449Session = null
         r446Cancel(reason)
         r446CaptureId = null
         val active = KeyguardR44Trial.active || r444ProfileOwner.snapshot.kind != KeyguardR444ProfileOwner.Kind.INACTIVE
@@ -540,6 +541,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 KeyguardR446PrintOwner.State.WAIT_OFF, KeyguardR446PrintOwner.State.WAIT_WAKE,
                 KeyguardR446PrintOwner.State.WAIT_READ, KeyguardR446PrintOwner.State.ISSUED)),
             "routeConfirmed" to r448DisplayRoute.name, "actionKind" to r449Action,
+            "printState" to r446Owner.state.name, "printReason" to r449LastTerminal,
+            "sessionExpiresAt" to r449Session?.expiresAt,
             "includeNotImportant" to (if (current != null) included else
                 profile.actual?.let { it and AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS != 0 }) )
     }
@@ -572,8 +575,9 @@ class FluviKeyguardCardService : AccessibilityService() {
      * the revision is also sampled by the bounded worker. */
     private data class R449Wake(
         val arm: KeyguardR446PrintOwner.Arm, val context: KeyguardDiagnosticContext,
-        val owner: KeyguardR448WidgetsAnywhereFrame.Owner, val screenAt: Long, val expiresAt: Long,
-        var issued: Boolean = false,
+        val owner: KeyguardR448WidgetsAnywhereFrame.Owner, val screenAt: Long, var expiresAt: Long = Long.MAX_VALUE,
+        var issued: Boolean = false, var allowedRevision: Long = -1L, var issueAt: Long? = null,
+        var pendingValidation: ((Boolean) -> Unit)? = null,
     )
     @Volatile private var r449Wake: R449Wake? = null
     private val r449RestrictionRevision = AtomicLong(0)
@@ -581,6 +585,14 @@ class FluviKeyguardCardService : AccessibilityService() {
     private var r449ReadPending = false
     private var r449FirstRead = true
     private var r449Action = "ONE_WAKE"
+    private var r449LastTerminal = "UNOBSERVED"
+    private data class R449FluviRecovery(val observation: KeyguardR449RecoveryObservation,
+                                          val arm: KeyguardR446PrintOwner.Arm, var consumed: Boolean = false)
+    private var r449FluviRecovery: R449FluviRecovery? = null
+    private data class R449Session(val capture: String, val serviceSession: Long, val route: KeyguardR448DisplayRoute,
+                                   val routeGeneration: Long, val expiresAt: Long)
+    private var r449Session: R449Session? = null
+    private var r449SessionPreparing = false
 
     private fun r449Current(wake: R449Wake, revision: Long): Boolean =
         r449Wake === wake && r449RestrictionRevision.get() == revision &&
@@ -602,13 +614,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         val bound = prepared.copy(wake = wakeEpoch)
         if (!frame.bindWake(prepared, bound)) return r446Cancel("wa:ownerBindFailed")
         r448FrameOwner = bound
-        val wake = R449Wake(arm, context, bound, screenAt, screenAt + 2_000L)
+        val wake = R449Wake(arm, context, bound, screenAt)
         r449Wake = wake
         r449RestrictionRevision.incrementAndGet()
         r449ReadPending = false
         r449FirstRead = true
-        mainHandler.postDelayed({ if (r449Wake === wake) r446Cancel("deadline") },
-            (wake.expiresAt - SystemClock.uptimeMillis()).coerceAtLeast(0L))
         r449ScheduleRead()
     }
 
@@ -617,7 +627,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     private fun r449ScheduleRead() {
         check(Looper.myLooper() == Looper.getMainLooper())
         val wake = r449Wake ?: return
-        if (wake.issued) return
+        if (r448Frame?.isAttached() == true) return
         if (r449ReadActive) { r449ReadPending = true; return }
         val revision = r449RestrictionRevision.get()
         if (!r449Current(wake, revision)) return
@@ -650,7 +660,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             mainHandler.post {
                 r449ReadActive = false
                 if (r449Current(wake, revision)) r449Apply(wake, revision, started, ended, system, evidence)
-                if (r449ReadPending && r449Wake?.issued == false) {
+                if (r449ReadPending && r449Wake != null && r448Frame?.isAttached() != true) {
                     r449ReadPending = false
                     r449ScheduleRead()
                 }
@@ -664,15 +674,22 @@ class FluviKeyguardCardService : AccessibilityService() {
         val decision = KeyguardR448Admission.evaluate(KeyguardR448Admission.Inputs(stamp, wake.screenAt,
             system, evidence.exclusions, KeyguardR448Admission.Domain.PUBLIC_SAMPLE, materialAuthorized = true),
             stamp, SystemClock.uptimeMillis())
-        val issueAt = if (decision == KeyguardR448Admission.Decision.ALLOW) SystemClock.uptimeMillis() else null
         runCatching { KeyguardCardDiagnostics.recordR449Admission(KeyguardR449AdmissionObservation(
             wake.context, wake.arm.generation, wake.owner.route, wake.owner.material, revision, r449Action,
-            wake.screenAt, started, ended, system, evidence.exclusions, evidence.reason, decision, issueAt)) }
+            wake.screenAt, started, ended, system, evidence.exclusions, evidence.reason, decision, wake.issueAt)) }
         if (decision != KeyguardR448Admission.Decision.ALLOW) {
             if (decision == KeyguardR448Admission.Decision.RESTRICTED ||
                 decision == KeyguardR448Admission.Decision.SYSTEM_EXCLUDED) r446Cancel("wa:${evidence.reason}")
             return
         }
+        wake.allowedRevision = revision
+        val pendingValidation = wake.pendingValidation
+        wake.pendingValidation = null
+        if (pendingValidation != null) r449ValidateSystem(wake, pendingValidation)
+        // An equivalent pending show keeps its original 50 ms due time. The
+        // fresh inventory above updates its restriction revision, not a new
+        // permission for an already attached or replaced owner.
+        if (wake.issued) return
         val frame = r448Frame ?: return r446Cancel("wa:missingFrame")
         val settings = lastSettings ?: return r446Cancel("wa:settingsUnavailable")
         val metrics = resources.displayMetrics
@@ -681,22 +698,46 @@ class FluviKeyguardCardService : AccessibilityService() {
             resources.getDimensionPixelSize(com.fluvi.app.R.dimen.fluvi_keyguard_card_height),
             KeyguardCardPresentationMode.ORB, settings.cardPosition, settings.orbPosition, settings.verticalOffsetDp,
             resources.getDimensionPixelSize(com.fluvi.app.R.dimen.fluvi_keyguard_orb_size))
+        val issueAt = SystemClock.uptimeMillis()
+        wake.issueAt = issueAt
         wake.issued = true
+        wake.expiresAt = issueAt + 2_000L
+        runCatching { KeyguardCardDiagnostics.recordR449Admission(KeyguardR449AdmissionObservation(
+            wake.context, wake.arm.generation, wake.owner.route, wake.owner.material, revision, r449Action,
+            wake.screenAt, started, ended, system, evidence.exclusions, evidence.reason, decision, issueAt)) }
         r446Observation = KeyguardR446Observation(wake.context, r446ArmAt, wake.owner.wake, 0,
             "NOT_REQUIRED", evidence.reason, "WA_WAITING", null, null, issueAt, null, null, null, null,
             null, "UNOBSERVED", armGeneration = wake.arm.generation, wakeArmState = "ARMED",
             readFinishedAt = ended, decisionAt = issueAt)
         runCatching { KeyguardCardDiagnostics.recordR446(requireNotNull(r446Observation)) }
-        val valid = { r449Current(wake, revision) }
-        val checkSystem: ((Boolean) -> Unit) -> Unit = { done ->
-            r449Scope.launch {
-                val state = runCatching { readSystemState(KeyguardSystemReadPurpose.PUBLICATION) }
-                    .getOrElse { KeyguardSystemState(-1L, -1L, available = false) }
-                mainHandler.post { done(r449Current(wake, revision) && state.eligible &&
-                    state.startedAt >= wake.screenAt) }
+        val valid = { val current = r449RestrictionRevision.get()
+            r449Current(wake, current) && wake.allowedRevision == current }
+        val checkSystem: ((Boolean) -> Unit) -> Unit = { done -> r449ValidateSystem(wake, done) }
+        if (!frame.requestShowChecked(wake.owner, geometry, valid, checkSystem)) r446Cancel("wa:showDenied")
+        else mainHandler.postDelayed({ if (r449Wake === wake) r446Cancel("deadline") },
+            (wake.expiresAt - SystemClock.uptimeMillis()).coerceAtLeast(0L))
+    }
+
+    /** Check platform state asynchronously at each publication boundary. If
+     * a real event invalidated the inventory meanwhile, retain one waiter and
+     * resume it only after that revision has independently been read. */
+    private fun r449ValidateSystem(wake: R449Wake, done: (Boolean) -> Unit) {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        val revision = r449RestrictionRevision.get()
+        if (!r449Current(wake, revision)) { done(false); return }
+        if (wake.allowedRevision != revision) { wake.pendingValidation = done; return }
+        r449Scope.launch {
+            val state = runCatching { readSystemState(KeyguardSystemReadPurpose.PUBLICATION) }
+                .getOrElse { KeyguardSystemState(-1L, -1L, available = false) }
+            mainHandler.post {
+                val current = r449RestrictionRevision.get()
+                if (!r449Current(wake, current)) done(false)
+                else if (current != revision || wake.allowedRevision != current) {
+                    if (wake.allowedRevision == current) r449ValidateSystem(wake, done)
+                    else wake.pendingValidation = done
+                } else done(state.eligible && state.startedAt >= wake.screenAt)
             }
         }
-        if (!frame.requestShowChecked(wake.owner, geometry, valid, checkSystem)) r446Cancel("wa:showDenied")
     }
 
     private fun r448RecordFrameEvent(event: KeyguardR448WidgetsAnywhereFrame.Event) {
@@ -749,6 +790,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (r446Preparing) return mapOf("active" to false, "reason" to "startInProgress")
         if (r448Frame != null) return mapOf("active" to false, "reason" to "retirementPending")
+        r449Action = "ONE_WAKE"
         val route = r448DisplayRoute
         val routeGeneration = r448RouteGeneration
         r446Preparing = true
@@ -807,6 +849,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             r446ArmAt = SystemClock.uptimeMillis()
             r446CaptureId = capture
             r446Owner.arm(session.get(), capture)
+            r449LastTerminal = "UNOBSERVED"
             return receipt + mapOf("printPurpose" to "fixedSampleOneWake", "printArmed" to true)
         } finally {
             r446Preparing = false
@@ -819,23 +862,94 @@ class FluviKeyguardCardService : AccessibilityService() {
     internal suspend fun startR449SampleCapture(build: String?, buildMode: String?, mode: String?,
                                                action: String?, requestedRoute: String?): Map<String, Any?> {
         check(Looper.myLooper() == Looper.getMainLooper())
-        if (action != "ONE_WAKE") return mapOf("active" to false, "reason" to "unsupportedAction")
+        if (action != "ONE_WAKE" && action != "SESSION") return mapOf("active" to false, "reason" to "unsupportedAction")
         val route = r448DisplayRoute.name
         if (requestedRoute != route) return mapOf("active" to false, "reason" to "routeChanged",
             "routeConfirmed" to route, "actionKind" to action)
         val result = startR446PrintCapture(build, buildMode, mode)
         if (result["active"] == true && result["printArmed"] == true && r448DisplayRoute.name == route) {
             r449Action = action
-            return result + mapOf("routeRequested" to route, "routeConfirmed" to route, "actionKind" to action)
+            val capture = result["captureId"] as String
+            KeyguardCardDiagnostics.recordR449Intent(capture, action, route, SystemClock.uptimeMillis())
+            val newSession = if (action == "SESSION") R449Session(capture, session.get(), r448DisplayRoute,
+                r448RouteGeneration, SystemClock.uptimeMillis() + 120_000L) else null
+            r449Session = newSession
+            if (newSession != null) mainHandler.postDelayed({
+                if (r449Session === newSession) stopR444Trial("sampleSessionExpired")
+            }, 120_000L)
+            return result + mapOf("routeRequested" to route, "routeConfirmed" to route, "actionKind" to action,
+                "sessionExpiresAt" to newSession?.expiresAt)
         }
         return result + mapOf("routeRequested" to requestedRoute, "routeConfirmed" to r448DisplayRoute.name,
             "actionKind" to action)
+    }
+
+    /** A session is an explicit, bounded public-data authority. Prepare the
+     * next wake only on an actual screen-off/user-present boundary; a late
+     * preparation from a stopped, replaced or expired session is discarded. */
+    private fun r449PrepareSessionWake() {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        val active = r449Session ?: return
+        if (r449SessionPreparing || r446HasBackend() || r448Frame != null ||
+            r446Owner.state in setOf(KeyguardR446PrintOwner.State.WAIT_OFF,
+                KeyguardR446PrintOwner.State.WAIT_WAKE, KeyguardR446PrintOwner.State.WAIT_READ,
+                KeyguardR446PrintOwner.State.ISSUED)) return
+        fun current() = r449Session === active && SystemClock.uptimeMillis() < active.expiresAt &&
+            active.capture == KeyguardCardDiagnostics.activeCaptureId() && r442Receipt?.capture == active.capture &&
+            active.serviceSession == session.get() && KeyguardR44Trial.active &&
+            r448DisplayRoute == active.route && r448RouteGeneration == active.routeGeneration
+        if (!current()) return
+        r449SessionPreparing = true
+        CoroutineScope(serviceJob + Dispatchers.Main.immediate).launch {
+            try {
+                val sample = KeyguardR44Trial.profile(null) ?: return@launch
+                val artifact = runCatching { withContext(Dispatchers.IO) {
+                    AndroidKeyguardShaderArtifactReader.load(applicationContext, sample.effectId, sample.usesPortal)
+                } }.getOrNull() ?: run { r442Reason = "samplePreparationFailed"; return@launch }
+                if (!current() || r446HasBackend()) return@launch
+                val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+                    ?: run { r442Reason = "samplePreparationFailed"; return@launch }
+                if (active.route == KeyguardR448DisplayRoute.WIDGETS_ANYWHERE) {
+                    val frame = KeyguardR448WidgetsAnywhereFrame(this@FluviKeyguardCardService)
+                    val owner = KeyguardR448WidgetsAnywhereFrame.Owner(active.routeGeneration, 0, ++r448FrameGeneration)
+                    if (!frame.prepare(owner, sample.neutralized(), false, artifact, ::r448RecordFrameEvent)) {
+                        r442Reason = "samplePreparationFailed"; return@launch
+                    }
+                    if (!current() || r446HasBackend()) { frame.retire(owner, "SESSION_REPLACED"); return@launch }
+                    r448Frame = frame
+                    r448FrameOwner = owner
+                } else {
+                    val presenter = KeyguardR446WindowPresenter(this@FluviKeyguardCardService)
+                    if (!presenter.prepare(display, sample, artifact) || !presenter.awaitInputReady()) {
+                        presenter.dispose(); r442Reason = "inputPreparationFailed"; return@launch
+                    }
+                    if (!current() || r446HasBackend()) { presenter.dispose(); return@launch }
+                    r446Presenter = presenter
+                }
+                r448HideAt = null; r448RemoveAt = null; r448RetireError = null
+                r446Observation = null; r447DecisionOrdinal = 0L; r446RestrictionSeen = false
+                r446ReadArm = null; r446ArmAt = SystemClock.uptimeMillis(); r446CaptureId = active.capture
+                r446Owner.arm(active.serviceSession, active.capture)
+                r449LastTerminal = "UNOBSERVED"
+                if (getSystemService(android.os.PowerManager::class.java)?.isInteractive == false) r446Owner.screenOff()
+                r442Reason = "armed"
+            } finally {
+                r449SessionPreparing = false
+            }
+        }
     }
 
     private fun r446Cancel(reason: String) {
         check(Looper.myLooper() == Looper.getMainLooper())
         val at = SystemClock.uptimeMillis()
         val cancelledArm = r446Owner.arm
+        if (cancelledArm != null) r449LastTerminal = reason
+        r449FluviRecovery?.let { recovery ->
+            runCatching { KeyguardCardDiagnostics.recordR449Recovery(
+                recovery.observation.copy(stage = "TERMINAL_$reason", at = at)) }
+        }
+        r449FluviRecovery = null
+        r449Wake?.pendingValidation = null
         r449RestrictionRevision.incrementAndGet()
         r449Wake = null
         r449ReadPending = false
@@ -963,6 +1077,33 @@ class FluviKeyguardCardService : AccessibilityService() {
             readFinishedAt = readFinishedAt, mainEnteredAt = mainEnteredAt, decisionAt = decision.at)
         if (r446Owner.arm == arm || decision.ticket != null) r446Observation = observation
         KeyguardCardDiagnostics.recordR446(observation)
+        if (route == KeyguardR448DisplayRoute.FLUVI_STREAM && decision.disposition == KeyguardR447Disposition.TARGET_MISSING &&
+            r449FluviRecovery == null && !r446RestrictionSeen && r446Owner.arm == arm &&
+            r446Owner.state == KeyguardR446PrintOwner.State.WAIT_READ && authorityIsCurrent(request)) {
+            val unresolved = inspection.r449UnresolvedUpper
+            val inventoryAt = stamp?.inventoryAt
+            if (unresolved != null && inventoryAt != null) {
+                val initial = KeyguardR449RecoveryObservation(context, arm.generation, request.wakeGeneration,
+                    request.id, unresolved.host, unresolved.upper, inventoryAt, "WAIT_REAL_CHANGE", decision.at)
+                val recovery = R449FluviRecovery(initial, arm)
+                r449FluviRecovery = recovery
+                KeyguardCardDiagnostics.recordR449Recovery(initial)
+                val successor = synchronized(queueLock) {
+                    listOfNotNull(inspectionQueue.pendingRequest(), inspectionQueue.activeRequest()).firstOrNull {
+                        it.id > request.id && it.session == request.session && it.wakeGeneration == request.wakeGeneration &&
+                            inspectionAuthority.matches(it) && it.r42FrameworkEvent && it.r32FrameworkIngressId != null &&
+                            it.r14Ingress?.let { event -> event.callbackAt >= inventoryAt && event.displayId == Display.DEFAULT_DISPLAY &&
+                                (event.windowId == unresolved.upper || event.windowId == unresolved.host ||
+                                    (event.windowId < 0 && event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED)) } == true
+                    }
+                }
+                if (successor != null) {
+                    recovery.consumed = true
+                    KeyguardCardDiagnostics.recordR449Recovery(initial.copy(stage = "ADOPT_CURRENT_SUCCESSOR",
+                        at = SystemClock.uptimeMillis(), successor = successor.id))
+                }
+            }
+        }
         val ticket = decision.ticket ?: return false
         val qualifiedTarget = requireNotNull(target)
         val settings = lastSettings ?: return false.also {
@@ -2547,6 +2688,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                     r442ScreenOn = null
                     val owner = currentDiagnosticAttempt
                     hideImmediately("screenOff", triggerReceivedUptimeMs = receivedAt)
+                    if (r449Session != null) r449PrepareSessionWake()
                     if (owner != null) traceKeyguard("SCREEN_OFF_RECEIVED", "broadcast", observedUptimeMs = receivedAt,
                         diagnosticContext = owner, fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true))
                 }
@@ -2561,6 +2703,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                         overlay.prepareR18()
                         refreshR18RouteOnMain()
                     }
+                    if (r449Session != null) r449PrepareSessionWake()
                     if (owner != null) traceKeyguard("USER_PRESENT_RECEIVED", "broadcast", observedUptimeMs = receivedAt,
                         diagnosticContext = owner, fields = mapOf("sourceEventTime" to "NA", "sourceTimeUnavailable" to true))
                 }
@@ -2886,11 +3029,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             val ownWa = r448Frame?.isOwnWindow(meta.windowId, meta.displayId) == true
             if (ownWa) return
             r449RestrictionRevision.incrementAndGet()
+            waWake.allowedRevision = -1L
             if (r448Frame?.isAttached() == true) {
                 r446Cancel("wa:externalWindowTransition")
             } else {
-                r448Frame?.cancelPending(waWake.owner)
-                waWake.issued = false
                 r449ScheduleRead()
             }
         }
@@ -3007,6 +3149,20 @@ class FluviKeyguardCardService : AccessibilityService() {
                     ingress = ingress,
                     externalScene = invalidation?.scene,
                 )
+                r449FluviRecovery?.let { recovery ->
+                    val initial = recovery.observation
+                    val relevant = frameworkEvent && offered != null && !recovery.consumed &&
+                        r446Owner.arm == recovery.arm && r446Owner.state == KeyguardR446PrintOwner.State.WAIT_READ &&
+                        wakeEpoch == initial.wake && callbackReceivedAt >= initial.inventoryAt &&
+                        meta.displayId == Display.DEFAULT_DISPLAY &&
+                        (meta.windowId == initial.host || meta.windowId == initial.upper ||
+                            (meta.windowId < 0 && meta.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED))
+                    if (relevant) {
+                        recovery.consumed = true
+                        KeyguardCardDiagnostics.recordR449Recovery(initial.copy(stage = "REAL_CHANGE_OFFERED",
+                            at = callbackReceivedAt, successor = offered))
+                    }
+                }
                 retained?.let { pending ->
                     runCatching { recordR21(pending.binding, "INGRESS", callbackReceivedAt, pending.decision.ordinal,
                         pending.decision.phase.name, if (offered != null) "RECHECK_OFFERED" else "OFFER_REJECTED",
@@ -5156,6 +5312,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val r446Eligibility: KeyguardR446Eligibility? = null,
         val r446Normal: KeyguardSurfaceClassification? = null,
         val r447Stamp: R447InventoryStamp? = null,
+        val r449UnresolvedUpper: KeyguardR449RestrictionEvidence.UnresolvedUpper? = null,
     )
 
     /** A missing Budget category is a user-visible configuration state, not a
@@ -5361,6 +5518,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             r446Eligibility = printEligibility,
             r446Normal = printNormal,
             r447Stamp = read.r447Stamp?.copy(target = printEligibility?.target),
+            r449UnresolvedUpper = if (printArm != null) KeyguardR449RestrictionEvidence.unresolvedUpper(
+                read.snapshots, if (inspectionProbeForTest == null) classification else
+                    KeyguardR44SurfaceClassifier.classify(read.snapshots, read.rootUnavailable, read.walkTruncated,
+                        strictOwn, syntheticTrial = syntheticAtRead, expanded = expandedAtRead), read.walkTruncated) else null,
         ))
     }
 

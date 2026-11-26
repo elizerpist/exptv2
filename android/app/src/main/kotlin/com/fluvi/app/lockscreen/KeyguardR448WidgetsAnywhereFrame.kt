@@ -127,7 +127,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
             pending = null
             emit(owner, "DEBOUNCE_FIRED")
             if (view !== material || viewOwner != owner || !leaseLive || attached || removalFailed ||
-                !runCatching(valid).getOrDefault(false)) {
+                (validateAsync == null && !runCatching(valid).getOrDefault(false))) {
                 emit(owner, "DENIED_SECOND_CHECK")
                 return@Runnable
             }

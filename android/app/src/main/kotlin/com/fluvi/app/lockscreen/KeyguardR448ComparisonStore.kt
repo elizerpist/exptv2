@@ -9,7 +9,7 @@ internal object KeyguardR448ComparisonStore {
     private val prefixes = listOf(
         "build=", "buildMode=", "captureState=", "captureMode=", "processInstance=", "pid=",
         "startedAt=", "durationElapsedMs=", "r448DisplayRoute=", "r448SampleOnly=", "r448WaSource=",
-        "R44_9_ADMISSION ", "R44_8_READ_BOUNDARY ", "R44_8_SYSTEM_VETO ", "R44_8_WA ", "R44_6_SAMPLE ", "attemptId=",
+        "R44_9_HU ", "R44_9_OUTCOME ", "R44_9_ADMISSION ", "R44_9_FLUVI_RECOVERY ", "R44_8_READ_BOUNDARY ", "R44_8_SYSTEM_VETO ", "R44_8_WA ", "R44_6_SAMPLE ", "attemptId=",
     )
     @Volatile private var fluviWriteFailed = false
     @Volatile private var widgetsWriteFailed = false

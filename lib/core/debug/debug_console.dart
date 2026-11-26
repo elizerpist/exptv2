@@ -61,6 +61,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
   bool _r44TrialEnabled = false;
   bool _r442Active = false;
   bool _r446Armed = false;
+  String? _r449PrintReason;
+  String? _r449Action;
   String? _r442Reason;
   String? _r444Profile;
   bool _loadingKeyguard = false;
@@ -326,6 +328,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
               _r44TrialEnabled &&
               _validR442Receipt(receipt, snapshot.captureId);
           _r446Armed = _r442Active && receipt['printArmed'] == true;
+          _r449PrintReason = receipt['printReason']?.toString();
+          _r449Action = receipt['actionKind']?.toString();
           _r442Reason = receipt['reason']?.toString();
           _r444Profile = _r442Active ? receipt['profile']?.toString() : null;
         });
@@ -407,6 +411,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
     bool expanded = false,
     bool oneWakePrint = false,
     KeyguardDisplayRoute? confirmedRoute,
+    bool sampleSession = false,
   }) async {
     final bridge = widget.keyguardTimingCapture;
     if (bridge == null || _loadingKeyguard) return;
@@ -427,6 +432,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
           : await bridge.startR449SampleCapture(
               mode: _keyguardCaptureMode,
               route: confirmedRoute,
+              session: sampleSession,
             );
       final rawSnapshot = receipt['snapshot'];
       final snapshot = rawSnapshot is Map<Object?, Object?>
@@ -446,11 +452,13 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
           current['profile'] == receipt['profile'] &&
           current['actualFlags'] == receipt['actualFlags'] &&
           (confirmedRoute == null ||
-              (receipt['actionKind'] == 'ONE_WAKE' &&
+              (receipt['actionKind'] ==
+                      (sampleSession ? 'SESSION' : 'ONE_WAKE') &&
                   receipt['routeRequested'] == confirmedRoute.wireValue &&
                   receipt['routeConfirmed'] == confirmedRoute.wireValue &&
                   current['routeConfirmed'] == confirmedRoute.wireValue &&
-                  current['actionKind'] == 'ONE_WAKE')) &&
+                  current['actionKind'] ==
+                      (sampleSession ? 'SESSION' : 'ONE_WAKE'))) &&
           (!oneWakePrint ||
               (receipt['printArmed'] == true &&
                   current['printArmed'] == true &&
@@ -465,6 +473,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
           _keyguardSnapshot = snapshot ?? _keyguardSnapshot;
           _r442Active = confirmed;
           _r446Armed = confirmed && oneWakePrint;
+          _r449PrintReason = current['printReason']?.toString();
+          _r449Action = current['actionKind']?.toString();
           _r444Profile = confirmed ? receipt['profile']?.toString() : null;
           _r44TrialEnabled = trial['enabled'] == true;
           _r442Reason = confirmed
@@ -1270,7 +1280,16 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                     key: ValueKey('debug-console-r442-active'),
                   ),
                 if (_r442Active && _r446Armed)
-                  const Text('Egyszeri rajzpróba előkészítve.'),
+                  Text(
+                    _r449Action == 'SESSION'
+                        ? 'Mintaorb-próba előkészítve a munkamenetre.'
+                        : 'Egyszeri rajzpróba előkészítve.',
+                  ),
+                if (_r442Active &&
+                    !_r446Armed &&
+                    _r449PrintReason != null &&
+                    _r449PrintReason != 'UNOBSERVED')
+                  Text('A rajzpróba véget ért: $_r449PrintReason.'),
                 if (_r442Active)
                   Text(
                     _r444Profile == 'EXPANDED'
@@ -1337,6 +1356,22 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                                   ),
                             child: Text(
                               'Egyszeri mintaorb és rögzítés – ${_keyguardDisplayRoute!.configured == KeyguardDisplayRoute.fluviStream ? 'Fluvi adatfolyam' : 'Widgets Anywhere'}',
+                            ),
+                          ),
+                        if (_r44TrialAvailable)
+                          OutlinedButton(
+                            key: const ValueKey('debug-console-r449-session'),
+                            onPressed:
+                                _loadingKeyguard || unavailable || _r442Active
+                                ? null
+                                : () => _startR442SampleCapture(
+                                    oneWakePrint: true,
+                                    confirmedRoute:
+                                        _keyguardDisplayRoute!.configured,
+                                    sampleSession: true,
+                                  ),
+                            child: Text(
+                              'Mintaorb több ébresztésnél · 2 perc – ${_keyguardDisplayRoute!.configured == KeyguardDisplayRoute.fluviStream ? 'Fluvi adatfolyam' : 'Widgets Anywhere'}',
                             ),
                           ),
                         if (_keyguardDisplayRoute!.reason != 'NONE')

@@ -6,6 +6,7 @@ import android.app.UiAutomation
 import android.content.ComponentName
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -52,6 +53,7 @@ class KeyguardR448SampleOnlyInstrumentationTest {
         val routePresent = routePrefs.contains("route")
         val oldRoute = routePrefs.getString("route", null)
         val component = ComponentName(context, FluviKeyguardCardService::class.java)
+        val savedLock = shell("locksettings get-disabled").trim()
         var service: FluviKeyguardCardService? = null
         try {
             assertTrue("NOT REACHED: sample-only variant resource", KeyguardR448Safety.sampleOnly(context))
@@ -88,11 +90,39 @@ class KeyguardR448SampleOnlyInstrumentationTest {
             assertTrue("NOT REACHED: sample arm completion", done.await(30, TimeUnit.SECONDS))
             failure.get()?.let { throw it }
             assertEquals("explicit fixed sample is armed", true, receipt.get()["printArmed"])
+            assertTrue(main { owner.stopR444Trial("oneWakeComplete") })
+            KeyguardCardDiagnostics.clearCapture(context)
+            val sessionDone = CountDownLatch(1)
+            val sessionReceipt = AtomicReference<Map<String, Any?>>()
+            val sessionFailure = AtomicReference<Throwable?>()
+            ins.runOnMainSync { CoroutineScope(Dispatchers.Main.immediate).launch {
+                try { sessionReceipt.set(owner.startR449SampleCapture("r449-session-test", "debug", "LIGHT",
+                    "SESSION", "FLUVI_STREAM")) }
+                catch (error: Throwable) { sessionFailure.set(error) }
+                finally { sessionDone.countDown() }
+            } }
+            assertTrue("NOT REACHED: explicit session arm", sessionDone.await(30, TimeUnit.SECONDS))
+            sessionFailure.get()?.let { throw it }
+            assertEquals("SESSION", sessionReceipt.get()["actionKind"])
+            assertEquals("FLUVI_STREAM", sessionReceipt.get()["routeConfirmed"])
+            assertEquals(true, sessionReceipt.get()["printArmed"])
+            shell("locksettings set-disabled false")
+            shell("input keyevent KEYCODE_SLEEP")
+            waitFor("first session screen off") { !context.getSystemService(PowerManager::class.java).isInteractive }
+            shell("input keyevent KEYCODE_WAKEUP")
+            waitFor("first session locked wake") { context.getSystemService(KeyguardManager::class.java).isKeyguardLocked }
+            shell("wm dismiss-keyguard")
+            waitFor("session unlock") { !context.getSystemService(KeyguardManager::class.java).isKeyguardLocked }
+            waitFor("session rearmed for a new wake") {
+                val status = main { owner.r442SampleStatus() }
+                status["actionKind"] == "SESSION" && status["printState"] == "WAIT_OFF" && status["printArmed"] == true
+            }
         } finally {
             service?.let { owner -> runCatching { main { owner.stopR444Trial("safeTestCleanup") } } }
             KeyguardCardDiagnostics.clearCapture(context)
             secure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, services)
             secure(Settings.Secure.ACCESSIBILITY_ENABLED, enabled)
+            shell("locksettings set-disabled ${if (savedLock.contains("true")) "true" else "false"}")
             val routeEdit = routePrefs.edit()
             if (routePresent) routeEdit.putString("route", oldRoute) else routeEdit.remove("route")
             assertTrue(routeEdit.commit())

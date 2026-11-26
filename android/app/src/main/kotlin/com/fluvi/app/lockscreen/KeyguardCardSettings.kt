@@ -808,6 +808,8 @@ internal object KeyguardCardDiagnostics {
         var r448Frame: KeyguardR448FrameTrace? = null,
         var r449First: KeyguardR449AdmissionObservation? = null,
         var r449Last: KeyguardR449AdmissionObservation? = null,
+        var r449RecoveryFirst: KeyguardR449RecoveryObservation? = null,
+        var r449RecoveryLast: KeyguardR449RecoveryObservation? = null,
         var r447LatestOrdinal: Long = 0,
         var r447DecisionCount: Int = 0,
         var firstExclusionSignalAtUptimeMs: Long? = null,
@@ -963,6 +965,9 @@ internal object KeyguardCardDiagnostics {
         val startedWallMs: Long,
         val configuration: Map<String, String>,
         val captureMode: KeyguardDiagnosticCaptureMode,
+        var r449Action: String? = null,
+        var r449ConfirmedRoute: String? = null,
+        var r449IntentAt: Long? = null,
         val r43Enabled: Boolean = false,
         var r43First: String? = null,
         var r43Last: String? = null,
@@ -1760,6 +1765,39 @@ internal object KeyguardCardDiagnostics {
         if (!accepted) token.r44Dropped.incrementAndGet()
     }
 
+    internal fun recordR449Intent(captureId: String, action: String, route: String, at: Long) {
+        if (action !in setOf("ONE_WAKE", "SESSION") || route !in setOf("FLUVI_STREAM", "WIDGETS_ANYWHERE")) return
+        val token = ingress?.takeIf { it.id == captureId } ?: return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                active.r449Action = action
+                active.r449ConfirmedRoute = route
+                active.r449IntentAt = at
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
+    internal fun recordR449Recovery(observation: KeyguardR449RecoveryObservation) {
+        val token = ingress ?: return
+        val owner = observation.context
+        if (owner.captureId != token.id || owner.attemptId == null) return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
+                    ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
+                if (attempt != null && attempt.serviceSession == owner.serviceSession &&
+                    attempt.wakeEpoch == owner.originWakeEpoch) {
+                    if (attempt.r449RecoveryFirst == null) attempt.r449RecoveryFirst = observation
+                    attempt.r449RecoveryLast = observation
+                }
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
     internal fun recordR448Frame(observation: KeyguardR448FrameObservation) {
         val token = ingress ?: return
         val owner = observation.context
@@ -1869,7 +1907,9 @@ internal object KeyguardCardDiagnostics {
                     if (observation.armGeneration > 0 && attempt.r447ArmGeneration > 0 &&
                         observation.armGeneration != attempt.r447ArmGeneration) return@synchronized
                     if (observation.armGeneration > 0) attempt.r447ArmGeneration = observation.armGeneration
-                    if (observation.request <= 0) {
+                    // WA has its own wake lease and no Fluvi target request.
+                    // Keep its real progress without manufacturing a request id.
+                    if (observation.request <= 0 && !observation.backend.startsWith("WA_")) {
                         if (attempt.r447Arm == null || (attempt.r447Arm?.wakeArmState != "ARMED" &&
                                 observation.wakeArmState == "ARMED")) attempt.r447Arm = observation
                         if (observation.withdrawAt != null && attempt.r447FirstTerminal == null)
@@ -3403,9 +3443,29 @@ internal object KeyguardCardDiagnostics {
         }
         val r44Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
         r44Attempts.forEach { attempt ->
+            val route = active.configuration["r448DisplayRoute"] ?: "UNOBSERVED"
+            val action = active.r449Action ?: if (active.configuration["r446PrintRequested"] == "true") "LEGACY_ONE_WAKE" else "PASSIVE"
+            val progress = attempt.r447Best ?: attempt.r446Last ?: attempt.r446
+            val terminal = attempt.r447FirstTerminal
+            val status = when {
+                action == "PASSIVE" -> "Csak mérés indult."
+                progress?.frameAt != null -> "Rajzolás megfigyelve; képernyőn való láthatóság nincs mérve."
+                progress?.issuedAt != null -> "Megjelenítési kérés megfigyelve; képernyőn való láthatóság nincs mérve."
+                terminal != null -> "A minta megjelenítése elmaradt (${terminal.withdrawReason})."
+                else -> "A minta megjelenítése még nem figyelhető meg."
+            }
+            select("a${attempt.id}:r449outcome", "R44_9_OUTCOME capture=${active.id} wake=${attempt.wakeEpoch} routeRequested=$route routeConfirmed=${active.r449ConfirmedRoute ?: "UNOBSERVED"} action=$action intent=${active.r449IntentAt ?: "UNOBSERVED"} arm=${attempt.r447Arm?.wakeArmState ?: "UNOBSERVED"} backend=${progress?.backend ?: "NOT_ATTEMPTED"} issue=${progress?.issuedAt ?: "UNOBSERVED"} frame=${progress?.frameAt ?: "UNOBSERVED"} terminal=${terminal?.withdrawReason ?: "UNOBSERVED"} physical=UNOBSERVED clock=uptimeMs\nR44_9_HU $status\n", attempt.id)
+            listOfNotNull(attempt.r449RecoveryFirst, attempt.r449RecoveryLast).distinct().forEachIndexed { index, r ->
+                select("a${attempt.id}:r449retry:$index", "R44_9_FLUVI_RECOVERY wake=${r.wake} arm=${r.arm} initialReq=${r.initialRequest} host=${r.host} upper=${r.upper} inventory=${r.inventoryAt} stage=${r.stage} at=${r.at} successor=${r.successor ?: "UNOBSERVED"} clock=uptimeMs\n", attempt.id)
+            }
             listOfNotNull(attempt.r449First, attempt.r449Last).distinct().forEachIndexed { index, o ->
                 val e = o.exclusions
-                select("a${attempt.id}:r449:$index", "R44_9_ADMISSION wake=${attempt.wakeEpoch} arm=${o.arm} route=WIDGETS_ANYWHERE routeGeneration=${o.routeGeneration} materialGeneration=${o.materialGeneration} restrictionRevision=${o.restrictionRevision} domain=PUBLIC_SAMPLE action=${o.action} screenOn=${o.screenAt} readStart=${o.readStart} readEnd=${o.readEnd} systemRead=${o.system.startedAt}/${o.system.finishedAt} available=${o.system.available} interactive=${o.system.interactive} displayOn=${o.system.displayOn} locked=${o.system.keyguardLocked} credential=${e.credential} shade=${e.shade} foreign=${e.foreign} power=${e.powerMenu} evidenceAt=${e.observedAt} reason=${o.reason} decision=${o.decision} issue=${o.issueAt ?: "UNOBSERVED"} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
+                val summary = when {
+                    attempt.r448Frame?.firstShader != null -> "Widgets Anywhere: a mintaablak rajzolt; a képernyőn való láthatóság nem mért."
+                    o.decision == KeyguardR448Admission.Decision.ALLOW -> "Widgets Anywhere: a minta engedélyezve; a láthatóság nem mért."
+                    else -> "Widgets Anywhere: a minta nem engedélyezett (${o.reason}, ${o.decision})."
+                }
+                select("a${attempt.id}:r449:$index", "R44_9_HU $summary\nR44_9_ADMISSION wake=${attempt.wakeEpoch} arm=${o.arm} routeRequested=WIDGETS_ANYWHERE routeConfirmed=WIDGETS_ANYWHERE routeGeneration=${o.routeGeneration} materialGeneration=${o.materialGeneration} restrictionRevision=${o.restrictionRevision} domain=PUBLIC_SAMPLE action=${o.action} screenOn=${o.screenAt} readStart=${o.readStart} readEnd=${o.readEnd} systemRead=${o.system.startedAt}/${o.system.finishedAt} available=${o.system.available} interactive=${o.system.interactive} displayOn=${o.system.displayOn} locked=${o.system.keyguardLocked} credential=${e.credential} shade=${e.shade} foreign=${e.foreign} power=${e.powerMenu} evidenceAt=${e.observedAt} reason=${o.reason} decision=${o.decision} issue=${o.issueAt ?: "UNOBSERVED"} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
             }
             attempt.r448Frame?.let { f ->
                 select("a${attempt.id}:r448frame", "R44_8_WA wake=${attempt.wakeEpoch} routeGeneration=${f.owner.route} materialGeneration=${f.owner.material} firstAllowed=${f.firstAllowed ?: "UNOBSERVED"} debounceScheduled=${f.scheduled ?: "UNOBSERVED"} requestedDue=${f.scheduled?.plus(50) ?: "UNOBSERVED"} debounceFired=${f.fired ?: "UNOBSERVED"} debounceCanceled=${f.canceled ?: "UNOBSERVED"} coalesced=${f.coalesced} secondAllowed=${f.secondAllowed ?: "UNOBSERVED"} addBegin=${f.addBegin ?: "UNOBSERVED"} addReturn=${f.addReturn ?: "UNOBSERVED"} attached=${f.attached ?: "UNOBSERVED"} firstShader=${f.firstShader ?: "UNOBSERVED"} hide=${f.hide ?: "UNOBSERVED"} removeReturn=${f.removeReturn ?: "UNOBSERVED"} detached=${f.detached ?: "UNOBSERVED"} geometry=${f.geometry ?: "UNOBSERVED"} terminal=${f.terminal ?: "UNOBSERVED"} terminalAt=${f.terminalAt ?: "UNOBSERVED"} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)

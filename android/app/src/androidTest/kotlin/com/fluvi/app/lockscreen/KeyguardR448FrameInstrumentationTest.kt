@@ -22,6 +22,7 @@ import com.fluvi.app.lockscreen.material.KeyguardMaterialTimeSource
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.*
 import org.junit.Test
@@ -66,6 +67,7 @@ class KeyguardR448FrameInstrumentationTest {
         val owner = KeyguardR448WidgetsAnywhereFrame.Owner(1, 1, 1)
         val cancelledOwner = KeyguardR448WidgetsAnywhereFrame.Owner(2, 1, 1)
         val postAddOwner = KeyguardR448WidgetsAnywhereFrame.Owner(3, 1, 1)
+        val recheckedOwner = KeyguardR448WidgetsAnywhereFrame.Owner(4, 1, 1)
         try {
             shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard")
             val others = services.orEmpty().split(':').filter { it.isNotBlank() && ComponentName.unflattenFromString(it) != component }
@@ -155,6 +157,30 @@ class KeyguardR448FrameInstrumentationTest {
             assertFalse("a late post-add check cannot draw a retired view", synchronized(events) {
                 events.any { it.owner == postAddOwner && it.stage == "FIRST_SHADER_DRAW" }
             })
+            val revisionAllowed = AtomicBoolean(true)
+            val refreshedCheck = AtomicReference<((Boolean) -> Unit)?>(null)
+            val refreshedCount = AtomicInteger()
+            main {
+                assertTrue(checkNotNull(frame).prepare(recheckedOwner, profile, false, artifact) { synchronized(events) { events.add(it) } })
+                assertTrue(checkNotNull(frame).requestShowChecked(recheckedOwner, geometry, { revisionAllowed.get() }) {
+                    if (refreshedCount.incrementAndGet() == 1) refreshedCheck.set(it) else it(true)
+                })
+                revisionAllowed.set(false)
+            }
+            waitFor("original timer reaches the pending revision check") { refreshedCheck.get() != null }
+            assertFalse("an unresolved new revision cannot add", synchronized(events) {
+                events.any { it.owner == recheckedOwner && it.stage == "ADD_BEGIN" }
+            })
+            revisionAllowed.set(true)
+            checkNotNull(refreshedCheck.get())(true)
+            waitFor("freshly checked revision adds") { synchronized(events) {
+                events.any { it.owner == recheckedOwner && it.stage == "ADD_RETURN" }
+            } }
+            assertEquals("revalidation did not restart the timer", 1, synchronized(events) {
+                events.count { it.owner == recheckedOwner && it.stage == "DEBOUNCE_SCHEDULED" }
+            })
+            main { assertTrue(checkNotNull(frame).retire(recheckedOwner, "CONTROL_REVISION_COMPLETE")) }
+            SystemClock.sleep(150)
             main {
                 assertTrue(checkNotNull(frame).prepare(owner, profile, false, artifact) { synchronized(events) { events.add(it) } })
                 assertTrue(checkNotNull(frame).requestShow(owner, geometry) { true })
@@ -189,6 +215,7 @@ class KeyguardR448FrameInstrumentationTest {
             main {
                 frame?.retire(owner, "CLEANUP")
                 frame?.retire(postAddOwner, "CLEANUP")
+                frame?.retire(recheckedOwner, "CLEANUP")
                 frame?.retire(cancelledOwner, "CLEANUP")
                 activity?.finish()
             }
