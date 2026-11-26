@@ -9,8 +9,10 @@ internal object KeyguardR448ComparisonStore {
     private val prefixes = listOf(
         "build=", "buildMode=", "captureState=", "captureMode=", "processInstance=", "pid=",
         "startedAt=", "durationElapsedMs=", "r448DisplayRoute=", "r448SampleOnly=", "r448WaSource=",
+        "R45_LIFECYCLE ", "R45_EVENT ", "R45_RECOVERY ", "R45_HU ",
         "R44_9_HU ", "R44_9_OUTCOME ", "R44_9_ADMISSION ", "R44_9_FLUVI_RECOVERY ", "R44_8_READ_BOUNDARY ", "R44_8_SYSTEM_VETO ", "R44_8_WA ", "R44_6_SAMPLE ", "attemptId=",
     )
+    private val priorityPrefixes = prefixes.take(15)
     @Volatile private var fluviWriteFailed = false
     @Volatile private var widgetsWriteFailed = false
 
@@ -24,7 +26,12 @@ internal object KeyguardR448ComparisonStore {
         val result = StringBuilder(header)
         var omitted = 0
         var truncated = 0
-        report.lineSequence().filter { line -> prefixes.any { line.startsWith(it) } }.forEach { line ->
+        val lines = report.lineSequence().filter { line -> prefixes.any { line.startsWith(it) } }.toList()
+        // The comparison has a strict size cap. Preserve each wake's new
+        // lifecycle evidence before older, more verbose observations.
+        val ordered = lines.filter { line -> priorityPrefixes.any { line.startsWith(it) } } +
+            lines.filterNot { line -> priorityPrefixes.any { line.startsWith(it) } }
+        ordered.forEach { line ->
             val bounded = line.take(1500)
             if (line.length > bounded.length) truncated++
             if ((result.toString() + bounded + "\n").toByteArray(Charsets.UTF_8).size <= MAX_BYTES - 64)

@@ -55,6 +55,8 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             KeyguardCardDiagnostics.recordR446(KeyguardR446Observation(owner, 990, wake, 11,
                 "UNKNOWN", "ELIGIBLE_SAMPLE", route.name, null, null, null, null, null,
                 null, null, null, "UNOBSERVED"))
+            KeyguardCardDiagnostics.recordR45(KeyguardR45Observation(owner, route.name, "INTENT", 1001, detail = "ORB"))
+            KeyguardCardDiagnostics.recordR45(KeyguardR45Observation(owner, route.name, "REVEAL", 1002, detail = "visible"))
             KeyguardCardDiagnostics.freezeCapture(context)
             return id
         }
@@ -65,6 +67,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             val combined = KeyguardR448ComparisonStore.export(context)
             assertTrue(combined, combined.contains("FLUVI_STREAM\ncapture=$a"))
             assertTrue(combined, combined.contains("WIDGETS_ANYWHERE\ncapture=$b"))
+            assertEquals(combined, 2, combined.lineSequence().count { it.startsWith("R45_LIFECYCLE ") && it.contains("shape=ORB") })
             assertTrue(combined.toByteArray(Charsets.UTF_8).size <= 32_768)
             KeyguardCardDiagnostics.clearCapture(context)
             assertEquals(combined, KeyguardR448ComparisonStore.export(context))
@@ -77,6 +80,25 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             if (oldB == null) summaries.remove("WIDGETS_ANYWHERE") else summaries.putString("WIDGETS_ANYWHERE", oldB)
             assertTrue(summaries.commit())
         }
+    }
+
+    @Test fun r45ComparisonKeepsThreeWakeReceiptsBeforeVerboseRows() {
+        val report = buildString {
+            append("build=source\n")
+            repeat(3) { i ->
+                append("R44_9_ADMISSION wake=$i ").append("x".repeat(1400)).append('\n')
+                append("R45_LIFECYCLE wake=$i shape=ORB reveal=1000\n")
+                append("R45_EVENT wake=$i decision=REASSESS\n")
+                append("R45_RECOVERY wake=$i result=ALLOW\n")
+            }
+        }
+        val summary = KeyguardR448ComparisonStore.summarize("capture", report)
+        repeat(3) { i ->
+            assertTrue(summary, summary.contains("R45_LIFECYCLE wake=$i "))
+            assertTrue(summary, summary.contains("R45_EVENT wake=$i "))
+            assertTrue(summary, summary.contains("R45_RECOVERY wake=$i "))
+        }
+        assertTrue(summary.toByteArray(Charsets.UTF_8).size <= 4800)
     }
 
     private fun r448Pressure(mode: String) {
