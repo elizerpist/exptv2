@@ -119,6 +119,13 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR446WindowLifecycleInstrumentationTest.kt
     sha256sum "$fixture" > "$out/fixture-r446-lifecycle.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r446_stock_observed ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR446StockServiceInstrumentationTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR446StockServiceInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r446-stock.sha256"
+    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR446StockServiceInstrumentationTest.kt > "$out/fixture-r446-stock.patch"
+  fi
   if [[ "$TEST_SCOPE" == r43_busy_red ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR43DiagnosticsInstrumentationTest.kt"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR43DiagnosticsInstrumentationTest.kt
@@ -183,7 +190,7 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
       methods=(r446ProtectedSampleEndpointsSurviveLightPressure r446ProtectedSampleEndpointsSurviveFullPressure)
       ;;
-    r446_stock)
+    r446_stock|r446_stock_observed)
       class=com.fluvi.app.lockscreen.KeyguardR446StockServiceInstrumentationTest
       methods=(actualStockWakeUsesOwnerPrintAndStops)
       ;;
