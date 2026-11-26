@@ -27,7 +27,9 @@ mkdir -p "$out/r45frames"
 for cycle in $(seq 1 "$wakes"); do
   adb shell input keyevent KEYCODE_SLEEP
   sleep 1
-  adb shell "mkdir -p /data/local/tmp/r45frames/$cycle; for n in \$(seq 1 80); do log -t R45Optical 'before $cycle ' \"\$n\"; screencap -p /data/local/tmp/r45frames/$cycle/\$n.png; log -t R45Optical 'after $cycle ' \"\$n\"; sleep 0.01; done" > "$out/r45-stream-$cycle.txt" 2>&1 &
+  # Keep all samples and their bounds, but do not spend the two-minute
+  # session on 80 slow PNG captures before starting the next wake.
+  adb shell "mkdir -p /data/local/tmp/r45frames/$cycle; for n in \$(seq 1 24); do log -t R45Optical 'before $cycle ' \"\$n\"; screencap -p /data/local/tmp/r45frames/$cycle/\$n.png; log -t R45Optical 'after $cycle ' \"\$n\"; sleep 0.01; done" > "$out/r45-stream-$cycle.txt" 2>&1 &
   stream_pid=$!
   sleep 0.5
   adb shell input keyevent KEYCODE_WAKEUP
