@@ -3,6 +3,8 @@ package com.fluvi.app.lockscreen
 /** Only allowlisted role and timings are exported; hierarchy data stays on the reader. */
 internal data class KeyguardR445IndexCall(
     val role: String, val outcome: String, val durationMs: Long, val ageMs: Long, val overrunMs: Long,
+    /** Nine denotes nine or more; no node identity or content is retained. */
+    val rawHits: Int = 0, val firstRejection: String = "NONE",
 )
 
 /** Immutable, capture-owned scalars from the same physical inspection used

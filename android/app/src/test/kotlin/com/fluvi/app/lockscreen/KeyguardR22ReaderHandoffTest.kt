@@ -36,7 +36,7 @@ class KeyguardR22ReaderHandoffTest {
     private data class Node(val id: String?, val windowId: Int, val pkg: String = "com.android.systemui",
         val children: MutableList<AccessibilityNodeInfo> = mutableListOf(), var recycled: Int = 0,
         val extras: Bundle = Bundle(), var advertised: Boolean = false, var lazyTag: String? = null,
-        var refreshSucceeds: Boolean = true, var visible: Boolean = true,
+        var refreshSucceeds: Boolean = true, var visible: Boolean = true, var visibilityThrows: Boolean = false,
         var queryParent: AccessibilityNodeInfo? = null)
     private data class Window(val id: Int, val layer: Int, val active: Boolean, val root: AccessibilityNodeInfo)
     private object Platform {
@@ -54,12 +54,13 @@ class KeyguardR22ReaderHandoffTest {
         var indexResults = mutableMapOf<String, List<AccessibilityNodeInfo>>()
         var onIndex: (() -> Unit)? = null
         var indexCalls = 0
+        var indexReturnsNull = false
         fun reset() {
             nodes.clear(); windows.clear(); inventory = emptyList(); activeRoot = null
             childCalls = mutableListOf(); afterChild = null; missingChild = false
             nullIndices = emptySet(); exceptionIndices = emptySet()
             extraCalls = 0; onExtra = null
-            indexResults.clear(); onIndex = null; indexCalls = 0
+            indexResults.clear(); onIndex = null; indexCalls = 0; indexReturnsNull = false
         }
         fun node(id: String?, window: Int = 10, pkg: String = "com.android.systemui"): AccessibilityNodeInfo =
             Shadow.newInstanceOf(AccessibilityNodeInfo::class.java).also { nodes[it] = Node(id, window, pkg) }
@@ -104,7 +105,10 @@ class KeyguardR22ReaderHandoffTest {
         @Implementation fun getWindowId(): Int = checkNotNull(Platform.nodes[real]).windowId
         @Implementation fun getPackageName(): CharSequence = checkNotNull(Platform.nodes[real]).pkg
         @Implementation fun getClassName(): CharSequence = "android.view.View"
-        @Implementation fun isVisibleToUser(): Boolean = checkNotNull(Platform.nodes[real]).visible
+        @Implementation fun isVisibleToUser(): Boolean = checkNotNull(Platform.nodes[real]).let {
+            if (it.visibilityThrows) throw IllegalStateException("fixture property failure")
+            it.visible
+        }
         @Implementation fun getViewIdResourceName(): String? = checkNotNull(Platform.nodes[real]).id
         @Implementation fun getExtras(): Bundle = checkNotNull(Platform.nodes[real]).extras
         @Implementation fun getAvailableExtraData(): List<String> =
@@ -116,9 +120,10 @@ class KeyguardR22ReaderHandoffTest {
                 entry.value.children.any { Platform.nodes[it] === data }
             }?.key
         }
-        @Implementation fun findAccessibilityNodeInfosByViewId(id: String): List<AccessibilityNodeInfo> {
+        @Implementation fun findAccessibilityNodeInfosByViewId(id: String): List<AccessibilityNodeInfo>? {
             Platform.indexCalls++
             Platform.onIndex?.invoke()
+            if (Platform.indexReturnsNull) return null
             return Platform.indexResults[id].orEmpty().map { obtain(it) }
         }
         @Implementation fun refreshWithExtraData(key: String, arguments: Bundle?): Boolean {
@@ -1118,6 +1123,49 @@ class KeyguardR22ReaderHandoffTest {
         assertNull(read.yieldedTo); assertEquals(h.b, h.queue.activeRequest()); assertEquals(c, h.queue.pendingRequest())
     }
 
+    private fun r445EmptyOrFailedQuery(fail: Boolean): Pair<KeyguardWindowSnapshotReader.Result, Int> {
+        val root = Platform.node(null)
+        val host = Platform.node(null)
+        checkNotNull(Platform.nodes[host]).extras.putCharSequence(KeyguardR44Markers.EXTRA, "element:lockscreen")
+        checkNotNull(Platform.nodes[root]).children.add(host)
+        Platform.activeRoot = root
+        Platform.inventory = listOf(Platform.window(10, 1, true, root))
+        if (fail) Platform.onIndex = { throw IllegalStateException("fixture framework failure") }
+        KeyguardR44Trial.set(true, true)
+        return try {
+            reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true,
+                r443Sample = true, r445SmallClockVerified = true, r445LargeClockVerified = true,
+                r445ClaimBatch = { 1L }), { true }) to Platform.indexCalls
+        } finally { KeyguardR44Trial.set(false, false) }
+    }
+
+    @Test fun r445EmptyQueryIsReportedAsEmpty() {
+        val read = r445EmptyOrFailedQuery(false).first
+        val evidence = checkNotNull(read.snapshots.single().r44)
+        assertEquals("EMPTY", evidence.r445IndexCalls.first().outcome)
+        assertEquals(0, evidence.r445IndexCalls.first().rawHits)
+        assertNull(evidence.content)
+    }
+
+    @Test fun r445FrameworkErrorIsReportedAndStopsTheBatch() {
+        val (read, calls) = r445EmptyOrFailedQuery(true)
+        val evidence = checkNotNull(read.snapshots.single().r44)
+        assertEquals("ERROR", evidence.r445IndexCalls.first().outcome)
+        assertEquals(1, calls)
+        assertFalse(evidence.complete)
+        assertNull(evidence.content)
+    }
+
+    @Test fun r445NullQueryResultRemainsDistinctAndFailsClosed() {
+        Platform.indexReturnsNull = true
+        val (read, calls) = r445EmptyOrFailedQuery(false)
+        val evidence = checkNotNull(read.snapshots.single().r44)
+        assertEquals("NULL_RESULT", evidence.r445IndexCalls.first().outcome)
+        assertEquals(1, calls)
+        assertFalse(evidence.complete)
+        assertNull(evidence.content)
+    }
+
     @Test fun r445ExactIndexRequiresVisibleCurrentHostLineage() {
         val id = "com.android.systemui:id/lockscreen_clock_view"
         fun sample(kind: String): Pair<KeyguardWindowSnapshotReader.Result, Int> {
@@ -1129,6 +1177,7 @@ class KeyguardR22ReaderHandoffTest {
             val clock = Platform.node(id, pkg = if (kind == "foreign") "foreign.app" else "com.android.systemui")
             val data = checkNotNull(Platform.nodes[clock])
             data.queryParent = if (kind == "sibling") root else host
+            if (kind == "property_error") data.visibilityThrows = true
             if (kind == "hidden") {
                 val hidden = Platform.node(null)
                 checkNotNull(Platform.nodes[hidden]).apply { visible = false; queryParent = host }
@@ -1154,11 +1203,24 @@ class KeyguardR22ReaderHandoffTest {
         val positive = sample("valid")
         assertEquals(1, positive.second)
         assertEquals("FOUND", positive.first.snapshots.single().r44?.r445IndexStatus)
+        assertEquals(1, positive.first.snapshots.single().r44?.r445IndexCalls?.single()?.rawHits)
         assertEquals(KeyguardR44Markers.Marker.SMALL_CLOCK, positive.first.snapshots.single().r44?.content?.marker)
-        for (kind in listOf("empty", "hidden", "sibling", "foreign", "duplicate")) {
+        for (kind in listOf("empty", "hidden", "sibling", "foreign", "duplicate", "property_error")) {
             val result = sample(kind)
             assertEquals("$kind must reach the query", 1, result.second)
             assertNull("$kind must not grant content", result.first.snapshots.single().r44?.content)
+            val call = checkNotNull(result.first.snapshots.single().r44).r445IndexCalls.single()
+            assertEquals(if (kind == "empty") 0 else if (kind == "duplicate") 2 else 1, call.rawHits)
+            assertEquals(when (kind) {
+                "empty" -> "EMPTY"; "duplicate" -> "DUPLICATE"; "property_error" -> "ERROR"
+                else -> "INELIGIBLE"
+            }, call.outcome)
+            when (kind) {
+                "hidden" -> assertEquals("HIDDEN_ANCESTOR", call.firstRejection)
+                "sibling" -> assertEquals("NO_ANCESTRY", call.firstRejection)
+                "foreign" -> assertEquals("WRONG_OWNER", call.firstRejection)
+                "property_error" -> assertEquals("PROPERTY_ERROR", call.firstRejection)
+            }
         }
         val stale = sample("stale")
         assertEquals(1, stale.second)

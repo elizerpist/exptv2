@@ -331,27 +331,40 @@ internal class KeyguardR44TreeReader(
             val start = SystemClock.uptimeMillis()
             val result = runCatching { root.findAccessibilityNodeInfosByViewId(id) }
             val returned = SystemClock.uptimeMillis()
-            val nodes = result.getOrNull().orEmpty()
-            var outcome = if (result.isFailure) "ERROR" else if (nodes.isEmpty()) "EMPTY" else "INELIGIBLE"
+            val returnedNodes = result.getOrNull()
+            val nodes = returnedNodes.orEmpty()
+            var outcome = "INELIGIBLE"
             var valid = 0
             var invalid = false
             var restriction: String? = null
             var unresolvedRestriction = false
+            var propertyError = false
+            var firstRejection = "NONE"
+            fun reject(reason: String) { if (firstRejection == "NONE") firstRejection = reason }
             try {
                 if (!authority()) outcome = "STALE"
+                else if (result.isFailure) outcome = "ERROR"
+                else if (returnedNodes == null) outcome = "NULL_RESULT"
+                else if (nodes.isEmpty()) outcome = "EMPTY"
                 else if (nodes.size > 8) outcome = "OVERFLOW"
                 else {
                     for (node in nodes) {
                         if (!authority()) { outcome = "STALE"; break }
                         val candidateCheck = runCatching {
-                            node.windowId == windowId && node.packageName?.toString() == "com.android.systemui" &&
-                                node.isVisibleToUser && node.viewIdResourceName == id && node != exactHost
+                            when {
+                                node.windowId != windowId -> "WRONG_WINDOW"
+                                node.packageName?.toString() != "com.android.systemui" -> "WRONG_OWNER"
+                                !node.isVisibleToUser -> "HIDDEN"
+                                node.viewIdResourceName != id -> "WRONG_ID"
+                                node == exactHost -> "HOST_ITSELF"
+                                else -> null
+                            }
                         }
-                        if (candidateCheck.isFailure) { unresolvedRestriction = true; break }
-                        val candidateValid = candidateCheck.getOrDefault(false)
-                        if (!candidateValid) { invalid = true; continue }
+                        if (candidateCheck.isFailure) { propertyError = true; reject("PROPERTY_ERROR"); break }
+                        val candidateRejection = candidateCheck.getOrNull()
+                        if (candidateRejection != null) { invalid = true; reject(candidateRejection); continue }
                         var cursor: AccessibilityNodeInfo? = runCatching { AccessibilityNodeInfo.obtain(node) }.getOrNull()
-                        if (cursor == null) { unresolvedRestriction = true; break }
+                        if (cursor == null) { propertyError = true; reject("COPY_ERROR"); break }
                         var matched = false
                         var depth = 0
                         try {
@@ -360,8 +373,12 @@ internal class KeyguardR44TreeReader(
                                 val safe = runCatching {
                                     val viewId = current.viewIdResourceName
                                     val tag = current.extras.getCharSequence(KeyguardR44Markers.EXTRA)
-                                    val owned = current.windowId == windowId &&
-                                        current.packageName?.toString() == "com.android.systemui" && current.isVisibleToUser
+                                    val owned = when {
+                                        current.windowId != windowId -> { reject("ANCESTOR_WINDOW"); false }
+                                        current.packageName?.toString() != "com.android.systemui" -> { reject("ANCESTOR_OWNER"); false }
+                                        !current.isVisibleToUser -> { reject("HIDDEN_ANCESTOR"); false }
+                                        else -> true
+                                    }
                                     if (owned) {
                                         restriction = when {
                                             viewId != null && KeyguardSurfaceClassifier.isDecisiveExclusionMarker(viewId) -> viewId
@@ -376,32 +393,42 @@ internal class KeyguardR44TreeReader(
                                                 KeyguardR44Markers.unknownMayRestrict(tag, true))
                                     }
                                     owned && restriction == null && !unresolvedRestriction
-                                }.getOrElse { unresolvedRestriction = true; false }
+                                }.getOrElse { propertyError = true; reject("PROPERTY_ERROR"); false }
                                 if (!safe) break
                                 if (current == exactHost) { matched = true; break }
                                 val parentResult = runCatching { current.parent }
-                                if (parentResult.isFailure) { unresolvedRestriction = true; break }
+                                if (parentResult.isFailure) { propertyError = true; reject("PARENT_ERROR"); break }
                                 val parent = parentResult.getOrNull()
                                 current.recycle()
                                 cursor = parent
                             }
                         } finally { cursor?.recycle() }
-                        if (matched && authority()) valid++ else invalid = true
-                        if (restriction != null || unresolvedRestriction) break
+                        if (matched && authority()) valid++ else {
+                            invalid = true
+                            if (depth >= 16) reject("DEPTH") else reject("NO_ANCESTRY")
+                        }
+                        if (restriction != null || unresolvedRestriction || propertyError) break
                     }
                     outcome = when {
                         !authority() -> "STALE"
                         restriction != null -> "RESTRICTION"
+                        propertyError -> "ERROR"
                         unresolvedRestriction -> "AMBIGUOUS"
                         valid > 1 -> "DUPLICATE"
                         valid == 1 && !invalid -> "FOUND"
+                        valid == 1 && invalid -> "AMBIGUOUS"
                         else -> "INELIGIBLE"
                     }
                 }
             } finally { nodes.forEach { it.recycle() } }
             calls += KeyguardR445IndexCall(role, outcome, returned - start,
                 (start - screenAt).coerceAtLeast(0),
-                (SystemClock.uptimeMillis() - batchStart - KeyguardR44ExtraBudget.MAX_ELAPSED_MS).coerceAtLeast(0))
+                (SystemClock.uptimeMillis() - batchStart - KeyguardR44ExtraBudget.MAX_ELAPSED_MS).coerceAtLeast(0),
+                nodes.size.coerceAtMost(9), firstRejection)
+            if (outcome == "ERROR" || outcome == "NULL_RESULT") {
+                complete = false
+                budget.hardFailure = true
+            }
             if (outcome == "RESTRICTION" || outcome == "AMBIGUOUS") {
                 restrictionObserved()
                 if (outcome == "AMBIGUOUS") complete = false
@@ -415,12 +442,15 @@ internal class KeyguardR44TreeReader(
                 indexedStatus = "FOUND"
                 break
             }
-            if (outcome == "STALE" || outcome == "ERROR" || outcome == "OVERFLOW" || outcome == "DUPLICATE" ||
+            if (outcome == "STALE" || outcome == "ERROR" || outcome == "NULL_RESULT" ||
+                outcome == "OVERFLOW" || outcome == "DUPLICATE" ||
                 outcome == "RESTRICTION" || outcome == "AMBIGUOUS") {
                 indexedStatus = outcome
                 break
             }
         }
+        if (indexedStatus == "NO_WITNESS" && calls.isNotEmpty())
+            indexedStatus = if (calls.all { it.outcome == "EMPTY" }) "EMPTY" else "NO_ELIGIBLE"
         indexedCalls = calls
     }
 
