@@ -229,7 +229,10 @@ PY
         receipt=true
         break
       fi
-      if (( attempt > 3 )); then scroll_controls "$out/ui-receipt.xml" up; fi
+      # The active receipt is below the start button in this scroll view.
+      # The previous control moved toward the top and left the receipt just
+      # outside the viewport even though the signed capture was recording.
+      if (( attempt > 1 )); then scroll_controls "$out/ui-receipt.xml" down; fi
       sleep 1
     done
     if [[ "$receipt" != true ]]; then
@@ -238,6 +241,23 @@ PY
     fi
     adb shell dumpsys accessibility > "$out/accessibility-expanded.txt" 2>&1 || true
     tap_label 'Próba leállítása és riport megtartása' freeze
+    frozen_state=false
+    for attempt in $(seq 1 12); do
+      adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
+      adb exec-out cat /sdcard/r442-window.xml > "$out/ui-frozen-state.xml" 2>/dev/null || true
+      if python3 - "$out/ui-frozen-state.xml" <<'PY'
+import sys,xml.etree.ElementTree as ET
+try:
+    values=[n.attrib.get(k,'') for n in ET.parse(sys.argv[1]).getroot().iter() for k in ('text','content-desc')]
+    assert any(s.startswith('FROZEN ·') for s in values)
+except (AssertionError,ET.ParseError,OSError):
+    sys.exit(1)
+PY
+      then frozen_state=true; break; fi
+      scroll_controls "$out/ui-frozen-state.xml" down
+      sleep 1
+    done
+    "$frozen_state" || { printf '%s\n' 'FAIL: frozen native capture state was not observed after stop.' >> "$out/ui-result.txt"; exit 1; }
     frozen=false
     for attempt in $(seq 1 12); do
       adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
