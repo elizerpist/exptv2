@@ -165,6 +165,14 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r446_composition)
+      class=com.fluvi.app.lockscreen.KeyguardR446WindowPresenterInstrumentationTest
+      methods=(actualAttachedSurfaceStaysBelowIndependentUpperWindow)
+      ;;
+    r446_composition_capture)
+      class=com.fluvi.app.lockscreen.KeyguardR446WindowPresenterInstrumentationTest
+      methods=(actualAttachedSurfaceWithCaptureStaysBelowIndependentUpperWindow)
+      ;;
     r445_provider)
       class=com.fluvi.app.lockscreen.KeyguardR44LazyProviderInstrumentationTest
       methods=(exactViewIdQueryReturnsVisibleOwnedDescendant)
