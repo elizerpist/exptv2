@@ -284,9 +284,9 @@ PY
           return 0
         fi
         if (( attempt > 3 )); then
-          if [[ "$name" == r446-action ]] && (( attempt <= 12 )); then
-            # After checking the older frozen control the new button is
-            # above it, as shown by the retained pre-freeze UI hierarchy.
+          if [[ "$name" == r446-action || ( "$name" == action && "${R448_UI_PROBE:-false}" == true ) ]] && (( attempt <= 12 )); then
+            # The signed selector sits below both sample buttons. After the
+            # route/reopen probe, scroll back toward the buttons first.
             scroll_controls "$out/ui-$name.xml" up
           else
             scroll_controls "$out/ui-$name.xml" down
