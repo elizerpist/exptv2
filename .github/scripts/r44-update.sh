@@ -261,12 +261,17 @@ PY
           if [[ "$name" == entry ]]; then adb shell am start -n com.fluvi.app/.MainActivity >> "$out/launch.txt" 2>&1 || true; fi
           continue
         fi
-        coords=$(python3 - "$out/ui-$name.xml" "$label" <<'PY'
+        coords=$(python3 - "$out/ui-$name.xml" "$label" "$name" <<'PY'
 import re,sys,xml.etree.ElementTree as ET
 try:
     root=ET.parse(sys.argv[1]).getroot()
     for n in root.iter():
         if any(sys.argv[2] in n.attrib.get(k,'') for k in ('text','content-desc')):
+            # A clipped or temporarily loading Flutter choice can still be
+            # exposed by semantics while it is not actionable. Never count a
+            # tap on that node as a route-selection attempt.
+            if sys.argv[3].startswith('r448-select-') and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
+                continue
             m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
             if m:
                 a,b,c,d=map(int,m.groups()); print((a+c)//2,(b+d)//2); break
