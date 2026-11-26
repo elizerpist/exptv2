@@ -335,18 +335,23 @@ internal class KeyguardR44TreeReader(
             var outcome = if (result.isFailure) "ERROR" else if (nodes.isEmpty()) "EMPTY" else "INELIGIBLE"
             var valid = 0
             var invalid = false
+            var restriction: String? = null
+            var unresolvedRestriction = false
             try {
                 if (!authority()) outcome = "STALE"
                 else if (nodes.size > 8) outcome = "OVERFLOW"
                 else {
                     for (node in nodes) {
                         if (!authority()) { outcome = "STALE"; break }
-                        val candidateValid = runCatching {
+                        val candidateCheck = runCatching {
                             node.windowId == windowId && node.packageName?.toString() == "com.android.systemui" &&
                                 node.isVisibleToUser && node.viewIdResourceName == id && node != exactHost
-                        }.getOrDefault(false)
+                        }
+                        if (candidateCheck.isFailure) { unresolvedRestriction = true; break }
+                        val candidateValid = candidateCheck.getOrDefault(false)
                         if (!candidateValid) { invalid = true; continue }
-                        var cursor: AccessibilityNodeInfo? = AccessibilityNodeInfo.obtain(node)
+                        var cursor: AccessibilityNodeInfo? = runCatching { AccessibilityNodeInfo.obtain(node) }.getOrNull()
+                        if (cursor == null) { unresolvedRestriction = true; break }
                         var matched = false
                         var depth = 0
                         try {
@@ -355,27 +360,39 @@ internal class KeyguardR44TreeReader(
                                 val safe = runCatching {
                                     val viewId = current.viewIdResourceName
                                     val tag = current.extras.getCharSequence(KeyguardR44Markers.EXTRA)
-                                    current.windowId == windowId && current.packageName?.toString() == "com.android.systemui" &&
-                                        current.isVisibleToUser &&
-                                        viewId?.let { KeyguardSurfaceClassifier.isDecisiveExclusionMarker(it) } != true &&
-                                        viewId != "com.android.systemui:id/notification_stack_scroller" &&
-                                        viewId != "com.android.systemui:id/notificationShelf" &&
-                                        KeyguardR44Markers.exact(tag)?.let(KeyguardR44Markers::exclusion) == null &&
-                                        !(tag != null && KeyguardR44Markers.exact(tag) == null &&
-                                            KeyguardR44Markers.unknownMayRestrict(tag, true)) &&
-                                        current.className?.toString()?.contains("BouncerContent") != true
-                                }.getOrDefault(false)
+                                    val owned = current.windowId == windowId &&
+                                        current.packageName?.toString() == "com.android.systemui" && current.isVisibleToUser
+                                    if (owned) {
+                                        restriction = when {
+                                            viewId != null && KeyguardSurfaceClassifier.isDecisiveExclusionMarker(viewId) -> viewId
+                                            KeyguardR44Markers.exact(tag)?.let(KeyguardR44Markers::exclusion) != null ->
+                                                KeyguardR44Markers.exact(tag)?.let(KeyguardR44Markers::exclusion)
+                                            current.className?.toString()?.contains("BouncerContent") == true -> "element:BouncerContent"
+                                            else -> null
+                                        }
+                                        unresolvedRestriction = viewId == "com.android.systemui:id/notification_stack_scroller" ||
+                                            viewId == "com.android.systemui:id/notificationShelf" ||
+                                            (tag != null && KeyguardR44Markers.exact(tag) == null &&
+                                                KeyguardR44Markers.unknownMayRestrict(tag, true))
+                                    }
+                                    owned && restriction == null && !unresolvedRestriction
+                                }.getOrElse { unresolvedRestriction = true; false }
                                 if (!safe) break
                                 if (current == exactHost) { matched = true; break }
-                                val parent = runCatching { current.parent }.getOrNull()
+                                val parentResult = runCatching { current.parent }
+                                if (parentResult.isFailure) { unresolvedRestriction = true; break }
+                                val parent = parentResult.getOrNull()
                                 current.recycle()
                                 cursor = parent
                             }
                         } finally { cursor?.recycle() }
                         if (matched && authority()) valid++ else invalid = true
+                        if (restriction != null || unresolvedRestriction) break
                     }
                     outcome = when {
                         !authority() -> "STALE"
+                        restriction != null -> "RESTRICTION"
+                        unresolvedRestriction -> "AMBIGUOUS"
                         valid > 1 -> "DUPLICATE"
                         valid == 1 && !invalid -> "FOUND"
                         else -> "INELIGIBLE"
@@ -384,7 +401,12 @@ internal class KeyguardR44TreeReader(
             } finally { nodes.forEach { it.recycle() } }
             calls += KeyguardR445IndexCall(role, outcome, returned - start,
                 (start - screenAt).coerceAtLeast(0),
-                (returned - batchStart - KeyguardR44ExtraBudget.MAX_ELAPSED_MS).coerceAtLeast(0))
+                (SystemClock.uptimeMillis() - batchStart - KeyguardR44ExtraBudget.MAX_ELAPSED_MS).coerceAtLeast(0))
+            if (outcome == "RESTRICTION" || outcome == "AMBIGUOUS") {
+                restrictionObserved()
+                if (outcome == "AMBIGUOUS") complete = false
+                restriction?.let { deferredRestriction?.invoke(it) }
+            }
             if (outcome == "FOUND" && authority() && runCatching {
                     exactHost.windowId == windowId && exactHost.isVisibleToUser && root.windowId == windowId
                 }.getOrDefault(false)) {
@@ -393,7 +415,8 @@ internal class KeyguardR44TreeReader(
                 indexedStatus = "FOUND"
                 break
             }
-            if (outcome == "STALE" || outcome == "ERROR" || outcome == "OVERFLOW" || outcome == "DUPLICATE") {
+            if (outcome == "STALE" || outcome == "ERROR" || outcome == "OVERFLOW" || outcome == "DUPLICATE" ||
+                outcome == "RESTRICTION" || outcome == "AMBIGUOUS") {
                 indexedStatus = outcome
                 break
             }

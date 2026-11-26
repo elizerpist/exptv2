@@ -6,6 +6,14 @@ import org.junit.Test
 
 /** The paired phone observations are separate fixtures, not a simulated phone result. */
 class KeyguardR445FirstFrameTest {
+    @Test fun replacementCannotRepeatTheWakeBatch() {
+        val budget = KeyguardR445WakeBudget()
+        assertEquals(null, budget.claim(1, 7, 0))
+        assertEquals(100L, budget.claim(1, 7, 100))
+        assertEquals(null, budget.claim(1, 7, 101))
+        assertEquals(200L, budget.claim(1, 8, 200))
+        assertEquals(300L, budget.claim(2, 8, 300))
+    }
     @Test fun realSmallClockIdHasARecognizedRole() {
         assertEquals(KeyguardR44Markers.Marker.SMALL_CLOCK,
             KeyguardR44Markers.exact("com.android.systemui:id/lockscreen_clock_view"))

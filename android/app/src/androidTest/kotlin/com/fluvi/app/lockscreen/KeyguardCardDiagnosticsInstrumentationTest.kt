@@ -81,6 +81,11 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                 appliedGate = if (empty) KeyguardR444Gate.INCOMPLETE else KeyguardR444Gate.NO_CONTENT,
                 profile = "EXPANDED", profileRevision = 5, previousFlags = 48, actualFlags = 50,
                 hostNodes = 1, hostCarriers = 5, hostParent = 2, secondaryCount = 1,
+                r445SmallInstalled = true, r445LargeInstalled = true, r445EntryInstalled = true,
+                r445IndexStatus = "NO_WITNESS", r445IndexCalls = listOf(
+                    KeyguardR445IndexCall("SMALL", "EMPTY", 12, 123, 0),
+                    KeyguardR445IndexCall("LARGE", "INELIGIBLE", 13, 136, 0),
+                    KeyguardR445IndexCall("ENTRY", "EMPTY", 17, 150, 3)),
                 r444Windows = listOf(KeyguardR444WindowObservation(972, 0, 3, false, false,
                     "SYSTEMUI", null, true, 4, "UDFPS_NODE_VERIFIED"))))
         }
@@ -92,6 +97,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.contains("Üres kiegészítő adat miatt hiányos az olvasás"))
         assertTrue(report.contains("további, nem minősített ablak"))
         assertTrue(report.contains("root=UDFPS_NODE_VERIFIED"))
+        assertEquals(5, report.lineSequence().count { it.startsWith("R44_5_INDEX ") })
+        assertEquals(15, report.lineSequence().count { it.startsWith("R44_5_ID ") })
+        assertTrue(report.contains("backend=SENSOR_UNQUALIFIED pixel=UNOBSERVED"))
     }
 
     @Test fun r442FirstIncompleteReadAndMissingSuccessorRemainExplicit() {

@@ -1186,6 +1186,37 @@ class KeyguardR22ReaderHandoffTest {
         } finally { KeyguardR44Trial.set(false, false) }
     }
 
+    @Test fun r445RestrictionInQueriedAncestryStopsTheWholeBatch() {
+        val root = Platform.node(null)
+        val host = Platform.node(null)
+        checkNotNull(Platform.nodes[host]).extras.putCharSequence(KeyguardR44Markers.EXTRA, "element:lockscreen")
+        checkNotNull(Platform.nodes[root]).children.add(host)
+        val small = Platform.node("com.android.systemui:id/lockscreen_clock_view")
+        val restricted = Platform.node(null)
+        checkNotNull(Platform.nodes[restricted]).apply {
+            queryParent = host
+            extras.putCharSequence(KeyguardR44Markers.EXTRA, "overlay:bouncer")
+        }
+        checkNotNull(Platform.nodes[small]).queryParent = restricted
+        val large = Platform.node("com.android.systemui:id/lockscreen_clock_view_large")
+        checkNotNull(Platform.nodes[large]).queryParent = host
+        Platform.indexResults["com.android.systemui:id/lockscreen_clock_view"] = listOf(small)
+        Platform.indexResults["com.android.systemui:id/lockscreen_clock_view_large"] = listOf(large)
+        Platform.activeRoot = root
+        Platform.inventory = listOf(Platform.window(10, 1, true, root))
+        KeyguardR44Trial.set(true, true)
+        try {
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true,
+                r443Sample = true, r445SmallClockVerified = true, r445LargeClockVerified = true,
+                r445ClaimBatch = { 1L }), { true })
+            assertEquals("a restriction prevents the later clock IPC", 1, Platform.indexCalls)
+            assertNull(read.snapshots.single().r44?.content)
+            assertEquals("RESTRICTION", read.snapshots.single().r44?.r445IndexStatus)
+            assertEquals(KeyguardSurface.CREDENTIAL, KeyguardR44SurfaceClassifier.classify(read.snapshots,
+                read.rootUnavailable, read.walkTruncated, false, true).surface)
+        } finally { KeyguardR44Trial.set(false, false) }
+    }
+
     @Test fun missingChildCannotProduceACompletePositive() {
         tree()
         Platform.missingChild = true

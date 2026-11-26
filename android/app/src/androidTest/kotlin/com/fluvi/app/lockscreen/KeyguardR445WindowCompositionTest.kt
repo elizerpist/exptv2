@@ -43,7 +43,10 @@ import org.junit.runner.RunWith
  * It is not an OEM clock result or authorization to enable a backend. */
 @RunWith(AndroidJUnit4::class)
 class KeyguardR445WindowCompositionTest {
-    @Test fun actualAttachedSurfaceStaysBelowIndependentUpperWindow() {
+    @Test fun actualAttachedSurfaceStaysBelowIndependentUpperWindow() = exercise(capture = false)
+    @Test fun actualAttachedSurfaceWithCaptureStaysBelowIndependentUpperWindow() = exercise(capture = true)
+
+    private fun exercise(capture: Boolean) {
         assertEquals(37, Build.VERSION.SDK_INT)
         val ins = InstrumentationRegistry.getInstrumentation()
         val context = ins.targetContext
@@ -80,7 +83,7 @@ class KeyguardR445WindowCompositionTest {
         var surfacePackage: SurfaceControlViewHost.SurfacePackage? = null
         var calibration: KeyguardR22VisualCalibration? = null
         var underlay: Bitmap? = null
-        val evidence = StringBuilder("fixture=two-app-windows service=real source=sample-clock backend=experimental\n")
+        val evidence = StringBuilder("fixture=two-app-windows service=real source=sample-clock backend=experimental capture=$capture\n")
         try {
             shell("input keyevent KEYCODE_WAKEUP")
             shell("wm dismiss-keyguard")
@@ -92,6 +95,7 @@ class KeyguardR445WindowCompositionTest {
             waitFor("real accessibility service") { FluviKeyguardCardServiceRegistry.connected }
             val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
             KeyguardR44Trial.set(true, true)
+            if (capture) KeyguardCardDiagnostics.startCapture(context, "r445-composition", "debug", "FULL")
             val profile = checkNotNull(KeyguardR44Trial.profile(null))
             calibration = KeyguardR22VisualCalibration(ins, out, ui, profile, discloseFull = false).also { it.calibrate() }
             val reference = checkNotNull(calibration)
@@ -139,11 +143,27 @@ class KeyguardR445WindowCompositionTest {
                 }
             }
             ins.waitForIdleSync()
-            val patchLocation = IntArray(2)
-            main { patch.getLocationOnScreen(patchLocation) }
-            val patchBounds = Rect(patchLocation[0], patchLocation[1], patchLocation[0] + patchSize, patchLocation[1] + patchSize)
             val orbBounds = Rect(hostBounds.left + x, hostBounds.top + y, hostBounds.left + x + size, hostBounds.top + y + size)
-            assertTrue("NOT REACHED: independent patch overlaps orb", Rect.intersects(patchBounds, orbBounds))
+            val patchBounds = Rect()
+            var geometryProbes = 0
+            waitFor("independent patch overlaps the measured orb bounds") {
+                main {
+                    val location = IntArray(2)
+                    patch.getLocationOnScreen(location)
+                    patchBounds.set(location[0], location[1], location[0] + patch.width, location[1] + patch.height)
+                    if (geometryProbes++ < 4) evidence.append("geometry host=$hostBounds orb=$orbBounds patch=$patchBounds\n")
+                    if (patch.width > 0 && patch.height > 0 && !Rect.intersects(patchBounds, orbBounds)) {
+                        // Dialog insets and gravity differ across Android builds.
+                        // Correct from the measured pixels, then re-observe.
+                        val window = checkNotNull(dialog?.window)
+                        window.attributes = window.attributes.apply {
+                            this.x += orbBounds.centerX() - patchBounds.centerX()
+                            this.y += orbBounds.centerY() - patchBounds.centerY()
+                        }
+                    }
+                }
+                patchBounds.width() > 0 && patchBounds.height() > 0 && Rect.intersects(patchBounds, orbBounds)
+            }
             waitFor("two actual independently layered application windows") {
                 val windows = service.windows
                 try {
@@ -225,6 +245,7 @@ class KeyguardR445WindowCompositionTest {
             }
             evidence.append("initialStack=PASS motion=PASS touch=PASS hide=PASS parentMutation=NOT_RUN\n")
         } finally {
+            runCatching { ui.takeScreenshot()?.let { save("r445-final-before-cleanup", it); it.recycle() } }
             File(out, "r445-composition.txt").writeText(evidence.toString())
             main {
                 surfacePackage?.surfaceControl?.let { child ->
@@ -234,6 +255,7 @@ class KeyguardR445WindowCompositionTest {
             }
             underlay?.recycle(); calibration?.close()
             KeyguardR44Trial.set(false, false)
+            if (capture) KeyguardCardDiagnostics.clearCapture(context)
             secure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices)
             secure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
         }

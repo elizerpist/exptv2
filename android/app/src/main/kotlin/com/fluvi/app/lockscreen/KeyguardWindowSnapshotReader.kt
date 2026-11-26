@@ -765,11 +765,22 @@ internal class KeyguardWindowSnapshotReader(
                     genuineClockResource = request.r444ClockVerified,
                     genuineSmallClockResource = request.r445SmallClockVerified,
                     genuineLargeClockResource = request.r445LargeClockVerified).also {
-                    if (r443Inventory != null) deferredReaders[window.id] = it
+                    if (r443Inventory != null) {
+                        val previous = deferredReaders.put(window.id, it)
+                        if (previous != null) {
+                            // Duplicate window identities cannot share one
+                            // request-owned host or authorize a positive.
+                            previous.unresolvedCandidate()
+                            it.unresolvedCandidate()
+                            previous.close()
+                        }
+                    }
                 }
             } else null
             if (r443Inventory != null && root != null && r44Window?.isVerifiedActiveRoot() == true) {
-                runCatching { AccessibilityNodeInfo.obtain(root) }.getOrNull()?.let { r445Roots[window.id] = it }
+                runCatching { AccessibilityNodeInfo.obtain(root) }.getOrNull()?.let {
+                    r445Roots.put(window.id, it)?.recycle()
+                }
             }
             // API 37 root extras can themselves carry an exclusion; consume
             // that node in the regular DFS before transferring the reader.

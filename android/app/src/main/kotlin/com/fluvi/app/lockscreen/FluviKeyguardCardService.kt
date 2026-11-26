@@ -79,8 +79,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     @Volatile private var r442ScreenOn: R442ScreenOn? = null
     // Protected by queueLock; request replacement cannot buy a second batch
     // in the same physical wake or transfer ownership to another session.
-    private var r445BatchSession = -1L
-    private var r445BatchWake = -1L
+    private val r445WakeBudget = KeyguardR445WakeBudget()
     private data class R442Lookup(val status: String, val identity: String?, val verified: Boolean,
                                   val clockVerified: Boolean = false, val udfpsVerified: Boolean = false,
                                   val smallClockVerified: Boolean = false, val largeClockVerified: Boolean = false)
@@ -102,6 +101,13 @@ class FluviKeyguardCardService : AccessibilityService() {
     private fun prepareR442ResourceLookup() {
         if (Build.VERSION.SDK_INT != 37) return
         val generation = ++r442LookupGeneration
+        // Installed-ID lookup is preparation, never a wake-path IPC. If
+        // the service comes up while locked, USER_PRESENT schedules it later.
+        val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+        if (keyguard == null || keyguard.isKeyguardLocked) {
+            r442Lookup = R442Lookup("PENDING_UNLOCK", null, false)
+            return
+        }
         val expectedSession = session.get()
         r442Lookup = R442Lookup("PENDING", null, false)
         CoroutineScope(serviceJob + Dispatchers.IO).launch {
@@ -390,6 +396,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         val km = getSystemService(android.app.KeyguardManager::class.java)
             ?: return rejectR442Start("keyguardUnavailable")
         if (km.isKeyguardLocked) return rejectR442Start("phoneLocked")
+        if (r442Lookup.status == "PENDING_UNLOCK" || r442Lookup.status == "UNAVAILABLE")
+            prepareR442ResourceLookup()
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)
         if (!settings.requested || settings.presentationMode != KeyguardCardPresentationMode.ORB)
             return rejectR442Start("orbServiceNotEnabled")
@@ -1979,6 +1987,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     r442ScreenOn = null
+                    if (Build.VERSION.SDK_INT == 37 && r442Lookup.status in setOf("PENDING_UNLOCK", "PENDING", "UNAVAILABLE"))
+                        prepareR442ResourceLookup()
                     val owner = currentDiagnosticAttempt
                     hideImmediately("userPresent", triggerReceivedUptimeMs = receivedAt)
                     if (::overlay.isInitialized && !overlay.isAttached && lastSettings?.requested == true) {
@@ -4763,13 +4773,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                         val screen = r442ScreenOn
                         if (screen == null || screen.session != request.session ||
                             request.wakeGeneration != wakeEpoch || !authorityIsCurrent(request) ||
-                            !KeyguardR44Trial.active || r444ProfileOwner.snapshot.revision != profileAtRead?.revision ||
-                            (r445BatchSession == request.session && r445BatchWake == request.wakeGeneration)) null
-                        else {
-                            r445BatchSession = request.session
-                            r445BatchWake = request.wakeGeneration
-                            screen.uptime
-                        }
+                            !KeyguardR44Trial.active || r444ProfileOwner.snapshot.revision != profileAtRead?.revision) null
+                        else r445WakeBudget.claim(request.session, request.wakeGeneration, screen.uptime)
                     }
                 } } else null,
                 r443Boundary = if (captureOpening && r442Enabled) { structuralReason ->

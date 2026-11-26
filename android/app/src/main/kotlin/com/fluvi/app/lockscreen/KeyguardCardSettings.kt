@@ -3597,6 +3597,20 @@ internal object KeyguardCardDiagnostics {
         appendLine("R44_4_HU próba=${attempt.id} $reasonHu" +
             if (additionalWindow && post?.appliedGate != KeyguardR444Gate.COVER_VETO)
                 " Van egy további, nem minősített ablak." else "")
+        if (post != null && post.synthetic) {
+            val companion = post.r444Windows.any { it.rootRole == "UDFPS_VERIFIED" }
+            val status = when {
+                post.appliedGate == KeyguardR444Gate.RESTRICTION -> "Tiltott képernyő: rejtve."
+                post.content == null -> "Nincs önálló, ellenőrzött jel."
+                post.appliedGate == KeyguardR444Gate.COVER_VETO && companion ->
+                    "Jel megvan; az érzékelő alatti út még nincs minősítve."
+                post.appliedGate == KeyguardR444Gate.COVER_VETO -> "Jel megvan; a felső ablak nem minősíthető."
+                show == null -> "Jel megvan; megjelenítés nem igazolt."
+                show.r12Evidence["firstPost"] == null -> "Megjelenítési kérés van; első képkocka nem igazolt."
+                else -> "Első képkocka beküldve; képpont nem megfigyelt."
+            }
+            appendLine("R44_5_HU próba=${attempt.id} $status")
+        }
         val handoff = attempt.r442Handoff
         val successorRead = handoff?.let { h ->
             listOfNotNull(post, attempt.r44FirstGrant, attempt.r44FirstRestriction, last)
@@ -3630,7 +3644,8 @@ internal object KeyguardCardDiagnostics {
             }
             appendLine("R44_4_PROFILE req=${read.request} profile=${read.profile} revision=${read.profileRevision ?: "UNOBSERVED"} previousFlags=${read.previousFlags ?: "UNOBSERVED"} actualFlags=${read.actualFlags ?: "UNOBSERVED"} clockResource=${read.clockResourceVerified} hostNodes=${read.hostNodes} hostCarriers=${read.hostCarriers} hostParent=${read.hostParent ?: "UNOBSERVED"} contentParent=${read.contentParent ?: "UNOBSERVED"}")
             appendLine("R44_4_GATE req=${read.request} applied=${read.appliedGate} coverReached=$coverReached structural=${read.cover} secondary=${read.secondaryCount} overflow=${read.secondaryOverflow}")
-            appendLine("R44_5_INDEX req=${read.request} installedSmall=${read.r445SmallInstalled} installedLarge=${read.r445LargeInstalled} installedEntry=${read.r445EntryInstalled} status=${read.r445IndexStatus} backend=SENSOR_UNQUALIFIED pixel=UNOBSERVED")
+            val backend = if (read.r444Windows.any { it.rootRole.startsWith("UDFPS_") }) "SENSOR_UNQUALIFIED" else "EXISTING_OR_NONE"
+            appendLine("R44_5_INDEX req=${read.request} installedSmall=${read.r445SmallInstalled} installedLarge=${read.r445LargeInstalled} installedEntry=${read.r445EntryInstalled} status=${read.r445IndexStatus} backend=$backend pixel=UNOBSERVED")
             read.r445IndexCalls.forEach { call ->
                 appendLine("R44_5_ID req=${read.request} role=${call.role} outcome=${call.outcome} durationMs=${call.durationMs} ageMs=${call.ageMs} overrunMs=${call.overrunMs}")
             }
