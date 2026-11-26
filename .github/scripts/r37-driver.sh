@@ -246,6 +246,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
       methods=(r448BoundaryAndVetoSurviveLightPressure r448BoundaryAndVetoSurviveFullPressure)
       ;;
+    r448_wa_service)
+      class=com.fluvi.app.lockscreen.KeyguardR447HandoffServiceInstrumentationTest
+      methods=(selectedWidgetsAnywhereUsesIndependentSampleFrame)
+      ;;
     r446_stock|r446_stock_observed|r447_stock_observed)
       class=com.fluvi.app.lockscreen.KeyguardR446StockServiceInstrumentationTest
       methods=(actualStockWakeUsesOwnerPrintAndStops)
