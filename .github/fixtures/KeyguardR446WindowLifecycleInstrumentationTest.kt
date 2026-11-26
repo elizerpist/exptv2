@@ -194,13 +194,6 @@ class KeyguardR446WindowLifecycleInstrumentationTest {
             val geometry = KeyguardOverlayGeometry(size, size, hostBounds.left + x, hostBounds.top + y,
                 KeyguardUsableBounds(hostBounds.left, hostBounds.top, hostBounds.right, hostBounds.bottom),
                 KeyguardCardCardPosition(.5f), KeyguardCardOrbPosition(.5f, .5f))
-            val ticket = main {
-                owner.arm(1, "fixture-capture")
-                owner.screenOff()
-                check(owner.wake(1, "fixture-capture"))
-                checkNotNull(owner.issue(1, "fixture-capture", 1, 1, 1, target, SystemClock.uptimeMillis()))
-            }
-            val testToken = ticket
             val touchX = orbBounds.left + size / 8
             val touchY = orbBounds.centerY()
             shell("input tap $touchX $touchY")
@@ -212,6 +205,12 @@ class KeyguardR446WindowLifecycleInstrumentationTest {
                 check(actual.prepare(checkNotNull(windowActivity.display), profile, artifact))
             }
             waitFor("embedded input region was prepared") { main { checkNotNull(presenter).inputReadyForInstrumentation() } }
+            val testToken = main {
+                owner.arm(1, "fixture-capture")
+                owner.screenOff()
+                check(owner.wake(1, "fixture-capture"))
+                checkNotNull(owner.issue(1, "fixture-capture", 1, 1, 1, target, SystemClock.uptimeMillis()))
+            }
             main {
                 val actual = checkNotNull(presenter)
                 assertEquals("NOT REACHED: controlled owner was revoked before show",
