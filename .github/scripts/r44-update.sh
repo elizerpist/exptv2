@@ -281,7 +281,8 @@ import re,sys,xml.etree.ElementTree as ET
 try:
     root=ET.parse(sys.argv[1]).getroot()
     for n in root.iter():
-        if any(sys.argv[2] in n.attrib.get(k,'') for k in ('text','content-desc')):
+        if any((sys.argv[2].casefold() in n.attrib.get(k,'').casefold() if sys.argv[3] == 'r449-freeze'
+                else sys.argv[2] in n.attrib.get(k,'')) for k in ('text','content-desc')):
             # A clipped or temporarily loading Flutter choice can still be
             # exposed by semantics while it is not actionable. Never count a
             # tap on that node as a route-selection attempt.
@@ -369,7 +370,7 @@ PY
       adb exec-out cat /sdcard/r449-reopen.xml > "$out/ui-r449-reopen.xml" 2>/dev/null || true
       if ! grep -Fq 'ZÁRKÉPERNYŐ' "$out/ui-r449-reopen.xml"; then tap_label 'Debug log' entry; fi
       tap_label 'ZÁRKÉPERNYŐ' tab
-      tap_label 'Próba leállítása és riport megtartása' r449-freeze
+      tap_label 'leállítás' r449-freeze
       sleep 2
       adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_keyguard_r448_comparison.xml > "$out/r449-comparison.xml" 2>/dev/null || true
       python3 - "$out/r449-comparison.xml" "$R449_UI_ROUTE" > "$out/r449-result.txt" <<'PY'
