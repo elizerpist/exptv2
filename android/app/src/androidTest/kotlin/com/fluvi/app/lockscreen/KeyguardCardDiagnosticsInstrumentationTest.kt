@@ -117,6 +117,17 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         val waOutput = KeyguardR446Observation(owner, 6990, 7, 0, "NOT_REQUIRED", "CLEAR", "WA_SHADER_DRAW",
             null, null, 7029, 7066, 7068, null, 7070, null, "UNOBSERVED", armGeneration = 5)
         KeyguardCardDiagnostics.recordR446(waOutput)
+        KeyguardCardDiagnostics.recordR45(KeyguardR45Observation(owner, "WIDGETS_ANYWHERE", "INTENT", 7005, detail = "ORB"))
+        KeyguardCardDiagnostics.recordR45(KeyguardR45Observation(owner, "WIDGETS_ANYWHERE", "INGRESS", 7071,
+            sequence = 4, sourceAt = 7070, eventType = 2048, changes = 0, window = 42, display = 0,
+            attribution = "SYSTEM_UI", decision = "REASSESS", phase = "VISIBLE", revision = 2))
+        KeyguardCardDiagnostics.recordR45(KeyguardR45Observation(owner, "WIDGETS_ANYWHERE", "RECOVERY", 7075,
+            decision = "ALLOW", revision = 2, readStart = 7072, readEnd = 7074, detail = "CLEAR"))
+        listOf("ATTACHED" to 7068L, "POST_ADD_CHECK_BEGIN" to 7069L, "POST_ADD_CHECK_RESULT" to 7070L,
+            "REVEAL" to 7071L, "FIRST_DRAW" to 7072L, "FIRST_SHADER_DRAW" to 7073L,
+            "CONCEAL" to 7080L, "REMOVE_RETURN" to 7082L, "TERMINAL" to 7083L).forEach { (stage, at) ->
+            KeyguardCardDiagnostics.recordR45(KeyguardR45Observation(owner, "WIDGETS_ANYWHERE", stage, at, detail = "test"))
+        }
         repeat(150) { n -> KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure",
             diagnosticContext = owner, requestId = 1000L + n, observedUptimeMs = 7100L + n) }
         val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
@@ -125,6 +136,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         val wa = report.lineSequence().single { it.startsWith("R44_8_WA ") }
         val admitted = report.lineSequence().single { it.startsWith("R44_9_ADMISSION ") }
         val sample = report.lineSequence().single { it.startsWith("R44_6_SAMPLE ") }
+        val life = report.lineSequence().single { it.startsWith("R45_LIFECYCLE ") }
+        val event = report.lineSequence().single { it.startsWith("R45_EVENT ") }
+        val recovery = report.lineSequence().single { it.startsWith("R45_RECOVERY ") }
         assertTrue(read, read.contains("active=40 pending=UNOBSERVED"))
         assertTrue(read, read.contains("boundaryDecision=OFFER workerRequest=41"))
         assertTrue(read, read.contains("workerStart=7012 workerEnd=7030 workerOutcome=COMPLETED"))
@@ -136,9 +150,14 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(wa, wa.contains("firstShader=7070 hide=7080 removeReturn=7082"))
         assertTrue(admitted, admitted.contains("routeConfirmed=WIDGETS_ANYWHERE") && admitted.contains("decision=ALLOW"))
         assertTrue(sample, sample.contains("req=0") && sample.contains("issue=7029") && sample.contains("frame=7070"))
+        assertTrue(life, life.contains("attachedHidden=7068") && life.contains("reveal=7071") &&
+            life.contains("firstDraw=7072") && life.contains("firstShader=7073") && life.contains("terminal=test"))
+        assertTrue(event, event.contains("seq=4") && event.contains("decision=REASSESS"))
+        assertTrue(recovery, recovery.contains("read=7072/7074") && recovery.contains("result=ALLOW"))
         assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
         KeyguardCardDiagnostics.recordR448SystemVeto(veto.copy(requestId = 101))
         KeyguardCardDiagnostics.recordR449Admission(admission.copy(reason = "LATE"))
+        KeyguardCardDiagnostics.recordR45(KeyguardR45Observation(owner, "WIDGETS_ANYWHERE", "TERMINAL", 9999, detail = "LATE"))
         frame("FIRST_SHADER_DRAW", 9999)
         assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
     }

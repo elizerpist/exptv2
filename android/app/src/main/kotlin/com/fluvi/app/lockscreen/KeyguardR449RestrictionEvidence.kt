@@ -6,7 +6,8 @@ import android.view.accessibility.AccessibilityWindowInfo
  * escapes the reader. Absence becomes CLEAR only when the relevant inventory
  * and all its SystemUI roots were actually read to completion. */
 internal object KeyguardR449RestrictionEvidence {
-    data class Result(val exclusions: KeyguardR448Admission.Exclusions, val reason: String)
+    data class Result(val exclusions: KeyguardR448Admission.Exclusions, val reason: String,
+                      val lower: List<KeyguardR45LowerWindow> = emptyList())
     data class UnresolvedUpper(val host: Int, val upper: Int)
 
     /** A scheduling hint, never permission to draw. It is only produced when
@@ -84,6 +85,11 @@ internal object KeyguardR449RestrictionEvidence {
             ambiguousUpper -> "UPPER_UNKNOWN"
             else -> "CLEAR"
         }
-        return Result(result, reason)
+        val lower = if (covered && !credential && !shade && !power && !foreign && host != null) primary.asSequence()
+            .filter { it !== host && it.layer < host.layer && it.windowId >= 0 &&
+                it.r444Active == false && it.r444Focused == false && it.packageName != null }
+            .take(8).map { KeyguardR45LowerWindow(it.windowId, it.displayId, requireNotNull(it.packageName)) }.toList()
+        else emptyList()
+        return Result(result, reason, lower)
     }
 }

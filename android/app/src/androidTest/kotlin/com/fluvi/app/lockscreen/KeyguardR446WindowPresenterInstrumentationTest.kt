@@ -242,6 +242,25 @@ class KeyguardR446WindowPresenterInstrumentationTest {
             }
             var attempt = 0
             waitFor("reference A pixels outside opaque upper window") { matches(reference.a, "a-${attempt++}") }
+            main { assertTrue("exact direct child concealed", checkNotNull(presenter).conceal(testToken)) }
+            var hiddenAttempt = 0
+            waitFor("concealed direct child restores the underlay") {
+                val shot = checkNotNull(ui.takeScreenshot())
+                try {
+                    save("r45-direct-concealed-${hiddenAttempt++}", shot)
+                    var differences = 0
+                    for (yy in 0 until size step 4) for (xx in 0 until size step 4) {
+                        val sx = orbBounds.left + xx; val sy = orbBounds.top + yy
+                        if (sx in 0 until shot.width && sy in 0 until shot.height &&
+                            shot.getPixel(sx, sy) != checkNotNull(underlay).getPixel(sx, sy)) differences++
+                    }
+                    differences < 10
+                } finally { shot.recycle() }
+            }
+            main { assertTrue("freshly allowed direct child resumes", checkNotNull(presenter).resume(
+                testToken, valid = { true }, stillOwned = { true }, onInvalidated = {})) }
+            attempt = 0
+            waitFor("same direct child resumes A pixels") { matches(reference.a, "resume-a-${attempt++}") }
             main { phase.set(KeyguardR22VisualCalibration.timeB); checkNotNull(presenter).frameForInstrumentation() }
             attempt = 0
             waitFor("reference B live pixels outside opaque upper window") { matches(reference.b, "b-${attempt++}") }

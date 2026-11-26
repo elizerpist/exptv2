@@ -48,7 +48,20 @@ internal class KeyguardR448WidgetsAnywhereFrame(
     private var event: ((Event) -> Unit)? = null
 
     fun isAttached(): Boolean = attached && leaseLive && view?.isAttachedToWindow == true
+    fun hasOwnedWindow(): Boolean = attached && leaseLive
     fun isRetired(): Boolean = view == null && !attached && !removalFailed
+
+    /** The inventory may exempt only the exact current overlay, never every
+     * window with our package name. An unavailable ID remains unavailable. */
+    fun ownIdentity(owner: Owner): KeyguardOwnOverlayIdentity? {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        val current = view?.takeIf { viewOwner == owner && leaseLive && attached && it.isAttachedToWindow } ?: return null
+        val display = current.display?.displayId ?: return null
+        val node = current.createAccessibilityNodeInfo() ?: return null
+        return try {
+            node.windowId.takeIf { it >= 0 }?.let { KeyguardOwnOverlayIdentity(it, display, owner.material) }
+        } finally { @Suppress("DEPRECATION") node.recycle() }
+    }
 
     private fun emit(owner: Owner, stage: String, detail: String? = null) {
         runCatching { event?.invoke(Event(owner, stage, SystemClock.uptimeMillis(), detail)) }
@@ -84,7 +97,12 @@ internal class KeyguardR448WidgetsAnywhereFrame(
 
     /** Preparation cannot display a frame or replace an unretired window. */
     fun prepare(owner: Owner, profile: KeyguardMaterialProfile, full: Boolean,
-                artifact: KeyguardShaderArtifact, observer: (Event) -> Unit): Boolean {
+                artifact: KeyguardShaderArtifact, observer: (Event) -> Unit): Boolean =
+        prepare(owner, profile, full, artifact, false, observer)
+
+    fun prepare(owner: Owner, profile: KeyguardMaterialProfile, full: Boolean,
+                artifact: KeyguardShaderArtifact, diagnosticCircle: Boolean,
+                observer: (Event) -> Unit): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (view != null || attached || removalFailed) return false
         return runCatching {
@@ -95,6 +113,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                 alpha = 1f
                 setScene(KeyguardMaterialScene(profile, full, System.nanoTime()), enabled = true)
                 setBootstrapActive(false)
+                setR45DiagnosticCircle(diagnosticCircle)
                 check(installPreparedShader(artifact) in setOf(
                     KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED,
                     KeyguardHeaderMaterialView.ProgramPreparationResult.REUSED))
@@ -134,8 +153,12 @@ internal class KeyguardR448WidgetsAnywhereFrame(
             fun beginAdd(confirmed: Boolean) {
             if (view !== material || viewOwner != owner || showSequence != sequence) return
             validating = false
-            if (!confirmed || view !== material || viewOwner != owner || !leaseLive || attached || removalFailed ||
-                !runCatching(valid).getOrDefault(false)) {
+            if (!confirmed || !runCatching(valid).getOrDefault(false)) {
+                conceal(owner, "PRE_ADD_UNVERIFIED")
+                emit(owner, "PRE_ADD_UNVERIFIED")
+                return
+            }
+            if (view !== material || viewOwner != owner || !leaseLive || attached || removalFailed) {
                 emit(owner, "DENIED_SECOND_CHECK")
                 return
             }
@@ -160,9 +183,14 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                     runCatching { event?.invoke(Event(owner, "FIRST_SHADER_DRAW", at)) }
                 }
             }
+            material.onNextDrawForDiagnostic = { at ->
+                if (view === material && viewOwner == owner && leaseLive && attached && material.visibility == View.VISIBLE)
+                    runCatching { event?.invoke(Event(owner, "FIRST_DRAW", at)) }
+            }
             material.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
                 override fun onViewAttachedToWindow(v: View) {
-                    if (view === material && viewOwner == owner && leaseLive) emit(owner, "ATTACHED")
+                    if (view === material && viewOwner == owner && leaseLive)
+                        emit(owner, "ATTACHED", "visibility=${v.visibility},alpha=${v.alpha}")
                 }
                 override fun onViewDetachedFromWindow(v: View) {
                     v.removeOnAttachStateChangeListener(this)
@@ -176,6 +204,10 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                 attached = true
                 wm.addView(material, params)
                 emit(owner, "ADD_RETURN")
+                // A concurrent ingress may already have concealed this exact
+                // owner and started a fresh read. The old add callback must
+                // not retire that suspended owner or reveal it.
+                if (showSequence != sequence) return
                 if (viewOwner != owner || !runCatching(valid).getOrDefault(false)) {
                     retire(owner, "POST_ADD_REVOKED")
                     return
@@ -183,26 +215,20 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                 fun beginFrames(confirmedAfterAdd: Boolean) {
                 if (view !== material || viewOwner != owner || showSequence != sequence) return
                 validating = false
+                emit(owner, "POST_ADD_CHECK_RESULT", confirmedAfterAdd.toString())
                 if (!confirmedAfterAdd || view !== material || viewOwner != owner || !leaseLive || !attached ||
                     !runCatching(valid).getOrDefault(false)) {
-                    if (view === material && viewOwner == owner) retire(owner, "POST_ADD_REVOKED")
+                    if (view === material && viewOwner == owner && leaseLive) {
+                        conceal(owner, "POST_ADD_UNVERIFIED")
+                        emit(owner, "POST_ADD_UNVERIFIED")
+                    }
                     return
                 }
-                material.visibility = View.VISIBLE
-                material.alpha = 1f
-                val callback = object : Choreographer.FrameCallback {
-                    override fun doFrame(frameTimeNanos: Long) {
-                        if (view !== material || viewOwner != owner || !leaseLive || !attached) return
-                        material.frame(frameTimeNanos)
-                        Choreographer.getInstance().postFrameCallback(this)
-                    }
-                }
-                frame = callback
-                material.frame(System.nanoTime())
-                Choreographer.getInstance().postFrameCallback(callback)
+                reveal(owner, material)
                 }
                 if (validateAsync == null) beginFrames(true) else {
                     validating = true
+                    emit(owner, "POST_ADD_CHECK_BEGIN")
                     try { validateAsync { allowed -> main.post { beginFrames(allowed) } } }
                     catch (_: Exception) { beginFrames(false) }
                 }
@@ -225,6 +251,68 @@ internal class KeyguardR448WidgetsAnywhereFrame(
             pending = null
             emit(owner, "DEBOUNCE_POST_FAILED")
             return false
+        }
+        return true
+    }
+
+    private fun reveal(owner: Owner, material: KeyguardHeaderMaterialView) {
+        material.visibility = View.VISIBLE
+        material.alpha = 1f
+        emit(owner, "REVEAL", "visibility=${material.visibility},alpha=${material.alpha}")
+        val callback = object : Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                if (view !== material || viewOwner != owner || !leaseLive || !attached ||
+                    material.visibility != View.VISIBLE) return
+                material.frame(frameTimeNanos)
+                Choreographer.getInstance().postFrameCallback(this)
+            }
+        }
+        frame = callback
+        material.frame(System.nanoTime())
+        Choreographer.getInstance().postFrameCallback(callback)
+    }
+
+    /** Conceal synchronously on an ambiguous change, while retaining this
+     * exact attached owner for a bounded, fresh revalidation. */
+    fun conceal(owner: Owner, reason: String): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        val material = view ?: return false
+        if (viewOwner != owner || !leaseLive || removalFailed) return false
+        showSequence++
+        pending?.let { main.removeCallbacks(it); emit(owner, "DEBOUNCE_CANCELED") }
+        pending = null
+        validating = false
+        frame?.let { Choreographer.getInstance().removeFrameCallback(it) }
+        frame = null
+        material.visibility = View.INVISIBLE
+        material.alpha = 0f
+        emit(owner, "CONCEAL", reason)
+        return true
+    }
+
+    /** A concealed attached view can be exposed only after a fresh, current
+     * system check; a late completion cannot revive a replaced owner. */
+    fun resumeChecked(owner: Owner, valid: () -> Boolean,
+                      validateAsync: (((Boolean) -> Unit) -> Unit)): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        val material = view ?: return false
+        if (viewOwner != owner || !leaseLive || !attached || removalFailed || validating) return false
+        val sequence = ++showSequence
+        validating = true
+        emit(owner, "RESUME_CHECK_BEGIN")
+        try {
+            validateAsync { allowed -> main.post {
+                if (view !== material || viewOwner != owner || showSequence != sequence) return@post
+                validating = false
+                emit(owner, "RESUME_CHECK_RESULT", allowed.toString())
+                if (allowed && leaseLive && attached && !removalFailed && runCatching(valid).getOrDefault(false))
+                    reveal(owner, material)
+                else emit(owner, "RESUME_UNVERIFIED")
+            } }
+        } catch (_: Exception) {
+            validating = false
+            emit(owner, "RESUME_CHECK_RESULT", "exception")
+            emit(owner, "RESUME_UNVERIFIED")
         }
         return true
     }
@@ -255,6 +343,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         frame = null
         val old = view ?: return false
         old.onNextShaderDrawForDiagnostic = null
+        old.onNextDrawForDiagnostic = null
         old.visibility = View.INVISIBLE
         old.alpha = 0f
         emit(owner, "HIDE", reason)

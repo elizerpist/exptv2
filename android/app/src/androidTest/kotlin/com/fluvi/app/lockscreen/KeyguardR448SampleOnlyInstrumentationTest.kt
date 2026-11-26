@@ -24,7 +24,10 @@ import org.junit.runner.RunWith
 /** Guard control for the sample-only build variant, not an optical privacy pass. */
 @RunWith(AndroidJUnit4::class)
 class KeyguardR448SampleOnlyInstrumentationTest {
-    @Test fun normalPresentationIsClosedAndFixedSampleCanArm() {
+    @Test fun normalPresentationIsClosedAndFixedSampleCanArm() = exercise(KeyguardR448DisplayRoute.FLUVI_STREAM)
+    @Test fun waSampleSessionKeepsItsOwnWakeAuthority() = exercise(KeyguardR448DisplayRoute.WIDGETS_ANYWHERE)
+
+    private fun exercise(route: KeyguardR448DisplayRoute) {
         assertEquals(37, Build.VERSION.SDK_INT)
         val ins = InstrumentationRegistry.getInstrumentation()
         val context = ins.targetContext
@@ -61,13 +64,14 @@ class KeyguardR448SampleOnlyInstrumentationTest {
             waitFor("unlocked setup") { !context.getSystemService(KeyguardManager::class.java).isKeyguardLocked }
             main { FluviKeyguardCardSettings.update(context, mapOf("requested" to true,
                 "showFinancialDetails" to true, "presentationMode" to "orb", "animationMode" to "orbOnly")) }
-            assertTrue(KeyguardR448DisplayRouteStore.write(context, KeyguardR448DisplayRoute.FLUVI_STREAM))
+            assertTrue(KeyguardR448DisplayRouteStore.write(context, route))
             val others = services.orEmpty().split(':').filter { it.isNotBlank() && ComponentName.unflattenFromString(it) != component }
             secure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, (others + component.flattenToString()).joinToString(":"))
             secure(Settings.Secure.ACCESSIBILITY_ENABLED, "1")
             waitFor("real service") { FluviKeyguardCardServiceRegistry.connected }
             service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
             val owner = checkNotNull(service)
+            assertTrue(main { owner.setR448DisplayRoute(route) })
             assertEquals(Triple(true, false, false), main { owner.r448SafetyForInstrumentation() })
             val candidate = main {
                 KeyguardR44Trial.set(true, true)
@@ -97,15 +101,17 @@ class KeyguardR448SampleOnlyInstrumentationTest {
             val sessionFailure = AtomicReference<Throwable?>()
             ins.runOnMainSync { CoroutineScope(Dispatchers.Main.immediate).launch {
                 try { sessionReceipt.set(owner.startR449SampleCapture("r449-session-test", "debug", "LIGHT",
-                    "SESSION", "FLUVI_STREAM")) }
+                    "SESSION", route.name)) }
                 catch (error: Throwable) { sessionFailure.set(error) }
                 finally { sessionDone.countDown() }
             } }
             assertTrue("NOT REACHED: explicit session arm", sessionDone.await(30, TimeUnit.SECONDS))
             sessionFailure.get()?.let { throw it }
             assertEquals("SESSION", sessionReceipt.get()["actionKind"])
-            assertEquals("FLUVI_STREAM", sessionReceipt.get()["routeConfirmed"])
+            assertEquals(route.name, sessionReceipt.get()["routeConfirmed"])
             assertEquals(true, sessionReceipt.get()["printArmed"])
+            if (route == KeyguardR448DisplayRoute.WIDGETS_ANYWHERE)
+                assertNull("WA never prepares the direct presenter", main { owner.r446PresenterForInstrumentation() })
             shell("locksettings set-disabled false")
             shell("input keyevent KEYCODE_SLEEP")
             waitFor("first session screen off") { !context.getSystemService(PowerManager::class.java).isInteractive }
@@ -116,6 +122,15 @@ class KeyguardR448SampleOnlyInstrumentationTest {
             waitFor("session rearmed for a new wake") {
                 val status = main { owner.r442SampleStatus() }
                 status["actionKind"] == "SESSION" && status["printState"] == "WAIT_OFF" && status["printArmed"] == true
+            }
+            shell("input keyevent KEYCODE_SLEEP")
+            waitFor("second session screen off") { !context.getSystemService(PowerManager::class.java).isInteractive }
+            waitFor("second arm observes screen off") { main { owner.r442SampleStatus()["printState"] == "WAIT_WAKE" } }
+            shell("input keyevent KEYCODE_WAKEUP")
+            waitFor("second session locked wake") { context.getSystemService(KeyguardManager::class.java).isKeyguardLocked }
+            waitFor("second wake has its own decision") {
+                val status = main { owner.r442SampleStatus() }
+                status["actionKind"] == "SESSION" && status["printState"] in setOf("WAIT_READ", "ISSUED", "CONSUMED")
             }
         } finally {
             service?.let { owner -> runCatching { main { owner.stopR444Trial("safeTestCleanup") } } }

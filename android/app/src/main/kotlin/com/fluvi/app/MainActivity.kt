@@ -380,6 +380,7 @@ class MainActivity : FlutterActivity() {
                                     values?.get("build") as? String, values?.get("buildMode") as? String,
                                     values?.get("captureMode") as? String, values?.get("actionKind") as? String,
                                     values?.get("routeRequested") as? String,
+                                    values?.get("diagnosticCircle") == true,
                                 ) else if (call.method == "startR446PrintCapture") service.startR446PrintCapture(
                                     values?.get("build") as? String, values?.get("buildMode") as? String,
                                     values?.get("captureMode") as? String,

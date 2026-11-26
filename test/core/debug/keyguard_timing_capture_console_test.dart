@@ -126,6 +126,7 @@ void main() {
       'routeConfirmed': 'WIDGETS_ANYWHERE',
       'routeRequested': 'WIDGETS_ANYWHERE',
       'actionKind': 'ONE_WAKE',
+      'sampleShape': 'ORB',
     };
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(runtime, (call) async {
@@ -145,6 +146,10 @@ void main() {
             },
             'startR449SampleCapture' => () {
               enabled = true;
+              receipt['sampleShape'] =
+                  (call.arguments as Map)['diagnosticCircle'] == true
+                  ? 'CIRCLE'
+                  : 'ORB';
               return <String, Object?>{
                 ...receipt,
                 'snapshot': response('REC', 'LIVE'),
@@ -166,6 +171,11 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
     await tester.pumpAndSettle();
+    final circle = find.byKey(const ValueKey('debug-console-r45-circle'));
+    await tester.ensureVisible(circle);
+    expect(tester.widget<SwitchListTile>(circle).value, isFalse);
+    await tester.tap(circle);
+    await tester.pumpAndSettle();
     final button = find.byKey(const ValueKey('debug-console-r449-one-wake'));
     await tester.ensureVisible(button);
     await tester.tap(button);
@@ -175,7 +185,9 @@ void main() {
     );
     expect((request.arguments as Map)['routeRequested'], 'WIDGETS_ANYWHERE');
     expect((request.arguments as Map)['actionKind'], 'ONE_WAKE');
+    expect((request.arguments as Map)['diagnosticCircle'], isTrue);
     expect(find.text('Egyszeri rajzpróba előkészítve.'), findsOneWidget);
+    expect(find.text('Natív minta: tömör kör'), findsOneWidget);
   });
 
   testWidgets(

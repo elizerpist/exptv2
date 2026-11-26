@@ -810,6 +810,7 @@ internal object KeyguardCardDiagnostics {
         var r449Last: KeyguardR449AdmissionObservation? = null,
         var r449RecoveryFirst: KeyguardR449RecoveryObservation? = null,
         var r449RecoveryLast: KeyguardR449RecoveryObservation? = null,
+        var r45Trace: KeyguardR45Trace? = null,
         var r447LatestOrdinal: Long = 0,
         var r447DecisionCount: Int = 0,
         var firstExclusionSignalAtUptimeMs: Long? = null,
@@ -1792,6 +1793,48 @@ internal object KeyguardCardDiagnostics {
                     attempt.wakeEpoch == owner.originWakeEpoch) {
                     if (attempt.r449RecoveryFirst == null) attempt.r449RecoveryFirst = observation
                     attempt.r449RecoveryLast = observation
+                }
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
+    internal fun recordR45(observation: KeyguardR45Observation) {
+        val token = ingress ?: return
+        val owner = observation.context
+        if (owner.captureId != token.id || owner.attemptId == null) return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
+                    ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
+                if (attempt == null || attempt.serviceSession != owner.serviceSession ||
+                    attempt.wakeEpoch != owner.originWakeEpoch) return@synchronized
+                val trace = attempt.r45Trace ?: KeyguardR45Trace().also { attempt.r45Trace = it }
+                when (observation.stage) {
+                    "INTENT" -> if (trace.shape == null) trace.shape = observation.detail
+                    "INGRESS" -> {
+                        if (trace.firstEvent == null) trace.firstEvent = observation
+                        when (observation.decision) {
+                            "IGNORE" -> trace.ignored = (trace.ignored + 1).coerceAtMost(9999)
+                            "REASSESS" -> trace.unknown = (trace.unknown + 1).coerceAtMost(9999)
+                            else -> trace.terminalEvents = (trace.terminalEvents + 1).coerceAtMost(9999)
+                        }
+                    }
+                    "RECOVERY" -> if (trace.firstRecovery == null) trace.firstRecovery = observation
+                    "ATTACHED" -> if (trace.attachedHidden == null) trace.attachedHidden = observation.at
+                    "POST_ADD_CHECK_BEGIN" -> if (trace.postCheckBegin == null) trace.postCheckBegin = observation.at
+                    "POST_ADD_CHECK_RESULT" -> if (trace.postCheckEnd == null) {
+                        trace.postCheckEnd = observation.at; trace.postCheckResult = observation.detail
+                    }
+                    "REVEAL" -> { if (trace.reveal == null) { trace.reveal = observation.at; trace.revealState = observation.detail }
+                        if (trace.conceal != null) trace.resumed = (trace.resumed + 1).coerceAtMost(9999) }
+                    "FIRST_DRAW" -> if (trace.firstDraw == null) trace.firstDraw = observation.at
+                    "FIRST_SHADER_DRAW" -> if (trace.firstShader == null) trace.firstShader = observation.at
+                    "CONCEAL" -> { if (trace.conceal == null) trace.conceal = observation.at
+                        trace.suspended = (trace.suspended + 1).coerceAtMost(9999) }
+                    "REMOVE_RETURN" -> if (trace.remove == null) trace.remove = observation.at
+                    "TERMINAL" -> if (trace.terminal == null) trace.terminal = observation
                 }
             }
         }
@@ -3455,6 +3498,19 @@ internal object KeyguardCardDiagnostics {
                 else -> "A minta megjelenítése még nem figyelhető meg."
             }
             select("a${attempt.id}:r449outcome", "R44_9_OUTCOME capture=${active.id} wake=${attempt.wakeEpoch} routeRequested=$route routeConfirmed=${active.r449ConfirmedRoute ?: "UNOBSERVED"} action=$action intent=${active.r449IntentAt ?: "UNOBSERVED"} arm=${attempt.r447Arm?.wakeArmState ?: "UNOBSERVED"} backend=${progress?.backend ?: "NOT_ATTEMPTED"} issue=${progress?.issuedAt ?: "UNOBSERVED"} frame=${progress?.frameAt ?: "UNOBSERVED"} terminal=${terminal?.withdrawReason ?: "UNOBSERVED"} physical=UNOBSERVED clock=uptimeMs\nR44_9_HU $status\n", attempt.id)
+            attempt.r45Trace?.let { t ->
+                val first = t.firstEvent
+                val recovery = t.firstRecovery
+                val stopped = t.terminal
+                val hu = when {
+                    t.reveal != null -> "A minta láthatóra állítva; a képernyőn való láthatóság nem mért."
+                    t.attachedHidden != null -> "Az ablak csatolva, még rejtve."
+                    else -> "A minta láthatóra állítása nem figyelhető meg."
+                }
+                select("a${attempt.id}:r45life", "R45_LIFECYCLE wake=${attempt.wakeEpoch} route=${active.r449ConfirmedRoute ?: "UNOBSERVED"} shape=${t.shape ?: "UNOBSERVED"} attachedHidden=${t.attachedHidden ?: "UNOBSERVED"} postCheck=${t.postCheckBegin ?: "UNOBSERVED"}/${t.postCheckEnd ?: "UNOBSERVED"}/${t.postCheckResult ?: "UNOBSERVED"} reveal=${t.reveal ?: "UNOBSERVED"} revealState=${t.revealState ?: "UNOBSERVED"} firstDraw=${t.firstDraw ?: "UNOBSERVED"} firstShader=${t.firstShader ?: "UNOBSERVED"} conceal=${t.conceal ?: "UNOBSERVED"} remove=${t.remove ?: "UNOBSERVED"} ignored=${t.ignored} unknown=${t.unknown} terminalEvents=${t.terminalEvents} suspended=${t.suspended} resumed=${t.resumed} terminal=${stopped?.detail ?: "UNOBSERVED"} terminalAt=${stopped?.at ?: "UNOBSERVED"} optical=UNOBSERVED clock=uptimeMs\nR45_HU $hu\n", attempt.id)
+                if (first != null) select("a${attempt.id}:r45event", "R45_EVENT wake=${attempt.wakeEpoch} seq=${first.sequence ?: "UNOBSERVED"} source=${first.sourceAt ?: "UNOBSERVED"} received=${first.at} type=${first.eventType ?: "UNOBSERVED"} mask=${first.changes ?: "UNOBSERVED"} window=${first.window ?: "UNOBSERVED"} display=${first.display ?: "UNOBSERVED"} origin=${first.attribution} decision=${first.decision} phase=${first.phase} revision=${first.revision} clock=uptimeMs\n", attempt.id)
+                if (recovery != null) select("a${attempt.id}:r45recovery", "R45_RECOVERY wake=${attempt.wakeEpoch} route=${recovery.route} revision=${recovery.revision} read=${recovery.readStart ?: "UNOBSERVED"}/${recovery.readEnd ?: "UNOBSERVED"} result=${recovery.decision} reason=${recovery.detail} clock=uptimeMs\n", attempt.id)
+            }
             listOfNotNull(attempt.r449RecoveryFirst, attempt.r449RecoveryLast).distinct().forEachIndexed { index, r ->
                 select("a${attempt.id}:r449retry:$index", "R44_9_FLUVI_RECOVERY wake=${r.wake} arm=${r.arm} initialReq=${r.initialRequest} host=${r.host} upper=${r.upper} inventory=${r.inventoryAt} stage=${r.stage} at=${r.at} successor=${r.successor ?: "UNOBSERVED"} clock=uptimeMs\n", attempt.id)
             }

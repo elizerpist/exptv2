@@ -187,13 +187,34 @@ class KeyguardR448FrameInstrumentationTest {
                 assertTrue(checkNotNull(frame).requestShow(owner, geometry) { true })
             }
             waitFor("actual accessibility window and shader draw") {
-                synchronized(events) { events.any { it.stage == "ADD_RETURN" } && events.any { it.stage == "FIRST_SHADER_DRAW" } }
+                synchronized(events) {
+                    events.any { it.owner == owner && it.stage == "ADD_RETURN" } &&
+                        events.any { it.owner == owner && it.stage == "FIRST_SHADER_DRAW" }
+                }
             }
             val observed = synchronized(events) { events.toList() }
             assertEquals("actual view bounds match the independent crop", bounds, main { checkNotNull(frame).measuredBoundsForInstrumentation() })
             assertEquals("one actual add for the active owner", 1, observed.count { it.owner == owner && it.stage == "ADD_BEGIN" })
             assertTrue("duplicate did not reset timer", observed.any { it.stage == "COALESCED" })
             reference.awaitServiceMatch("r448-controlled-A", bounds, reference.a, stableUnderlay)
+            val oldResume = AtomicReference<((Boolean) -> Unit)?>(null)
+            val currentResume = AtomicReference<((Boolean) -> Unit)?>(null)
+            val revealCount = synchronized(events) { events.count { it.owner == owner && it.stage == "REVEAL" } }
+            main {
+                assertTrue(checkNotNull(frame).conceal(owner, "CONTROL_UNKNOWN"))
+                assertTrue(checkNotNull(frame).resumeChecked(owner, { true }) { oldResume.set(it) })
+                assertTrue(checkNotNull(frame).conceal(owner, "CONTROL_NEWER_REVISION"))
+                assertTrue(checkNotNull(frame).resumeChecked(owner, { true }) { currentResume.set(it) })
+            }
+            checkNotNull(oldResume.get())(true)
+            SystemClock.sleep(150)
+            assertEquals("old validation cannot reveal the new revision", revealCount,
+                synchronized(events) { events.count { it.owner == owner && it.stage == "REVEAL" } })
+            checkNotNull(currentResume.get())(true)
+            waitFor("same owner resumes after fresh validation") {
+                synchronized(events) { events.count { it.owner == owner && it.stage == "REVEAL" } == revealCount + 1 }
+            }
+            reference.awaitServiceMatch("r45-controlled-resume-A", bounds, reference.a, stableUnderlay)
             phase.set(KeyguardR22VisualCalibration.timeB)
             reference.awaitServiceMatch("r448-controlled-B", bounds, reference.b, stableUnderlay)
             shell("input tap ${bounds.centerX()} ${bounds.centerY()}")

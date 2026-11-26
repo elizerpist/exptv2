@@ -249,6 +249,8 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     /** One timestamp per physical attach is enough for wake diagnostics; this
      * is not a per-frame observation hook. */
     var onFirstShaderDraw: ((Long) -> Unit)? = null
+    /** Actual View.onDraw entry for an explicitly armed public sample. */
+    var onNextDrawForDiagnostic: ((Long) -> Unit)? = null
     /** Optional one-shot observation for an explicitly armed sample host. */
     var onNextShaderDrawForDiagnostic: ((Long) -> Unit)? = null
     /** Once per actually drawn current scene, used to qualify transitions. */
@@ -270,6 +272,14 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val fallbackPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val bootstrapPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val r45CirclePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private var r45DiagnosticCircle = false
+
+    /** Public sample control only. The normal renderer keeps its prior path. */
+    fun setR45DiagnosticCircle(enabled: Boolean) {
+        r45DiagnosticCircle = enabled
+        invalidate()
+    }
 
     init {
         isClickable = false
@@ -612,6 +622,10 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        onNextDrawForDiagnostic?.let { callback ->
+            onNextDrawForDiagnostic = null
+            callback(SystemClock.uptimeMillis())
+        }
         onDrawCount += 1
         if (lastCanvasHardwareAccelerated != canvas.isHardwareAccelerated) {
             lastCanvasHardwareAccelerated = canvas.isHardwareAccelerated
@@ -620,6 +634,10 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         val scene = current
         if (!materialEnabled || scene == null || width <= 0 || height <= 0) {
             drawFallback(canvas, scene)
+            return
+        }
+        if (r45DiagnosticCircle) {
+            drawKeyguardOrbCircle(canvas, r45CirclePaint, width, height)
             return
         }
         if (bootstrapActive) {

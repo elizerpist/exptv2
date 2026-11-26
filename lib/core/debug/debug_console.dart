@@ -63,6 +63,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
   bool _r446Armed = false;
   String? _r449PrintReason;
   String? _r449Action;
+  bool _r45DiagnosticCircle = false;
+  String? _r45ConfirmedShape;
   String? _r442Reason;
   String? _r444Profile;
   bool _loadingKeyguard = false;
@@ -330,6 +332,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
           _r446Armed = _r442Active && receipt['printArmed'] == true;
           _r449PrintReason = receipt['printReason']?.toString();
           _r449Action = receipt['actionKind']?.toString();
+          _r45ConfirmedShape = receipt['sampleShape']?.toString();
           _r442Reason = receipt['reason']?.toString();
           _r444Profile = _r442Active ? receipt['profile']?.toString() : null;
         });
@@ -433,6 +436,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
               mode: _keyguardCaptureMode,
               route: confirmedRoute,
               session: sampleSession,
+              diagnosticCircle: _r45DiagnosticCircle,
             );
       final rawSnapshot = receipt['snapshot'];
       final snapshot = rawSnapshot is Map<Object?, Object?>
@@ -457,6 +461,10 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                   receipt['routeRequested'] == confirmedRoute.wireValue &&
                   receipt['routeConfirmed'] == confirmedRoute.wireValue &&
                   current['routeConfirmed'] == confirmedRoute.wireValue &&
+                  receipt['sampleShape'] ==
+                      (_r45DiagnosticCircle ? 'CIRCLE' : 'ORB') &&
+                  current['sampleShape'] ==
+                      (_r45DiagnosticCircle ? 'CIRCLE' : 'ORB') &&
                   current['actionKind'] ==
                       (sampleSession ? 'SESSION' : 'ONE_WAKE'))) &&
           (!oneWakePrint ||
@@ -475,6 +483,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
           _r446Armed = confirmed && oneWakePrint;
           _r449PrintReason = current['printReason']?.toString();
           _r449Action = current['actionKind']?.toString();
+          _r45ConfirmedShape = current['sampleShape']?.toString();
           _r444Profile = confirmed ? receipt['profile']?.toString() : null;
           _r44TrialEnabled = trial['enabled'] == true;
           _r442Reason = confirmed
@@ -1343,6 +1352,26 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                         Text(
                           'Natív választás: ${_keyguardDisplayRoute!.configured == KeyguardDisplayRoute.fluviStream ? 'Fluvi adatfolyam' : 'Widgets Anywhere'} · Aktív: ${_keyguardDisplayRoute!.active}',
                         ),
+                        const Text(
+                          'Egy ébresztésnél a minta legfeljebb 2 másodpercig jelenhet meg.',
+                        ),
+                        SwitchListTile(
+                          key: const ValueKey('debug-console-r45-circle'),
+                          title: const Text('Kontrasztpróba: tömör kör'),
+                          subtitle: const Text(
+                            'Kikapcsolva a megszokott animált mintaorb látható.',
+                          ),
+                          value: _r45DiagnosticCircle,
+                          onChanged: _loadingKeyguard || _r442Active
+                              ? null
+                              : (value) => setState(
+                                  () => _r45DiagnosticCircle = value,
+                                ),
+                        ),
+                        if (_r442Active && _r45ConfirmedShape != null)
+                          Text(
+                            'Natív minta: ${_r45ConfirmedShape == 'CIRCLE' ? 'tömör kör' : 'animált orb'}',
+                          ),
                         if (_r44TrialAvailable)
                           FilledButton(
                             key: const ValueKey('debug-console-r449-one-wake'),

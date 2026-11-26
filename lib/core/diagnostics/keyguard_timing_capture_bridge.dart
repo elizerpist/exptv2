@@ -194,6 +194,7 @@ class KeyguardTimingCaptureBridge {
     required KeyguardDisplayRoute route,
     KeyguardTimingCaptureMode mode = KeyguardTimingCaptureMode.light,
     bool session = false,
+    bool diagnosticCircle = false,
   }) async {
     if (!_isAndroid()) {
       return const {'active': false, 'reason': 'unsupportedBuild'};
@@ -206,6 +207,7 @@ class KeyguardTimingCaptureBridge {
             'captureMode': mode.wireValue,
             'actionKind': session ? 'SESSION' : 'ONE_WAKE',
             'routeRequested': route.wireValue,
+            'diagnosticCircle': diagnosticCircle,
           },
         ) ??
         const {'active': false, 'reason': 'missingReceipt'};

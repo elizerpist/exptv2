@@ -38,9 +38,10 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
     private var inputReadySignal = CompletableDeferred<Boolean>()
 
     /** Invoked unlocked, after private state has been retired. */
-    fun prepare(display: Display, profile: KeyguardMaterialProfile, artifact: KeyguardShaderArtifact): Boolean {
+    fun prepare(display: Display, profile: KeyguardMaterialProfile, artifact: KeyguardShaderArtifact,
+                diagnosticCircle: Boolean = false): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
-        dispose()
+        if (dispose().errorClass != null) return false
         inputReadySignal = CompletableDeferred()
         val signal = inputReadySignal
         return runCatching {
@@ -53,6 +54,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                 setScene(KeyguardMaterialScene(sample, false, System.nanoTime()), enabled = true)
                 setBootstrapActive(false)
+                setR45DiagnosticCircle(diagnosticCircle)
                 check(installPreparedShader(artifact) in setOf(
                     KeyguardHeaderMaterialView.ProgramPreparationResult.COMPILED,
                     KeyguardHeaderMaterialView.ProgramPreparationResult.REUSED))
@@ -106,6 +108,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
      * reveals the child. The caller owns the ticket and deadline. */
     fun show(token: Any, target: KeyguardR446Target, geometry: KeyguardOverlayGeometry,
              valid: () -> Boolean, stillOwned: () -> Boolean, onInvalidated: () -> Unit = { dispose() },
+             onFirstTraversal: (Long) -> Unit = {},
              onFirstDraw: (Long) -> Unit = {}): Receipt {
         check(Looper.myLooper() == Looper.getMainLooper())
         val child = surface?.surfaceControl ?: return Receipt("NOT_PREPARED")
@@ -138,17 +141,8 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
             }
             val submitted = SystemClock.uptimeMillis()
             if (!valid()) { dispose(); return Receipt("POSTSUBMIT_REVOKED", attached, submitted) }
-            val callback = object : Choreographer.FrameCallback {
-                override fun doFrame(frameTimeNanos: Long) {
-                    if (owner !== token) return
-                    if (!stillOwned()) { onInvalidated(); return }
-                    material.frame(frameTimeNanos)
-                    Choreographer.getInstance().postFrameCallback(this)
-                }
-            }
-            frameCallback = callback
-            material.frame(System.nanoTime())
-            Choreographer.getInstance().postFrameCallback(callback)
+            material.onNextDrawForDiagnostic = { at -> if (owner === token && stillOwned()) onFirstTraversal(at) }
+            startFrames(token, material, stillOwned, onInvalidated)
             Receipt("SUBMITTED", attached, submitted)
         } catch (failure: Exception) {
             dispose()
@@ -160,6 +154,46 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
     internal fun shaderDrawCountForInstrumentation(): Int = view?.diagnostics()?.shaderDrawCount ?: 0
     internal fun frameForInstrumentation() { view?.frame(System.nanoTime()) }
 
+    private fun startFrames(token: Any, material: KeyguardHeaderMaterialView,
+                            stillOwned: () -> Boolean, onInvalidated: () -> Unit) {
+        val callback = object : Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                if (owner !== token) return
+                if (!stillOwned()) { onInvalidated(); return }
+                material.frame(frameTimeNanos)
+                Choreographer.getInstance().postFrameCallback(this)
+            }
+        }
+        frameCallback = callback
+        material.frame(System.nanoTime())
+        Choreographer.getInstance().postFrameCallback(callback)
+    }
+
+    /** Hide the exact child immediately without releasing its host. */
+    fun conceal(token: Any): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (owner !== token) return false
+        frameCallback?.let { Choreographer.getInstance().removeFrameCallback(it) }
+        frameCallback = null
+        val child = surface?.surfaceControl ?: return false
+        return runCatching { SurfaceControl.Transaction().use { it.setVisibility(child, false).apply() }; true }
+            .getOrDefault(false)
+    }
+
+    /** The service supplies freshly qualified authority for this same target. */
+    fun resume(token: Any, valid: () -> Boolean, stillOwned: () -> Boolean,
+               onInvalidated: () -> Unit): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (owner !== token || !runCatching(valid).getOrDefault(false)) return false
+        val child = surface?.surfaceControl ?: return false
+        val material = view ?: return false
+        return runCatching {
+            SurfaceControl.Transaction().use { it.setVisibility(child, true).apply() }
+            if (!valid()) { conceal(token); false }
+            else { startFrames(token, material, stillOwned, onInvalidated); true }
+        }.getOrDefault(false)
+    }
+
     /** Hide/detach this exact child before releasing its host. */
     fun dispose(): Retirement {
         check(Looper.myLooper() == Looper.getMainLooper())
@@ -169,7 +203,6 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         frameCallback?.let { Choreographer.getInstance().removeFrameCallback(it) }
         frameCallback = null
         val oldSurface = surface
-        surface = null
         var hideReturn: Long? = null
         var errorClass: String? = null
         if (oldSurface != null) runCatching {
@@ -178,16 +211,20 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
             }
         }.onSuccess { hideReturn = SystemClock.uptimeMillis() }
             .onFailure { errorClass = it.javaClass.simpleName.take(48) }
+        if (errorClass != null) return Retirement(hideReturn, null, errorClass)
         view?.onFirstShaderDraw = null
         view?.onNextShaderDrawForDiagnostic = null
-        view = null
+        view?.onNextDrawForDiagnostic = null
         runCatching { oldSurface?.release() }.onFailure { if (errorClass == null) errorClass = it.javaClass.simpleName.take(48) }
         val oldHost = host
-        host = null
         var releaseReturn: Long? = null
         if (oldHost != null) runCatching { oldHost.release() }
             .onSuccess { releaseReturn = SystemClock.uptimeMillis() }
             .onFailure { if (errorClass == null) errorClass = it.javaClass.simpleName.take(48) }
+        if (errorClass != null) return Retirement(hideReturn, releaseReturn, errorClass)
+        surface = null
+        view = null
+        host = null
         firstDraw = null
         return Retirement(hideReturn, releaseReturn, errorClass)
     }

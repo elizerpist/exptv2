@@ -220,10 +220,12 @@ void main() {
     final receipt = await bridge.startR449SampleCapture(
       route: KeyguardDisplayRoute.fluviStream,
       session: true,
+      diagnosticCircle: true,
     );
     expect(received?.method, 'startR449SampleCapture');
     expect((received?.arguments as Map)['routeRequested'], 'FLUVI_STREAM');
     expect((received?.arguments as Map)['actionKind'], 'SESSION');
+    expect((received?.arguments as Map)['diagnosticCircle'], isTrue);
     expect(receipt['actionKind'], 'SESSION');
   });
 
