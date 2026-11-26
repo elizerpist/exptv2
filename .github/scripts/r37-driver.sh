@@ -131,6 +131,10 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r44_2_owner)
+      class=com.fluvi.app.lockscreen.KeyguardR442OwnerInstrumentationTest
+      methods=(serviceOwnsSampleCaptureReceiptAndInvalidatesIt)
+      ;;
     r44_1_holder_post)
       class=com.fluvi.app.lockscreen.KeyguardR441HolderReproInstrumentationTest
       methods=(realHolderPostThenDetach)

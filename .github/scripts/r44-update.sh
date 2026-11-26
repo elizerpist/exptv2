@@ -9,9 +9,9 @@ case "$1" in
       test -s "$out/r43.apk"
       test -s "$out/r44.apk"
     else
-    curl -fLsS --retry 3 'https://media.githubusercontent.com/media/elizerpist/exptv2/47ba86e432b7027ea9c786270211d1d8b5b8edf2/fluvi_R43_HUMAN_0732bee6a2bc.apk' -o "$out/r43.apk"
-    test "$(wc -c < "$out/r43.apk")" -eq 121039632
-    printf '%s  %s\n' 4abcfd4f0b929919c1102a76155d061a721112b8efac5c5ee7c293d3c198b166 "$out/r43.apk" | sha256sum -c -
+    curl -fLsS --retry 3 'https://media.githubusercontent.com/media/elizerpist/exptv2/1f842db6394e0a44904133ae4825820cf61418f7/Fluvi_R44.1_HUMAN_1cd0b8fb31f6.apk' -o "$out/r43.apk"
+    test "$(wc -c < "$out/r43.apk")" -eq 121072400
+    printf '%s  %s\n' 58915a3a0161b9132af821a72c789fb00c266f047c052ec597bd57af7f523b9c "$out/r43.apk" | sha256sum -c -
     case "$CANDIDATE_URL" in
       https://media.githubusercontent.com/media/elizerpist/exptv2/*/*.zstpatch.enc)
         [[ "$R44_STAGE_SHA256" =~ ^[0-9a-f]{64}$ && "$R44_STAGE_SIZE" =~ ^[0-9]+$ && -n "${FLUVI_R44_STAGE_KEY:-}" ]]
@@ -27,8 +27,8 @@ case "$1" in
       *) printf '%s\n' 'unsupported candidate source' >&2; exit 2;;
     esac
     fi
-    test "$(wc -c < "$out/r43.apk")" -eq 121039632
-    printf '%s  %s\n' 4abcfd4f0b929919c1102a76155d061a721112b8efac5c5ee7c293d3c198b166 "$out/r43.apk" | sha256sum -c -
+    test "$(wc -c < "$out/r43.apk")" -eq 121072400
+    printf '%s  %s\n' 58915a3a0161b9132af821a72c789fb00c266f047c052ec597bd57af7f523b9c "$out/r43.apk" | sha256sum -c -
     test "$(wc -c < "$out/r44.apk")" -eq "$CANDIDATE_SIZE"
     printf '%s  %s\n' "$CANDIDATE_SHA256" "$out/r44.apk" | sha256sum -c -
     signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
@@ -108,7 +108,7 @@ for name,expected in seed.items():
 PY
     cmp "$out/sentinel.txt" "$out/sentinel-before.txt"
     cmp "$out/sentinel.txt" "$out/sentinel-after.txt"
-    printf '%s\n' 'PASS: genuine signed R43 to R44 install -r; synthetic preferences, sentinel and live bound service survived on API 37.' > "$out/result.txt"
+    printf '%s\n' 'PASS: genuine signed R44.1 to candidate install -r; synthetic preferences, sentinel and live bound service survived on API 37.' > "$out/result.txt"
     ;;
   *) exit 2;;
 esac
