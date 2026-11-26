@@ -266,6 +266,12 @@ except (ET.ParseError,OSError): pass
 PY
 )
         if [[ "$coords" =~ ^[0-9]+\ [0-9]+$ ]]; then
+          if [[ "$name" == r446-action ]]; then
+            # uiautomator dump registers UiAutomation with flags=0 and can
+            # temporarily suppress/rebind the service. Wait until the actual
+            # service is bound before starting the single-use owner action.
+            observe before-print-tap
+          fi
           adb shell input tap $coords
           return 0
         fi
@@ -288,22 +294,14 @@ PY
     adb shell dumpsys accessibility > "$out/accessibility-normal.txt" 2>&1 || true
     if [[ "${R446_UI_PROBE:-false}" == true ]]; then
       # Exercise the actual new button in the signed profile, followed by one
-      # unmodified Android lock/wake.  A receipt proves arming only: save the
-      # optical frame without claiming that a sample was drawn or visible.
+      # unmodified Android lock/wake. Do not run uiautomator between the tap
+      # and wake: its flags=0 suppress other accessibility services.
       tap_label 'Egyszeri rajzpróba – fix minta' r446-action
-      r446_armed=false
-      for attempt in $(seq 1 15); do
-        adb shell uiautomator dump /sdcard/r446-window.xml > /dev/null 2>&1 || true
-        adb exec-out cat /sdcard/r446-window.xml > "$out/ui-r446-receipt.xml" 2>/dev/null || true
-        if wait_for_system_anr "$out/ui-r446-receipt.xml" "r446-receipt-$attempt"; then continue; fi
-        if grep -Fq 'Egyszeri rajzpróba előkészítve' "$out/ui-r446-receipt.xml"; then
-          r446_armed=true; break
-        fi
-        if (( attempt > 1 )); then scroll_controls "$out/ui-r446-receipt.xml" down; fi
-        sleep 1
-      done
-      "$r446_armed" || { printf '%s\n' 'FAIL: no signed R44.6 one-wake arm receipt.' >> "$out/ui-r446-result.txt"; exit 1; }
-      printf '%s\n' 'PASS: signed R44.6 one-wake console action returned the service arm receipt.' > "$out/ui-r446-result.txt"
+      sleep 12
+      scroll_controls "$out/ui-r446-action.xml" down
+      sleep 1
+      adb exec-out screencap -p > "$out/r446-prewake-receipt.png"
+      printf '%s\n' 'OBSERVED: signed one-wake button tapped; pre-wake screenshot retained for independent receipt inspection.' > "$out/ui-r446-result.txt"
       adb shell locksettings set-disabled false > "$out/r446-locksettings.txt" 2>&1
       adb shell input keyevent KEYCODE_SLEEP
       sleep 1
