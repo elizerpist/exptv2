@@ -302,6 +302,27 @@ PY
       sleep 1
       adb exec-out screencap -p > "$out/r446-prewake-receipt.png"
       printf '%s\n' 'OBSERVED: signed one-wake button tapped; pre-wake screenshot retained for independent receipt inspection.' > "$out/ui-r446-result.txt"
+      if [[ "${R446_ARM_ONLY:-false}" == true ]]; then
+        # Separate arm-only diagnostic. The first hierarchy is read only
+        # after the preparation interval; UiAutomation may end the probe.
+        # Do not use this run to claim an uninterrupted wake.
+        r446_receipt=false
+        for attempt in $(seq 1 16); do
+          adb shell uiautomator dump /sdcard/r446-arm-only.xml > /dev/null 2>&1 || true
+          adb exec-out cat /sdcard/r446-arm-only.xml > "$out/ui-r446-arm-$attempt.xml" 2>/dev/null || true
+          if wait_for_system_anr "$out/ui-r446-arm-$attempt.xml" "arm-only-$attempt"; then continue; fi
+          if grep -Fq 'Egyszeri rajzpróba előkészítve' "$out/ui-r446-arm-$attempt.xml"; then
+            r446_receipt=true; break
+          fi
+          if (( attempt <= 8 )); then scroll_controls "$out/ui-r446-arm-$attempt.xml" down
+          else scroll_controls "$out/ui-r446-arm-$attempt.xml" up; fi
+          sleep 1
+        done
+        "$r446_receipt" || { printf '%s\n' 'FAIL: signed one-wake receipt not observed in arm-only UI.' >> "$out/ui-r446-result.txt"; exit 1; }
+        printf '%s\n' 'PASS: signed one-wake UI receipt observed; this arm-only run does not prove an uninterrupted wake.' >> "$out/ui-r446-result.txt"
+        [[ "$bound_before" == true && "$bound_after" == true ]]
+        exit 0
+      fi
       adb shell locksettings set-disabled false > "$out/r446-locksettings.txt" 2>&1
       adb shell input keyevent KEYCODE_SLEEP
       sleep 1
