@@ -841,6 +841,7 @@ internal class KeyguardWindowSnapshotReader(
                 }
             r443Inventory.resolve {
                 coverClear && deferredReaders.values.count { it.hasVerifiedHost() } == 1 &&
+                    deferredReaders.values.count { it.hasAnyVerifiedHost() } == 1 &&
                     authorityIsCurrent() && KeyguardR44Trial.active
             }
             for (index in snapshots.indices) {

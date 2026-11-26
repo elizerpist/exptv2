@@ -117,6 +117,10 @@ internal object KeyguardR44SurfaceClassifier {
             return legacy
         }
         if (!syntheticTrial) return legacy
+        // Multiple verified lockscreen hosts are ambiguous even if only one
+        // is currently marked active. Do not infer ownership from the layer.
+        if (observed.count { it.verifiedRoot && it.host != null } > 1) return KeyguardSurfaceClassification(
+            KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.WALK_TRUNCATED, legacy.markers)
         val hosts = primary.filter { w ->
             w.type == AccessibilityWindowInfo.TYPE_SYSTEM && w.packageName == "com.android.systemui" &&
                 w.r44?.let { it.verifiedRoot && it.active && it.host != null } == true

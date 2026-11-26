@@ -98,6 +98,7 @@ internal class KeyguardR44TreeReader(
     fun pendingCandidate() { deferredPending++ }
     fun unresolvedCandidate() { complete = false; budget.hardFailure = true }
     fun isVerifiedActiveRoot(): Boolean = verifiedRoot && active && !foreign
+    fun hasAnyVerifiedHost(): Boolean = verifiedRoot && !foreign && host != null
     fun hasVerifiedHost(): Boolean = isVerifiedActiveRoot() && host != null && complete
     fun candidatePriority(parentOrdinal: Int): Int = if (descendsFrom(parentOrdinal, host?.ordinal)) 1 else 2
     private fun descendsFrom(start: Int, ancestor: Int?): Boolean {

@@ -11,8 +11,6 @@ import java.security.MessageDigest
  * SDK methods. Any serialization failure or changed parent fails closed. */
 internal object KeyguardR443ParentIdentity {
     fun of(node: AccessibilityNodeInfo): String? {
-        val unique = runCatching { node.uniqueId }.getOrNull()
-        if (unique != null) return "unique:$unique"
         val parcel = Parcel.obtain()
         val copy = runCatching { AccessibilityNodeInfo.obtain(node) }.getOrNull()
         if (copy == null) { parcel.recycle(); return null }

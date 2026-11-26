@@ -2,6 +2,7 @@ package com.fluvi.app.lockscreen
 
 import android.accessibilityservice.AccessibilityService
 import android.os.Bundle
+import android.os.Parcel
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
@@ -89,6 +90,9 @@ class KeyguardR22ReaderHandoffTest {
         }
         @RealObject lateinit var real: AccessibilityNodeInfo
         @Implementation fun getUniqueId(): String = "fixture:${System.identityHashCode(checkNotNull(Platform.nodes[real]))}"
+        @Implementation fun writeToParcel(parcel: Parcel, flags: Int) {
+            parcel.writeInt(System.identityHashCode(checkNotNull(Platform.nodes[real])))
+        }
         @Implementation fun getWindowId(): Int = checkNotNull(Platform.nodes[real]).windowId
         @Implementation fun getPackageName(): CharSequence = checkNotNull(Platform.nodes[real]).pkg
         @Implementation fun getClassName(): CharSequence = "android.view.View"
@@ -443,6 +447,52 @@ class KeyguardR22ReaderHandoffTest {
                     read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
             } finally { KeyguardR44Trial.set(false, false) }
         }
+    }
+
+    @Test fun r443LateShadeInAnotherRelevantWindowOverridesClock() {
+        val host = Platform.node("element:lockscreen")
+        checkNotNull(Platform.nodes[host]).children.add(Platform.node("element:LargeClock"))
+        repeat(4) {
+            val node = Platform.node(null)
+            checkNotNull(Platform.nodes[node]).apply { advertised = true; lazyTag = "component:unrelated" }
+            checkNotNull(Platform.nodes[host]).children.add(node)
+        }
+        val lower = Platform.node(null, window = 11)
+        repeat(3) { index ->
+            val node = Platform.node(null, window = 11)
+            checkNotNull(Platform.nodes[node]).apply {
+                advertised = true; lazyTag = if (index == 2) "scene:shade" else "component:unrelated"
+            }
+            checkNotNull(Platform.nodes[lower]).children.add(node)
+        }
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 2, true, host), Platform.window(11, 1, false, lower))
+        KeyguardR44Trial.set(true, true)
+        try {
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true), { true })
+            assertEquals(7, Platform.extraCalls)
+            assertEquals(KeyguardSurface.SHADE, KeyguardR44SurfaceClassifier.classify(
+                read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+        } finally { KeyguardR44Trial.set(false, false) }
+    }
+
+    @Test fun r443UnknownUpperFingerprintWindowBlocksExtraWorkAndGrant() {
+        val host = Platform.node("element:lockscreen")
+        repeat(7) {
+            val node = Platform.node(null)
+            checkNotNull(Platform.nodes[node]).apply { advertised = true; lazyTag = "component:unrelated" }
+            checkNotNull(Platform.nodes[host]).children.add(node)
+        }
+        val upper = Platform.node("com.android.systemui:id/udfps_view", window = 11)
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 1, true, host), Platform.window(11, 2, false, upper))
+        KeyguardR44Trial.set(true, true)
+        try {
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true), { true })
+            assertEquals(4, Platform.extraCalls)
+            assertFalse(KeyguardR44SurfaceClassifier.classify(read.snapshots,
+                read.rootUnavailable, read.walkTruncated, false, true).surface == KeyguardSurface.MAIN_KEYGUARD)
+        } finally { KeyguardR44Trial.set(false, false) }
     }
 
     @Test fun r443DirectHostCannotHideALazyRestrictionOnTheSameNode() {
