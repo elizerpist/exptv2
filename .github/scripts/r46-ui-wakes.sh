@@ -42,6 +42,9 @@ for wakes in 1 3; do
   done
   adb pull /data/local/tmp/r46frames/. "$out/r46frames" > "$out/r46-pull-$wakes.txt" 2>&1 || true
   adb logcat -b all -d -v monotonic -s R46Optical:I > "$out/r46-frame-times-$wakes.txt" 2>&1 || true
+  python3 "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r46-frame-witness.py" \
+    "$out/r46frames" "$out/r46-frame-times-$wakes.txt" "$wakes" "$out/r46-optical-$route-$wakes.json" \
+    > "$out/r46-optical-$route-$wakes.txt" 2>&1 || true
   adb shell am start -n com.fluvi.app/.MainActivity > "$out/r46-reopen-$wakes.txt" 2>&1
   sleep 2
   adb shell uiautomator dump /sdcard/r46-reopen.xml >/dev/null 2>&1 || true

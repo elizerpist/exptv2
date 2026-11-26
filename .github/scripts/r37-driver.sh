@@ -145,6 +145,12 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR448StockServiceInstrumentationTest.kt
     sha256sum "$fixture" > "$out/fixture-r448-stock-wa.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r46_store ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR46RecordingStoreInstrumentationTest.kt"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR46RecordingStoreInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r46-store.sha256"
+    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR46RecordingStoreInstrumentationTest.kt > "$out/fixture-r46-store.patch"
+  fi
   if [[ "$TEST_SCOPE" == r45_wa_session_diag ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR45WaSessionStateInstrumentationTest.kt"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR448SampleOnlyInstrumentationTest.kt
@@ -272,7 +278,7 @@ case "${1:-}" in
       ;;
     r46_store)
       class=com.fluvi.app.lockscreen.KeyguardR46RecordingStoreInstrumentationTest
-      methods=(completeLongUtf8ReportIsSealedOnceAndRetriedVerbatim)
+      methods=(completeLongUtf8ReportIsSealedOnceAndRetriedVerbatim nativeCaptureCutRetainsAcceptedEventsBeyondOldRingAndExportLimit)
       ;;
     r46_frame|r46_frame_baseline|r448_controlled_frame)
       class=com.fluvi.app.lockscreen.KeyguardR448FrameInstrumentationTest

@@ -1,4 +1,5 @@
 name: R44 Android 17 service and evidence controls
+run-name: R46 ${{ inputs.test_scope }} app ${{ inputs.app_sha }}
 on:
   workflow_dispatch:
     inputs:
@@ -339,6 +340,7 @@ jobs:
           path: |
             ${{ runner.temp }}/r44-update/*.txt
             ${{ runner.temp }}/r44-update/*.xml
+            ${{ runner.temp }}/r44-update/*.json
             ${{ runner.temp }}/r44-update/*.png
             ${{ runner.temp }}/r44-update/r449frames/*.png
             ${{ runner.temp }}/r44-update/r45frames/**/*.png
