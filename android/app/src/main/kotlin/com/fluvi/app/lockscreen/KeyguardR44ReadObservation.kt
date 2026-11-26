@@ -22,6 +22,8 @@ internal data class KeyguardR446Observation(
     val freshnessRevision: Long? = null, val systemBarrierAtRead: Long? = null,
     val systemBarrierAtDecision: Long? = null, val ownerState: String = "UNOBSERVED",
     val wakeArmState: String = "UNOBSERVED",
+    val inventoryAt: Long? = null, val readFinishedAt: Long? = null,
+    val mainEnteredAt: Long? = null, val decisionAt: Long? = null,
 ) {
     /** Preserve the original owner and first withdrawal when later freeze or
      * unlock cleanup repeats the operation. */
