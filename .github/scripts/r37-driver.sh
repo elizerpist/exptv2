@@ -157,7 +157,7 @@ case "${1:-}" in
       ;;
     r44_pressure)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
-      methods=(r44PerWakeEvidenceSurvivesLightPressure r44PerWakeEvidenceSurvivesFullPressure)
+      methods=(r44PerWakeEvidenceSurvivesLightPressure r44PerWakeEvidenceSurvivesFullPressure r442FirstIncompleteReadAndMissingSuccessorRemainExplicit)
       ;;
     r44_service)
       class=com.fluvi.app.lockscreen.KeyguardR44ServiceInstrumentationTest
