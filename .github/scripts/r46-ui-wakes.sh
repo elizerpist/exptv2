@@ -114,14 +114,37 @@ for wakes in "${trials[@]}"; do
     printf 'FAIL: stop did not confirm clipboard success\n' > "$out/r46-$route-$wakes-result.txt"
     exit 1
   fi
-  adb shell am start -n com.fluvi.r46receiver/.PasteActivity > "$out/r46-receiver-launch-$wakes.txt" 2>&1
-  tap_label 'Paste report' "r46-paste-$wakes"
-  adb exec-out run-as com.fluvi.r46receiver cat files/report.txt > "$out/r46-$route-$wakes-pasted.txt"
-  python3 "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r46-check-paste.py" \
-    "$out/r46-$route-$wakes-pasted.txt" "$R46_UI_ROUTE" "$wakes" > "$out/r46-$route-$wakes-result.txt" 2>&1 || result=1
-  capture=$(sed -n 's/^captureId=\([^ ]*\).*/\1/p' "$out/r46-$route-$wakes-pasted.txt" | head -1)
+  # Preserve the immutable native report even if the independent receiver
+  # itself fails to start or paste; it is not counted as a paste result.
+  adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_r46_recording.xml > "$out/r46-$route-$wakes-prefs.xml"
+  capture=$(python3 - "$out/r46-$route-$wakes-prefs.xml" <<'PY'
+import sys,xml.etree.ElementTree as ET
+root=ET.parse(sys.argv[1]).getroot()
+print(next((n.text or '' for n in root if n.attrib.get('name') == 'id'), ''))
+PY
+)
   [[ "$capture" =~ ^[a-f0-9-]{36}$ ]]
   adb exec-out run-as com.fluvi.app cat "files/r46-recordings/$capture.txt" > "$out/r46-$route-$wakes-sealed.txt"
+  adb shell run-as com.fluvi.r46receiver rm -f files/report.txt >/dev/null 2>&1 || true
+  adb shell am start -n com.fluvi.r46receiver/.PasteActivity > "$out/r46-receiver-launch-$wakes.txt" 2>&1
+  tap_label 'Paste report' "r46-paste-$wakes"
+  pasted=false
+  for attempt in $(seq 1 20); do
+    if adb shell run-as com.fluvi.r46receiver test -s files/report.txt >/dev/null 2>&1; then
+      adb exec-out run-as com.fluvi.r46receiver cat files/report.txt > "$out/r46-$route-$wakes-pasted.txt"
+      pasted=true
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$pasted" != true ]]; then
+    adb shell uiautomator dump /sdcard/r46-paste-result.xml >/dev/null 2>&1 || true
+    adb exec-out cat /sdcard/r46-paste-result.xml > "$out/ui-r46-paste-result-$wakes.xml" 2>/dev/null || true
+    printf 'NOT REACHED: independent receiver did not persist pasted text\n' > "$out/r46-$route-$wakes-result.txt"
+    exit 1
+  fi
+  python3 "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r46-check-paste.py" \
+    "$out/r46-$route-$wakes-pasted.txt" "$R46_UI_ROUTE" "$wakes" > "$out/r46-$route-$wakes-result.txt" 2>&1 || result=1
   if ! cmp "$out/r46-$route-$wakes-sealed.txt" "$out/r46-$route-$wakes-pasted.txt"; then
     printf 'independentReceiverPaste=FAIL\n' >> "$out/r46-$route-$wakes-result.txt"
     result=1
