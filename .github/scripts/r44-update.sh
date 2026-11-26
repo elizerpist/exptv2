@@ -3,6 +3,10 @@ set -euo pipefail
 out="$RUNNER_TEMP/r44-update"
 mkdir -p "$out"
 case "${R44_BASELINE:-r44_2_owner}" in
+  r45)
+    base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/ed69761b616cd2e14df7f406b20378761cbca548/fluvi_R45_SAMPLE_ONLY_HUMAN_855d17dfded1.apk'
+    base_size=121437137
+    base_sha=353df78a9acefea151b6c6a6b74c595e31bf09c96fe8952350ca1c05d95d7a8d;;
   r44_9)
     base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/6af65a63b51b61e16985c613254b0f8cb7d9f71e/fluvi_R44_9_SAMPLE_ONLY_HUMAN_4ca41b7db0b2.apk'
     base_size=121404369
@@ -47,6 +51,9 @@ case "${R44_BASELINE:-r44_2_owner}" in
 esac
 case "$1" in
   prepare)
+    if [[ -n "${R46_UI_ROUTE:-}" ]]; then
+      bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r46-build-receiver.sh"
+    fi
     [[ "$APP_SHA" =~ ^[0-9a-f]{40}$ && "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ && "$CANDIDATE_SIZE" =~ ^[0-9]+$ ]]
     if [[ "${R44_PRIVATE:-false}" == true ]]; then
       test -s "$out/r43.apk"
@@ -295,7 +302,7 @@ try:
             # tap on that node as a route-selection attempt.
             if sys.argv[3].startswith('r448-select-') and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
                 continue
-            if sys.argv[3] in ('r449-action','r45-action','r45-shape') and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
+            if sys.argv[3] in ('r449-action','r45-action','r45-shape','r46-start','r46-stop') and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
                 continue
             if sys.argv[3] == 'r449-freeze' and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
                 continue
@@ -308,7 +315,7 @@ except (ET.ParseError,OSError): pass
 PY
 )
         if [[ "$coords" =~ ^[0-9]+\ [0-9]+$ ]]; then
-          if [[ "$name" == r446-action || "$name" == r449-action || "$name" == r45-action ]]; then
+          if [[ "$name" == r446-action || "$name" == r449-action || "$name" == r45-action || "$name" == r46-start ]]; then
             # uiautomator dump registers UiAutomation with flags=0 and can
             # temporarily suppress/rebind the service. Wait until the actual
             # service is bound before starting the single-use owner action.
@@ -340,6 +347,10 @@ PY
       return 1
     }
     tap_label 'Debug log' entry
+    if [[ -n "${R46_UI_ROUTE:-}" ]]; then
+      source "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r46-ui-wakes.sh"
+      exit $?
+    fi
     tap_label 'ZÁRKÉPERNYŐ' tab
     adb shell dumpsys accessibility > "$out/accessibility-normal.txt" 2>&1 || true
     if [[ -n "${R45_UI_ROUTE:-}" ]]; then

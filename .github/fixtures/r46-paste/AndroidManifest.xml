@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.fluvi.r46receiver">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
+    <application android:label="R46 independent paste receiver" android:debuggable="true"
+                 android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name=".PasteActivity" android:exported="true" />
+    </application>
+</manifest>

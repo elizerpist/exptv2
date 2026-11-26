@@ -11,7 +11,13 @@ case "${1:-}" in
   test -z "$(git status --porcelain --untracked-files=no)"
   if [[ "$BASELINE" = true ]]; then
     test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
-    if [[ "$TEST_SCOPE" == r44_1_holder_* ]]; then
+    if [[ "$TEST_SCOPE" == r46_frame_baseline ]]; then
+      fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR448FrameInstrumentationTest.kt"
+      test -f "$fixture"
+      sed 's/prepareForInstrumentation(/prepare(/g' "$fixture" > android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR448FrameInstrumentationTest.kt
+      sha256sum "$fixture" > "$out/fixture-r46-frame.sha256"
+      git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR448FrameInstrumentationTest.kt > "$out/fixture-r46-frame.patch"
+    elif [[ "$TEST_SCOPE" == r44_1_holder_* ]]; then
       fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR441HolderReproInstrumentationTest.kt"
       cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR441HolderReproInstrumentationTest.kt
       sha256sum "$fixture" > "$out/fixture.sha256"
@@ -264,7 +270,11 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR448BoundaryParentInstrumentationTest
       methods=(preScreenReadMustNotConsumeArmedPostScreenObligation)
       ;;
-    r448_controlled_frame)
+    r46_store)
+      class=com.fluvi.app.lockscreen.KeyguardR46RecordingStoreInstrumentationTest
+      methods=(completeLongUtf8ReportIsSealedOnceAndRetriedVerbatim)
+      ;;
+    r46_frame|r46_frame_baseline|r448_controlled_frame)
       class=com.fluvi.app.lockscreen.KeyguardR448FrameInstrumentationTest
       methods=(independentAccessibilityFrameDrawsAndRevocationCancelsPendingAdd)
       ;;

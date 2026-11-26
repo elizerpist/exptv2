@@ -57,7 +57,7 @@ permissions:
   contents: read
 jobs:
   service:
-    if: ${{ !startsWith(inputs.test_scope, 'r45_ui_') && inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' && inputs.test_scope != 'r44_update' && inputs.test_scope != 'r448_update_routes' && inputs.test_scope != 'r448_update_restart' && inputs.test_scope != 'r449_ui_fluvi' && inputs.test_scope != 'r449_ui_wa' && inputs.test_scope != 'r446_update_once' && inputs.test_scope != 'r446_update_arm' && inputs.test_scope != 'r44_update_reopen' && inputs.test_scope != 'r44_update_private' && inputs.test_scope != 'r43_flutter' }}
+    if: ${{ !startsWith(inputs.test_scope, 'r46_ui_') && !startsWith(inputs.test_scope, 'r45_ui_') && inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' && inputs.test_scope != 'r44_update' && inputs.test_scope != 'r448_update_routes' && inputs.test_scope != 'r448_update_restart' && inputs.test_scope != 'r449_ui_fluvi' && inputs.test_scope != 'r449_ui_wa' && inputs.test_scope != 'r446_update_once' && inputs.test_scope != 'r446_update_arm' && inputs.test_scope != 'r44_update_reopen' && inputs.test_scope != 'r44_update_private' && inputs.test_scope != 'r43_flutter' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -273,7 +273,7 @@ jobs:
           retention-days: 14
 
   r44-update:
-    if: ${{ startsWith(inputs.test_scope, 'r45_ui_') || inputs.test_scope == 'r44_update' || inputs.test_scope == 'r448_update_routes' || inputs.test_scope == 'r448_update_restart' || inputs.test_scope == 'r449_ui_fluvi' || inputs.test_scope == 'r449_ui_wa' || inputs.test_scope == 'r446_update_once' || inputs.test_scope == 'r446_update_arm' || inputs.test_scope == 'r44_update_reopen' || inputs.test_scope == 'r44_update_private' }}
+    if: ${{ startsWith(inputs.test_scope, 'r46_ui_') || startsWith(inputs.test_scope, 'r45_ui_') || inputs.test_scope == 'r44_update' || inputs.test_scope == 'r448_update_routes' || inputs.test_scope == 'r448_update_restart' || inputs.test_scope == 'r449_ui_fluvi' || inputs.test_scope == 'r449_ui_wa' || inputs.test_scope == 'r446_update_once' || inputs.test_scope == 'r446_update_arm' || inputs.test_scope == 'r44_update_reopen' || inputs.test_scope == 'r44_update_private' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -298,6 +298,7 @@ jobs:
       R45_UI_ROUTE: ${{ startsWith(inputs.test_scope, 'r45_ui_fluvi_') && 'FLUVI_STREAM' || startsWith(inputs.test_scope, 'r45_ui_wa_') && 'WIDGETS_ANYWHERE' || '' }}
       R45_UI_ACTION: ${{ contains(inputs.test_scope, '_session_') && 'SESSION' || 'ONE_WAKE' }}
       R45_UI_SHAPE: ${{ endsWith(inputs.test_scope, '_circle') && 'CIRCLE' || 'ORB' }}
+      R46_UI_ROUTE: ${{ inputs.test_scope == 'r46_ui_fluvi' && 'FLUVI_STREAM' || inputs.test_scope == 'r46_ui_wa' && 'WIDGETS_ANYWHERE' || '' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -309,7 +310,7 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools build-tools;36.0.0'
+          packages: 'platform-tools build-tools;36.0.0 platforms;android-36'
       - name: Ensure lossless patch tool is available
         run: command -v zstd || (sudo apt-get update && sudo apt-get install -y zstd)
       - name: Prepare private signed update fixture
@@ -341,6 +342,7 @@ jobs:
             ${{ runner.temp }}/r44-update/*.png
             ${{ runner.temp }}/r44-update/r449frames/*.png
             ${{ runner.temp }}/r44-update/r45frames/**/*.png
+            ${{ runner.temp }}/r44-update/r46frames/**/*.png
           if-no-files-found: warn
           retention-days: 14
 
