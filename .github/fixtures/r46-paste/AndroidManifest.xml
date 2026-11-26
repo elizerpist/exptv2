@@ -4,4 +4,5 @@
                  android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity android:name=".PasteActivity" android:exported="true" />
     </application>
+    <instrumentation android:name=".TreeDumpInstrumentation" android:targetPackage="com.fluvi.r46receiver" />
 </manifest>

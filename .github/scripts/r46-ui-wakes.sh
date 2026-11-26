@@ -8,15 +8,61 @@ case "$R46_UI_ROUTE" in
   *) printf 'Unknown R46 renderer\n' >&2; exit 2;;
 esac
 adb install -r "$RUNNER_TEMP/r46-receiver/receiver.apk" > "$out/r46-receiver-install.txt" 2>&1
+
+# UiAutomator's ordinary dump can suppress the accessibility service and end
+# the very trial being measured. This separate instrumentation requests the
+# platform's DONT_SUPPRESS_ACCESSIBILITY_SERVICES flag for active recordings.
+r46_dump() {
+  local destination=$1
+  adb shell run-as com.fluvi.r46receiver rm -f files/tree.xml >/dev/null 2>&1 || true
+  adb shell am instrument -w com.fluvi.r46receiver/.TreeDumpInstrumentation > "$out/r46-tree-instrumentation.txt" 2>&1 || return 1
+  grep -Fq 'INSTRUMENTATION_CODE: -1' "$out/r46-tree-instrumentation.txt" || return 1
+  adb exec-out run-as com.fluvi.r46receiver cat files/tree.xml > "$destination" 2>/dev/null
+  test -s "$destination"
+}
+tap_label() {
+  local label=$1 name=$2 coords=''
+  for attempt in $(seq 1 25); do
+    local xml="$out/ui-$name-$attempt.xml"
+    if [[ "$name" == r46-paste-* ]]; then
+      adb shell uiautomator dump /sdcard/r46-paste.xml >/dev/null 2>&1 || true
+      adb exec-out cat /sdcard/r46-paste.xml > "$xml" 2>/dev/null || true
+    else
+      r46_dump "$xml" || true
+    fi
+    coords=$(python3 - "$xml" "$label" <<'PY'
+import re,sys,xml.etree.ElementTree as ET
+try:
+    for n in ET.parse(sys.argv[1]).getroot().iter():
+        if not any(sys.argv[2].casefold() in n.attrib.get(k,'').casefold() for k in ('text','content-desc')): continue
+        if n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true': continue
+        m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
+        if m:
+            x1,y1,x2,y2=map(int,m.groups())
+            if x2>x1 and y2>y1: print((x1+x2)//2,(y1+y2)//2); break
+except (ET.ParseError,OSError): pass
+PY
+)
+    if [[ "$coords" =~ ^[0-9]+\ [0-9]+$ ]]; then
+      if [[ "$name" == r46-start ]]; then observe before-r46-tap; fi
+      adb shell input tap $coords
+      return 0
+    fi
+    sleep 1
+  done
+  printf 'NOT REACHED: actionable %s\n' "$label" >> "$out/ui-result.txt"
+  return 1
+}
 mkdir -p "$out/r46frames"
 result=0
-for wakes in 1 3; do
+trials=(1 3)
+if [[ "${R46_LONG:-false}" == true ]]; then trials=(3); fi
+for wakes in "${trials[@]}"; do
   tap_label "$label" "r448-select-r46-$route-$wakes"
   tap_label 'Felvétel indítása' r46-start
   ack=false
   for attempt in $(seq 1 45); do
-    adb shell uiautomator dump /sdcard/r46-ack.xml >/dev/null 2>&1 || true
-    adb exec-out cat /sdcard/r46-ack.xml > "$out/ui-r46-$route-$wakes-ack-$attempt.xml" 2>/dev/null || true
+    r46_dump "$out/ui-r46-$route-$wakes-ack-$attempt.xml" || true
     if grep -Fq 'Leállítás és másolás' "$out/ui-r46-$route-$wakes-ack-$attempt.xml"; then ack=true; break; fi
     sleep 1
   done
@@ -24,6 +70,8 @@ for wakes in 1 3; do
     printf 'NOT REACHED: actual owner button did not obtain native recording acknowledgement\n' > "$out/r46-$route-$wakes-result.txt"
     exit 1
   fi
+  printf 'after_ack ' >> "$out/r46-$route-$wakes-clock.txt"
+  adb shell cat /proc/uptime >> "$out/r46-$route-$wakes-clock.txt"
   observe "r46-$route-$wakes-after-ack"
   adb shell locksettings set-disabled false > "$out/r46-locksettings.txt" 2>&1
   for cycle in $(seq 1 "$wakes"); do
@@ -38,7 +86,11 @@ for wakes in 1 3; do
     sleep 5
     adb shell wm dismiss-keyguard || true
     wait "$stream" || true
+    printf 'after_wake_%s ' "$cycle" >> "$out/r46-$route-$wakes-clock.txt"
+    adb shell cat /proc/uptime >> "$out/r46-$route-$wakes-clock.txt"
     sleep 1
+    if [[ "${R46_LONG:-false}" == true && "$cycle" -eq 1 ]]; then sleep 125; fi
+    if [[ "${R46_LONG:-false}" == true && "$cycle" -eq 2 ]]; then sleep 185; fi
   done
   adb pull /data/local/tmp/r46frames/. "$out/r46frames" > "$out/r46-pull-$wakes.txt" 2>&1 || true
   adb logcat -b all -d -v monotonic -s R46Optical:I > "$out/r46-frame-times-$wakes.txt" 2>&1 || true
@@ -47,16 +99,14 @@ for wakes in 1 3; do
     > "$out/r46-optical-$route-$wakes.txt" 2>&1 || true
   adb shell am start -n com.fluvi.app/.MainActivity > "$out/r46-reopen-$wakes.txt" 2>&1
   sleep 2
-  adb shell uiautomator dump /sdcard/r46-reopen.xml >/dev/null 2>&1 || true
-  adb exec-out cat /sdcard/r46-reopen.xml > "$out/ui-r46-$route-$wakes-reopen.xml" 2>/dev/null || true
+  r46_dump "$out/ui-r46-$route-$wakes-reopen.xml" || true
   if ! grep -Fq 'Leállítás és másolás' "$out/ui-r46-$route-$wakes-reopen.xml"; then
     tap_label 'Debug log' entry
   fi
   tap_label 'Leállítás és másolás' r46-stop
   copied=false
   for attempt in $(seq 1 30); do
-    adb shell uiautomator dump /sdcard/r46-copy.xml >/dev/null 2>&1 || true
-    adb exec-out cat /sdcard/r46-copy.xml > "$out/ui-r46-$route-$wakes-copy-$attempt.xml" 2>/dev/null || true
+    r46_dump "$out/ui-r46-$route-$wakes-copy-$attempt.xml" || true
     if grep -Fq 'Riport a vágólapon.' "$out/ui-r46-$route-$wakes-copy-$attempt.xml"; then copied=true; break; fi
     sleep 1
   done
@@ -83,8 +133,7 @@ for wakes in 1 3; do
   adb shell am start -n com.fluvi.app/.MainActivity >/dev/null 2>&1
   sleep 2
   if [[ "$wakes" -eq 1 ]]; then
-    adb shell uiautomator dump /sdcard/r46-next.xml >/dev/null 2>&1 || true
-    adb exec-out cat /sdcard/r46-next.xml > "$out/ui-r46-next.xml" 2>/dev/null || true
+    r46_dump "$out/ui-r46-next.xml" || true
     if ! grep -Fq 'Felvétel indítása' "$out/ui-r46-next.xml"; then tap_label 'Debug log' entry; fi
   fi
 done

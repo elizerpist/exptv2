@@ -6,7 +6,7 @@ mkdir -p "$dest/classes" "$dest/dex"
 tools="$ANDROID_HOME/build-tools/36.0.0"
 platform="$ANDROID_HOME/platforms/android-36/android.jar"
 test -f "$platform"
-javac -source 8 -target 8 -classpath "$platform" -d "$dest/classes" "$fixture/PasteActivity.java"
+javac -source 8 -target 8 -classpath "$platform" -d "$dest/classes" "$fixture"/*.java
 mapfile -t classfiles < <(find "$dest/classes" -name '*.class' -type f | sort)
 "$tools/d8" --lib "$platform" --output "$dest/dex" "${classfiles[@]}"
 "$tools/aapt" package -f -M "$fixture/AndroidManifest.xml" -I "$platform" -F "$dest/unsigned.apk"
