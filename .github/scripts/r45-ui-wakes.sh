@@ -31,7 +31,9 @@ for cycle in $(seq 1 "$wakes"); do
   stream_pid=$!
   sleep 0.5
   adb shell input keyevent KEYCODE_WAKEUP
-  sleep 2.5
+  # A real admission can complete seconds after SCREEN_ON. Do not force an
+  # unlock before the sample has had a chance to use its own two-second cap.
+  sleep 5
   adb exec-out screencap -p > "$out/r45-$route_name-wake-$cycle.png" || true
   adb shell wm dismiss-keyguard || true
   wait "$stream_pid" || true
@@ -45,8 +47,16 @@ adb exec-out cat /sdcard/r45-reopen.xml > "$out/ui-r45-reopen.xml" 2>/dev/null |
 if ! grep -Fq 'ZÁRKÉPERNYŐ' "$out/ui-r45-reopen.xml"; then tap_label 'Debug log' entry; fi
 tap_label 'ZÁRKÉPERNYŐ' tab
 tap_label 'leállítás' r449-freeze
-sleep 2
-adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_keyguard_r448_comparison.xml > "$out/r45-comparison.xml" 2>/dev/null || true
+for attempt in $(seq 1 30); do
+  adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_keyguard_r448_comparison.xml > "$out/r45-comparison.xml" 2>/dev/null || true
+  if python3 - "$out/r45-comparison.xml" <<'PY'
+import sys, xml.etree.ElementTree as ET
+try: ET.parse(sys.argv[1])
+except (ET.ParseError,OSError): sys.exit(1)
+PY
+  then break; fi
+  sleep 1
+done
 python3 - "$out/r45-comparison.xml" "$R45_UI_ROUTE" "$R45_UI_ACTION" "$R45_UI_SHAPE" "$wakes" > "$out/r45-result.txt" <<'PY'
 import sys, xml.etree.ElementTree as ET
 path, route, action, shape, expected = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], int(sys.argv[5])
