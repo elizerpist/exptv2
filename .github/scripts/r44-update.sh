@@ -198,21 +198,57 @@ PY
     }
     tap_label 'Debug log' entry
     tap_label 'ZÁRKÉPERNYŐ' tab
+    adb shell dumpsys accessibility > "$out/accessibility-normal.txt" 2>&1 || true
     tap_label 'Mintaorb kipróbálása és rögzítés' action
+    receipt=false
     for attempt in $(seq 1 12); do
       adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
       adb exec-out cat /sdcard/r442-window.xml > "$out/ui-receipt.xml" 2>/dev/null || true
       if grep -Fq 'Mintaorb-próba aktív' "$out/ui-receipt.xml" &&
           grep -Fq 'Kibővített nézetprofil visszaigazolva' "$out/ui-receipt.xml"; then
         printf '%s\n' 'PASS: signed profile primary control returned an active native expanded-profile sample receipt.' > "$out/ui-result.txt"
-        if [[ "$bound_before" == true && "$bound_after" == true ]]; then exit 0; fi
-        exit 1
+        receipt=true
+        break
       fi
       if (( attempt > 3 )); then scroll_controls "$out/ui-receipt.xml" up; fi
       sleep 1
     done
-    printf '%s\n' 'FAIL: no active sample receipt observed after the signed profile action.' > "$out/ui-result.txt"
-    exit 1
+    if [[ "$receipt" != true ]]; then
+      printf '%s\n' 'FAIL: no active expanded sample receipt observed after the signed profile action.' > "$out/ui-result.txt"
+      exit 1
+    fi
+    adb shell dumpsys accessibility > "$out/accessibility-expanded.txt" 2>&1 || true
+    tap_label 'Próba leállítása és riport megtartása' freeze
+    frozen=false
+    for attempt in $(seq 1 12); do
+      adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
+      adb exec-out cat /sdcard/r442-window.xml > "$out/ui-frozen.xml" 2>/dev/null || true
+      if ! grep -Fq 'Mintaorb-próba aktív' "$out/ui-frozen.xml" &&
+          grep -Fq 'Mintaorb kipróbálása és rögzítés' "$out/ui-frozen.xml"; then
+        frozen=true; break
+      fi
+      scroll_controls "$out/ui-frozen.xml" up
+      sleep 1
+    done
+    "$frozen" || { printf '%s\n' 'FAIL: inactive sample control was not observed after freeze.' >> "$out/ui-result.txt"; exit 1; }
+    adb shell dumpsys accessibility > "$out/accessibility-restored.txt" 2>&1 || true
+    printf '%s\n' 'PASS: stop/freeze returned to the inactive sample control; service snapshots retained for flag inspection.' >> "$out/ui-result.txt"
+    adb shell am force-stop com.fluvi.app
+    adb shell am start -n com.fluvi.app/.MainActivity > "$out/reopen.txt" 2>&1
+    observe reopened
+    adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$out/prefs-reopened.xml"
+    adb exec-out run-as com.fluvi.app cat files/r44-update-sentinel.txt > "$out/sentinel-reopened.txt"
+    cmp "$out/sentinel.txt" "$out/sentinel-reopened.txt"
+    python3 - "$out/seed.xml" "$out/prefs-reopened.xml" >> "$out/settings-check.txt" <<'PY'
+import sys,xml.etree.ElementTree as ET
+def values(p):
+    return {n.attrib['name']:(n.tag,n.attrib.get('value',n.text or '')) for n in ET.parse(p).getroot()}
+seed,after=map(values,sys.argv[1:])
+for name,expected in seed.items():
+    assert after.get(name)==expected, name
+    print(name, 'REOPEN PASS')
+PY
+    [[ "$bound_before" == true && "$bound_after" == true ]]
     ;;
   *) exit 2;;
 esac
