@@ -42,10 +42,11 @@ import org.junit.runner.RunWith
  * It is not an OEM clock result or authorization to enable a backend. */
 @RunWith(AndroidJUnit4::class)
 class KeyguardR445WindowCompositionTest {
-    @Test fun actualAttachedSurfaceStaysBelowIndependentUpperWindow() = exercise(capture = false)
-    @Test fun actualAttachedSurfaceWithCaptureStaysBelowIndependentUpperWindow() = exercise(capture = true)
+    @Test fun actualAttachedSurfaceStaysBelowIndependentUpperWindow() = exercise(capture = false, parentLifecycle = false)
+    @Test fun actualAttachedSurfaceWithCaptureStaysBelowIndependentUpperWindow() = exercise(capture = true, parentLifecycle = false)
+    @Test fun actualParentMoveResizeAndReplacementRetireTheChild() = exercise(capture = false, parentLifecycle = true)
 
-    private fun exercise(capture: Boolean) {
+    private fun exercise(capture: Boolean, parentLifecycle: Boolean) {
         assertEquals(37, Build.VERSION.SDK_INT)
         val ins = InstrumentationRegistry.getInstrumentation()
         val context = ins.targetContext
@@ -83,7 +84,7 @@ class KeyguardR445WindowCompositionTest {
         var surfacePackage: SurfaceControlViewHost.SurfacePackage? = null
         var calibration: KeyguardR22VisualCalibration? = null
         var underlay: Bitmap? = null
-        val evidence = StringBuilder("fixture=two-app-windows service=real source=sample-clock backend=experimental capture=$capture\n")
+        val evidence = StringBuilder("fixture=two-app-windows service=real source=sample-clock backend=experimental capture=$capture parentLifecycle=$parentLifecycle\n")
         try {
             shell("input keyevent KEYCODE_WAKEUP")
             shell("wm dismiss-keyguard")
@@ -227,6 +228,80 @@ class KeyguardR445WindowCompositionTest {
             waitFor("reference B live pixels outside opaque upper window") { matches(reference.b, "b-${attempt++}") }
             shell("input tap ${patchBounds.centerX()} ${patchBounds.centerY()}")
             waitFor("upper-window touch after attach") { touches.get() >= 2 }
+            if (parentLifecycle) {
+                val originalBounds = Rect(hostBounds)
+                main {
+                    val window = windowActivity.window
+                    window.setGravity(Gravity.TOP or Gravity.LEFT)
+                    window.setLayout(originalBounds.width() - 120, originalBounds.height() - 240)
+                    window.attributes = window.attributes.apply { this.x = 40; this.y = 60 }
+                }
+                waitFor("real host window moved and resized") {
+                    val windows = service.windows
+                    try {
+                        val current = windows.firstOrNull { it.id == hostId }
+                        if (current == null) false else {
+                            current.getBoundsInScreen(hostBounds)
+                            hostBounds != originalBounds && hostBounds.width() < originalBounds.width() &&
+                                hostBounds.height() < originalBounds.height()
+                        }
+                    } finally { windows.forEach { it.recycle() } }
+                }
+                orbBounds.offset(hostBounds.left - originalBounds.left, hostBounds.top - originalBounds.top)
+                main {
+                    val location = IntArray(2); patch.getLocationOnScreen(location)
+                    patchBounds.set(location[0], location[1], location[0] + patch.width, location[1] + patch.height)
+                    view.frame(System.nanoTime())
+                }
+                assertTrue("NOT REACHED: moved upper patch still overlaps", Rect.intersects(patchBounds, orbBounds))
+                attempt = 0
+                waitFor("sample follows the moved/resized actual host") { matches(reference.b, "moved-${attempt++}") }
+                evidence.append("parentMoved=$originalBounds->$hostBounds\n")
+                main {
+                    upperPatch?.let { checkNotNull(upperManager).removeViewImmediate(it) }
+                    upperPatch = null
+                    windowActivity.finish()
+                }
+                waitFor("actual old parent removed") {
+                    val windows = service.windows
+                    try { windows.none { it.id == hostId } } finally { windows.forEach { it.recycle() } }
+                }
+                val replacement = ins.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
+                activity = replacement
+                val replacementTouches = AtomicInteger()
+                val replacementColor = Color.rgb(213, 13, 37)
+                main {
+                    replacement.setContentView(FrameLayout(replacement).apply {
+                        setBackgroundColor(replacementColor)
+                        setOnTouchListener { _, event ->
+                            if (event.action == MotionEvent.ACTION_UP) replacementTouches.incrementAndGet()
+                            true
+                        }
+                    })
+                    // An old producer may still request work after the parent
+                    // disappeared. It must not draw into the new window.
+                    view.frame(System.nanoTime())
+                }
+                ins.waitForIdleSync()
+                attempt = 0
+                waitFor("replacement has no old attached sample") {
+                    val shot = checkNotNull(ui.takeScreenshot())
+                    try {
+                        save("r445-replacement-${attempt++}", shot)
+                        val color = shot.getPixel(orbBounds.centerX(), orbBounds.centerY())
+                        val matchesBackground = abs(Color.red(color) - Color.red(replacementColor)) <= 3 &&
+                            abs(Color.green(color) - Color.green(replacementColor)) <= 3 &&
+                            abs(Color.blue(color) - Color.blue(replacementColor)) <= 3
+                        evidence.append("replacementCenter=$color background=$matchesBackground\n")
+                        matchesBackground
+                    } finally { shot.recycle() }
+                }
+                shell("input tap ${orbBounds.centerX()} ${orbBounds.centerY()}")
+                waitFor("replacement-window input") { replacementTouches.get() > 0 }
+                evidence.append("parentMutation=PASS replacementInput=PASS lateProducer=NOT_VISIBLE\n")
+                return
+            }
             main { SurfaceControl.Transaction().use { it.setVisibility(checkNotNull(surfacePackage).surfaceControl, false).apply() } }
             attempt = 0
             waitFor("withdrawn surface underlay") {

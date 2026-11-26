@@ -106,7 +106,7 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR444SystemUiExtendedObservationTest.kt
     sha256sum "$fixture" > "$out/fixture-r444-actual.sha256"
   fi
-  if [[ "$TEST_SCOPE" == r445_composition* ]]; then
+  if [[ "$TEST_SCOPE" == r445_composition* || "$TEST_SCOPE" == r445_parent ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR445WindowCompositionTest.kt"
     test -f "$fixture"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR445WindowCompositionTest.kt
@@ -176,6 +176,10 @@ case "${1:-}" in
     r445_composition_capture)
       class=com.fluvi.app.lockscreen.KeyguardR445WindowCompositionTest
       methods=(actualAttachedSurfaceWithCaptureStaysBelowIndependentUpperWindow)
+      ;;
+    r445_parent)
+      class=com.fluvi.app.lockscreen.KeyguardR445WindowCompositionTest
+      methods=(actualParentMoveResizeAndReplacementRetireTheChild)
       ;;
     r444_reason)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
