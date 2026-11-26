@@ -23,6 +23,9 @@ on:
       candidate_url:
         type: string
         default: ''
+      baseline_apk:
+        type: string
+        default: 'r44_2_owner'
       stage_sha256:
         type: string
         default: ''
@@ -279,6 +282,7 @@ jobs:
       CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
       CANDIDATE_SIZE: ${{ inputs.candidate_size }}
       CANDIDATE_URL: ${{ inputs.candidate_url }}
+      R44_BASELINE: ${{ inputs.baseline_apk }}
       R44_STAGE_SHA256: ${{ inputs.stage_sha256 }}
       R44_STAGE_SIZE: ${{ inputs.stage_size }}
       FLUVI_R44_STAGE_KEY: ${{ secrets.FLUVI_R44_UPDATE_STAGE_KEY }}

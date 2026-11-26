@@ -2,6 +2,21 @@
 set -euo pipefail
 out="$RUNNER_TEMP/r44-update"
 mkdir -p "$out"
+case "${R44_BASELINE:-r44_2_owner}" in
+  r44_1)
+    base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/1f842db6394e0a44904133ae4825820cf61418f7/Fluvi_R44.1_HUMAN_1cd0b8fb31f6.apk'
+    base_size=121072400
+    base_sha=58915a3a0161b9132af821a72c789fb00c266f047c052ec597bd57af7f523b9c;;
+  r44_2_owner)
+    base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/22ce8d1c96ec2e11cc3a6a8321c50849223a5edc/fluvi_R44_2_HUMAN_3c6618400e54.apk'
+    base_size=121170704
+    base_sha=3fbd2c77c36125a2ecd1e8144b285b5f70f9f86994cbc7a55c8215d6575af31d;;
+  r44_2_successor)
+    base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/d8c099290874ea2c9b8b4b88615acb993aeb281e/fluvi_R44_2_HUMAN_31df90e7dc83.apk'
+    base_size=121170704
+    base_sha=e62fa8ce52aae4ee1b06fe3705fe57c24ff5a6b70bee5004d4ab1cb25906eb76;;
+  *) printf 'unrecognised baseline\n' >&2; exit 2;;
+esac
 case "$1" in
   prepare)
     [[ "$APP_SHA" =~ ^[0-9a-f]{40}$ && "$CANDIDATE_SHA256" =~ ^[0-9a-f]{64}$ && "$CANDIDATE_SIZE" =~ ^[0-9]+$ ]]
@@ -9,9 +24,9 @@ case "$1" in
       test -s "$out/r43.apk"
       test -s "$out/r44.apk"
     else
-    curl -fLsS --retry 3 'https://media.githubusercontent.com/media/elizerpist/exptv2/1f842db6394e0a44904133ae4825820cf61418f7/Fluvi_R44.1_HUMAN_1cd0b8fb31f6.apk' -o "$out/r43.apk"
-    test "$(wc -c < "$out/r43.apk")" -eq 121072400
-    printf '%s  %s\n' 58915a3a0161b9132af821a72c789fb00c266f047c052ec597bd57af7f523b9c "$out/r43.apk" | sha256sum -c -
+    curl -fLsS --retry 3 "$base_url" -o "$out/r43.apk"
+    test "$(wc -c < "$out/r43.apk")" -eq "$base_size"
+    printf '%s  %s\n' "$base_sha" "$out/r43.apk" | sha256sum -c -
     case "$CANDIDATE_URL" in
       https://media.githubusercontent.com/media/elizerpist/exptv2/*/*.zstpatch.enc)
         [[ "$R44_STAGE_SHA256" =~ ^[0-9a-f]{64}$ && "$R44_STAGE_SIZE" =~ ^[0-9]+$ && -n "${FLUVI_R44_STAGE_KEY:-}" ]]
@@ -27,8 +42,8 @@ case "$1" in
       *) printf '%s\n' 'unsupported candidate source' >&2; exit 2;;
     esac
     fi
-    test "$(wc -c < "$out/r43.apk")" -eq 121072400
-    printf '%s  %s\n' 58915a3a0161b9132af821a72c789fb00c266f047c052ec597bd57af7f523b9c "$out/r43.apk" | sha256sum -c -
+    test "$(wc -c < "$out/r43.apk")" -eq "$base_size"
+    printf '%s  %s\n' "$base_sha" "$out/r43.apk" | sha256sum -c -
     test "$(wc -c < "$out/r44.apk")" -eq "$CANDIDATE_SIZE"
     printf '%s  %s\n' "$CANDIDATE_SHA256" "$out/r44.apk" | sha256sum -c -
     signer=$(find "$ANDROID_HOME/build-tools" -mindepth 2 -maxdepth 2 -name apksigner -type f | sort -V | tail -1)
@@ -121,7 +136,7 @@ for name,expected in seed.items():
 PY
     cmp "$out/sentinel.txt" "$out/sentinel-before.txt"
     cmp "$out/sentinel.txt" "$out/sentinel-after.txt"
-    printf '%s\n' 'PASS: genuine signed R44.1 to candidate install -r; synthetic preferences and sentinel survived on API 37.' > "$out/result.txt"
+    printf '%s\n' 'PASS: genuine signed selected baseline to candidate install -r; synthetic preferences and sentinel survived on API 37.' > "$out/result.txt"
     printf 'bound_before=%s bound_after=%s\n' "$bound_before" "$bound_after" >> "$out/service-gate.txt"
     # Exercise the control in the installed signed profile. A missing semantic
     # node, startup crash or unacknowledged action is an explicit failure, not
