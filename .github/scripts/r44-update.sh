@@ -125,6 +125,14 @@ XML
     adb push "$out/seed.xml" /data/local/tmp/r44-seed.xml > /dev/null
     adb push "$out/sentinel.txt" /data/local/tmp/r44-sentinel.txt > /dev/null
     adb shell 'run-as com.fluvi.app sh -c "mkdir -p files shared_prefs; cp /data/local/tmp/r44-seed.xml shared_prefs/fluvi_native_keyguard_card.xml; cp /data/local/tmp/r44-sentinel.txt files/r44-update-sentinel.txt"'
+    if [[ "${R47_ROUTE_UPDATE_CHECK:-false}" == true ]]; then
+      cat > "$out/route-seed.xml" <<'XML'
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map><string name="route">WIDGETS_ANYWHERE</string></map>
+XML
+      adb push "$out/route-seed.xml" /data/local/tmp/r47-route-seed.xml > /dev/null
+      adb shell 'run-as com.fluvi.app sh -c "cp /data/local/tmp/r47-route-seed.xml shared_prefs/fluvi_keyguard_r448_display_route.xml"'
+    fi
     # force-stop above protects the seeded preferences but leaves the package
     # stopped. Launch the original app before asking Android to bind its
     # accessibility service; otherwise the pre-update service is unreachable.
@@ -175,6 +183,9 @@ XML
     fi
     adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$out/prefs-before.xml"
     adb exec-out run-as com.fluvi.app cat files/r44-update-sentinel.txt > "$out/sentinel-before.txt"
+    if [[ "${R47_ROUTE_UPDATE_CHECK:-false}" == true ]]; then
+      adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_keyguard_r448_display_route.xml > "$out/route-before.xml"
+    fi
     adb install -r "$out/r44.apk" > "$out/install-r44.txt" 2>&1
     bound_after=true
     if ! observe after; then
@@ -183,6 +194,16 @@ XML
     fi
     adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$out/prefs-after.xml"
     adb exec-out run-as com.fluvi.app cat files/r44-update-sentinel.txt > "$out/sentinel-after.txt"
+    if [[ "${R47_ROUTE_UPDATE_CHECK:-false}" == true ]]; then
+      adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_keyguard_r448_display_route.xml > "$out/route-after.xml"
+      python3 - "$out/route-before.xml" "$out/route-after.xml" > "$out/route-update-check.txt" <<'PY'
+import sys,xml.etree.ElementTree as ET
+for p in sys.argv[1:]:
+    values={n.attrib.get('name'):(n.text or '') for n in ET.parse(p).getroot()}
+    assert values.get('route') == 'WIDGETS_ANYWHERE', (p, values)
+    print(p, 'non-default route PASS')
+PY
+    fi
     python3 - "$out/seed.xml" "$out/prefs-before.xml" "$out/prefs-after.xml" > "$out/settings-check.txt" <<'PY'
 import sys,xml.etree.ElementTree as ET
 def values(p):
@@ -196,6 +217,10 @@ PY
     cmp "$out/sentinel.txt" "$out/sentinel-after.txt"
     printf '%s\n' 'PASS: genuine signed selected baseline to candidate install -r; synthetic preferences and sentinel survived on API 37.' > "$out/result.txt"
     printf 'bound_before=%s bound_after=%s\n' "$bound_before" "$bound_after" >> "$out/service-gate.txt"
+    if [[ "${R47_ROUTE_UPDATE_CHECK:-false}" == true ]]; then
+      [[ "$bound_before" == true && "$bound_after" == true ]]
+      exit 0
+    fi
     if [[ "${R44_REOPEN_ONLY:-false}" == true ]]; then
       # Independent activity reopen control: no UiAutomator connection and no
       # forced package stop; the preceding run covers the trial and freeze.
