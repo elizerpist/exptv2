@@ -49,11 +49,14 @@ internal object KeyguardR449RestrictionEvidence {
         val shade = KeyguardR44Markers.Marker.SHADE in markers ||
             KeyguardR44Markers.Marker.QUICK_SETTINGS in markers || legacy.surface == KeyguardSurface.SHADE
         val power = ids.any { it.contains("global_actions", ignoreCase = true) }
-        val explicitForeign = primary.any { it.packageName != null && it.packageName != "com.android.systemui" }
         val hosts = primary.filter { it.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
             it.packageName == "com.android.systemui" && it.r444Active == true && it.r444Focused == true &&
             it.r44?.let { e -> e.verifiedRoot && e.active && e.complete && !e.foreignNode } == true }
         val host = hosts.singleOrNull()
+        // A known app behind a verified active SystemUI host cannot
+        // cover that host. Unknown or higher windows remain fail-closed.
+        val explicitForeign = primary.any { it.packageName != null && it.packageName != "com.android.systemui" &&
+            (host == null || it.layer >= host.layer) }
         val incomplete = unavailable || truncated || primary.isEmpty() || host == null || primary.any {
             it.packageName == null || (it.packageName == "com.android.systemui" &&
                 (it.type != AccessibilityWindowInfo.TYPE_SYSTEM ||

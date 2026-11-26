@@ -46,6 +46,14 @@ class KeyguardR449RestrictionEvidenceTest {
         assertEquals(KeyguardR448Admission.Presence.PRESENT, result.exclusions.foreign)
     }
 
+    @Test fun verifiedBackgroundAppBelowHostIsNotForeignCoverage() {
+        val behind = KeyguardWindowSnapshot("other.app", 1, 0, 0, windowId = 7)
+        val result = KeyguardR449RestrictionEvidence.fromInventory(listOf(host(), behind), 50, false, false)
+        assertEquals(KeyguardR448Admission.Presence.CLEAR, result.exclusions.foreign)
+        val equalLayer = KeyguardR449RestrictionEvidence.fromInventory(listOf(host(), behind.copy(layer = 1)), 50, false, false)
+        assertEquals(KeyguardR448Admission.Presence.PRESENT, equalLayer.exclusions.foreign)
+    }
+
     @Test fun oneUnknownUpperIsARefreshHintOnly() {
         val upper = KeyguardWindowSnapshot(null, 3, 2, 0, windowId = 8)
         val incomplete = KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.ROOT_UNAVAILABLE,
