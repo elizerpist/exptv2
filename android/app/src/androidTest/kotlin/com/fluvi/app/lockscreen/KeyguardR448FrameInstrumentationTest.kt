@@ -73,8 +73,12 @@ class KeyguardR448FrameInstrumentationTest {
             waitFor("real accessibility service") { FluviKeyguardCardServiceRegistry.connected }
             val service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
             KeyguardR44Trial.set(true, true)
-            val profile = checkNotNull(KeyguardR44Trial.profile(null)).neutralized()
-            calibration = KeyguardR22VisualCalibration(ins, out, ui, profile, discloseFull = false).also { it.calibrate() }
+            val original = checkNotNull(KeyguardR44Trial.profile(null))
+            val profile = original.neutralized()
+            // The calibration derives both domains from the original profile;
+            // passing an already-neutralized input makes its contrast control
+            // compare the same palette to itself and cannot qualify the fixture.
+            calibration = KeyguardR22VisualCalibration(ins, out, ui, original, discloseFull = false).also { it.calibrate() }
             val reference = checkNotNull(calibration)
             activity = ins.startActivitySync(Intent(context, KeyguardMaterialTestActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
