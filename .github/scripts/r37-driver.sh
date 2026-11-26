@@ -133,6 +133,12 @@ case "${1:-}" in
     sha256sum "$fixture" > "$out/fixture-r447-stock.sha256"
     git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR446StockServiceInstrumentationTest.kt > "$out/fixture-r447-stock.patch"
   fi
+  if [[ "$TEST_SCOPE" == r448_stock_wa ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR448StockServiceInstrumentationTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR448StockServiceInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r448-stock-wa.sha256"
+  fi
   if [[ "$TEST_SCOPE" == r447_handoff_stable ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR447HandoffStableInstrumentationTest.kt"
     test -f "$fixture"
@@ -257,6 +263,10 @@ case "${1:-}" in
     r448_wa_service)
       class=com.fluvi.app.lockscreen.KeyguardR447HandoffServiceInstrumentationTest
       methods=(selectedWidgetsAnywhereUsesIndependentSampleFrame)
+      ;;
+    r448_stock_wa)
+      class=com.fluvi.app.lockscreen.KeyguardR448StockServiceInstrumentationTest
+      methods=(selectedWaUsesRealStockWakeAndIndependentPixels)
       ;;
     r446_stock|r446_stock_observed|r447_stock_observed)
       class=com.fluvi.app.lockscreen.KeyguardR446StockServiceInstrumentationTest
