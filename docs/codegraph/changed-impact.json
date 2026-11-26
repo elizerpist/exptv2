@@ -1,16 +1,12 @@
 {
   "schema_version": 1,
-  "source_head": "14e05315520ff3282348838804ff6e004c677d30",
-  "base_head": "5b18235f261df24dcee06cf3050e3e20411612fa",
+  "source_head": "31df90e7dc8316fe57d030ce00ef85c726cc3b94",
+  "base_head": "3c6618400e5486517bd5fdf9a5cd912485eb8a34",
   "changed_files": [
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardInspectionQueue.kt",
     "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR32OverlapPolicy.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR32OverlapPolicyTest.kt"
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR44TreeReader.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardWindowSnapshotReader.kt",
+    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR22ReaderHandoffTest.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
