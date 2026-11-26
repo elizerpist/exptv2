@@ -264,7 +264,15 @@ PY
           adb shell input tap $coords
           return 0
         fi
-        if (( attempt > 3 )); then scroll_controls "$out/ui-$name.xml" down; fi
+        if (( attempt > 3 )); then
+          if [[ "$name" == r446-action ]] && (( attempt <= 12 )); then
+            # After checking the older frozen control the new button is
+            # above it, as shown by the retained pre-freeze UI hierarchy.
+            scroll_controls "$out/ui-$name.xml" up
+          else
+            scroll_controls "$out/ui-$name.xml" down
+          fi
+        fi
         sleep 1
       done
       printf 'NOT REACHED: %s\n' "$label" >> "$out/ui-result.txt"
