@@ -53,7 +53,7 @@ class KeyguardR448BoundaryParentInstrumentationTest {
   val component=ComponentName(context,FluviKeyguardCardService::class.java)
   val early=CountDownLatch(1); val release=CountDownLatch(1); val post=CountDownLatch(1)
   val earlyId=AtomicLong(0); val postId=AtomicLong(0); val screenAt=AtomicLong(0); val unrelated=AtomicInteger(0)
-  val note=StringBuilder("parent=ee852850 actualService=true actualPlatformWake=true syntheticClassification=false controlledEventSubscription=true\n")
+  val note=StringBuilder("applicationIdentity=source.txt actualService=true actualPlatformWake=true syntheticClassification=false controlledEventSubscription=true\n")
   var service:FluviKeyguardCardService?=null
   try {
    shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard"); waitFor("unlocked setup") { !keyguard.isKeyguardLocked }
