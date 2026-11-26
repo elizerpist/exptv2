@@ -325,6 +325,11 @@ PY
           elif [[ "$name" == r448-select-* ]]; then
             if (( attempt > 10 )); then scroll_controls "$out/ui-$name.xml" up fine
             else scroll_controls "$out/ui-$name.xml" down fine; fi
+          elif [[ "$name" == r45-action || "$name" == r45-shape ]]; then
+            # The choices occupy a short nested Flutter scroll view. Large
+            # swipes skipped over these controls in the first R45 runs.
+            if (( attempt > 10 )); then scroll_controls "$out/ui-$name.xml" up fine
+            else scroll_controls "$out/ui-$name.xml" down fine; fi
           else
             scroll_controls "$out/ui-$name.xml" down
           fi

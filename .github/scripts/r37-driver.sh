@@ -274,7 +274,7 @@ case "${1:-}" in
       ;;
     r448_pressure)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
-      methods=(r448BoundaryAndVetoSurviveLightPressure r448BoundaryAndVetoSurviveFullPressure r448TwoFrozenRouteSummariesRemainDistinct)
+      methods=(r448BoundaryAndVetoSurviveLightPressure r448BoundaryAndVetoSurviveFullPressure r448TwoFrozenRouteSummariesRemainDistinct r45ComparisonKeepsThreeWakeReceiptsBeforeVerboseRows)
       ;;
     r448_route_preferences)
       class=com.fluvi.app.lockscreen.KeyguardR448DisplayRouteInstrumentationTest
