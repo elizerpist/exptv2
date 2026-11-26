@@ -1,4 +1,4 @@
-name: R46 Android 17 exact-source code graph
+name: R47 active-header exact-source code graph
 on:
   workflow_dispatch:
     inputs:
@@ -26,7 +26,7 @@ jobs:
     timeout-minutes: 35
     env:
       APP_SHA: ${{ inputs.app_sha }}
-      TOOLING_BASE: b3847093bcc9a6aae80c329b8ad5f1844bab32c5
+      TOOLING_BASE: 3e7ee45b35c4ac13a42cc468ab1d8b1298aae589
     steps:
       - uses: actions/checkout@v5
         with:
@@ -60,10 +60,10 @@ jobs:
           dart analyze > "$out/analyze.txt" 2>&1
           dart test > "$out/test.txt" 2>&1
           dart run bin/fluvi_codegraph.dart generate --index "$source_dir/index.scip" --graph "$tooling_dir/docs/codegraph" --source-root "$source_dir" --source-head "$APP_SHA" --source-ref "$APP_SHA" > "$out/generate.txt"
-          for symbol in KeyguardTimingCaptureBridge KeyguardTimingCaptureSnapshot DebugConsoleDialog; do
+          for symbol in DashboardKeyguardMaterialBridge DashboardHeaderMaterialSnapshot DashboardHeaderOrbMaterialExportCoordinator KeyguardTimingCaptureBridge KeyguardTimingCaptureSnapshot DebugConsoleDialog; do
             printf '\n## %s\n' "$symbol"
             dart run bin/fluvi_codegraph.dart query --graph "$tooling_dir/docs/codegraph" --symbol "$symbol"
-          done > "$tooling_dir/docs/codegraph-r46-android17-query.txt"
+          done > "$tooling_dir/docs/codegraph-r47-header-query.txt"
           python3 - "$tooling_dir/docs/codegraph" "$APP_SHA" "$source_dir/index.scip" > "$out/verification.txt" <<'PY'
           import hashlib,json,pathlib,sys
           root=pathlib.Path(sys.argv[1]); m=json.loads((root/'manifest.json').read_text())
@@ -81,10 +81,10 @@ jobs:
                   shards+=1
           print('source=',sys.argv[2],'shards=',shards,'documents=',m['document_count'],'repo_symbols=',m['repository_defined_symbol_count'])
           PY
-          report="$tooling_dir/docs/codegraph-r46-android17-inventory.md"
-          printf '# R46 exact-source public recording and route inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
+          report="$tooling_dir/docs/codegraph-r47-header-inventory.md"
+          printf '# R47 exact-source active header and route inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
           printf 'The SCIP graph covers Dart only. Kotlin lines below are direct source navigation, not generated edges or proof of runtime behavior. Native submission and transaction receipts are not physical pixels.\n\n```text\n' >> "$report"
-          (cd "$source_dir" && git grep -n -E 'KeyguardR44|KeyguardR45|KeyguardR46|r44[A-Z_]|r447|r448|r449|r45|r46|R44_|R45_|R46_|KeyguardFirstAuthorizedOrb|KeyguardInspectionFreshness|KeyguardWindowSnapshotReader|KeyguardSurfaceClassifier|inspectSurface|readSystemWindows|recordR44|KeyguardCardVisibilityPolicy|setR44SyntheticTrial|startCapture|freezeCapture|formatReport' -- android/app/src/main/kotlin/com/fluvi/app/MainActivity.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen android/app/src/test/kotlin/com/fluvi/app/lockscreen android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen) >> "$report"
+          (cd "$source_dir" && git grep -n -E 'KeyguardR44|KeyguardR45|KeyguardR46|KeyguardR47|FluviActiveHeaderMaterialStore|r44[A-Z_]|r447|r448|r449|r45|r46|r47|R44_|R45_|R46_|R47_|KeyguardFirstAuthorizedOrb|KeyguardInspectionFreshness|KeyguardWindowSnapshotReader|KeyguardSurfaceClassifier|inspectSurface|readSystemWindows|recordR44|KeyguardCardVisibilityPolicy|setR44SyntheticTrial|startCapture|freezeCapture|formatReport' -- android/app/src/main/kotlin/com/fluvi/app/MainActivity.kt android/app/src/main/kotlin/com/fluvi/app/lockscreen android/app/src/test/kotlin/com/fluvi/app/lockscreen android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen) >> "$report"
           printf '\n```\n' >> "$report"
           sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$out/manifest-sha256.txt"
           printf 'source_dir=%s\ntooling_dir=%s\n' "$source_dir" "$tooling_dir" > "$out/paths.txt"
@@ -95,11 +95,11 @@ jobs:
           cd tooling
           git config user.name 'Fluvi Graph Bot'
           git config user.email 'fluvi-graph@users.noreply.github.com'
-          git add docs/codegraph docs/codegraph-r46-android17-inventory.md docs/codegraph-r46-android17-query.txt
+          git add docs/codegraph docs/codegraph-r47-header-inventory.md docs/codegraph-r47-header-query.txt
           git diff --cached --check
-          git commit -m 'graph: index R46 Android 17 exact source [skip ci]'
+          git commit -m 'graph: index R47 active header exact source [skip ci]'
           git rev-parse HEAD > "$RUNNER_TEMP/r34-graph/graph-commit.txt"
-          graph_ref="tooling/r46-android17-${APP_SHA:0:12}"
+          graph_ref="tooling/r47-active-header-${APP_SHA:0:12}"
           test -z "$(git ls-remote origin "refs/heads/$graph_ref")"
           git push origin "HEAD:refs/heads/$graph_ref"
       - name: Preserve graph receipts
@@ -109,7 +109,7 @@ jobs:
           name: r34-stock-graph-${{ github.run_id }}
           path: |
             tooling/docs/codegraph/**
-            tooling/docs/codegraph-r46-android17-*
+            tooling/docs/codegraph-r47-header-*
             ${{ runner.temp }}/r34-graph/**
           if-no-files-found: warn
           retention-days: 30
