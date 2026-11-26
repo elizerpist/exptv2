@@ -23262,3 +23262,81 @@ First Hungarian line: verified direct link to the delivered APK, or the concrete
 On the delivered authorized build, both routes follow the **current** header through two visibly different settings, move when the header moves, stay present through a held eligible lockscreen, and disappear on an actual restrictive transition. The signed A/B checks include independent pixel evidence and no cross-domain leak. The normal launcher widget and R46 recorder still work. A fixed demo that animates, a repeated frame at 120 draws/s, the wrong active mode or an unexplained two-second disappearance does not meet the requested outcome.
 
 PHYSICAL VALIDATION — PENDING, USER ONLY
+
+## 2026-11-26 — R47 implementation and qualification, interim evidence
+
+This is an interim engineering record, not an acceptance or a phone-install
+instruction. Application branch `implement/r47-header-orb-parity` has source
+`346213e32f0674e359cabc966852b892f5add7a3` (tested R46 parent
+`fd74df6057793f6fdd12e0ccb61a20bdbfdd7f20`). The application, test-harness,
+graph and delivery artifacts are distinct. The two raw Nothing captures cited
+above were not available in this workspace; only the supplied audit was read.
+
+The candidate publishes the committed foreground header independently of the
+configured card/widget, retains one generation in process memory, separates
+the public fixture from current-header admission, invalidates stale producers,
+and adds separate presenter adapters. Static motion preference is propagated.
+The current implementation uses a semantic shader profile; it does not yet
+prepare an active-header verified finite-loop package and conservatively
+classifies all current header profiles as private. No owner palette, image or
+financial values are added to this journal.
+
+* Baseline source-selection control reached the intended boundary and failed
+  against fd74 (`[]` for a current-header publication). The Mesa fixture was
+  unchanged at both recorded phases, while the selected-default reference
+  changed 70.36% and 78.68% of the 8,741-pixel interior at 1.9 s. These are
+  reference controls, not a phone measurement. The complete baseline route
+  pixel/lifetime matrix was not reproduced.
+* Exact-source JVM tests [45911063283](https://github.com/elizerpist/exptv2/actions/runs/45911063283)
+  passed 658/658. Flutter targeted and static-analysis evidence, the baseline
+  control and boundary checks were also retained with the runner evidence.
+  Full pipeline [45911062865](https://github.com/elizerpist/exptv2/actions/runs/45911062865)
+  was still running when this checkpoint was written; its dashboard profile
+  job had already failed.
+* A clean app-owned host on API 37 compared synthetic canonical Flutter
+  images with both native presenters. The reference-phase comparisons reached
+  both styles and the static control. With a verified green underlay, the
+  first after-conceal sample retained orb pixels in WA for all three styles
+  ([45911063275](https://github.com/elizerpist/exptv2/actions/runs/45911063275))
+  and in direct for the static case
+  ([45911063274](https://github.com/elizerpist/exptv2/actions/runs/45911063274)).
+  All 15,648 interior pixels differed from the underlay in these failing
+  samples; the next sampled images matched. Sampling intervals were bracketed,
+  and these are not proven stock PIN/shade frames. They nonetheless fail the
+  requested first-removal control and need reviewer investigation.
+* The initial natural-clock test was not decisive: its first alleged live
+  image exactly matched the previous injected 6 s frame, so a near-identical
+  next 6 s image cannot prove the source was stationary. Keep those failed
+  runs. Corrected fixture-only controls, which first verify phase zero on the
+  compositor and keep the first-hide assertions, were launched as
+  [45912275885](https://github.com/elizerpist/exptv2/actions/runs/45912275885)
+  and [45912279165](https://github.com/elizerpist/exptv2/actions/runs/45912279165).
+* The signed R46-to-candidate update and synthetic settings/sentinel retention
+  passed on API 37 in both
+  [45911941921](https://github.com/elizerpist/exptv2/actions/runs/45911941921)
+  and [45911945245](https://github.com/elizerpist/exptv2/actions/runs/45911945245).
+  Each single-wake report was pasted byte-identically into an independent
+  package. Fluvi did not reach a same-wake draw; WA reported a current-header
+  software draw. The three-wake independent paste did not complete in either
+  run; the sealed WA report separately contained three current-header software
+  draw receipts. These receipts are not optical proof. Android animations were
+  disabled by that emulator setup, so the source was intentionally static;
+  further qualified motion and receiver controls were launched separately.
+* Exact-source Dart SCIP graph commit
+  [`ff46cf95d5cf6b35ee478ab6310a978e971e5268`](https://github.com/elizerpist/exptv2/tree/ff46cf95d5cf6b35ee478ab6310a978e971e5268/docs/codegraph)
+  records 814 documents, index SHA-256
+  `fa578089e3c07d12dba3c59ead4c540e781916a9d60985cbe9393906d28819b0`
+  and manifest SHA-256
+  `e13d90e3f5e3889ee53a9cf4fa1aab53430da806db51a5ca6213b67b1e9caf6a`.
+  Kotlin navigation is a manual inventory, not SCIP coverage.
+* The normal HUMAN profile was built from the app SHA above and signed with
+  the R46 update certificate `faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`.
+  Its local SHA-256 is `5307e4deb61e54f5b4ba345c4036f2870c37d5caa7a625c7b149a26e49ea12e0`,
+  121,502,673 bytes. No public owner download is asserted here. The current
+  private-material candidate is **not qualified for delivery** while the
+  first-after-hide failures and signed real-screen checks remain open.
+
+R46's API 35 material/service failures and first WA removal failure remain
+historical negative evidence, not passes for this candidate. Physical Nothing
+acceptance and any 10 ms claim are pending the owner; neither emulator
+callbacks nor reference pixels establish physical presentation timing.
