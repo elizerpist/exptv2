@@ -27,6 +27,11 @@ case "${1:-}" in
         sha256sum "$fixture" >> "$out/fixture.sha256"
       done
       git diff > "$out/fixture.patch"
+    elif [[ "$TEST_SCOPE" == r44_2_race ]]; then
+      fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR442ReceiptRaceInstrumentationTest.kt"
+      test -f "$fixture"
+      cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR442ReceiptRaceInstrumentationTest.kt
+      sha256sum "$fixture" > "$out/fixture.sha256"
     elif [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui ]]; then
       fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt"
       test -f "$fixture"
@@ -131,6 +136,10 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r44_2_race)
+      class=com.fluvi.app.lockscreen.KeyguardR442ReceiptRaceInstrumentationTest
+      methods=(captureCreationRaceRejectsDoubleStartAndChangedMaterial)
+      ;;
     r44_2_owner)
       class=com.fluvi.app.lockscreen.KeyguardR442OwnerInstrumentationTest
       methods=(serviceOwnsSampleCaptureReceiptAndInvalidatesIt)
