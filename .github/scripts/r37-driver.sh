@@ -126,6 +126,13 @@ case "${1:-}" in
     sha256sum "$fixture" > "$out/fixture-r446-stock.sha256"
     git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR446StockServiceInstrumentationTest.kt > "$out/fixture-r446-stock.patch"
   fi
+  if [[ "$TEST_SCOPE" == r447_stock_observed ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR447StockServiceInstrumentationTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR446StockServiceInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r447-stock.sha256"
+    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR446StockServiceInstrumentationTest.kt > "$out/fixture-r447-stock.patch"
+  fi
   if [[ "$TEST_SCOPE" == r446_parent_mutation ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR446ParentMutationInstrumentationTest.kt"
     test -f "$fixture"
@@ -204,7 +211,7 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR447HandoffServiceInstrumentationTest
       methods=(internalDuplicateAfterPhysicalReadIssuesOnce sameHostExternalIngressRejectsOldRead)
       ;;
-    r446_stock|r446_stock_observed)
+    r446_stock|r446_stock_observed|r447_stock_observed)
       class=com.fluvi.app.lockscreen.KeyguardR446StockServiceInstrumentationTest
       methods=(actualStockWakeUsesOwnerPrintAndStops)
       ;;
