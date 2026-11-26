@@ -109,6 +109,53 @@ PY
     cmp "$out/sentinel.txt" "$out/sentinel-before.txt"
     cmp "$out/sentinel.txt" "$out/sentinel-after.txt"
     printf '%s\n' 'PASS: genuine signed R44.1 to candidate install -r; synthetic preferences, sentinel and live bound service survived on API 37.' > "$out/result.txt"
+    # Exercise the control in the installed signed profile. A missing semantic
+    # node, startup crash or unacknowledged action is an explicit failure, not
+    # evidence from the debug test APK or from a different source.
+    adb shell input keyevent KEYCODE_WAKEUP
+    adb shell wm dismiss-keyguard || true
+    adb shell am start -n com.fluvi.app/.MainActivity > "$out/launch.txt" 2>&1
+    tap_label() {
+      local label=$1 name=$2 coords=''
+      for attempt in $(seq 1 12); do
+        adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
+        adb exec-out cat /sdcard/r442-window.xml > "$out/ui-$name.xml" 2>/dev/null || true
+        coords=$(python3 - "$out/ui-$name.xml" "$label" <<'PY'
+import re,sys,xml.etree.ElementTree as ET
+try:
+    root=ET.parse(sys.argv[1]).getroot()
+    for n in root.iter():
+        if any(sys.argv[2] in n.attrib.get(k,'') for k in ('text','content-desc')):
+            m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
+            if m:
+                a,b,c,d=map(int,m.groups()); print((a+c)//2,(b+d)//2); break
+except (ET.ParseError,OSError): pass
+PY
+)
+        if [[ "$coords" =~ ^[0-9]+\ [0-9]+$ ]]; then
+          adb shell input tap $coords
+          return 0
+        fi
+        if (( attempt > 4 )); then adb shell input swipe 400 1100 400 500 250 || true; fi
+        sleep 1
+      done
+      printf 'NOT REACHED: %s\n' "$label" >> "$out/ui-result.txt"
+      return 1
+    }
+    tap_label 'Debug log' entry
+    tap_label 'ZÁRKÉPERNYŐ' tab
+    tap_label 'Mintaorb kipróbálása és rögzítés' action
+    for attempt in $(seq 1 12); do
+      adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
+      adb exec-out cat /sdcard/r442-window.xml > "$out/ui-receipt.xml" 2>/dev/null || true
+      if grep -Fq 'Mintaorb-próba aktív' "$out/ui-receipt.xml"; then
+        printf '%s\n' 'PASS: signed profile primary control returned an active native sample receipt.' > "$out/ui-result.txt"
+        exit 0
+      fi
+      sleep 1
+    done
+    printf '%s\n' 'FAIL: no active sample receipt observed after the signed profile action.' > "$out/ui-result.txt"
+    exit 1
     ;;
   *) exit 2;;
 esac
