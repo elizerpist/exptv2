@@ -36,6 +36,40 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r447LatestPreIssueDecisionSurvivesLightPressure() = r447LatestDecision("LIGHT")
     @Test fun r447LatestPreIssueDecisionSurvivesFullPressure() = r447LatestDecision("FULL")
 
+    @Test fun r448BoundaryAndVetoSurviveLightPressure() = r448Pressure("LIGHT")
+    @Test fun r448BoundaryAndVetoSurviveFullPressure() = r448Pressure("FULL")
+
+    private fun r448Pressure(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r448-pressure", "profile", mode,
+            r442ExpectedSession = 9448, r446PrintRequested = true)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9448, 7, "wake", 7000))
+        KeyguardCardDiagnostics.captureEvent(context, "SCREEN_ON_RECEIVED", "test",
+            diagnosticContext = owner, observedUptimeMs = 7010)
+        val boundary = KeyguardR448BoundaryObservation(owner, 5, 7010, 40, null, 40, false,
+            KeyguardR448WakeReadBoundary.Decision.OFFER)
+        KeyguardCardDiagnostics.recordR448Boundary(boundary)
+        KeyguardCardDiagnostics.recordR448Worker(KeyguardR448WorkerObservation(owner, 5, 41, 7011,
+            7012, 7030, "COMPLETED", "ELIGIBLE_SAMPLE", true))
+        val veto = KeyguardR448SystemVeto(owner, 5, 99, false, "display", 7020, 7021,
+            7010, 7040, KeyguardSystemState(7022, 7035, true, true, false, false, true, true, false))
+        KeyguardCardDiagnostics.recordR448SystemVeto(veto)
+        KeyguardCardDiagnostics.recordR448SystemVeto(veto.copy(requestId = 100, reason = "later"))
+        repeat(150) { n -> KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure",
+            diagnosticContext = owner, requestId = 1000L + n, observedUptimeMs = 7100L + n) }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val read = report.lineSequence().single { it.startsWith("R44_8_READ_BOUNDARY ") }
+        val gate = report.lineSequence().single { it.startsWith("R44_8_SYSTEM_VETO ") }
+        assertTrue(read, read.contains("active=40 pending=UNOBSERVED"))
+        assertTrue(read, read.contains("boundaryDecision=OFFER workerRequest=41"))
+        assertTrue(read, read.contains("workerStart=7012 workerEnd=7030 workerOutcome=COMPLETED"))
+        assertTrue(gate, gate.contains("request=99 requestCaptureMatched=false"))
+        assertTrue(gate, gate.contains("readStart=7022 readEnd=7035 main=7040"))
+        assertTrue(gate, gate.contains("interactive=false") && gate.contains("displayOff=true"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        KeyguardCardDiagnostics.recordR448SystemVeto(veto.copy(requestId = 101))
+        assertEquals(report, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+    }
+
     /** Each observation is a different physical request on the same armed
      * wake. A later failed attempt must not disappear behind the first two. */
     private fun r447LatestDecision(mode: String) {
