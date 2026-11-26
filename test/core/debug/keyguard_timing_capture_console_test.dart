@@ -213,6 +213,41 @@ void main() {
     expect(find.textContaining('következő elrejtés'), findsOneWidget);
   });
 
+  testWidgets('one action requests an acknowledged sample capture', (tester) async {
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(runtime, (call) async {
+          calls.add(call.method);
+          if (call.method == 'getR44SyntheticTrial') {
+            return <String, Object?>{'available': true, 'enabled': false};
+          }
+          if (call.method == 'startR442SampleCapture') {
+            return <String, Object?>{
+              'active': true,
+              'captureId': 'capture-test',
+              'process': 'process-test',
+              'serviceSession': 1,
+              'snapshot': response('REC', 'LIVE'),
+            };
+          }
+          return response('IDLE', '');
+        });
+    final bridge = KeyguardTimingCaptureBridge(channel: runtime, isAndroid: () => true);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+    ));
+    await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
+    await tester.pumpAndSettle();
+    final start = find.byKey(const ValueKey('debug-console-r442-start'));
+    expect(start, findsOneWidget);
+    await tester.ensureVisible(start);
+    await tester.tap(start);
+    await tester.pumpAndSettle();
+    expect(calls, contains('startR442SampleCapture'));
+    expect(calls, isNot(contains('setR44SyntheticTrial')));
+    expect(find.text('Mintaorb-próba aktív'), findsOneWidget);
+  });
+
   testWidgets('R44 synthetic data requires an explicit switch', (tester) async {
     final changes = <bool>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
