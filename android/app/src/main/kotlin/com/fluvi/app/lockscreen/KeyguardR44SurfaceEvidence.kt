@@ -15,6 +15,8 @@ internal object KeyguardR44Markers {
         value.contentEquals("element:lockscreen") -> Marker.HOST
         value.contentEquals("com.android.systemui:id/device_entry_icon_view") -> Marker.DEVICE_ENTRY
         value.contentEquals("com.android.systemui:id/keyguard_clock_switch") -> Marker.CLOCK_SWITCH
+        value.contentEquals("com.android.systemui:id/lockscreen_clock_view") -> Marker.SMALL_CLOCK
+        value.contentEquals("com.android.systemui:id/lockscreen_clock_view_large") -> Marker.LARGE_CLOCK
         value.contentEquals("element:LargeClock") -> Marker.LARGE_CLOCK
         value.contentEquals("element:SmallClock") -> Marker.SMALL_CLOCK
         value.contentEquals("overlay:bouncer") -> Marker.BOUNCER
@@ -75,6 +77,8 @@ internal data class KeyguardR44WindowEvidence(
     val r444HostParent: Int? = null,
     val r444ContentParent: Int? = null,
     val r444ClockResourceVerified: Boolean = false,
+    val r445IndexStatus: String = "NOT_REQUESTED",
+    val r445IndexCalls: List<KeyguardR445IndexCall> = emptyList(),
 )
 
 internal object KeyguardR44SurfaceClassifier {

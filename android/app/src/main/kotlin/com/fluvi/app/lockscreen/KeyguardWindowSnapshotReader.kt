@@ -228,6 +228,10 @@ internal class KeyguardWindowSnapshotReader(
         val r444Expanded: Boolean = false,
         val r444ClockVerified: Boolean = false,
         val r444UdfpsVerified: Boolean = false,
+        val r445SmallClockVerified: Boolean = false,
+        val r445LargeClockVerified: Boolean = false,
+        /** Claims this physical wake's only optional ID batch, or returns null. */
+        val r445ClaimBatch: (() -> Long?)? = null,
         val r443Boundary: ((String) -> Unit)? = null,
     )
 
@@ -488,6 +492,8 @@ internal class KeyguardWindowSnapshotReader(
         val r44Budget = if (request.r44Enabled) KeyguardR44ExtraBudget() else null
         val r443Inventory = if (r44Budget != null && request.r443Sample && !request.r443Live)
             KeyguardR443Inventory(r44Budget) { authorityIsCurrent() && KeyguardR44Trial.active } else null
+        val deferredReaders = mutableMapOf<Int, KeyguardR44TreeReader>()
+        val r445Roots = mutableMapOf<Int, AccessibilityNodeInfo>()
         try {
         fun observeIngressCall(kind: String, begin: Long, end: Long) {
             if (timing.ingressCallKind != null) return
@@ -664,7 +670,6 @@ internal class KeyguardWindowSnapshotReader(
         var visited = 0
         var readsAfterInvalidation = 0
         val snapshots = mutableListOf<KeyguardWindowSnapshot>()
-        val deferredReaders = mutableMapOf<Int, KeyguardR44TreeReader>()
         for (window in primary) {
             if (!authorityIsCurrent()) {
                 activeRoot?.recycle()
@@ -683,8 +688,8 @@ internal class KeyguardWindowSnapshotReader(
                 snapshots += KeyguardWindowSnapshot(
                     windowId = window.id, packageName = ownPackageName, type = window.type,
                     layer = window.layer, displayId = displayId(window), ownOverlay = true,
-                    r444Active = if (request.r443Diagnostics) window.isActive else null,
-                    r444Focused = if (request.r443Diagnostics) window.isFocused else null,
+                    r444Active = if (request.r443Diagnostics || request.r443Sample) window.isActive else null,
+                    r444Focused = if (request.r443Diagnostics || request.r443Sample) window.isFocused else null,
                     r444OwnGeneration = if (request.r443Diagnostics) request.attachGeneration else null,
                 )
                 request.r43Evidence?.let { evidence -> runCatching {
@@ -718,7 +723,7 @@ internal class KeyguardWindowSnapshotReader(
                     activeLayer?.let { window.layer.toLong() - it.toLong() }, "perWindow")
             }
             val rootPackage = root?.packageName?.toString()
-            val r444RootRole = if (request.r443Diagnostics && rootPackage == "com.android.systemui" && root != null) {
+            val r444RootRole = if ((request.r443Diagnostics || request.r443Sample) && rootPackage == "com.android.systemui" && root != null) {
                 val id = runCatching { root.viewIdResourceName }.getOrNull()
                 if (request.r444UdfpsVerified && id == "com.android.systemui:id/udfps_view") "UDFPS_VERIFIED"
                 else "UNCLASSIFIED"
@@ -757,10 +762,15 @@ internal class KeyguardWindowSnapshotReader(
                         primary.none { other -> other.id != window.id && other.layer >= window.layer &&
                             !isExactKnownOwn(other, scopedRequest) },
                     collectDiagnostics = request.r443Diagnostics, expanded = request.r444Expanded,
-                    genuineClockResource = request.r444ClockVerified).also {
+                    genuineClockResource = request.r444ClockVerified,
+                    genuineSmallClockResource = request.r445SmallClockVerified,
+                    genuineLargeClockResource = request.r445LargeClockVerified).also {
                     if (r443Inventory != null) deferredReaders[window.id] = it
                 }
             } else null
+            if (r443Inventory != null && root != null && r44Window?.isVerifiedActiveRoot() == true) {
+                runCatching { AccessibilityNodeInfo.obtain(root) }.getOrNull()?.let { r445Roots[window.id] = it }
+            }
             // API 37 root extras can themselves carry an exclusion; consume
             // that node in the regular DFS before transferring the reader.
             val rootNext = if (!request.r44Enabled && request.r37YieldHint?.invoke() == true && root != null &&
@@ -838,8 +848,8 @@ internal class KeyguardWindowSnapshotReader(
             snapshots += KeyguardWindowSnapshot(
                 windowId = window.id, packageName = rootPackage, type = window.type, layer = window.layer,
                 displayId = displayId(window), ownOverlay = own, visibleViewIds = visible?.ids.orEmpty(), r44 = visible?.r44,
-                r444Active = if (request.r443Diagnostics) window.isActive else null,
-                r444Focused = if (request.r443Diagnostics) window.isFocused else null,
+                r444Active = if (request.r443Diagnostics || request.r443Sample) window.isActive else null,
+                r444Focused = if (request.r443Diagnostics || request.r443Sample) window.isFocused else null,
                 r444Visited = if (request.r443Diagnostics) visible?.visited else null,
                 r444RootRole = if (r444RootRole == "UNCLASSIFIED" && request.r444UdfpsVerified &&
                     visible?.ids?.contains("com.android.systemui:id/udfps_view") == true)
@@ -866,6 +876,40 @@ internal class KeyguardWindowSnapshotReader(
             for (index in snapshots.indices) {
                 val owner = deferredReaders[snapshots[index].windowId] ?: continue
                 snapshots[index] = snapshots[index].copy(r44 = owner.finish())
+            }
+            // Only after the full inventory and all retained restrictions have
+            // been read can a current host ask for an exact installed ID.
+            val hostCandidates = snapshots.filter { snap ->
+                !snap.ownOverlay && snap.r44?.let { it.verifiedRoot && it.active && it.host != null } == true
+            }
+            val indexedHost = hostCandidates.singleOrNull()
+            val indexedEvidence = indexedHost?.r44
+            val legacy = KeyguardSurfaceClassifier.classifyDetailed(snapshots,
+                unavailableRoot = unavailableRoot, walkTruncated = walkTruncated,
+                strictOwnAttribution = request.strictOwnAttribution)
+            val canQuery = indexedHost != null && indexedEvidence?.content == null && indexedEvidence?.complete == true &&
+                !unavailableRoot && !walkTruncated && !timing.ownAttributionAmbiguous &&
+                snapshots.mapNotNull { it.r44 }.all { it.complete && !it.foreignNode } &&
+                legacy.surface != KeyguardSurface.CREDENTIAL && legacy.surface != KeyguardSurface.SHADE &&
+                legacy.surface != KeyguardSurface.OCCLUDED &&
+                snapshots.none { snap -> snap.visibleViewIds.any { id ->
+                    KeyguardR44Markers.exact(id)?.let(KeyguardR44Markers::exclusion) != null
+                } } && authorityIsCurrent() && KeyguardR44Trial.active
+            if (canQuery) {
+                val hostId = requireNotNull(indexedHost).windowId
+                val ownedRoot = r445Roots[hostId]
+                val owner = deferredReaders[hostId]
+                val installed = request.r445SmallClockVerified || request.r445LargeClockVerified ||
+                    request.r44DeviceEntryResourceVerified
+                val currentIndexRead = { authorityIsCurrent() && request.r37YieldHint?.invoke() != true }
+                val screenAt = if (installed && ownedRoot != null && owner != null && currentIndexRead())
+                    request.r445ClaimBatch?.invoke() else null
+                if (screenAt != null && ownedRoot != null && owner != null) {
+                    owner.queryInstalledContent(ownedRoot, screenAt, currentIndexRead)
+                } else owner?.indexNotIssued(if (!installed) "NO_INSTALLED_ID" else if (ownedRoot == null)
+                    "NO_OWNED_ROOT" else "NO_SCREEN_OR_BATCH_USED")
+                val i = snapshots.indexOfFirst { it.windowId == hostId }
+                if (i >= 0 && owner != null) snapshots[i] = snapshots[i].copy(r44 = owner.finish())
             }
             if (!authorityIsCurrent() || !KeyguardR44Trial.active) return Result(
                 snapshots, unavailableRoot, walkTruncated, windowsReadMs,
@@ -895,6 +939,8 @@ internal class KeyguardWindowSnapshotReader(
             timing.snapshot(treeElapsed), false, readsAfterInvalidation, firstIncompleteReason = timing.firstIncompleteReason)
         } finally {
             r443Inventory?.close()
+            r445Roots.values.forEach { runCatching { it.recycle() } }
+            deferredReaders.values.forEach { it.close() }
         }
     }
 

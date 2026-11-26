@@ -391,7 +391,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       'A mintaorb-próba nem indult el: ${reason ?? 'hiányzó visszaigazolás'}.',
   };
 
-  Future<void> _startR442SampleCapture({bool expanded = true}) async {
+  Future<void> _startR442SampleCapture({bool expanded = false}) async {
     final bridge = widget.keyguardTimingCapture;
     if (bridge == null || _loadingKeyguard) return;
     setState(() {
@@ -1139,15 +1139,15 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                   ),
                 if (_r44TrialAvailable)
                   const Text(
-                    'A próba több SystemUI-nézetazonosítót olvas, kizárólag mintaadattal.',
+                    'A próba kizárólag mintaadatot használ, a szokásos nézetprofilban.',
                   ),
                 if (_r44TrialAvailable)
                   TextButton(
-                    key: const ValueKey('debug-console-r444-standard'),
+                    key: const ValueKey('debug-console-r444-expanded'),
                     onPressed: _loadingKeyguard || unavailable || _r442Active
                         ? null
-                        : () => _startR442SampleCapture(expanded: false),
-                    child: const Text('Mintaorb-rögzítés szokásos profillal'),
+                        : () => _startR442SampleCapture(expanded: true),
+                    child: const Text('Mintaorb-rögzítés kibővített profillal'),
                   ),
                 if (_r44TrialAvailable)
                   SwitchListTile(

@@ -77,8 +77,13 @@ class FluviKeyguardCardService : AccessibilityService() {
     @Volatile private var r444ConfigurationReady = Build.VERSION.SDK_INT != 37
     private data class R442ScreenOn(val session: Long, val uptime: Long)
     @Volatile private var r442ScreenOn: R442ScreenOn? = null
+    // Protected by queueLock; request replacement cannot buy a second batch
+    // in the same physical wake or transfer ownership to another session.
+    private var r445BatchSession = -1L
+    private var r445BatchWake = -1L
     private data class R442Lookup(val status: String, val identity: String?, val verified: Boolean,
-                                  val clockVerified: Boolean = false, val udfpsVerified: Boolean = false)
+                                  val clockVerified: Boolean = false, val udfpsVerified: Boolean = false,
+                                  val smallClockVerified: Boolean = false, val largeClockVerified: Boolean = false)
     @Volatile private var r442Lookup = R442Lookup("UNAVAILABLE", null, false)
     private var r442LookupGeneration = 0L
     private var r442PackageReceiverRegistered = false
@@ -111,7 +116,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                 }.getOrDefault(false)
                 val verified = verifiedId("device_entry_icon_view")
                 R442Lookup(if (verified) "VERIFIED" else "MISSING", identity, verified,
-                    clockVerified = verifiedId("keyguard_clock_switch"), udfpsVerified = verifiedId("udfps_view"))
+                    clockVerified = verifiedId("keyguard_clock_switch"), udfpsVerified = verifiedId("udfps_view"),
+                    smallClockVerified = verifiedId("lockscreen_clock_view"),
+                    largeClockVerified = verifiedId("lockscreen_clock_view_large"))
             } catch (_: Exception) {
                 R442Lookup("FAILURE", null, false)
             }
@@ -365,7 +372,7 @@ class FluviKeyguardCardService : AccessibilityService() {
      * reducer may run off Main, but only this service/session can acknowledge
      * the resulting ID. No receipt survives a rebind or capture replacement. */
     internal suspend fun startR442SampleCapture(
-        build: String?, buildMode: String?, captureMode: String?, expanded: Boolean = true,
+        build: String?, buildMode: String?, captureMode: String?, expanded: Boolean = false,
     ): Map<String, Any?> {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (r442Starting) return mapOf("active" to false, "reason" to "startInProgress")
@@ -4640,6 +4647,9 @@ class FluviKeyguardCardService : AccessibilityService() {
             hostParent = hostEvidence?.r444HostParent, contentParent = hostEvidence?.r444ContentParent,
             secondaryCount = secondary.size, secondaryOverflow = (secondary.size - 4).coerceAtLeast(0),
             r444Windows = (listOfNotNull(host) + secondary.take(4)).map(::describe),
+            r445SmallInstalled = lookup.smallClockVerified, r445LargeInstalled = lookup.largeClockVerified,
+            r445EntryInstalled = lookup.verified, r445IndexStatus = hostEvidence?.r445IndexStatus ?: "NO_HOST",
+            r445IndexCalls = hostEvidence?.r445IndexCalls.orEmpty().take(3),
         ))
     }
 
@@ -4746,6 +4756,22 @@ class FluviKeyguardCardService : AccessibilityService() {
                 r444Expanded = syntheticAtRead && profileAtRead?.expandedPolicy == true,
                 r444ClockVerified = lookup.clockVerified,
                 r444UdfpsVerified = lookup.udfpsVerified,
+                r445SmallClockVerified = lookup.smallClockVerified,
+                r445LargeClockVerified = lookup.largeClockVerified,
+                r445ClaimBatch = if (syntheticAtRead && readAheadSnapshot?.detached == true) { {
+                    synchronized(queueLock) {
+                        val screen = r442ScreenOn
+                        if (screen == null || screen.session != request.session ||
+                            request.wakeGeneration != wakeEpoch || !authorityIsCurrent(request) ||
+                            !KeyguardR44Trial.active || r444ProfileOwner.snapshot.revision != profileAtRead?.revision ||
+                            (r445BatchSession == request.session && r445BatchWake == request.wakeGeneration)) null
+                        else {
+                            r445BatchSession = request.session
+                            r445BatchWake = request.wakeGeneration
+                            screen.uptime
+                        }
+                    }
+                } } else null,
                 r443Boundary = if (captureOpening && r442Enabled) { structuralReason ->
                     val at = SystemClock.uptimeMillis()
                     synchronized(queueLock) {

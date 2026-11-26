@@ -115,7 +115,7 @@ class KeyguardTimingCaptureBridge {
   /// The native service, not this bridge, owns the sample/capture receipt.
   Future<Map<Object?, Object?>> startR442SampleCapture({
     KeyguardTimingCaptureMode mode = KeyguardTimingCaptureMode.light,
-    bool expanded = true,
+    bool expanded = false,
   }) async {
     if (!_isAndroid()) {
       return const {'active': false, 'reason': 'unsupportedBuild'};

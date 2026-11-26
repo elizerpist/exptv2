@@ -38,6 +38,8 @@ internal class KeyguardR44TreeReader(
     private val collectDiagnostics: Boolean = false,
     private val expanded: Boolean = false,
     private val genuineClockResource: Boolean = false,
+    private val genuineSmallClockResource: Boolean = false,
+    private val genuineLargeClockResource: Boolean = false,
 ) {
     private var host: KeyguardR44Witness? = null
     private var content: KeyguardR44Witness? = null
@@ -65,6 +67,7 @@ internal class KeyguardR44TreeReader(
     private var firstCandidate: KeyguardR44Markers.Marker? = null
     private var firstCarrier: KeyguardR44Markers.Carrier? = null
     private val parents = IntArray(if (deferred == null) 0 else 97)
+    private val actualClockIds = BooleanArray(if (deferred == null) 0 else 97)
     private val excludedHere = BooleanArray(if (deferred == null) 0 else 97)
     private val unknownScenes = BooleanArray(if (deferred == null) 0 else 97)
     private val facts = arrayOfNulls<MutableList<Pair<KeyguardR44Markers.Marker, KeyguardR44Markers.Carrier>>>(
@@ -72,6 +75,29 @@ internal class KeyguardR44TreeReader(
     private var deferredPending = 0
     private var deferredRestriction: ((String) -> Unit)? = null
     private var optionalTiming: ((String, Long, Long) -> Unit)? = null
+    // Request-owned only. A query must prove ancestry against the very host
+    // seen by this walk; it must never reuse a host from an earlier wake.
+    private var indexedHost: AccessibilityNodeInfo? = null
+    private var indexedHostOrdinal: Int? = null
+    private var indexedContent: KeyguardR44Witness? = null
+    private var indexedStatus: String = "NOT_REQUESTED"
+    private var indexedCalls: List<KeyguardR445IndexCall> = emptyList()
+    private fun rememberIndexedHost(node: AccessibilityNodeInfo, ordinal: Int) {
+        if (deferred == null || indexedHostOrdinal == ordinal) return
+        if (indexedHost != null) { complete = false; return }
+        indexedHost = runCatching { AccessibilityNodeInfo.obtain(node) }.getOrNull()
+        indexedHostOrdinal = if (indexedHost != null) ordinal else null
+    }
+    fun close() { indexedHost?.recycle(); indexedHost = null }
+    fun indexNotIssued(reason: String) { if (indexedCalls.isEmpty()) indexedStatus = reason }
+    private fun verifiedContent(marker: KeyguardR44Markers.Marker, carrier: KeyguardR44Markers.Carrier,
+                                actualClockId: Boolean = false): Boolean = when (marker) {
+        KeyguardR44Markers.Marker.DEVICE_ENTRY -> genuineDeviceEntryResource && carrier == KeyguardR44Markers.Carrier.VIEW_ID
+        KeyguardR44Markers.Marker.CLOCK_SWITCH -> expanded && genuineClockResource && carrier == KeyguardR44Markers.Carrier.VIEW_ID
+        KeyguardR44Markers.Marker.SMALL_CLOCK -> !actualClockId || genuineSmallClockResource
+        KeyguardR44Markers.Marker.LARGE_CLOCK -> !actualClockId || genuineLargeClockResource
+        else -> false
+    }
     private data class CandidateMetric(val ordinal: Int, val parentOrdinal: Int,
         var rank: Int = 0, var status: String = "PENDING", var role: String = "UNOBSERVED",
         var costMs: Long = 0, var remaining: Int = 0, var remainingMs: Long = 0,
@@ -197,7 +223,11 @@ internal class KeyguardR44TreeReader(
         addFact(ordinal, marker, KeyguardR44Markers.Carrier.EXTRA_LAZY)
         if (marker == KeyguardR44Markers.Marker.HOST) {
             if (host != null && host?.ordinal != ordinal) complete = false
-            else { host = KeyguardR44Witness(marker, KeyguardR44Markers.Carrier.EXTRA_LAZY, ordinal); hostParent = parentOrdinal }
+            else {
+                host = KeyguardR44Witness(marker, KeyguardR44Markers.Carrier.EXTRA_LAZY, ordinal)
+                hostParent = parentOrdinal
+                rememberIndexedHost(node, ordinal)
+            }
         }
         KeyguardR44Markers.exclusion(marker)?.let {
             excludedHere[ordinal] = true
@@ -234,10 +264,8 @@ internal class KeyguardR44TreeReader(
             } ?: continue
             when {
                 hasExcludedAncestor(ordinal) -> rejectedExcluded++
-                item.first == KeyguardR44Markers.Marker.DEVICE_ENTRY &&
-                    (!genuineDeviceEntryResource || item.second != KeyguardR44Markers.Carrier.VIEW_ID) -> rejectedUnverified++
-                item.first == KeyguardR44Markers.Marker.CLOCK_SWITCH &&
-                    (!expanded || !genuineClockResource || item.second != KeyguardR44Markers.Carrier.VIEW_ID) -> rejectedUnverified++
+                !verifiedContent(item.first, item.second, actualClockIds[ordinal] &&
+                    item.second == KeyguardR44Markers.Carrier.VIEW_ID) -> rejectedUnverified++
                 !descendsFrom(parents[ordinal], hostOrdinal) -> rejectedAncestry++
                 content == null -> {
                     content = KeyguardR44Witness(item.first, item.second, ordinal)
@@ -278,6 +306,101 @@ internal class KeyguardR44TreeReader(
 
     fun restrictionObserved() { budget.restrictionObserved = true }
 
+    /** Single post-screen batch on the existing reader. Even a framework
+     * result must prove the same visible host lineage and current ownership. */
+    fun queryInstalledContent(root: AccessibilityNodeInfo, screenAt: Long, authority: () -> Boolean) {
+        val before = finish()
+        val exactHost = indexedHost
+        if (!before.complete || before.foreignNode || before.host == null || before.content != null ||
+            exactHost == null || indexedHostOrdinal != before.host.ordinal || budget.restrictionObserved ||
+            !authority()) { indexedStatus = "PRECONDITION"; return }
+        val ids = listOf(
+            Triple("SMALL", "com.android.systemui:id/lockscreen_clock_view", genuineSmallClockResource),
+            Triple("LARGE", "com.android.systemui:id/lockscreen_clock_view_large", genuineLargeClockResource),
+            Triple("ENTRY", "com.android.systemui:id/device_entry_icon_view", genuineDeviceEntryResource),
+        ).filter { it.third }
+        if (ids.isEmpty()) { indexedStatus = "NO_INSTALLED_ID"; return }
+        val batchStart = SystemClock.uptimeMillis()
+        val calls = ArrayList<KeyguardR445IndexCall>(3)
+        indexedStatus = "NO_WITNESS"
+        for ((role, id) in ids) {
+            if (!authority()) { indexedStatus = "STALE"; break }
+            if (SystemClock.uptimeMillis() - batchStart >= KeyguardR44ExtraBudget.MAX_ELAPSED_MS) {
+                indexedStatus = "DEADLINE"; break
+            }
+            val start = SystemClock.uptimeMillis()
+            val result = runCatching { root.findAccessibilityNodeInfosByViewId(id) }
+            val returned = SystemClock.uptimeMillis()
+            val nodes = result.getOrNull().orEmpty()
+            var outcome = if (result.isFailure) "ERROR" else if (nodes.isEmpty()) "EMPTY" else "INELIGIBLE"
+            var valid = 0
+            var invalid = false
+            try {
+                if (!authority()) outcome = "STALE"
+                else if (nodes.size > 8) outcome = "OVERFLOW"
+                else {
+                    for (node in nodes) {
+                        if (!authority()) { outcome = "STALE"; break }
+                        val candidateValid = runCatching {
+                            node.windowId == windowId && node.packageName?.toString() == "com.android.systemui" &&
+                                node.isVisibleToUser && node.viewIdResourceName == id && node != exactHost
+                        }.getOrDefault(false)
+                        if (!candidateValid) { invalid = true; continue }
+                        var cursor: AccessibilityNodeInfo? = AccessibilityNodeInfo.obtain(node)
+                        var matched = false
+                        var depth = 0
+                        try {
+                            while (cursor != null && depth++ < 16 && authority()) {
+                                val current = cursor
+                                val safe = runCatching {
+                                    val viewId = current.viewIdResourceName
+                                    val tag = current.extras.getCharSequence(KeyguardR44Markers.EXTRA)
+                                    current.windowId == windowId && current.packageName?.toString() == "com.android.systemui" &&
+                                        current.isVisibleToUser &&
+                                        viewId?.let { KeyguardSurfaceClassifier.isDecisiveExclusionMarker(it) } != true &&
+                                        viewId != "com.android.systemui:id/notification_stack_scroller" &&
+                                        viewId != "com.android.systemui:id/notificationShelf" &&
+                                        KeyguardR44Markers.exact(tag)?.let(KeyguardR44Markers::exclusion) == null &&
+                                        !(tag != null && KeyguardR44Markers.exact(tag) == null &&
+                                            KeyguardR44Markers.unknownMayRestrict(tag, true)) &&
+                                        current.className?.toString()?.contains("BouncerContent") != true
+                                }.getOrDefault(false)
+                                if (!safe) break
+                                if (current == exactHost) { matched = true; break }
+                                val parent = runCatching { current.parent }.getOrNull()
+                                current.recycle()
+                                cursor = parent
+                            }
+                        } finally { cursor?.recycle() }
+                        if (matched && authority()) valid++ else invalid = true
+                    }
+                    outcome = when {
+                        !authority() -> "STALE"
+                        valid > 1 -> "DUPLICATE"
+                        valid == 1 && !invalid -> "FOUND"
+                        else -> "INELIGIBLE"
+                    }
+                }
+            } finally { nodes.forEach { it.recycle() } }
+            calls += KeyguardR445IndexCall(role, outcome, returned - start,
+                (start - screenAt).coerceAtLeast(0),
+                (returned - batchStart - KeyguardR44ExtraBudget.MAX_ELAPSED_MS).coerceAtLeast(0))
+            if (outcome == "FOUND" && authority() && runCatching {
+                    exactHost.windowId == windowId && exactHost.isVisibleToUser && root.windowId == windowId
+                }.getOrDefault(false)) {
+                val marker = requireNotNull(KeyguardR44Markers.exact(id))
+                indexedContent = KeyguardR44Witness(marker, KeyguardR44Markers.Carrier.VIEW_ID, 97)
+                indexedStatus = "FOUND"
+                break
+            }
+            if (outcome == "STALE" || outcome == "ERROR" || outcome == "OVERFLOW" || outcome == "DUPLICATE") {
+                indexedStatus = outcome
+                break
+            }
+        }
+        indexedCalls = calls
+    }
+
     /** An unresolved or potentially restrictive observed marker remains a
      * fail-closed obligation of this read. It cannot be discarded merely
      * because a later request is waiting. */
@@ -312,6 +435,9 @@ internal class KeyguardR44TreeReader(
             return NodeResult(ancestor, true, emptyList())
         }
         if (deferred != null && ordinal in parents.indices) parents[ordinal] = parentOrdinal
+        val actualClockId = viewId == "com.android.systemui:id/lockscreen_clock_view" ||
+            viewId == "com.android.systemui:id/lockscreen_clock_view_large"
+        if (ordinal in actualClockIds.indices) actualClockIds[ordinal] = actualClockId
         val markers = ArrayList<Pair<KeyguardR44Markers.Marker, KeyguardR44Markers.Carrier>>(2)
         val directMarker = KeyguardR44Markers.exact(viewId)?.takeIf {
             expanded || it != KeyguardR44Markers.Marker.CLOCK_SWITCH
@@ -421,11 +547,7 @@ internal class KeyguardR44TreeReader(
                 marker == KeyguardR44Markers.Marker.CLOCK_SWITCH) {
                 when {
                     excluded -> rejectedExcluded = (rejectedExcluded + 1).coerceAtMost(255)
-                    marker == KeyguardR44Markers.Marker.DEVICE_ENTRY &&
-                        (!genuineDeviceEntryResource || carrier != KeyguardR44Markers.Carrier.VIEW_ID) ->
-                        rejectedUnverified = (rejectedUnverified + 1).coerceAtMost(255)
-                    marker == KeyguardR44Markers.Marker.CLOCK_SWITCH &&
-                        (!expanded || !genuineClockResource || carrier != KeyguardR44Markers.Carrier.VIEW_ID) ->
+                    !verifiedContent(marker, carrier, actualClockId && carrier == KeyguardR44Markers.Carrier.VIEW_ID) ->
                         rejectedUnverified = (rejectedUnverified + 1).coerceAtMost(255)
                     ancestor == null || ancestor != host?.ordinal || ordinal == ancestor ->
                         rejectedAncestry = (rejectedAncestry + 1).coerceAtMost(255)
@@ -437,15 +559,15 @@ internal class KeyguardR44TreeReader(
             val nodeHost = markers.firstOrNull { it.first == KeyguardR44Markers.Marker.HOST }
             if (nodeHost != null) {
                 if (host != null && host?.ordinal != ordinal) complete = false
-                else { host = KeyguardR44Witness(nodeHost.first, nodeHost.second, ordinal); hostParent = parentOrdinal }
+                else {
+                    host = KeyguardR44Witness(nodeHost.first, nodeHost.second, ordinal)
+                    hostParent = parentOrdinal
+                    rememberIndexedHost(node, ordinal)
+                }
                 childAncestor = ordinal
             }
             val candidate = markers.firstOrNull {
-                it.first == KeyguardR44Markers.Marker.LARGE_CLOCK || it.first == KeyguardR44Markers.Marker.SMALL_CLOCK ||
-                    (it.first == KeyguardR44Markers.Marker.DEVICE_ENTRY && genuineDeviceEntryResource &&
-                        it.second == KeyguardR44Markers.Carrier.VIEW_ID) ||
-                    (it.first == KeyguardR44Markers.Marker.CLOCK_SWITCH && expanded && genuineClockResource &&
-                        it.second == KeyguardR44Markers.Carrier.VIEW_ID)
+                verifiedContent(it.first, it.second, actualClockId && it.second == KeyguardR44Markers.Carrier.VIEW_ID)
             }
             if (candidate != null && ancestor != null && ancestor == host?.ordinal && ordinal != ancestor && content == null) {
                 content = KeyguardR44Witness(candidate.first, candidate.second, ordinal)
@@ -458,6 +580,10 @@ internal class KeyguardR44TreeReader(
 
     fun finish(): KeyguardR44WindowEvidence {
         reconcileDeferred()
+        if (indexedContent != null && content == null && complete && !foreign && host?.ordinal == indexedHostOrdinal) {
+            content = indexedContent
+            below = true
+        }
         return KeyguardR44WindowEvidence(
         verifiedRoot, active, host, content, below, complete, foreign,
         advertised = advertised, fetched = fetched, failed = failed, unsupported = unsupported,
@@ -471,6 +597,7 @@ internal class KeyguardR44TreeReader(
         r444HostCarriers = r444HostCarriers,
         r444HostParent = hostParent, r444ContentParent = contentParent,
         r444ClockResourceVerified = expanded && genuineClockResource,
+        r445IndexStatus = indexedStatus, r445IndexCalls = indexedCalls,
         r443Candidates = candidateMetrics.orEmpty().map { metric -> KeyguardR443CandidateObservation(
             windowId, metric.ordinal,
             if (hasExcludedAncestor(metric.ordinal)) "EXCLUDED" else if (descendsFrom(metric.parentOrdinal, host?.ordinal)) "HOST" else "OTHER",

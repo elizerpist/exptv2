@@ -36,7 +36,8 @@ class KeyguardR22ReaderHandoffTest {
     private data class Node(val id: String?, val windowId: Int, val pkg: String = "com.android.systemui",
         val children: MutableList<AccessibilityNodeInfo> = mutableListOf(), var recycled: Int = 0,
         val extras: Bundle = Bundle(), var advertised: Boolean = false, var lazyTag: String? = null,
-        var refreshSucceeds: Boolean = true, var visible: Boolean = true)
+        var refreshSucceeds: Boolean = true, var visible: Boolean = true,
+        var queryParent: AccessibilityNodeInfo? = null)
     private data class Window(val id: Int, val layer: Int, val active: Boolean, val root: AccessibilityNodeInfo)
     private object Platform {
         val nodes = IdentityHashMap<AccessibilityNodeInfo, Node>()
@@ -50,11 +51,15 @@ class KeyguardR22ReaderHandoffTest {
         var exceptionIndices = emptySet<Int>()
         var extraCalls = 0
         var onExtra: (() -> Unit)? = null
+        var indexResults = mutableMapOf<String, List<AccessibilityNodeInfo>>()
+        var onIndex: (() -> Unit)? = null
+        var indexCalls = 0
         fun reset() {
             nodes.clear(); windows.clear(); inventory = emptyList(); activeRoot = null
             childCalls = mutableListOf(); afterChild = null; missingChild = false
             nullIndices = emptySet(); exceptionIndices = emptySet()
             extraCalls = 0; onExtra = null
+            indexResults.clear(); onIndex = null; indexCalls = 0
         }
         fun node(id: String?, window: Int = 10, pkg: String = "com.android.systemui"): AccessibilityNodeInfo =
             Shadow.newInstanceOf(AccessibilityNodeInfo::class.java).also { nodes[it] = Node(id, window, pkg) }
@@ -89,6 +94,9 @@ class KeyguardR22ReaderHandoffTest {
                 }
         }
         @RealObject lateinit var real: AccessibilityNodeInfo
+        @Implementation override fun equals(other: Any?): Boolean = other is AccessibilityNodeInfo &&
+            Platform.nodes[real] != null && Platform.nodes[real] === Platform.nodes[other]
+        @Implementation override fun hashCode(): Int = System.identityHashCode(Platform.nodes[real])
         @Implementation fun getUniqueId(): String = "fixture:${System.identityHashCode(checkNotNull(Platform.nodes[real]))}"
         @Implementation fun writeToParcel(parcel: Parcel, flags: Int) {
             parcel.writeInt(System.identityHashCode(checkNotNull(Platform.nodes[real])))
@@ -103,9 +111,15 @@ class KeyguardR22ReaderHandoffTest {
             if (checkNotNull(Platform.nodes[real]).advertised) listOf(KeyguardR44Markers.EXTRA) else emptyList()
         @Implementation fun getParent(): AccessibilityNodeInfo? {
             val data = checkNotNull(Platform.nodes[real])
+            data.queryParent?.let { return it }
             return Platform.nodes.entries.firstOrNull { entry ->
                 entry.value.children.any { Platform.nodes[it] === data }
             }?.key
+        }
+        @Implementation fun findAccessibilityNodeInfosByViewId(id: String): List<AccessibilityNodeInfo> {
+            Platform.indexCalls++
+            Platform.onIndex?.invoke()
+            return Platform.indexResults[id].orEmpty().map { obtain(it) }
         }
         @Implementation fun refreshWithExtraData(key: String, arguments: Bundle?): Boolean {
             Platform.extraCalls += 1
@@ -1102,6 +1116,74 @@ class KeyguardR22ReaderHandoffTest {
                         virginDirect = true, noRetainedProof = true), checkpoint, 31, children)
             }), { true })
         assertNull(read.yieldedTo); assertEquals(h.b, h.queue.activeRequest()); assertEquals(c, h.queue.pendingRequest())
+    }
+
+    @Test fun r445ExactIndexRequiresVisibleCurrentHostLineage() {
+        val id = "com.android.systemui:id/lockscreen_clock_view"
+        fun sample(kind: String): Pair<KeyguardWindowSnapshotReader.Result, Int> {
+            Platform.reset()
+            val root = Platform.node(null)
+            val host = Platform.node(null)
+            checkNotNull(Platform.nodes[host]).extras.putCharSequence(KeyguardR44Markers.EXTRA, "element:lockscreen")
+            checkNotNull(Platform.nodes[root]).children.add(host)
+            val clock = Platform.node(id, pkg = if (kind == "foreign") "foreign.app" else "com.android.systemui")
+            val data = checkNotNull(Platform.nodes[clock])
+            data.queryParent = if (kind == "sibling") root else host
+            if (kind == "hidden") {
+                val hidden = Platform.node(null)
+                checkNotNull(Platform.nodes[hidden]).apply { visible = false; queryParent = host }
+                data.queryParent = hidden
+            }
+            Platform.indexResults[id] = if (kind == "empty") emptyList() else listOf(clock)
+            if (kind == "duplicate") {
+                val second = Platform.node(id)
+                checkNotNull(Platform.nodes[second]).queryParent = host
+                Platform.indexResults[id] = listOf(clock, second)
+            }
+            Platform.activeRoot = root
+            Platform.inventory = listOf(Platform.window(10, 1, true, root))
+            var current = true
+            if (kind == "stale") Platform.onIndex = { current = false }
+            KeyguardR44Trial.set(true, true)
+            return try {
+                val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true,
+                    r443Sample = true, r445SmallClockVerified = true, r445ClaimBatch = { 1L }), { current })
+                read to Platform.indexCalls
+            } finally { KeyguardR44Trial.set(false, false) }
+        }
+        val positive = sample("valid")
+        assertEquals(1, positive.second)
+        assertEquals("FOUND", positive.first.snapshots.single().r44?.r445IndexStatus)
+        assertEquals(KeyguardR44Markers.Marker.SMALL_CLOCK, positive.first.snapshots.single().r44?.content?.marker)
+        for (kind in listOf("empty", "hidden", "sibling", "foreign", "duplicate")) {
+            val result = sample(kind)
+            assertEquals("$kind must reach the query", 1, result.second)
+            assertNull("$kind must not grant content", result.first.snapshots.single().r44?.content)
+        }
+        val stale = sample("stale")
+        assertEquals(1, stale.second)
+        assertTrue("a query that returned after cancellation is not authority", stale.first.abortedStale)
+    }
+
+    @Test fun r445UnverifiedInstalledIdAndRestrictionCannotBecomeClockProof() {
+        val root = Platform.node(null)
+        val host = Platform.node(null)
+        checkNotNull(Platform.nodes[host]).extras.putCharSequence(KeyguardR44Markers.EXTRA, "element:lockscreen")
+        val clock = Platform.node("com.android.systemui:id/lockscreen_clock_view")
+        val pin = Platform.node("com.android.systemui:id/password_entry")
+        checkNotNull(Platform.nodes[root]).children.add(host)
+        checkNotNull(Platform.nodes[host]).children.addAll(listOf(clock, pin))
+        Platform.activeRoot = root
+        Platform.inventory = listOf(Platform.window(10, 1, true, root))
+        KeyguardR44Trial.set(true, true)
+        try {
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true,
+                r443Sample = true, r445SmallClockVerified = false, r445ClaimBatch = { 1L }), { true })
+            assertNull(read.snapshots.single().r44?.content)
+            assertEquals(0, Platform.indexCalls)
+            assertEquals(KeyguardSurface.CREDENTIAL, KeyguardR44SurfaceClassifier.classify(read.snapshots,
+                read.rootUnavailable, read.walkTruncated, false, true).surface)
+        } finally { KeyguardR44Trial.set(false, false) }
     }
 
     @Test fun missingChildCannotProduceACompletePositive() {

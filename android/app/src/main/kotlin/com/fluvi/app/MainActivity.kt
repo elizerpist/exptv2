@@ -373,7 +373,7 @@ class MainActivity : FlutterActivity() {
                             runCatching {
                                 if (call.method == "startR442SampleCapture") service.startR442SampleCapture(
                                     values?.get("build") as? String, values?.get("buildMode") as? String,
-                                    values?.get("captureMode") as? String, values?.get("expanded") != false,
+                                    values?.get("captureMode") as? String, values?.get("expanded") == true,
                                 ) else service.r442SampleStatus()
                             }.onSuccess(result::success).onFailure {
                                 result.error("R442_START", it.message ?: "A rögzítés nem indult el.", null)

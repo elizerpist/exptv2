@@ -1,5 +1,10 @@
 package com.fluvi.app.lockscreen
 
+/** Only allowlisted role and timings are exported; hierarchy data stays on the reader. */
+internal data class KeyguardR445IndexCall(
+    val role: String, val outcome: String, val durationMs: Long, val ageMs: Long, val overrunMs: Long,
+)
+
 /** Immutable, capture-owned scalars from the same physical inspection used
  * for authorization. No tree, arbitrary tag, text or foreign name survives. */
 internal data class KeyguardR443CandidateObservation(
@@ -72,6 +77,9 @@ internal data class KeyguardR44ReadObservation(
     val hostParent: Int? = null, val contentParent: Int? = null,
     val secondaryCount: Int = 0, val secondaryOverflow: Int = 0,
     val r444Windows: List<KeyguardR444WindowObservation> = emptyList(),
+    val r445SmallInstalled: Boolean = false, val r445LargeInstalled: Boolean = false,
+    val r445EntryInstalled: Boolean = false, val r445IndexStatus: String = "NOT_REQUESTED",
+    val r445IndexCalls: List<KeyguardR445IndexCall> = emptyList(),
 )
 
 internal data class KeyguardR442HandoffObservation(

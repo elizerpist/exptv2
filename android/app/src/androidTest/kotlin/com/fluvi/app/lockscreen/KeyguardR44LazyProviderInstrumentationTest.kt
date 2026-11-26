@@ -24,6 +24,52 @@ import org.junit.runner.RunWith
  * provider is Fluvi-owned test content, not SystemUI or OEM qualification. */
 @RunWith(AndroidJUnit4::class)
 class KeyguardR44LazyProviderInstrumentationTest {
+    /** Exercises the real public indexed lookup; this app-owned hierarchy is
+     * a mechanics control and is never a SystemUI clock witness. */
+    @Test fun exactViewIdQueryReturnsVisibleOwnedDescendant() {
+        assertEquals(37, Build.VERSION.SDK_INT)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val ui = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext,
+            KeyguardMaterialTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val original = checkNotNull(ui.serviceInfo).flags
+        try {
+            val info = checkNotNull(ui.serviceInfo)
+            info.flags = original or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+            ui.serviceInfo = info
+            instrumentation.runOnMainSync {
+                val root = FrameLayout(activity).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES }
+                root.addView(View(activity).apply {
+                    id = android.R.id.button1
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                }, FrameLayout.LayoutParams(200, 200))
+                activity.setContentView(root)
+            }
+            instrumentation.waitForIdleSync()
+            ui.clearCache()
+            val root = checkNotNull(ui.rootInActiveWindow) { "NOT REACHED: fixture root" }
+            try {
+                assertEquals(instrumentation.targetContext.packageName, root.packageName.toString())
+                val nodes = root.findAccessibilityNodeInfosByViewId("android:id/button1")
+                try {
+                    assertEquals("one genuine fixture view", 1, nodes.size)
+                    val node = nodes.single()
+                    assertEquals("android:id/button1", node.viewIdResourceName)
+                    assertEquals(root.windowId, node.windowId)
+                    assertEquals(instrumentation.targetContext.packageName, node.packageName.toString())
+                    assertTrue(node.isVisibleToUser)
+                    assertNotNull(node.parent?.also { it.recycle() })
+                } finally { nodes.forEach { it.recycle() } }
+                val absent = root.findAccessibilityNodeInfosByViewId("android:id/button2")
+                try { assertTrue(absent.isEmpty()) } finally { absent.forEach { it.recycle() } }
+            } finally { root.recycle() }
+        } finally {
+            val info = checkNotNull(ui.serviceInfo)
+            info.flags = original
+            ui.serviceInfo = info
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
     /** Collection-only platform control. This activity is Fluvi-owned; it
      * cannot qualify an OEM SystemUI clock or the actual ORB renderer. */
     @Test fun visibleUnimportantViewAppearsOnlyWithIncludeFlag() {

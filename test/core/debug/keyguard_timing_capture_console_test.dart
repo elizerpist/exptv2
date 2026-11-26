@@ -235,10 +235,10 @@ void main() {
               'process': 'process-test',
               'serviceSession': 1,
               'materialDomain': 'fixedSample',
-              'profile': 'EXPANDED',
+              'profile': 'STANDARD',
               'profileRevision': 9,
-              'actualFlags': 2,
-              'includeNotImportant': true,
+              'actualFlags': 0,
+              'includeNotImportant': false,
               'snapshot': response('REC', 'LIVE'),
             };
           }
@@ -249,10 +249,10 @@ void main() {
               'process': 'process-test',
               'serviceSession': 1,
               'materialDomain': 'fixedSample',
-              'profile': 'EXPANDED',
+              'profile': 'STANDARD',
               'profileRevision': 9,
-              'actualFlags': 2,
-              'includeNotImportant': true,
+              'actualFlags': 0,
+              'includeNotImportant': false,
             };
           }
           return response('IDLE', '');
@@ -288,7 +288,7 @@ void main() {
     expect(find.text('Próba leállítása és riport megtartása'), findsOneWidget);
   });
 
-  testWidgets('a separate standard sample start records its actual profile', (
+  testWidgets('a separate expanded sample start records its actual profile', (
     tester,
   ) async {
     var enabled = false;
@@ -299,10 +299,10 @@ void main() {
       'process': 'process-test',
       'serviceSession': 1,
       'materialDomain': 'fixedSample',
-      'profile': 'STANDARD',
+      'profile': 'EXPANDED',
       'profileRevision': 10,
-      'actualFlags': 0,
-      'includeNotImportant': false,
+      'actualFlags': 2,
+      'includeNotImportant': true,
     };
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(runtime, (call) async {
@@ -331,12 +331,12 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
     await tester.pumpAndSettle();
-    final standard = find.byKey(const ValueKey('debug-console-r444-standard'));
-    await tester.ensureVisible(standard);
-    await tester.tap(standard);
+    final expanded = find.byKey(const ValueKey('debug-console-r444-expanded'));
+    await tester.ensureVisible(expanded);
+    await tester.tap(expanded);
     await tester.pumpAndSettle();
-    expect(selected, false);
-    expect(find.text('Szokásos nézetprofil visszaigazolva.'), findsOneWidget);
+    expect(selected, true);
+    expect(find.text('Kibővített nézetprofil visszaigazolva.'), findsOneWidget);
   });
 
   testWidgets('stop remains available for a trial without an open capture', (
