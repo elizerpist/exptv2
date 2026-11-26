@@ -18,6 +18,9 @@ public final class PasteActivity extends Activity {
         super.onCreate(saved);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        // API 37 may lay Activity content under the status bar. Keep the
+        // actual paste button outside the system's input region.
+        root.setPadding(0, Math.round(56f * getResources().getDisplayMetrics().density), 0, 0);
         EditText field = new EditText(this);
         field.setContentDescription("R46 paste field");
         field.setSingleLine(false);
