@@ -330,6 +330,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       _loadingKeyguard = true;
       _keyguardError = null;
       _r442Active = false;
+      _r442Reason = 'trialChanged';
     });
     try {
       final trial = await bridge.r44SyntheticTrial(enabled: enabled);
@@ -360,6 +361,14 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
     'samplePreparationFailed' => 'A mintaorb előkészítése sikertelen.',
     'captureFailed' => 'A natív rögzítés indítása sikertelen.',
     'startCancelled' => 'A mintaorb-próba indítása megszakadt.',
+    'serviceRebound' =>
+      'A szolgáltatás újraindult; a próbát újra kell indítani.',
+    'serviceLost' => 'A zárképernyő-szolgáltatás leállt.',
+    'captureStopped' =>
+      'A rögzítés leállt; a mintaadat kapcsolóval külön kikapcsolható.',
+    'trialChanged' =>
+      'A mintaadat beállítása megváltozott; a rögzítési visszaigazolás érvénytelen.',
+    'normalCapture' => 'A sima rögzítés nem indít mintaorb-próbát.',
     'serviceOrCaptureChanged' =>
       'A szolgáltatás vagy a rögzítés időközben megváltozott.',
     _ =>
@@ -438,6 +447,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       _keyguardError = null;
       _keyguardCopied = false;
       _r442Active = false;
+      _r442Reason = 'normalCapture';
     });
     try {
       final snapshot = await bridge.start(
@@ -459,6 +469,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       _loadingKeyguard = true;
       _keyguardError = null;
       _r442Active = false;
+      _r442Reason = 'captureStopped';
     });
     try {
       final snapshot = await bridge.freeze();
@@ -478,6 +489,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       _keyguardCopied = false;
       _keyguardError = null;
       _r442Active = false;
+      _r442Reason = 'captureStopped';
     });
     try {
       // A running capture is frozen first so the clipboard receives one
@@ -512,6 +524,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       _loadingKeyguard = true;
       _keyguardError = null;
       _keyguardCopied = false;
+      _r442Active = false;
+      _r442Reason = 'captureStopped';
     });
     try {
       final snapshot = await bridge.clear();
@@ -1097,6 +1111,15 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                   const Text(
                     'Mintaorb-próba aktív',
                     key: ValueKey('debug-console-r442-active'),
+                  ),
+                if (!_r442Active &&
+                    _keyguardError == null &&
+                    _r442Reason != null &&
+                    _r442Reason != 'notStarted' &&
+                    _r442Reason != 'armed')
+                  Text(
+                    _r442Failure(_r442Reason),
+                    key: const ValueKey('debug-console-r442-inactive'),
                   ),
                 if (_keyguardRenderMode?.available == true)
                   Padding(

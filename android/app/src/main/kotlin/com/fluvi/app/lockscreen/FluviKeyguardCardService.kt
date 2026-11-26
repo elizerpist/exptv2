@@ -1949,14 +1949,16 @@ class FluviKeyguardCardService : AccessibilityService() {
         publishInspectionAuthority()
         FluviKeyguardCardServiceRegistry.connected(this)
         if (Build.VERSION.SDK_INT == 37) {
-            val packageFilter = IntentFilter().apply {
-                addAction(Intent.ACTION_PACKAGE_ADDED)
-                addAction(Intent.ACTION_PACKAGE_REMOVED)
-                addAction(Intent.ACTION_PACKAGE_REPLACED)
-                addDataScheme("package")
+            if (!r442PackageReceiverRegistered) {
+                val packageFilter = IntentFilter().apply {
+                    addAction(Intent.ACTION_PACKAGE_ADDED)
+                    addAction(Intent.ACTION_PACKAGE_REMOVED)
+                    addAction(Intent.ACTION_PACKAGE_REPLACED)
+                    addDataScheme("package")
+                }
+                registerReceiver(r442PackageReceiver, packageFilter, Context.RECEIVER_EXPORTED)
+                r442PackageReceiverRegistered = true
             }
-            registerReceiver(r442PackageReceiver, packageFilter, Context.RECEIVER_EXPORTED)
-            r442PackageReceiverRegistered = true
             prepareR442ResourceLookup()
         }
         overlay = KeyguardCardWindow(
@@ -4582,8 +4584,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         val r37Eligible = r34Eligible || r37EarlyStamp != null
         val r442Enabled = Build.VERSION.SDK_INT == 37 &&
             lastSettings?.presentationMode == KeyguardCardPresentationMode.ORB
-        fun r442PendingLocked(): KeyguardCardInspectionRequest? {
-            val screen = r442ScreenOn
+        fun r442PendingLocked(screen: R442ScreenOn? = r442ScreenOn): KeyguardCardInspectionRequest? {
             val pending = inspectionQueue.pendingRequest()
             return pending?.takeIf {
                 KeyguardR442YieldPolicy.permits(Build.VERSION.SDK_INT, r442Enabled, screen?.uptime,
@@ -4633,11 +4634,13 @@ class FluviKeyguardCardService : AccessibilityService() {
                 claimR37Yield = if (r442Enabled) { { boundary, freshnessSafe, visited, roots, children ->
                     val at = SystemClock.uptimeMillis()
                     val claimed = synchronized(queueLock) {
-                        val pending = if (freshnessSafe) r442PendingLocked() else null
-                        pending?.let { inspectionQueue.handoffOpening(request, it) }?.also {
+                        val screen = r442ScreenOn
+                        val pending = if (freshnessSafe) r442PendingLocked(screen) else null
+                        pending?.takeIf { r442ScreenOn === screen }
+                            ?.let { inspectionQueue.handoffOpening(request, it) }?.also {
                             r37Boundary = "R442_$boundary:$visited/$roots/$children"
                             r37ClaimAt = at
-                            r442ClaimScreenAt = r442ScreenOn?.uptime
+                            r442ClaimScreenAt = screen?.uptime
                             openingHandoff.invalidate()
                         }
                     }

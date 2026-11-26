@@ -1692,8 +1692,7 @@ internal object KeyguardCardDiagnostics {
                 }
                 if (attempt.r44Reads.any { it.request == observation.request }) return@synchronized
                 val screenAt = attempt.screenOnReceivedAtUptimeMs
-                if (screenAt != null && observation.start >= screenAt && !observation.stale &&
-                    !observation.unavailable && !observation.truncated &&
+                if (screenAt != null && observation.start >= screenAt &&
                     (attempt.r44FirstPostScreen == null || observation.start < attempt.r44FirstPostScreen!!.start))
                     attempt.r44FirstPostScreen = observation
                 if (!observation.stale && !observation.unavailable && !observation.truncated &&
@@ -1713,7 +1712,7 @@ internal object KeyguardCardDiagnostics {
         val token = ingress ?: return
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null) return
-        reduction.offer {
+        val accepted = reduction.offer {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
@@ -1723,6 +1722,7 @@ internal object KeyguardCardDiagnostics {
                     attempt.r442Handoff = observation
             }
         }
+        if (!accepted) token.r44Dropped.incrementAndGet()
     }
 
     /** Bounded capture-only evidence. Resource verification/formatting run on
@@ -3547,7 +3547,7 @@ internal object KeyguardCardDiagnostics {
         val reads = attempt.r44Reads.toList()
         val screen = attempt.screenOnReceivedAtUptimeMs
         val post = attempt.r44FirstPostScreen ?: screen?.let { t -> reads.filter {
-            it.start >= t && !it.stale && !it.unavailable && !it.truncated }.minByOrNull { it.start } }
+            it.start >= t }.minByOrNull { it.start } }
         val pre = screen?.let { t -> reads.filter { it.start < t }.minByOrNull { it.start } }
         val last = attempt.r44Last ?: reads.lastOrNull()
         val change = post?.let { first -> reads.firstOrNull { it.start > first.start && it.verdict != first.verdict } }
@@ -3560,7 +3560,11 @@ internal object KeyguardCardDiagnostics {
             appendLine("R44_2_HU FIGYELEM: a mintaorb-próba visszaigazolása vagy üzemmódja elveszett.")
         appendLine("R44_2_TRIAL requested=$trialRequested receipt=${post?.receipt ?: "UNOBSERVED"} domain=${if (post?.synthetic == true) "fixedSample" else "normal"}")
         val handoff = attempt.r442Handoff
-        appendLine("R44_2_HANDOFF old=${handoff?.oldRequest ?: "UNOBSERVED"} next=${handoff?.nextRequest ?: "UNOBSERVED"} screen=${handoff?.screenAt ?: "UNOBSERVED"} offer=${handoff?.offerAt ?: "UNOBSERVED"} oldStart=${handoff?.oldStart ?: "UNOBSERVED"} boundary=${handoff?.boundaryAt ?: "UNOBSERVED"} oldReturn=${handoff?.oldReturn ?: "UNOBSERVED"} where=${handoff?.boundary ?: "UNOBSERVED"} newStart=${post?.start ?: "UNOBSERVED"} newEnd=${post?.end ?: "UNOBSERVED"}")
+        val successorRead = handoff?.let { h ->
+            listOfNotNull(post, attempt.r44FirstGrant, attempt.r44FirstRestriction, last)
+                .firstOrNull { it.request == h.nextRequest } ?: reads.firstOrNull { it.request == h.nextRequest }
+        }
+        appendLine("R44_2_HANDOFF old=${handoff?.oldRequest ?: "UNOBSERVED"} next=${handoff?.nextRequest ?: "UNOBSERVED"} screen=${handoff?.screenAt ?: "UNOBSERVED"} offer=${handoff?.offerAt ?: "UNOBSERVED"} oldStart=${handoff?.oldStart ?: "UNOBSERVED"} boundary=${handoff?.boundaryAt ?: "UNOBSERVED"} oldReturn=${handoff?.oldReturn ?: "UNOBSERVED"} where=${handoff?.boundary ?: "UNOBSERVED"} newStart=${successorRead?.start ?: "UNOBSERVED"} newEnd=${successorRead?.end ?: "UNOBSERVED"}")
         appendLine("R44_WAKE capture=$captureId session=${attempt.serviceSession} wake=${attempt.wakeEpoch} screenOn=${screen ?: "UNOBSERVED"} firstPostRead=${post?.request ?: "missing"} omitted=${attempt.r44ReadsOmitted} showRequest=${show?.requestId ?: "none"}")
         fun line(kind: String, read: KeyguardR44ReadObservation) {
             val host = read.host

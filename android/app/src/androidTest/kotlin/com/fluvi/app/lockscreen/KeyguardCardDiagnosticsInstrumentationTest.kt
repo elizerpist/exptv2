@@ -30,6 +30,30 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r44PerWakeEvidenceSurvivesLightPressure() = r44EvidencePressure("LIGHT")
     @Test fun r44PerWakeEvidenceSurvivesFullPressure() = r44EvidencePressure("FULL")
 
+    @Test fun r442FirstIncompleteReadAndMissingSuccessorRemainExplicit() {
+        KeyguardCardDiagnostics.startCapture(context, "r442-fixture", "profile", "LIGHT", r442ExpectedSession = 945)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 945, 7, "wake", 1000))
+        KeyguardCardDiagnostics.captureEvent(context, "SCREEN_ON_RECEIVED", "test",
+            diagnosticContext = owner, observedUptimeMs = 1020)
+        KeyguardCardDiagnostics.recordR442Handoff(KeyguardR442HandoffObservation(
+            owner, 1, 3, 1020, 1021, 1005, 1022, 1023, "R442_AFTER_NODE"))
+        fun record(id: Long, start: Long, unavailable: Boolean, verdict: KeyguardSurface) =
+            KeyguardCardDiagnostics.recordR44(KeyguardR44ReadObservation(owner, id, 1, 1,
+                start, start + 5, KeyguardSurface.UNKNOWN, verdict, KeyguardSurfaceReason.NO_MAIN_MARKER,
+                true, false, false, unavailable, false, null, null, false, null, null,
+                false, false, 0, 0, 0, 0, false, 0, receipt = "armed"))
+        record(2, 1024, true, KeyguardSurface.UNKNOWN)
+        record(4, 1035, false, KeyguardSurface.MAIN_KEYGUARD)
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.contains("firstPostRead=2"))
+        assertTrue(report.contains("kind=firstPost wake=7 req=2"))
+        val handoff = report.lineSequence().single { it.startsWith("R44_2_HANDOFF ") }
+        assertTrue(handoff, handoff.contains("next=3 "))
+        assertTrue(handoff, handoff.contains("newStart=UNOBSERVED newEnd=UNOBSERVED"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        assertEquals(report, report.toByteArray(Charsets.UTF_8).toString(Charsets.UTF_8))
+    }
+
     private fun r44EvidencePressure(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r44-fixture", "profile", mode, r442ExpectedSession = 944)
         var firstOwner: KeyguardDiagnosticContext? = null
