@@ -21588,3 +21588,122 @@ Normal CI [45795698756](https://github.com/elizerpist/exptv2/actions/runs/457956
 Extended uninjected API-37 scene observation [45800280626](https://github.com/elizerpist/exptv2/actions/runs/45800280626) **FAIL/NOT REACHED**: clock read, PIN and shade decisions were observed; the secure camera launch command returned successfully but its focused window was not confirmed; disposable-PIN unlock was not observed. The sample was not attached and no post or physical first/restricted pixel was observed. Do not treat launch success or a timed screenshot as camera/unlock privacy evidence. Its fixture commit `28c2dc905` is separate from the application source and injects no SystemUI tree.
 
 Status: **IMPLEMENTATION — present in `157539474803f2ac92d5c425e74244db42237f59`; AUTOMATED QUALIFICATION — FAIL with retained observations above; SIGNED FIXED-SAMPLE APK DELIVERY — PASS, independently fetched and signature/hash verified; PHYSICAL VALIDATION — PENDING, USER ONLY.** The user's first phone check is the unlocked single-action expanded sample receipt, followed by one lock/wake, observation and frozen short report. No Android widget or additional accessibility permission is required. Do not use real financial data for this diagnostic while the visual privacy gate remains failed.
+
+## 2026-11-26 — R44.4 paired Nothing handset results and R44.5 first visible ORB handoff
+
+# Fluvi R44.5 — Print the first authorized sample ORB on the ordinary Android lockscreen
+
+## 1. Task intent
+
+IMPLEMENTATION in elizerpist/exptv2. Deliver an installable signed HUMAN_DIAGNOSTIC update over R44.4. The owner's first goal is to see the familiar ORB on the ordinary Nothing clock screen. The engineering success case requires the real renderer to submit its prepared fixed-sample frame and an independent observer to see the ORB pixels. The owner also reports intermittent rough screen locking when Fluvi is open. Record that as a separate, unmeasured observation. Keep this iteration focused on printing the ORB.
+
+## 2. Authoritative app state
+
+Start implement/r44-5-android17-orb at the physically tested implement/r44-4-android17-orb source 157539474803f2ac92d5c425e74244db42237f59, parent e45493a085142878b2346e557f11c713ae3a8a4f. R44.4 binary artifact 84763fd4fa820b6e0fdb2ad5c7b4d5716ba20f1b, 121236240 bytes, SHA-256 ccbc29660930b76a97c36a919a9b5eea772eee4725063224f39af385926d66c3. Coordination head before this entry was 06ec9a9a4ceb5fd6cbd2ef48fcac1fa83473c516. Preserve R41 at 97f9704120e2ae997185ea6e35fbc053e1d7f0ab as the owner-accepted perceived-opening reference on API 35. Reconcile verified newer work if present.
+
+## 3. Preflight
+
+Read FLUVI_PROMPT_WRITER_RULES v2.1, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM v1.2, overriding DEBUGGING_LOOP_VERY_IMPORTANT.txt, the current shared docs/FLUVI_ENGINEERING_JOURNAL.md, MILESTONE_COMMITS.md and docs/ORB következtetések.md. Portable texts start around journal lines 5900, 7352 and 9601 at 161f63675121302432be2026898bed07b23d7ded. Read both R44.4 delivery/qualification entries and its R44.3 predecessor. Verify Git refs, worktree, exact source and graph. Preserve concurrent work. The paired captures below are sufficient to start implementation.
+
+## 4. Physical evidence
+
+Both files are frozen LIGHT captures from the same A142/API 37, app build, process 26635-204d8311 and service session 1. Both requested the fixed-sample trial. ForegroundRequested=false and backgroundRequested=false are settings in the report; they cannot determine whether the owner had the Fluvi activity open at a particular instant.
+
+| Phone capture | Start, Europe/Budapest | File SHA-256 and size | First post-screen reads |
+| --- | --- | --- | --- |
+| STANDARD, 6db045f4-0863-4799-9707-2b9419a839cf | 26 Nov 2026 11:34:24 | 09a1afd386bf37583b75aa98f9e75f3b97bf77951a32cdd889cb95c8565d6825, 31516 bytes | 5, all fresh and complete |
+| EXPANDED, bb616ab2-0438-43ad-ba0f-2937926fa3ed | 26 Nov 2026 11:34:59 | c764589d99bf107d750b365af76265c78f7de4465c9128c53e3d5038e15ba428, 31523 bytes | 6, all fresh and complete |
+
+All eleven reached NO_CONTENT and HIDE_DECIDED. None generated a show request, grant, attachment, or recorded post. The owner saw no ORB. There is no measured physical first pixel.
+
+## 5. What the paired logs establish
+
+STANDARD used flags 80, host visited=34, upper window visited=1. EXPANDED confirmed flags 82, host visited=39, upper visited=2. Every first read found one distinct host, carrier mask 5, one eligible extra returning HOST, zero recognized entry/clock, no budget exhaustion and clockResource=false. The extra identifies the same host and cannot serve as independent clock proof. In the tested source clockResource describes only the installed keyguard_clock_switch lookup. Device-entry resource lookup succeeded; no eligible live entry node was found by the walker.
+
+On all eleven joined reads the secondary window was the single verified SystemUI TYPE_SYSTEM root udfps_view, one layer above the host, inactive and unfocused. This is now same-read evidence. Its touchability, opacity, passivity and the current clock scene are independent facts. The applied gate was NO_CONTENT; the actual cover gate was NOT_REACHED. If a witness were accepted, the old display-overlay policy would still reject this unqualified upper window.
+
+SCREEN_ON to first-read end was 566/189/316/116/448 ms for STANDARD and 238/292/494/504/467/583 ms for EXPANDED. The capture exports omitted 766 and 815 evidence records respectively. These sequential wake observations do not establish the cause of screen-off animation lag. Do not infer financial disclosure or optical latency from them.
+
+## 6. Prior implementation and qualification
+
+R44.4 correctly changed and restored the service flag, distinguished body absence from structural cover and identified the actual root in the same read. Its proposed flag change did not produce a clock witness on these phone wakes. Do not repeat the mask comparison or raise the lazy-extra cap. 610 JVM and 17 Flutter controls passed. Run 45800280626 reached emulator clock, PIN and shade decisions with no ORB attachment/post; camera/unlock were unqualified. Controlled capture-on/off graphics jobs encountered native crashes. Normal CI 45795698756 failed material and dashboard lanes. The API 35 black first post-restriction sample remained FULL; isolated white passed while normal white failed calibration. Signed update/reopen passed 45800825406. Preserve the distinction between receipt, clean upgrade and actual visible output. R36's separate widget-picker experiment was previously closed.
+
+## 7. Graph and affected owners
+
+Exact graph 32eaab573c08e92671370773f2ce1f015a77a6b4, source_head 15753947, manifest index c2b12afa3f9623d26ae9f20bf315293462dd63c7a636f9d617d3bafc46fda098. Use Dart references for the console/bridge, direct Kotlin source for service, reader, policy, view and renderer. Inspect FluviKeyguardCardService's R442Lookup, startR442SampleCapture, inspectSurface, readSystemWindows and recordR44Read; KeyguardWindowSnapshotReader.read/visibleIds; KeyguardR44TreeReader, KeyguardR44SurfaceClassifier, KeyguardR444ProfileOwner, KeyguardFirstAuthorizedOrb, KeyguardCardWindow.showOrUpdate and the existing material presenter/worker. Trace restriction, disposal, old-surface and post callbacks for each host.
+
+## 8. Source facts and public mechanisms
+
+R44.4 pre-verifies device_entry_icon_view, keyguard_clock_switch and udfps_view. Its primary reader obtains evidence by visiting the tree. An invisible node ends that visit branch. R44.4 records the verified upper root only under diagnostic collection. The classifier tests for distinct authorized content before the cover check. The existing WindowManager.addView route presents an independent display overlay; do not assume a verified sensor root is transparent to that overlay.
+
+Use only supported Android APIs. Android's findAccessibilityNodeInfosByViewId accepts fully qualified real resource IDs. It can miss embedded hierarchies. An AOSP small/large default-clock implementation assigns the IDs lockscreen_clock_view and lockscreen_clock_view_large to actual face views. This is independent evidence for what to query; verify installed presence and visible ownership on each device. Android also supports attaching a SurfaceControl to a specified accessibility window, with window-relative placement. The API alone establishes neither the clock scene nor optical stacking across all OEM layers. Qualify the latter using the controlled pixel test in §13.
+
+References: [AOSP small and large clock faces](https://android.googlesource.com/platform/frameworks/base/+/c26b84048385a9c915a403a5b28e3cf4fe107a72/packages/SystemUI/customization/src/com/android/systemui/shared/clocks/DefaultClockController.kt), [Android exact view-ID lookup](https://developer.android.com/reference/android/view/accessibility/AccessibilityNodeInfo#findAccessibilityNodeInfosByViewId(java.lang.String)), [Android window-attached overlay](https://developer.android.com/reference/android/accessibilityservice/AccessibilityService#attachAccessibilityOverlayToWindow(int,android.view.SurfaceControl)).
+
+## 9. Hypotheses and decision tests
+
+| Observed obstacle | Selected hypothesis and falsifier |
+| --- | --- |
+| Host without independent content in 11/11 | The installed device-entry view or a genuine small/large clock face can be retrieved by exact ID and verified under the same host even when the ordinary walk did not accept it. Direct or indexed result with a valid lineage supports this. Per-ID missing/empty/ineligible results across complete reads weaken it. |
+| Verified sensor companion in 11/11 | A qualified clock can host the sample below its separate fingerprint window. Require both the independent scene witness and a proven window-bound backend. A same-read PIN/panel, unknown cover, an intervening camera, or failed stack test forbids this route. |
+| No physical render result yet | Before blaming the shader, separate actual admission/attachment, first current prepared frame post, subsequent live sample and composited pixels. A genuine grant with no current post is a new downstream failure. |
+| Occasional rough lock with Fluvi open | Timing files cover wake reads. No causal screen-off/input-to-frame evidence is present. Keep it open as a secondary owner observation. |
+
+## 10. Selected repair: obtain real clock evidence
+
+For an explicitly armed fixed-sample trial on API 37, prefer STANDARD collection and preserve the existing opt-in expanded diagnostic as a secondary control. While unlocked, resolve the installed SystemUI device-entry and the two exact clock-face resource IDs, verifying getResourceName round-trip against the expected package/type/name. Keep the existing clock_switch witness when genuinely available. Avoid identifier lookup on the wake path. Recognize the two genuine clock-face IDs in the existing walk under precisely the distinct visible SystemUI descendant rules.
+
+If a completed current hidden-state walk found an unambiguous active clock host and no usable content, perform a targeted exact-ID query from that same verified root while its lifetime is owned. Never pass a Compose tag to the view-ID API. First try the installed clock-face resources and genuine device entry, skipping absent IDs, already disproved ownership and duplicates. At most one bounded batch, up to three genuinely installed IDs per wake, on the existing worker after SCREEN_ON. Stop at the first valid witness or restriction; bound candidate and ancestor work, and use the existing time/deadline/freshness checks before issuing another IPC. Bound the total across request replacements; a stalled synchronous IPC may return late. Cancel inapplicable work and record the residual delay. Never schedule a repeated tree walk or fallback polling.
+
+Verify each result is current, visible, owned by this SystemUI window on the primary display, has the exact verified resource identity, and has a distinct visible host ancestor with provable lineage. A hidden or foreign branch, a disconnected embedded view, unverified ancestry, a stale query, or ambiguity cannot provide a grant. Do not combine facts from different scene epochs or windows. Process all existing restrictions first; an index result cannot turn an incomplete/racy inventory into a positive. Retain bounded allowlisted role/parent summaries from the same visited nodes to distinguish true missing roles from rejected ones. No node text, descriptions, arbitrary tags or financial values.
+
+## 11. Selected repair: present under the sensor
+
+Implement a separate sample-only, window-bound presentation target for a valid host/content pair when its sole upper companion is the exact verified sensor. Treat that outcome as a limited presentation instruction, never as a general MAIN grant or verifiedPassive bit. Compute the needed root/type/owner flags as part of the actual sample policy even with capture OFF; diagnostics must not confer authority. Require the complete current inventory, fresh authority, interactive ordinary primary keyguard, unique active/focused verified SystemUI host, all existing restriction/occlusion checks, and exactly one different verified SystemUI TYPE_SYSTEM root whose installed udfps_view is the actual root, inactive/unfocused and exactly one layer above. A name on a descendant, window ID from a previous wake, subtree size, model name or touch rectangle does not qualify. No unverified/same-layer/intervening third window. In an ordinary clear-cover case retain the existing guarded presentation. Standard and expanded sample profiles both require independent content for the sensor route; the legacy button-only shortcut cannot select it.
+
+For that target use the public window attachment API on the verified host window ID. Host the existing prepared fixed-sample ORB view/painter with SurfaceControlViewHost and its SurfacePackage; retain the normal visual position, size, transparency and non-touchable/non-focusable behavior. Map display to window coordinates using current verified geometry. Scope this backend to the sample trial. Keep its first frame hidden until the matching authorization, backend qualification and final owner recheck. Reuse the canonical cached first image and existing live renderer. No independent top-level display overlay, second application window, competing renderer or notification fallback on this path.
+
+## 12. Ownership, withdrawal and limits
+
+Make both targets explicit at the presentation API. Bind the window-bound target to service, process, wake, request/scene, host window, attach generation, retained sample domain and unique presentation lease. A host window can remain alive across clock→PIN or shade. Revoke on known restrictions, invalidating transitions, stale/unavailable evidence, changed inventory/host/companion, unlock, screen off, stop/freeze, service loss, backend failure or domain change. Immediately hide and detach the child, invalidate late frame callbacks, reparent to null and release owned surface/package/host objects exactly once in a safe sequence. Replace only after withdrawal. No sample may retain focus, receive input, cover the fingerprint control, capture credentials or publish private buffers. Failed attachment must remain hidden. Reaching a downstream post must never trigger a fallback to the unqualified overlay. Financial and existing API 35/R41 behavior are outside the new route.
+
+## 13. Red tests and first-pixel control
+
+1. Use the actual framework view-ID query on a controlled real Android view hierarchy, plus reader/classifier fixtures for genuine distinct face or entry, missing resource, empty query, hidden ancestor, sibling, duplicate, stale and foreign nodes. A framework provider owned by the test app demonstrates query mechanics only. In a SystemUI fixture run the measured topology with no content and a genuine sensor: it must stay hidden. A paired valid face or entry must reach the correct presentation instruction.
+2. Establish a genuine composition control on API 37 with a lower host and a separate upper test window containing an opaque, independently identifiable patch overlapping the sample target. Use a real accessibility service and the public window attachment. Outside the patch observe the canonical prepared ORB and subsequent live frames. In the overlap verify the upper pixels remain above it. Verify touch and fingerprint-area input goes to its original owner. Move, resize, replace and remove the parent. Compare to a hidden/no-attach control. Capture ON and OFF. No drawing-into-a-bitmap assertion can certify this backend. If ordering, input isolation or revoke controls fail, disable this backend for the diagnostic handoff and identify the precise failure. Never enable it merely because an attachment call returned.
+3. Reproduce a single host window persisting across clock→PIN/shade/QS. Verify restriction wins with the sensor still present, a queued target, a blocked ID query, an already-visible sample, and a late post. Include AOD, camera, another unqualified window, changed sensor ownership and unlock. Run black/white first-restricted-frame checks. Preserve ambiguous, old and unreached samples. Cross-check known owner identity and cleanup with the real native post hook, generation and frame sequence.
+4. Test the signed Human path with no test injection. A successful fixture is a lab result. Run the uninjected system clock and each restriction; record which states were actually reached. The first physical Nothing test should need one armed lock and wake. Forbid labeling an unlocked preview, notification, custom test Activity, widget picker or synthetic replay as the factory clock outcome.
+
+## 14. Debug output for one wake
+
+Pin a short Hungarian summary in the existing 32 KiB export. For real observed data give receipt/profile, applied gate, installed face/entry ID status, direct/index query outcome (including why not issued), distinct host/candidate and verified relation, current companion/cover disposition, selected backend and final stage. Distinguish “nincs önálló jel”, “jel megvan, felső ablak nem minősíthető”, “ablakhoz csatolás sikertelen”, “első képkocka elküldve” and “pixelmegfigyelés hiányzik”. Emit numeric per-ID duration/age/overrun only for actually issued calls. Record grant, attach requested/returned, lease, first successful current prepared-frame post, live post/ack, restriction and retirement in a joined clock domain. Bounded buffer; format after the hot path. Test missing first reads and pressure in LIGHT/FULL. Attachment and post receipts remain separate from actual pixels.
+
+## 15. Performance and priority
+
+Focus on first visibility. No new foreground polling, screen-off scans, synchronous main-thread hierarchy queries, ordinary financial subscriptions, or expanded service flag as a prerequisite. Avoid pre-screen IPC for this feature. Reuse prepared resources, cap extra work, and compare equivalent first-post-screen reads and first current posts. Preserve zero new reader/presentation work on ordinary non-trial paths. Keep API 35 performance and stable animation controls. The secondary lock-off stutter may be documented with already available events; do not spend this release redesigning locking or claim it improved. Physical ≤10 ms wake-to-visible and first forbidden-frame removal remain separate handset goals.
+
+## 16. Order and execution
+
+First replay the two measured shapes and reproduce the parent's NO_CONTENT. Implement the narrow source-backed additional witness and direct query. Independently prove a real positive pixel under the upper companion on the public window-bound backend. Integrate only through the sample-specific authorization, then verify current prepared→live ownership and withdrawal. Exercise the exact signed profile and uninjected stock SystemUI. If the phone publishes no verifiable witness even by installed exact ID, report that boundary without loosening the privacy rule, repeating the expanded-profile experiment or increasing the lazy budget. If a genuine grant now occurs, follow failures through attach/post/copy rather than returning another “host recognized” result.
+
+## 17. Validation
+
+Run git diff --check, scripts/verify-fluvi-boundaries.sh, Android JVM, instrumentation compilation, Flutter console/bridge, existing reader/handoff/late-marker and R40/R41 contracts, first-authorized-ORB and material regressions, API 37 framework query, composition, service and pressure controls, API 35 privacy strips and normal CI. Exercise signed upgrade/reopen, service binding and sample control. Retain actual app/fixture SHA, selectors, counts, job links, first failing assertion, crash and scope of observation. Resolve mechanical build/fixture failures in scope. No blind rerun of known graphics failures, skipped tests as PASS, or claims of phone presentation from emulator pixels.
+
+## 18. Git and journal
+
+Commit with cause, evidence, changes, tests, invariant and uncertainty. Push the R44.5 implementation. Append results, backend qualification, failures, signed file identity and a direct delivery receipt to docs/FLUVI_ENGINEERING_JOURNAL.md on fix/orb-v4-latency-lockscreen, preserving concurrent entries. Regenerate the graph against the exact new application source; report native coverage honestly. Keep R41 in milestones and record physical acceptance only after the owner supplies it.
+
+## 19. Build, upgrade, publish
+
+Use the established HUMAN_DIAGNOSTIC profile, com.fluvi.app and update signer SHA-256 faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. Produce a new version installable over the published R44.4 without uninstall, data loss or manual permission resets. Verify actual embedded application source, signer, APK integrity, size/SHA-256, settings/sentinel, service binding, primary button, receipt and reopen/cleanup. Ship only a sample-isolated artifact. Preserve known failed production/privacy results. They do not by themselves withhold the owner's diagnostic download.
+
+Attach the standalone APK or deliver a stable owner-accessible immutable binary link. Fetch the complete delivered file through the recipient route and verify it matches the signed bytes. If one channel fails, recover through the authorized alternative. A locally retained APK, source/CI page or LFS pointer cannot fulfill the handoff. Report any unresolvable signing/delivery issue with exact evidence.
+
+## 20. Hungarian completion report
+
+First line must be the actual **R44.5 mintaadatos teszt-APK letöltése** link or the attached APK. Include source, graph, signer/hash/size, signed upgrade verdict, whether the sensor-companion backend is enabled and its actual composition/withdrawal evidence. Report separately (1) implementation, (2) automated qualification, (3) verified APK delivery, (4) phone acceptance. Owner steps: install over R44.4, open the unlocked console, tap **„Mintaorb kipróbálása és rögzítés”**, wait for its fixed-sample receipt, lock and wake once to the ordinary clock. Observe the first ORB and disappearance; copy the short report after unlocking. No new permissions, picker or second profile run.
+
+## 21. Definition of done
+
+Hand the owner a new signed, independently retrieved test APK. Demonstrate real presentation on the qualified positive path or identify exactly where it is still blocked. Keep no-content and restricted scenes hidden. Report whether independent pixels were seen, on which actual surface and using which input. A visible lab ORB and a successful signed installation leave the Nothing acceptance open. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
