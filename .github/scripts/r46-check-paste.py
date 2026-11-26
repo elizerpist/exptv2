@@ -15,6 +15,7 @@ body, footer = payload.rsplit(b'bodyBytes=', 1)
 match = re.match(rb'(\d+) bodySha256=([0-9a-f]{64})\n', footer)
 assert match and int(match.group(1)) == len(body), 'body length mismatch'
 assert match.group(2).decode() == hashlib.sha256(body).hexdigest(), 'body digest mismatch'
+print('reportIntegrity=PASS')
 rows = [line for line in text.splitlines() if line.startswith('R45_EVENT ')]
 events = {}
 for row in rows:
@@ -30,4 +31,4 @@ print(f'route={route} expectedWakes={expected} observedWakeIds={sorted(events)} 
 for wake, stages in sorted(events.items()): print(f'wake={wake} stages={sorted(stages)}')
 assert len(qualified) >= expected, 'NOT REACHED: fewer same-wake software reveal/shader receipts than requested'
 assert 'spoolDropped=0' in text and 'spoolFailure=none' in text, 'spool incomplete'
-print('reportIntegrity=PASS')
+print('softwareWakeReceipts=PASS')
