@@ -331,6 +331,9 @@ jobs:
         with:
           api-level: 36
           system-image-api-level: '37.0'
+          # The real dashboard honors Android's reduced-motion setting. Keep
+          # the device's default animation scale for the R47 motion trial.
+          disable-animations: false
           target: default
           arch: x86_64
           profile: pixel_7
