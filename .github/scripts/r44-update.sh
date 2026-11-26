@@ -7,6 +7,10 @@ case "${R44_BASELINE:-r44_2_owner}" in
     base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/1f842db6394e0a44904133ae4825820cf61418f7/Fluvi_R44.1_HUMAN_1cd0b8fb31f6.apk'
     base_size=121072400
     base_sha=58915a3a0161b9132af821a72c789fb00c266f047c052ec597bd57af7f523b9c;;
+  r44_3)
+    base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/86d98402ff3f72be47fa52a29e97bfff025843e0/fluvi_R44_3_HUMAN_7dd17596cf2b.apk'
+    base_size=121203472
+    base_sha=4831c948c5db7416d921f7bb67f9fd541ea2e1758006a41f33885d0ebdcdbfdf;;
   r44_2_owner)
     base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/22ce8d1c96ec2e11cc3a6a8321c50849223a5edc/fluvi_R44_2_HUMAN_3c6618400e54.apk'
     base_size=121170704

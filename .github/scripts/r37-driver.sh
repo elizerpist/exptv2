@@ -146,6 +146,14 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r444_reason)
+      class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
+      methods=(r444AppliedReasonIsSeparateFromASeparateUpperWindow)
+      ;;
+    r444_filter)
+      class=com.fluvi.app.lockscreen.KeyguardR44LazyProviderInstrumentationTest
+      methods=(visibleUnimportantViewAppearsOnlyWithIncludeFlag)
+      ;;
     r44_2_yield)
       class=com.fluvi.app.lockscreen.KeyguardR442ServiceYieldInstrumentationTest
       methods=(heldPreScreenReaderHandsOffToLatestPendingRequest)
