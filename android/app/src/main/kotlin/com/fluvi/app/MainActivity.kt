@@ -73,6 +73,8 @@ import com.fluvi.app.lockscreen.FluviKeyguardCardServiceRegistry
 import com.fluvi.app.lockscreen.KeyguardOrbRenderMode
 import com.fluvi.app.lockscreen.KeyguardOrbRenderModeStatus
 import com.fluvi.app.lockscreen.KeyguardOrbRenderModeStore
+import com.fluvi.app.lockscreen.KeyguardR448DisplayRoute
+import com.fluvi.app.lockscreen.KeyguardR448DisplayRouteStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
@@ -421,6 +423,36 @@ class MainActivity : FlutterActivity() {
                         val configured = KeyguardOrbRenderModeStore.read(applicationContext)
                         result.success((service?.renderModeStatus()
                             ?: KeyguardOrbRenderModeStatus(configured, configured, visible = false)).toMap())
+                    }
+                    return@setMethodCallHandler
+                }
+                if (call.method == "getR448DisplayRoute" || call.method == "setR448DisplayRoute") {
+                    scope.launch(Dispatchers.Main.immediate) {
+                        if (!KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext)) {
+                            result.success(mapOf("available" to false))
+                            return@launch
+                        }
+                        val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
+                        if (call.method == "setR448DisplayRoute") {
+                            val value = (call.arguments as? Map<*, *>)?.get("route") as? String
+                            val requested = KeyguardR448DisplayRoute.entries.firstOrNull { it.name == value }
+                            val old = KeyguardR448DisplayRouteStore.read(applicationContext)
+                            if (requested == null ||
+                                getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != false ||
+                                (service != null && !service.setR448DisplayRoute(requested))) {
+                                result.error("R448_ROUTE", "Az útvonal csak feloldott készüléken váltható.", null)
+                                return@launch
+                            }
+                            if (!KeyguardR448DisplayRouteStore.write(applicationContext, requested)) {
+                                service?.setR448DisplayRoute(old)
+                                result.error("R448_ROUTE", "A választást nem sikerült menteni.", null)
+                                return@launch
+                            }
+                        }
+                        val configured = KeyguardR448DisplayRouteStore.read(applicationContext)
+                        val native = service?.r448DisplayRouteStatus() ?: mapOf(
+                            "configured" to configured.name, "active" to "NONE", "reason" to "DISCONNECTED", "generation" to 0L)
+                        result.success(mapOf("available" to true, "connected" to (service != null)) + native)
                     }
                     return@setMethodCallHandler
                 }

@@ -147,7 +147,11 @@ class FluviKeyguardCardService : AccessibilityService() {
     private var referenceLocalPresentationAttempted = false
     private var referenceServiceSerial = 0L
 
-    private fun localPresentationAllowed(): Boolean = r444ConfigurationReady && referenceOwnership?.appMayShow() != false
+    @Volatile private var r448DisplayRoute = KeyguardR448DisplayRoute.FLUVI_STREAM
+    private var r448RouteGeneration = 0L
+
+    private fun localPresentationAllowed(): Boolean = r444ConfigurationReady &&
+        referenceOwnership?.appMayShow() != false && r448DisplayRoute == KeyguardR448DisplayRoute.FLUVI_STREAM
 
     /** A prior process may have left native work behind. Only a genuinely
      * fresh reference installation's first service can assert no prior owner. */
@@ -274,6 +278,33 @@ class FluviKeyguardCardService : AccessibilityService() {
         val configured = KeyguardOrbRenderModeStore.read(applicationContext)
         return if (::overlay.isInitialized) overlay.renderModeStatus()
         else KeyguardOrbRenderModeStatus(configured, configured, visible = false)
+    }
+
+    /** Selection revokes the previous route before accepting a new owner. */
+    internal fun setR448DisplayRoute(route: KeyguardR448DisplayRoute): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != false ||
+            !FluviKeyguardCardServiceRegistry.connected) return false
+        if (r448DisplayRoute == route) return true
+        if ((KeyguardR44Trial.active || r446CaptureId != null) && !stopR444Trial("ROUTE_CHANGED")) return false
+        hideImmediately("r448RouteChanged")
+        if (::overlay.isInitialized && overlay.isAttached) return false
+        r448RouteGeneration++
+        r448DisplayRoute = route
+        refreshR18RouteOnMain()
+        publishReadAheadState(invalidate = true)
+        if (route == KeyguardR448DisplayRoute.FLUVI_STREAM)
+            requestSystemCheck("r448RouteChanged", evaluate = true)
+        return true
+    }
+
+    internal fun r448DisplayRouteStatus(): Map<String, Any> {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        val active = if (::overlay.isInitialized && overlay.isAttached &&
+            r448DisplayRoute == KeyguardR448DisplayRoute.FLUVI_STREAM) "FLUVI_STREAM" else "NONE"
+        return mapOf("configured" to r448DisplayRoute.name, "active" to active,
+            "generation" to r448RouteGeneration,
+            "reason" to if (r448DisplayRoute == KeyguardR448DisplayRoute.WIDGETS_ANYWHERE) "BACKEND_NOT_CONNECTED" else "NONE")
     }
 
     /** Bounded test observation of the current authorized target. The
@@ -525,6 +556,8 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     internal suspend fun startR446PrintCapture(build: String?, buildMode: String?, mode: String?): Map<String, Any?> {
         check(Looper.myLooper() == Looper.getMainLooper())
+        if (r448DisplayRoute == KeyguardR448DisplayRoute.WIDGETS_ANYWHERE)
+            return mapOf("active" to false, "reason" to "backendNotConnected")
         if (r446Preparing) return mapOf("active" to false, "reason" to "startInProgress")
         r446Preparing = true
         try {
@@ -1260,7 +1293,8 @@ class FluviKeyguardCardService : AccessibilityService() {
     private fun refreshR18RouteOnMain() {
         val settings = lastSettings
         val profile = lastMaterialProfile
-        val eligible = Build.VERSION.SDK_INT == 35 && settings != null && profile != null &&
+        val eligible = r448DisplayRoute == KeyguardR448DisplayRoute.FLUVI_STREAM &&
+            Build.VERSION.SDK_INT == 35 && settings != null && profile != null &&
             ::overlay.isInitialized && overlay.preparedInitialLiveOrb(settings, profile)
         val preparation = if (eligible) overlay.r18Preparation() ?: overlay.prepareR18() else null
         val next = if (preparation != null && settings != null && profile != null &&
@@ -2333,6 +2367,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             if (KeyguardCardDiagnostics.r43Enabled(id)) armR43Capture(id)
         }
         initializeReferenceOwnership()
+        r448DisplayRoute = KeyguardR448DisplayRouteStore.read(applicationContext)
+        r448RouteGeneration++
         session.incrementAndGet()
         mainWorkEvidence.resetSession(session.get(), android.os.Process.myTid().toLong())
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "SERVICE_CONNECTED")

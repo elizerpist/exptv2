@@ -56,6 +56,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
   bool _pushCopied = false;
   KeyguardTimingCaptureSnapshot? _keyguardSnapshot;
   KeyguardOrbRenderModeStatus? _keyguardRenderMode;
+  KeyguardDisplayRouteStatus? _keyguardDisplayRoute;
   bool _r44TrialAvailable = false;
   bool _r44TrialEnabled = false;
   bool _r442Active = false;
@@ -301,6 +302,12 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       final mode = await bridge.getRenderMode();
       if (mounted) setState(() => _keyguardRenderMode = mode);
       try {
+        final route = await bridge.getDisplayRoute();
+        if (mounted) setState(() => _keyguardDisplayRoute = route);
+      } on Object catch (_) {
+        if (mounted) setState(() => _keyguardDisplayRoute = null);
+      }
+      try {
         final trial = await bridge.r44SyntheticTrial();
         if (mounted) {
           setState(() {
@@ -471,6 +478,23 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
     try {
       final status = await bridge.setRenderMode(mode);
       if (mounted) setState(() => _keyguardRenderMode = status);
+    } on Object catch (error) {
+      if (mounted) setState(() => _keyguardError = '$error');
+    } finally {
+      if (mounted) setState(() => _loadingKeyguard = false);
+    }
+  }
+
+  Future<void> _setKeyguardDisplayRoute(KeyguardDisplayRoute route) async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _loadingKeyguard) return;
+    setState(() {
+      _loadingKeyguard = true;
+      _keyguardError = null;
+    });
+    try {
+      final status = await bridge.setDisplayRoute(route);
+      if (mounted) setState(() => _keyguardDisplayRoute = status);
     } on Object catch (error) {
       if (mounted) setState(() => _keyguardError = '$error');
     } finally {
@@ -1209,6 +1233,43 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                   Text(
                     _r442Failure(_r442Reason),
                     key: const ValueKey('debug-console-r442-inactive'),
+                  ),
+                if (_keyguardDisplayRoute?.available == true)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Orb megjelenítési útvonala'),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            for (final route in KeyguardDisplayRoute.values)
+                              ChoiceChip(
+                                key: ValueKey(
+                                  'debug-console-route-${route.wireValue}',
+                                ),
+                                label: Text(
+                                  route == KeyguardDisplayRoute.fluviStream
+                                      ? 'Fluvi adatfolyam'
+                                      : 'Widgets Anywhere',
+                                ),
+                                selected:
+                                    _keyguardDisplayRoute?.configured == route,
+                                onSelected: _loadingKeyguard
+                                    ? null
+                                    : (_) => _setKeyguardDisplayRoute(route),
+                              ),
+                          ],
+                        ),
+                        Text(
+                          'Natív választás: ${_keyguardDisplayRoute!.configured == KeyguardDisplayRoute.fluviStream ? 'Fluvi adatfolyam' : 'Widgets Anywhere'} · Aktív: ${_keyguardDisplayRoute!.active}',
+                        ),
+                        if (_keyguardDisplayRoute!.reason != 'NONE')
+                          Text('Állapot: ${_keyguardDisplayRoute!.reason}'),
+                      ],
+                    ),
                   ),
                 if (_keyguardRenderMode?.available == true)
                   Padding(

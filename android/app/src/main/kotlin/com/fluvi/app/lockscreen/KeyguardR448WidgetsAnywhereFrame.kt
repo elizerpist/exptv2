@@ -57,6 +57,26 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         return Rect(point[0], point[1], point[0] + current.width, point[1] + current.height)
     }
 
+    /** Changes only a detached prepared view's wake identity. It never carries
+     * an old admission or transfers an attached surface to a new wake. */
+    fun bindWake(prepared: Owner, next: Owner): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (view == null || !leaseLive || attached || removalFailed || pending != null ||
+            viewOwner != prepared || prepared.wake != 0L || next.wake <= 0 ||
+            prepared.route != next.route || prepared.material != next.material) return false
+        viewOwner = next
+        return true
+    }
+
+    /** Exact current View identity only; an unknown window remains unknown. */
+    fun isOwnWindow(window: Int, display: Int): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        val current = view?.takeIf { leaseLive && attached && it.isAttachedToWindow } ?: return false
+        if (window < 0 || current.display?.displayId != display) return false
+        val node = current.createAccessibilityNodeInfo() ?: return false
+        return try { node.windowId == window } finally { @Suppress("DEPRECATION") node.recycle() }
+    }
+
     /** Preparation cannot display a frame or replace an unretired window. */
     fun prepare(owner: Owner, profile: KeyguardMaterialProfile, full: Boolean,
                 artifact: KeyguardShaderArtifact, observer: (Event) -> Unit): Boolean {

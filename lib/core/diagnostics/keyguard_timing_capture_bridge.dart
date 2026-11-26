@@ -24,6 +24,49 @@ enum KeyguardOrbRenderMode {
   );
 }
 
+enum KeyguardDisplayRoute {
+  fluviStream('FLUVI_STREAM'),
+  widgetsAnywhere('WIDGETS_ANYWHERE');
+
+  const KeyguardDisplayRoute(this.wireValue);
+  final String wireValue;
+
+  static KeyguardDisplayRoute fromWire(Object? value) => values.firstWhere(
+    (route) => route.wireValue == value,
+    orElse: () => fluviStream,
+  );
+}
+
+@immutable
+class KeyguardDisplayRouteStatus {
+  const KeyguardDisplayRouteStatus({
+    required this.available,
+    required this.connected,
+    required this.configured,
+    required this.active,
+    required this.reason,
+  });
+
+  factory KeyguardDisplayRouteStatus.fromMap(Map<Object?, Object?> map) =>
+      KeyguardDisplayRouteStatus(
+        available:
+            map['available'] == true &&
+            KeyguardDisplayRoute.values.any(
+              (route) => route.wireValue == map['configured'],
+            ),
+        connected: map['connected'] == true,
+        configured: KeyguardDisplayRoute.fromWire(map['configured']),
+        active: map['active']?.toString() ?? 'NONE',
+        reason: map['reason']?.toString() ?? 'UNOBSERVED',
+      );
+
+  final bool available;
+  final bool connected;
+  final KeyguardDisplayRoute configured;
+  final String active;
+  final String reason;
+}
+
 @immutable
 class KeyguardOrbRenderModeStatus {
   const KeyguardOrbRenderModeStatus({
@@ -145,6 +188,35 @@ class KeyguardTimingCaptureBridge {
 
   Future<KeyguardOrbRenderModeStatus> getRenderMode() =>
       _invokeRenderMode('getKeyguardOrbRenderMode');
+
+  Future<KeyguardDisplayRouteStatus> getDisplayRoute() =>
+      _invokeDisplayRoute('getR448DisplayRoute');
+
+  Future<KeyguardDisplayRouteStatus> setDisplayRoute(
+    KeyguardDisplayRoute route,
+  ) => _invokeDisplayRoute('setR448DisplayRoute', {'route': route.wireValue});
+
+  Future<KeyguardDisplayRouteStatus> _invokeDisplayRoute(
+    String method, [
+    Map<String, Object?>? arguments,
+  ]) async {
+    if (!_isAndroid()) {
+      return const KeyguardDisplayRouteStatus(
+        available: false,
+        connected: false,
+        configured: KeyguardDisplayRoute.fluviStream,
+        active: 'NONE',
+        reason: 'UNSUPPORTED',
+      );
+    }
+    final raw = await _channel.invokeMapMethod<Object?, Object?>(
+      method,
+      arguments,
+    );
+    return KeyguardDisplayRouteStatus.fromMap(
+      raw ?? const <Object?, Object?>{},
+    );
+  }
 
   Future<KeyguardOrbRenderModeStatus> setRenderMode(
     KeyguardOrbRenderMode mode,

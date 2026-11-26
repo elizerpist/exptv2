@@ -213,6 +213,57 @@ void main() {
     expect(find.textContaining('következő elrejtés'), findsOneWidget);
   });
 
+  testWidgets(
+    'display route control shows native selection and active backend',
+    (tester) async {
+      String configured = 'FLUVI_STREAM';
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(runtime, (call) async {
+            if (call.method == 'getR448DisplayRoute' ||
+                call.method == 'setR448DisplayRoute') {
+              if (call.method == 'setR448DisplayRoute') {
+                configured = (call.arguments as Map)['route'] as String;
+              }
+              return <String, Object?>{
+                'available': true,
+                'connected': true,
+                'configured': configured,
+                'active': 'NONE',
+                'reason': configured == 'WIDGETS_ANYWHERE'
+                    ? 'BACKEND_NOT_CONNECTED'
+                    : 'NONE',
+              };
+            }
+            return response('IDLE', '');
+          });
+      final bridge = KeyguardTimingCaptureBridge(
+        channel: runtime,
+        isAndroid: () => true,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DebugConsoleDialog(keyguardTimingCapture: bridge),
+          ),
+        ),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('debug-console-keyguard-tab')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Orb megjelenítési útvonala'), findsOneWidget);
+      final route = find.byKey(
+        const ValueKey('debug-console-route-WIDGETS_ANYWHERE'),
+      );
+      await tester.ensureVisible(route);
+      await tester.tap(route);
+      await tester.pumpAndSettle();
+      expect(configured, 'WIDGETS_ANYWHERE');
+      expect(find.textContaining('Aktív: NONE'), findsOneWidget);
+      expect(find.textContaining('BACKEND_NOT_CONNECTED'), findsOneWidget);
+    },
+  );
+
   testWidgets('one action requests an acknowledged sample capture', (
     tester,
   ) async {

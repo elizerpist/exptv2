@@ -139,6 +139,46 @@ void main() {
     expect((await bridge.getRenderMode()).available, isFalse);
   });
 
+  test(
+    'display path reports the native selection separately from activity',
+    () async {
+      MethodCall? received;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            received = call;
+            return <String, Object?>{
+              'available': true,
+              'connected': true,
+              'configured': 'WIDGETS_ANYWHERE',
+              'active': 'NONE',
+              'reason': 'BACKEND_NOT_CONNECTED',
+            };
+          });
+      final bridge = KeyguardTimingCaptureBridge(
+        channel: channel,
+        isAndroid: () => true,
+      );
+      final status = await bridge.setDisplayRoute(
+        KeyguardDisplayRoute.widgetsAnywhere,
+      );
+      expect(received?.method, 'setR448DisplayRoute');
+      expect((received?.arguments as Map)['route'], 'WIDGETS_ANYWHERE');
+      expect(status.configured, KeyguardDisplayRoute.widgetsAnywhere);
+      expect(status.active, 'NONE');
+      expect(status.reason, 'BACKEND_NOT_CONNECTED');
+    },
+  );
+
+  test('unknown display path replies are not treated as confirmed', () async {
+    final status = KeyguardDisplayRouteStatus.fromMap({
+      'available': true,
+      'configured': 'UNKNOWN',
+      'active': 'NONE',
+    });
+    expect(status.available, isFalse);
+    expect(status.configured, KeyguardDisplayRoute.fluviStream);
+  });
+
   test('R44 synthetic trial changes only after an explicit request', () async {
     final calls = <MethodCall>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
