@@ -219,17 +219,15 @@ PY
         adb shell input swipe $points 350 || true
       fi
     }
-    tap_label() {
-      local label=$1 name=$2 coords='' wait_coords=''
-      for attempt in $(seq 1 20); do
-        adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
-        adb exec-out cat /sdcard/r442-window.xml > "$out/ui-$name.xml" 2>/dev/null || true
-        if grep -Fq "Quickstep isn't responding" "$out/ui-$name.xml"; then
-          # A system launcher ANR dialog blocked the prior signed UI
-          # probe. Retain the actual dialog and select Wait on this disposable
-          # emulator; never treat this as the requested button's receipt.
-          cp "$out/ui-$name.xml" "$out/ui-quickstep-anr-$name-$attempt.xml"
-          wait_coords=$(python3 - "$out/ui-$name.xml" <<'PY'
+    wait_for_system_anr() {
+      local xml=$1 phase=$2 wait_coords=''
+      if ! grep -Fq "Quickstep isn't responding" "$xml" && ! grep -Fq "System UI isn't responding" "$xml"; then
+        return 1
+      fi
+      # Keep each observed Android system dialog. This is only fixture
+      # recovery; selecting Wait never satisfies a Fluvi UI assertion.
+      cp "$xml" "$out/ui-system-anr-$phase.xml"
+      wait_coords=$(python3 - "$xml" <<'PY'
 import re,sys,xml.etree.ElementTree as ET
 try:
     for n in ET.parse(sys.argv[1]).getroot().iter():
@@ -240,13 +238,20 @@ try:
 except (ET.ParseError,OSError): pass
 PY
 )
-          if [[ "$wait_coords" =~ ^[0-9]+\ [0-9]+$ ]]; then
-            printf 'Quickstep ANR before %s attempt %s; selected Wait.\n' "$name" "$attempt" >> "$out/ui-environment.txt"
-            adb shell input tap $wait_coords
-            sleep 2
-            adb shell am start -n com.fluvi.app/.MainActivity >> "$out/launch.txt" 2>&1 || true
-            continue
-          fi
+      [[ "$wait_coords" =~ ^[0-9]+\ [0-9]+$ ]] || return 1
+      printf 'System ANR at %s; selected Wait.\n' "$phase" >> "$out/ui-environment.txt"
+      adb shell input tap $wait_coords
+      sleep 2
+      return 0
+    }
+    tap_label() {
+      local label=$1 name=$2 coords=''
+      for attempt in $(seq 1 20); do
+        adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
+        adb exec-out cat /sdcard/r442-window.xml > "$out/ui-$name.xml" 2>/dev/null || true
+        if wait_for_system_anr "$out/ui-$name.xml" "$name-$attempt"; then
+          if [[ "$name" == entry ]]; then adb shell am start -n com.fluvi.app/.MainActivity >> "$out/launch.txt" 2>&1 || true; fi
+          continue
         fi
         coords=$(python3 - "$out/ui-$name.xml" "$label" <<'PY'
 import re,sys,xml.etree.ElementTree as ET
@@ -286,6 +291,7 @@ PY
     for attempt in $(seq 1 12); do
       adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
       adb exec-out cat /sdcard/r442-window.xml > "$out/ui-receipt.xml" 2>/dev/null || true
+      if wait_for_system_anr "$out/ui-receipt.xml" "receipt-$attempt"; then continue; fi
       if grep -Fq 'Mintaorb-próba aktív' "$out/ui-receipt.xml" &&
           grep -Fq 'Szokásos nézetprofil visszaigazolva' "$out/ui-receipt.xml"; then
         printf '%s\n' 'PASS: signed profile primary control returned an active native standard-profile sample receipt.' > "$out/ui-result.txt"
@@ -308,6 +314,7 @@ PY
     for attempt in $(seq 1 12); do
       adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
       adb exec-out cat /sdcard/r442-window.xml > "$out/ui-frozen-state.xml" 2>/dev/null || true
+      if wait_for_system_anr "$out/ui-frozen-state.xml" "frozen-state-$attempt"; then continue; fi
       if python3 - "$out/ui-frozen-state.xml" <<'PY'
 import sys,xml.etree.ElementTree as ET
 try:
@@ -325,6 +332,7 @@ PY
     for attempt in $(seq 1 12); do
       adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
       adb exec-out cat /sdcard/r442-window.xml > "$out/ui-frozen.xml" 2>/dev/null || true
+      if wait_for_system_anr "$out/ui-frozen.xml" "frozen-$attempt"; then continue; fi
       if ! grep -Fq 'Mintaorb-próba aktív' "$out/ui-frozen.xml" &&
           grep -Fq 'Mintaorb kipróbálása és rögzítés' "$out/ui-frozen.xml"; then
         frozen=true; break
@@ -344,6 +352,7 @@ PY
       for attempt in $(seq 1 15); do
         adb shell uiautomator dump /sdcard/r446-window.xml > /dev/null 2>&1 || true
         adb exec-out cat /sdcard/r446-window.xml > "$out/ui-r446-receipt.xml" 2>/dev/null || true
+        if wait_for_system_anr "$out/ui-r446-receipt.xml" "r446-receipt-$attempt"; then continue; fi
         if grep -Fq 'Egyszeri rajzpróba előkészítve' "$out/ui-r446-receipt.xml"; then
           r446_armed=true; break
         fi
