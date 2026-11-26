@@ -71,6 +71,10 @@ XML
     adb push "$out/seed.xml" /data/local/tmp/r44-seed.xml > /dev/null
     adb push "$out/sentinel.txt" /data/local/tmp/r44-sentinel.txt > /dev/null
     adb shell 'run-as com.fluvi.app sh -c "mkdir -p files shared_prefs; cp /data/local/tmp/r44-seed.xml shared_prefs/fluvi_native_keyguard_card.xml; cp /data/local/tmp/r44-sentinel.txt files/r44-update-sentinel.txt"'
+    # force-stop above protects the seeded preferences but leaves the package
+    # stopped. Launch the original app before asking Android to bind its
+    # accessibility service; otherwise the pre-update service is unreachable.
+    adb shell am start -n com.fluvi.app/.MainActivity > "$out/launch-before.txt" 2>&1
     component='com.fluvi.app/com.fluvi.app.lockscreen.FluviKeyguardCardService'
     adb shell settings put secure enabled_accessibility_services "$component"
     adb shell settings put secure accessibility_enabled 1
@@ -146,7 +150,7 @@ PY
           adb shell input tap $coords
           return 0
         fi
-        if (( attempt > 4 )); then adb shell input swipe 400 1100 400 500 250 || true; fi
+        if (( attempt > 4 )); then adb shell input swipe 500 2000 500 1300 250 || true; fi
         sleep 1
       done
       printf 'NOT REACHED: %s\n' "$label" >> "$out/ui-result.txt"
