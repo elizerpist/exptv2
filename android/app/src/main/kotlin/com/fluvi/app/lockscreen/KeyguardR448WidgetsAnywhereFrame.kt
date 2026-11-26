@@ -2,6 +2,7 @@ package com.fluvi.app.lockscreen
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -12,7 +13,9 @@ import android.view.WindowManager
 import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.lockscreen.material.KeyguardMaterialScene
+import com.fluvi.app.lockscreen.material.KeyguardMaterialTimeSource
 import com.fluvi.app.lockscreen.material.KeyguardShaderArtifact
+import com.fluvi.app.lockscreen.material.SystemKeyguardMaterialTimeSource
 
 /**
  * One accessibility-window frame adapted from Widgets Anywhere 4.7.5,
@@ -24,7 +27,10 @@ import com.fluvi.app.lockscreen.material.KeyguardShaderArtifact
  * current, independently qualified owner and invalidate it on every relevant
  * restriction. The single Fluvi material View is not an AppWidgetHost.
  */
-internal class KeyguardR448WidgetsAnywhereFrame(private val service: AccessibilityService) {
+internal class KeyguardR448WidgetsAnywhereFrame(
+    private val service: AccessibilityService,
+    private val timeSource: KeyguardMaterialTimeSource = SystemKeyguardMaterialTimeSource,
+) {
     internal data class Owner(val route: Long, val wake: Long, val material: Long)
     internal data class Event(val owner: Owner, val stage: String, val at: Long, val detail: String? = null)
 
@@ -43,13 +49,21 @@ internal class KeyguardR448WidgetsAnywhereFrame(private val service: Accessibili
         runCatching { event?.invoke(Event(owner, stage, SystemClock.uptimeMillis(), detail)) }
     }
 
+    internal fun measuredBoundsForInstrumentation(): Rect? {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        val current = view?.takeIf { attached && it.isAttachedToWindow && it.width > 0 && it.height > 0 } ?: return null
+        val point = IntArray(2)
+        current.getLocationOnScreen(point)
+        return Rect(point[0], point[1], point[0] + current.width, point[1] + current.height)
+    }
+
     /** Preparation cannot display a frame or replace an unretired window. */
     fun prepare(owner: Owner, profile: KeyguardMaterialProfile, full: Boolean,
                 artifact: KeyguardShaderArtifact, observer: (Event) -> Unit): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (view != null || attached || removalFailed) return false
         return runCatching {
-            val material = KeyguardHeaderMaterialView(service).apply {
+            val material = KeyguardHeaderMaterialView(service, materialTimeSource = timeSource).apply {
                 isClickable = false
                 isFocusable = false
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -112,7 +126,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(private val service: Accessibili
                     emit(owner, "DETACHED")
                 }
             })
-            emit(owner, "ADD_BEGIN")
+            emit(owner, "ADD_BEGIN", "type=${params.type},flags=${params.flags},bounds=${geometry.left},${geometry.top},${geometry.width},${geometry.height}")
             try {
                 // Treat an in-flight add as potentially transferred until
                 // exact-view removal proves otherwise.
