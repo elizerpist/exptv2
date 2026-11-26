@@ -84,7 +84,7 @@ jobs:
           report="$tooling_dir/docs/codegraph-r44-android17-inventory.md"
           printf '# R44 exact-source authorization inventory\n\nApplication source: `%s`\n\n' "$APP_SHA" > "$report"
           printf 'The SCIP graph covers Dart only. Kotlin lines below are direct source navigation, not generated edges or proof of runtime behavior. Native submission and transaction receipts are not physical pixels.\n\n```text\n' >> "$report"
-          (cd "$source_dir" && git grep -n -E 'KeyguardR44|r44[A-Z_]|R44_|KeyguardWindowSnapshotReader|KeyguardSurfaceClassifier|inspectSurface|readSystemWindows|recordR44|KeyguardCardVisibilityPolicy|setR44SyntheticTrial|startCapture|freezeCapture|formatReport' -- android/app/src/main/kotlin/com/fluvi/app/lockscreen android/app/src/test/kotlin/com/fluvi/app/lockscreen android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen) >> "$report"
+          (cd "$source_dir" && git grep -n -E 'KeyguardR44|r44[A-Z_]|r447|R44_|KeyguardFirstAuthorizedOrb|KeyguardInspectionFreshness|KeyguardWindowSnapshotReader|KeyguardSurfaceClassifier|inspectSurface|readSystemWindows|recordR44|KeyguardCardVisibilityPolicy|setR44SyntheticTrial|startCapture|freezeCapture|formatReport' -- android/app/src/main/kotlin/com/fluvi/app/lockscreen android/app/src/test/kotlin/com/fluvi/app/lockscreen android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen) >> "$report"
           printf '\n```\n' >> "$report"
           sha256sum "$tooling_dir/docs/codegraph/manifest.json" > "$out/manifest-sha256.txt"
           printf 'source_dir=%s\ntooling_dir=%s\n' "$source_dir" "$tooling_dir" > "$out/paths.txt"
@@ -99,7 +99,7 @@ jobs:
           git diff --cached --check
           git commit -m 'graph: index R44 Android 17 exact source [skip ci]'
           git rev-parse HEAD > "$RUNNER_TEMP/r34-graph/graph-commit.txt"
-          graph_ref="tooling/r44-android17-${APP_SHA:0:12}"
+          graph_ref="tooling/r44-7-android17-${APP_SHA:0:12}"
           test -z "$(git ls-remote origin "refs/heads/$graph_ref")"
           git push origin "HEAD:refs/heads/$graph_ref"
       - name: Preserve graph receipts
