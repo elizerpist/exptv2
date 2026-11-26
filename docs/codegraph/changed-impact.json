@@ -1,16 +1,10 @@
 {
   "schema_version": 1,
-  "source_head": "14e05315520ff3282348838804ff6e004c677d30",
-  "base_head": "5b18235f261df24dcee06cf3050e3e20411612fa",
+  "source_head": "f812613d30712efc68bc89eb3d3ceab6d9d44216",
+  "base_head": "422084649b4b5e8fd3f56c8c488aef65f0745672",
   "changed_files": [
     "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardFirstAuthorizedOrbInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR22FirstInspectionFixture.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardInspectionQueue.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR32OverlapPolicy.kt",
-    "android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR32OverlapPolicyTest.kt"
+    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt"
   ],
   "candidate_changed_symbols": [],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
