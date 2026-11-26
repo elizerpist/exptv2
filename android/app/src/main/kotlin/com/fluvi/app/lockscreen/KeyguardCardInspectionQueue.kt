@@ -103,6 +103,12 @@ internal data class KeyguardInspectionAuthority(
  * No live Event, node or View is retained in this boundary. */
 internal interface KeyguardInspectionProbeForTest {
     fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> = actual
+    /** Fixture-only subset of actual physical windows. The ordinary policy
+     * and the production sample route never enable this controlled topology. */
+    fun r447ControlledSampleTopology(): Boolean = false
+    fun r447SampleReadCompleted(request: KeyguardCardInspectionRequest, eligibility: KeyguardR446Eligibility?,
+                                stale: Boolean) {}
+    fun r447PresenterInvoked(request: Long) {}
     fun started(request: KeyguardCardInspectionRequest) {}
     /** Called only by an already-presented owner's optional worker read. */
     fun r40ProvenanceStarted(request: KeyguardCardInspectionRequest) {}

@@ -16,6 +16,12 @@ internal data class KeyguardR446Observation(
     val attachEnd: Long?, val submittedAt: Long?, val frameAt: Long?,
     val withdrawAt: Long?, val withdrawReason: String,
     val hideReturn: Long? = null, val releaseReturn: Long? = null, val retireError: String? = null,
+    val armGeneration: Long = 0, val decisionOrdinal: Long = 0,
+    val handoff: KeyguardR447Disposition = KeyguardR447Disposition.UNOBSERVED,
+    val order: KeyguardFirstAuthorizedOrb.SampleOrder? = null,
+    val freshnessRevision: Long? = null, val systemBarrierAtRead: Long? = null,
+    val systemBarrierAtDecision: Long? = null, val ownerState: String = "UNOBSERVED",
+    val wakeArmState: String = "UNOBSERVED",
 ) {
     /** Preserve the original owner and first withdrawal when later freeze or
      * unlock cleanup repeats the operation. */

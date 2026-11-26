@@ -29,6 +29,15 @@ internal fun interface KeyguardSystemStateReader {
     fun read(purpose: KeyguardSystemReadPurpose): KeyguardSystemState
 }
 
+/** Identity of an explicitly internal output-ready evaluation. The proof is
+ * rechecked when the physical reader offer is made; it cannot grant output. */
+internal data class KeyguardR447DuplicateProof(
+    val authority: KeyguardInspectionAuthority, val scene: Long, val revision: Long,
+    val activeRequest: Long, val required: Long, val barrier: Long,
+    val systemBarrier: Long, val armGeneration: Long,
+    val stateRevision: Long, val routeRevision: Long,
+)
+
 internal data class KeyguardSystemGateRequest(
     val id: Long,
     val authority: KeyguardInspectionAuthority,
@@ -49,6 +58,8 @@ internal data class KeyguardSystemGateRequest(
     /** Capture-local provisional callback identities; never admission inputs. */
     val r41WakeOrdinal: Long = 0,
     val r41ScreenOrdinal: Long = 0,
+    val r447SystemBarrier: Long = 0,
+    val r447Duplicate: KeyguardR447DuplicateProof? = null,
 )
 
 /** Capture-only sampler observations. They do not influence queue ownership. */
@@ -80,6 +91,9 @@ internal class KeyguardSystemStateSampler(
     var maximumActive = 0; private set
     var maximumPending = 0; private set
     var rejected = 0L; private set
+
+    /** Main-owned; a pending/coalesced sampler is not a redundant offer. */
+    fun hasOutstandingWork(): Boolean = active != null || pending != null || delivering
 
     private fun observe(phase: Int, request: KeyguardSystemGateRequest, detail: Long = 0) {
         if (request.diagnosticCaptureId != null) {
@@ -117,6 +131,9 @@ internal class KeyguardSystemStateSampler(
                 freshness = if (previous.freshness.requiresCacheClear && !request.freshness.requiresCacheClear)
                     previous.freshness else request.freshness,
             ) else request
+            // Coalescing invalidates the proof that no other sampler work
+            // intervened, even if the incoming request was internal.
+            if (previous != null) pending = pending?.copy(r447Duplicate = null)
             previous?.let { observe(KeyguardR41RawLedger.SAMPLE_REPLACED, it, request.id) }
             maximumPending = 1
         }

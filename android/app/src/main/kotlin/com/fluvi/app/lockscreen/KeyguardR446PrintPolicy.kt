@@ -16,6 +16,14 @@ internal data class KeyguardR446Bounds(val left: Int, val top: Int, val right: I
 internal data class KeyguardR446Target(val windowId: Int, val displayId: Int, val bounds: KeyguardR446Bounds)
 internal data class KeyguardR446Eligibility(val target: KeyguardR446Target?, val reason: String)
 
+/** Causal result of the actual Main handoff, not a later diagnostic replay. */
+internal enum class KeyguardR447Disposition {
+    UNOBSERVED, SCENE_CHANGED, NEWER_COMPLETED, NEWER_BARRIER_REQUIRED,
+    REDUNDANT_OFFER_ACCEPTED, FRESHNESS_UNESTABLISHED, RESTRICTION_OBSERVED,
+    RESTRICTION_ONLY, STALE_AUTHORITY, ARM_MISMATCH, TARGET_MISSING,
+    PRESENTER_UNAVAILABLE, ISSUE_REJECTED, SETTINGS_UNAVAILABLE, ISSUED,
+}
+
 internal object KeyguardR446PrintPolicy {
     fun evaluate(
         windows: List<KeyguardWindowSnapshot>, classification: KeyguardSurfaceClassification,

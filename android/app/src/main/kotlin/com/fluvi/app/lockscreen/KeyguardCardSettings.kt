@@ -797,6 +797,13 @@ internal object KeyguardCardDiagnostics {
         var r443Boundary: KeyguardR443BoundaryObservation? = null,
         var r446: KeyguardR446Observation? = null,
         var r446Last: KeyguardR446Observation? = null,
+        var r447FirstEligible: KeyguardR446Observation? = null,
+        var r447Best: KeyguardR446Observation? = null,
+        var r447FirstTerminal: KeyguardR446Observation? = null,
+        var r447Arm: KeyguardR446Observation? = null,
+        var r447ArmGeneration: Long = 0,
+        var r447LatestOrdinal: Long = 0,
+        var r447DecisionCount: Int = 0,
         var firstExclusionSignalAtUptimeMs: Long? = null,
         var firstExclusionSignalSource: String? = null,
         var firstInspectionRequestId: Long? = null,
@@ -1724,10 +1731,39 @@ internal object KeyguardCardDiagnostics {
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt != null && attempt.serviceSession == owner.serviceSession &&
                     attempt.wakeEpoch == owner.originWakeEpoch) {
+                    if (observation.armGeneration > 0 && attempt.r447ArmGeneration > 0 &&
+                        observation.armGeneration != attempt.r447ArmGeneration) return@synchronized
+                    if (observation.armGeneration > 0) attempt.r447ArmGeneration = observation.armGeneration
+                    if (observation.request <= 0) {
+                        attempt.r447Arm = observation
+                        if (observation.withdrawAt != null && attempt.r447FirstTerminal == null)
+                            attempt.r447FirstTerminal = observation
+                        return@synchronized
+                    }
                     if (attempt.r446 == null || attempt.r446?.request == observation.request)
                         attempt.r446 = observation
-                    else if (attempt.r446Last == null || attempt.r446Last?.request == observation.request ||
-                        observation.backend != "NOT_ATTEMPTED") attempt.r446Last = observation
+                    if (observation.eligibility == "ELIGIBLE_SAMPLE" && attempt.r447FirstEligible == null)
+                        attempt.r447FirstEligible = observation
+                    val ordinal = if (observation.decisionOrdinal > 0) observation.decisionOrdinal else observation.request
+                    if (ordinal > attempt.r447LatestOrdinal) {
+                        attempt.r447LatestOrdinal = ordinal
+                        attempt.r447DecisionCount = (attempt.r447DecisionCount + 1).coerceAtMost(9999)
+                        attempt.r446Last = observation
+                    } else if (ordinal == attempt.r447LatestOrdinal &&
+                        attempt.r446Last?.request == observation.request) attempt.r446Last = observation
+                    fun progress(o: KeyguardR446Observation): Int = when {
+                        o.frameAt != null -> 4
+                        o.submittedAt != null -> 3
+                        o.attachBegin != null -> 2
+                        o.issuedAt != null -> 1
+                        else -> 0
+                    }
+                    val best = attempt.r447Best
+                    if (progress(observation) > 0 && (best == null || progress(observation) > progress(best) ||
+                            (observation.request == best.request && progress(observation) == progress(best))))
+                        attempt.r447Best = observation
+                    if (observation.withdrawAt != null && attempt.r447FirstTerminal == null)
+                        attempt.r447FirstTerminal = observation
                 }
             }
         }
@@ -3216,18 +3252,28 @@ internal object KeyguardCardDiagnostics {
             val first = attempt.r446
             if (first == null) {
                 if (active.configuration["r446PrintRequested"] == "true" && attempt.screenOnReceivedAtUptimeMs != null) {
-                    select("a${attempt.id}:r446", "R44_6_HU Nincs rajzkérés.\nR44_6_SAMPLE wake=${attempt.wakeEpoch} arm=UNOBSERVED firstReq=UNOBSERVED firstNormal=UNOBSERVED firstEligible=UNOBSERVED firstBackend=NOT_ATTEMPTED req=UNOBSERVED normal=UNOBSERVED eligible=UNOBSERVED backend=NOT_ATTEMPTED host=UNOBSERVED scene=UNOBSERVED issue=UNOBSERVED attachBegin=UNOBSERVED attachEnd=UNOBSERVED submit=UNOBSERVED frame=UNOBSERVED withdraw=UNOBSERVED/UNOBSERVED hideReturn=UNOBSERVED releaseReturn=UNOBSERVED retireError=none physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
+                    val armState = attempt.r447Arm?.wakeArmState ?: "UNOBSERVED"
+                    val message = when (armState) {
+                        "ARMED" -> "A próba élesítve volt, alkalmas olvasás nem figyelhető meg."
+                        "NOT_ARMED" -> "A próba nem volt élesítve ezen az ébredésen."
+                        else -> "A próba élesítése ezen az ébredésen nem figyelhető meg."
+                    }
+                    val terminal = attempt.r447FirstTerminal
+                    select("a${attempt.id}:r446", "R44_6_HU $message\nR44_6_SAMPLE wake=${attempt.wakeEpoch} arm=UNOBSERVED firstReq=UNOBSERVED firstNormal=UNOBSERVED firstEligible=UNOBSERVED firstBackend=NOT_ATTEMPTED req=UNOBSERVED normal=UNOBSERVED eligible=UNOBSERVED backend=NOT_ATTEMPTED host=UNOBSERVED scene=UNOBSERVED issue=UNOBSERVED attachBegin=UNOBSERVED attachEnd=UNOBSERVED submit=UNOBSERVED frame=UNOBSERVED withdraw=${terminal?.withdrawAt ?: "UNOBSERVED"}/${terminal?.withdrawReason ?: "UNOBSERVED"} hideReturn=${terminal?.hideReturn ?: "UNOBSERVED"} releaseReturn=${terminal?.releaseReturn ?: "UNOBSERVED"} retireError=${terminal?.retireError ?: "none"} armState=$armState physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
                 }
                 return@forEach
             }
             val o = attempt.r446Last ?: first
+            val p = attempt.r447Best ?: o
+            val terminal = attempt.r447FirstTerminal ?: p
             val status = when {
-                o.frameAt != null -> "Képkocka beküldve, láthatóság ismeretlen."
-                o.submittedAt != null -> "Felület beküldve, képkocka nem megfigyelt."
-                o.backend.contains("FAILED") -> "Csatolás vagy beküldés sikertelen."
-                else -> "Nincs rajzkérés."
+                p.frameAt != null -> "Shader rajzolt, fizikai láthatóság ismeretlen."
+                p.submittedAt != null -> "Réteg beküldve, fizikai láthatóság ismeretlen."
+                p.backend.contains("FAILED") -> "Csatolás vagy beküldés meghiúsult."
+                o.eligibility == "ELIGIBLE_SAMPLE" -> "Alkalmas ablak, rajzolás letiltva: ${o.handoff}."
+                else -> "Nem született mintaorb-engedély: ${o.handoff}."
             }
-            select("a${attempt.id}:r446", "R44_6_HU $status\nR44_6_SAMPLE wake=${o.wake} arm=${o.armAt} firstReq=${first.request} firstNormal=${first.normal} firstEligible=${first.eligibility} firstBackend=${first.backend} req=${o.request} normal=${o.normal} eligible=${o.eligibility} backend=${o.backend} host=${o.host ?: "UNOBSERVED"} scene=${o.scene ?: "UNOBSERVED"} issue=${o.issuedAt ?: "UNOBSERVED"} attachBegin=${o.attachBegin ?: "UNOBSERVED"} attachEnd=${o.attachEnd ?: "UNOBSERVED"} submit=${o.submittedAt ?: "UNOBSERVED"} frame=${o.frameAt ?: "UNOBSERVED"} withdraw=${o.withdrawAt ?: "UNOBSERVED"}/${o.withdrawReason} hideReturn=${o.hideReturn ?: "UNOBSERVED"} releaseReturn=${o.releaseReturn ?: "UNOBSERVED"} retireError=${o.retireError ?: "none"} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
+            select("a${attempt.id}:r446", "R44_6_HU $status\nR44_6_SAMPLE wake=${o.wake} arm=${o.armAt} firstReq=${first.request} firstNormal=${first.normal} firstEligible=${first.eligibility} firstBackend=${first.backend} req=${o.request} normal=${o.normal} eligible=${o.eligibility} backend=${o.backend} host=${o.host ?: "UNOBSERVED"} scene=${o.scene ?: "UNOBSERVED"} issue=${p.issuedAt ?: "UNOBSERVED"} attachBegin=${p.attachBegin ?: "UNOBSERVED"} attachEnd=${p.attachEnd ?: "UNOBSERVED"} submit=${p.submittedAt ?: "UNOBSERVED"} frame=${p.frameAt ?: "UNOBSERVED"} withdraw=${terminal.withdrawAt ?: "UNOBSERVED"}/${terminal.withdrawReason} hideReturn=${terminal.hideReturn ?: "UNOBSERVED"} releaseReturn=${terminal.releaseReturn ?: "UNOBSERVED"} retireError=${terminal.retireError ?: "none"} firstEligibleReq=${attempt.r447FirstEligible?.request ?: "UNOBSERVED"} firstHandoff=${first.handoff} progressReq=${p.request} terminalReq=${if (terminal.withdrawAt != null) terminal.request else "UNOBSERVED"} decisions=${attempt.r447DecisionCount} ordinal=${o.decisionOrdinal} handoff=${o.handoff} order=${o.order?.result ?: "UNOBSERVED"} completed=${o.order?.completed ?: "UNOBSERVED"} required=${o.order?.required ?: "UNOBSERVED"} barrier=${o.order?.barrier ?: "UNOBSERVED"} origin=${o.order?.origin ?: "UNOBSERVED"} sceneNow=${o.order?.scene ?: "UNOBSERVED"} freshness=${o.freshnessRevision ?: "UNOBSERVED"} sysAtRead=${o.systemBarrierAtRead ?: "UNOBSERVED"} sysNow=${o.systemBarrierAtDecision ?: "UNOBSERVED"} owner=${o.ownerState} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
         }
         r44Attempts.filter { it.r44Reads.isNotEmpty() ||
             (Build.VERSION.SDK_INT == 37 && it.presentationMode == "ORB") }.forEach { attempt ->

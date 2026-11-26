@@ -63,6 +63,45 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
     }
 
+    @Test fun r447ProgressAndTerminalRemainWithTheirOriginalRequest() {
+        KeyguardCardDiagnostics.startCapture(context, "r447-order", "profile", "FULL",
+            r442ExpectedSession = 9448, r446PrintRequested = true)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9448, 7, "wake", 7000))
+        KeyguardCardDiagnostics.captureEvent(context, "SCREEN_ON_RECEIVED", "test",
+            diagnosticContext = owner, observedUptimeMs = 7010)
+        val first = KeyguardR446Observation(owner, 6990, 7, 40, "UNKNOWN/NO_MAIN_MARKER",
+            "ELIGIBLE_SAMPLE", "NOT_ATTEMPTED", 9, 109, null, null, null, null, null, null, "UNOBSERVED",
+            armGeneration = 2, decisionOrdinal = 1, handoff = KeyguardR447Disposition.NEWER_BARRIER_REQUIRED)
+        val issued = first.copy(request = 44, decisionOrdinal = 2, handoff = KeyguardR447Disposition.ISSUED,
+            backend = "SUBMITTED", issuedAt = 7020, attachBegin = 7021, attachEnd = 7022, submittedAt = 7023)
+        KeyguardCardDiagnostics.recordR446(first)
+        KeyguardCardDiagnostics.recordR446(issued)
+        KeyguardCardDiagnostics.recordR446(first.copy(request = 45, decisionOrdinal = 3,
+            handoff = KeyguardR447Disposition.ARM_MISMATCH))
+        val laterFrame = issued.copy(frameAt = 7024).retireOnce(7050, "restriction", 7051, 7052, null)
+        KeyguardCardDiagnostics.recordR446(laterFrame)
+        KeyguardCardDiagnostics.recordR446(laterFrame.retireOnce(7090, "duplicate", null, null, null))
+        // A callback from a different arm in this same attempt is not allowed
+        // to relabel the retained record, even when it has a larger ordinal.
+        KeyguardCardDiagnostics.recordR446(first.copy(request = 99, decisionOrdinal = 99, armGeneration = 1))
+        val unarmed = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9448, 8, "wake", 8000))
+        KeyguardCardDiagnostics.captureEvent(context, "SCREEN_ON_RECEIVED", "test",
+            diagnosticContext = unarmed, observedUptimeMs = 8010)
+        KeyguardCardDiagnostics.recordR446(first.copy(context = unarmed, wake = 8, request = 0,
+            armGeneration = 0, decisionOrdinal = 0, wakeArmState = "NOT_ARMED"))
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val rows = report.lineSequence().filter { it.startsWith("R44_6_SAMPLE ") }.toList()
+        val row = rows.single { it.contains("wake=7 ") }
+        assertTrue(row, row.contains("req=45"))
+        assertTrue(row, row.contains("firstEligibleReq=40"))
+        assertTrue(row, row.contains("progressReq=44"))
+        assertTrue(row, row.contains("frame=7024"))
+        assertTrue(row, row.contains("withdraw=7050/restriction"))
+        assertTrue(row, row.contains("terminalReq=44"))
+        assertTrue(rows.single { it.contains("wake=8 ") }.contains("armState=NOT_ARMED"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+    }
+
     private fun r446Pressure(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r446-pressure", "profile", mode,
             r442ExpectedSession = 9446, r446PrintRequested = true)
