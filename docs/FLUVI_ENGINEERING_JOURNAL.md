@@ -23340,3 +23340,33 @@ R46's API 35 material/service failures and first WA removal failure remain
 historical negative evidence, not passes for this candidate. Physical Nothing
 acceptance and any 10 ms claim are pending the owner; neither emulator
 callbacks nor reference pixels establish physical presentation timing.
+
+### R47 completed qualification results and handback
+
+These results continue the interim record above. The exact application source
+is still `346213e32f0674e359cabc966852b892f5add7a3`. The following controls
+use synthetic data on emulators; they do not reveal or reproduce the owner's
+actual palette. They cannot establish visible pixels on the Nothing handset.
+
+| Boundary | Result and retained evidence |
+| --- | --- |
+| Source selection | Partial PASS: mode/source revision, stale publication, distinct card target and zero-widget bridge controls passed. The baseline source-selection control was RED. Actual signed-UI edits across two styles and all three modes remain NOT RUN. |
+| Direct reference and natural motion | Corrected API 37 app-owned-host fixture [45912275885](https://github.com/elizerpist/exptv2/actions/runs/45912275885), harness `047544b19703082f8628b601cb08ba44c1abf67d`: synthetic Flutter references were matched at 0/.2/.5/1/1.9/6 s. At natural elapsed 6.79/6.95 s the tide/braided interiors differed from the phase-zero start by 12,944/10,111 of 15,648 pixels at the fixture's ≥7/255 threshold, with intermediate samples at two and four seconds. This is compositor evidence for those synthetic profiles, not the owner's settings or real keyguard. The run FAILS: the first static after-conceal sample still contained the previous orb; the next sample matched the green underlay. |
+| WA reference and natural motion | Corrected API 37 app-owned-host fixture [45912279165](https://github.com/elizerpist/exptv2/actions/runs/45912279165), same harness: reference phases matched and at natural elapsed 7.47/7.25 s tide/braided changed 12,657/10,193 of 15,648 interior pixels, with intermediate samples. This run FAILS: the first after-conceal sample for tide, braided and static still contained the previous orb; all next samples matched the underlay. The first/next capture intervals are recorded in `r47-visual.txt` inside the run artifact. They do not establish first physical PIN, shade or unlock frames. |
+| Actual signed UI, animations enabled | Direct [45912848148](https://github.com/elizerpist/exptv2/actions/runs/45912848148) and WA [45912850979](https://github.com/elizerpist/exptv2/actions/runs/45912850979) selected the route in the installed app and sealed/pasted identical reports into a separate package. Both recorded `active_header_semantic` and `animated=true`. Of three requested wakes, direct had zero matching software-draw receipts; WA had one. Both gates therefore FAIL/NOT REACHED, and the slow screenshots are NOT QUALIFIED optical evidence. No admission failure is promoted to permission. |
+| Other signed recorder observations | With Android animations disabled, the separate three-wake WA trial [45912707303](https://github.com/elizerpist/exptv2/actions/runs/45912707303) had three matching current-header software draws and a byte-identical independent paste; physical motion was not tested. Direct [45912704784](https://github.com/elizerpist/exptv2/actions/runs/45912704784) pasted its report but had only one matching draw, so FAIL/NOT REACHED. The initial 1+3-wake runs and their receiver failures remain in the interim record. |
+| Optical witness parser | The original R47 harness added an `after-seven-seconds.png` file that the older numeric-frame parser could not parse. This was an analysis-fixture error, not a product PASS. The old artifacts remain unchanged; harness `3c843082` handles it as an unbracketed hold image and reprocessing preserved 24 bracketed frames plus one unbracketed hold per wake. No reference, underlay, physical presentation or first-forbidden frame was certified by that reprocessing. |
+| Signed update | API 37 [45913769160](https://github.com/elizerpist/exptv2/actions/runs/45913769160) PASS: the actual signed R46 APK was updated in place with the signed candidate; the synthetic sentinel, requested/details/mode/focus settings, enabled bound accessibility service, and seeded non-default `WIDGETS_ANYWHERE` selection survived. This is not a test of the owner's phone data. |
+| Full CI | [45911062865](https://github.com/elizerpist/exptv2/actions/runs/45911062865): dashboard paths, core and Flutter jobs PASS. API 35 material suite FAIL 13/155, including FULL/LIGHT retained-record pressure, retired-buffer ownership, and an immediately acquired privacy strip beginning `FULL`; the two subsequent real-service cases FAIL 2/2. The independent dashboard profile FAILS with `Prepared vector asset atlas is not ready` and a missing A-scenario report. The normal Human job was skipped behind these failures; the separately dispatched exact-source Human build succeeded. R46 had its own earlier failures and no claim of an R47-caused or fixed regression is inferred from counts alone. |
+| Graph and build | Exact-source graph remains `ff46cf95d5cf6b35ee478ab6310a978e971e5268`; the independent signed APK is 121,502,673 bytes, SHA-256 `5307e4deb61e54f5b4ba345c4036f2870c37d5caa7a625c7b149a26e49ea12e0`, signer `faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`. Application source and `HUMAN_DIAGNOSTIC` were checked in each packaged AOT ABI. Its build run is [45911063270](https://github.com/elizerpist/exptv2/actions/runs/45911063270); the downloadable runner artifact is not the update-signed candidate. |
+
+The evidence requires a reviewer decision about first-hide behavior and the
+unreached real-screen admission/draw, rather than an unreviewed additional
+repair hypothesis. The source still lacks the verified finite-loop active
+header route and separately permitted public styling classification. Real
+PIN/shade/unlock first-frame privacy, two distinct actual UI styles on both
+routes, launcher comparison and active-header optical motion in signed stock
+keyguard remain NOT QUALIFIED. No qualified alternate diagnostic variant and
+no anonymously verified R47 APK download are available. The signed private
+candidate is withheld under R47 section 19; an R46 demo is not a substitute.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
