@@ -129,6 +129,27 @@ PY
     adb shell input keyevent KEYCODE_WAKEUP
     adb shell wm dismiss-keyguard || true
     adb shell am start -n com.fluvi.app/.MainActivity > "$out/launch.txt" 2>&1
+    scroll_controls() {
+      local xml=$1 direction=$2 points
+      points=$(python3 - "$xml" "$direction" <<'PY'
+import re,sys,xml.etree.ElementTree as ET
+try:
+    for n in ET.parse(sys.argv[1]).getroot().iter():
+        if n.attrib.get('scrollable') != 'true': continue
+        m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
+        if not m: continue
+        a,b,c,d=map(int,m.groups())
+        if d-b < 100: continue
+        x=(a+c)//2; hi=b+(d-b)//5; lo=d-(d-b)//5
+        print(x,lo if sys.argv[2]=='down' else hi,x,hi if sys.argv[2]=='down' else lo)
+        break
+except (ET.ParseError,OSError): pass
+PY
+)
+      if [[ "$points" =~ ^[0-9]+\ [0-9]+\ [0-9]+\ [0-9]+$ ]]; then
+        adb shell input swipe $points 350 || true
+      fi
+    }
     tap_label() {
       local label=$1 name=$2 coords=''
       for attempt in $(seq 1 12); do
@@ -150,7 +171,7 @@ PY
           adb shell input tap $coords
           return 0
         fi
-        if (( attempt > 4 )); then adb shell input swipe 500 2000 500 1300 250 || true; fi
+        if (( attempt > 3 )); then scroll_controls "$out/ui-$name.xml" down; fi
         sleep 1
       done
       printf 'NOT REACHED: %s\n' "$label" >> "$out/ui-result.txt"
@@ -167,6 +188,7 @@ PY
         if [[ "$bound_before" == true && "$bound_after" == true ]]; then exit 0; fi
         exit 1
       fi
+      if (( attempt > 3 )); then scroll_controls "$out/ui-receipt.xml" up; fi
       sleep 1
     done
     printf '%s\n' 'FAIL: no active sample receipt observed after the signed profile action.' > "$out/ui-result.txt"
