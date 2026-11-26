@@ -94,6 +94,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         val row = rows.single { it.contains("wake=7 ") }
         assertTrue(row, row.contains("req=45"))
         assertTrue(row, row.contains("firstEligibleReq=40"))
+        assertTrue(row, row.contains("firstEligibleHandoff=NEWER_BARRIER_REQUIRED"))
         assertTrue(row, row.contains("progressReq=44"))
         assertTrue(row, row.contains("frame=7024"))
         assertTrue(row, row.contains("withdraw=7050/restriction"))
