@@ -207,6 +207,13 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR26DirectOrderingInstrumentationTest.kt
     sha256sum "$fixture" > "$out/fixture-r42-stale-verbose.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r47_clock_recheck_* ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR47VisualClockCorrectedInstrumentationTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR47VisualInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r47-clock-corrected.sha256"
+    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR47VisualInstrumentationTest.kt > "$out/fixture-r47-clock-corrected.patch"
+  fi
   flutter pub get > "$out/pub-get.log" 2>&1
   rc=0
   (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain) > "$out/build.log" 2>&1 || rc=$?
@@ -248,11 +255,11 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
-    r47_visual_direct)
+    r47_visual_direct|r47_clock_recheck_direct)
       class=com.fluvi.app.lockscreen.KeyguardR47VisualInstrumentationTest
       methods=(directPresenterMatchesFlutterAndWithdraws)
       ;;
-    r47_visual_wa)
+    r47_visual_wa|r47_clock_recheck_wa)
       class=com.fluvi.app.lockscreen.KeyguardR47VisualInstrumentationTest
       methods=(waPresenterMatchesFlutterAndWithdraws)
       ;;
