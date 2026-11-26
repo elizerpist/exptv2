@@ -173,6 +173,14 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR446WindowPresenterInstrumentationTest
       methods=(actualAttachedSurfaceWithCaptureStaysBelowIndependentUpperWindow)
       ;;
+    r446_pressure)
+      class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
+      methods=(r446ProtectedSampleEndpointsSurviveLightPressure r446ProtectedSampleEndpointsSurviveFullPressure)
+      ;;
+    r446_stock)
+      class=com.fluvi.app.lockscreen.KeyguardR446StockServiceInstrumentationTest
+      methods=(actualStockWakeUsesOwnerPrintAndStops)
+      ;;
     r445_provider)
       class=com.fluvi.app.lockscreen.KeyguardR44LazyProviderInstrumentationTest
       methods=(exactViewIdQueryReturnsVisibleOwnedDescendant)
