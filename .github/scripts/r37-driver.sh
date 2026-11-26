@@ -139,6 +139,11 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR448StockServiceInstrumentationTest.kt
     sha256sum "$fixture" > "$out/fixture-r448-stock-wa.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r449_session_diag ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR449SessionEvidenceInstrumentationTest.kt"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR449SessionEvidenceInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r449-session.sha256"
+  fi
   if [[ "$TEST_SCOPE" == r447_handoff_stable ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR447HandoffStableInstrumentationTest.kt"
     test -f "$fixture"
@@ -258,6 +263,10 @@ case "${1:-}" in
       ;;
     r448_safe_only)
       class=com.fluvi.app.lockscreen.KeyguardR448SampleOnlyInstrumentationTest
+      methods=(normalPresentationIsClosedAndFixedSampleCanArm)
+      ;;
+    r449_session_diag)
+      class=com.fluvi.app.lockscreen.KeyguardR449SessionEvidenceInstrumentationTest
       methods=(normalPresentationIsClosedAndFixedSampleCanArm)
       ;;
     r448_wa_service)
