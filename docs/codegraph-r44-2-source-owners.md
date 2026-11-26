@@ -1,0 +1,12 @@
+# R44.2 source ownership and impact inventory
+
+Application source `31df90e7dc8316fe57d030ce00ef85c726cc3b94`. The generated SCIP graph covers Dart, not Kotlin; the native paths below are direct source navigation, not semantic SCIP edges or runtime proof. The graph manifest and shards retain this exact application source identity.
+
+- `lib/core/debug/debug_console.dart:378,1200` calls `lib/core/diagnostics/keyguard_timing_capture_bridge.dart:116,133`; `android/app/src/main/kotlin/com/fluvi/app/MainActivity.kt:366` dispatches to service owner `FluviKeyguardCardService.kt:306,369`. Receipt validity is bound to service, process, revision and capture.
+- `FluviKeyguardCardService.kt:255` clears old material and arms the sample; `KeyguardCardWindow.kt:455` verifies the retained fixed-sample domain. `FluviKeyguardCardService.kt:76,1962` prepares/invalidate-checks the SystemUI resource away from wake.
+- `FluviKeyguardCardService.kt:1901,4389,4544,4587,4634` tracks SCREEN_ON and claims a qualifying queued successor using `KeyguardR442YieldPolicy.kt:4` and the existing single-reader queue. The successor still performs its own complete admission.
+- `KeyguardWindowSnapshotReader.kt:817,868,910,924,940` consumes restrictive markers and controls the safe boundary; `KeyguardR44TreeReader.kt:86,96,142` guards unresolved/foreign/restrictive evidence before any transfer or optional extra. `KeyguardR44SurfaceEvidence.kt:75` retains normal and sample classification and cover precedence.
+- `FluviKeyguardCardService.kt:4479` records applied and observational verdicts from the same snapshot. `KeyguardCardSettings.kt:1678,1711,3173,3546` reduces bounded per-wake facts and handoff identity on the existing consumer and exports them. Missing optical evidence remains `UNOBSERVED`.
+- Controls: `test/core/debug/keyguard_timing_capture_console_test.dart:216`, `android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR22ReaderHandoffTest.kt:170`, `KeyguardR442YieldPolicyTest.kt`, and `android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR442OwnerInstrumentationTest.kt:27` and `KeyguardCardDiagnosticsInstrumentationTest.kt:33`. Fixture-only tests are independently pinned in `test/r44-2-native-race`; they are not part of the app SHA.
+
+This inventory is navigation evidence only. API-35 first-frame privacy failures and the API-37 graphics crash remain independently reported; the physical phone must establish any visible timing and restricted-frame result.
