@@ -212,7 +212,7 @@ case "${1:-}" in
       ;;
     r447_pressure)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
-      methods=(r447LatestPreIssueDecisionSurvivesLightPressure r447LatestPreIssueDecisionSurvivesFullPressure r447ProgressAndTerminalRemainWithTheirOriginalRequest)
+      methods=(r447LatestPreIssueDecisionSurvivesLightPressure r447LatestPreIssueDecisionSurvivesFullPressure r447ProgressAndTerminalRemainWithTheirOriginalRequest r447TerminalBeforeAnyWakeSurvivesFreezeAndLateCleanup)
       ;;
     r447_handoff|r447_handoff_stable)
       class=com.fluvi.app.lockscreen.KeyguardR447HandoffServiceInstrumentationTest
