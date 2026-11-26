@@ -512,6 +512,10 @@ class FluviKeyguardCardService : AccessibilityService() {
     private var r446Presenter: KeyguardR446WindowPresenter? = null
     private var r446ArmAt = 0L
     private var r446Observation: KeyguardR446Observation? = null
+    // Written and read under queueLock. A start is attributed to an arm only
+    // when that arm and the SCREEN_ON boundary already exist at reader entry.
+    private var r448StartedRequest: Long? = null
+    private var r448StartedArm: Long? = null
 
     internal fun r446PresenterForInstrumentation() = r446Presenter
     internal fun r446PreparePresenterForInstrumentation(timeSource: KeyguardMaterialTimeSource): KeyguardR446WindowPresenter {
@@ -2271,6 +2275,15 @@ class FluviKeyguardCardService : AccessibilityService() {
                         r446ReadArm = r446Owner.arm
                     beginOrJoinWakeCycle("wake", receivedAt, r41CaptureId = r41Capture, r41Ordinal = r41Ordinal)
                     r447RecordWakeArm()
+                    // An already running pre-screen walk cannot carry the
+                    // one-wake arm. Offer one successor on the same reader;
+                    // the queue rechecks for suitable work before accepting it.
+                    val boundaryArm = r446ReadArm
+                    if (boundaryArm != null && wakeCycleOwner.current() != null) {
+                        r448RecordBoundary(boundaryArm, receivedAt)
+                        scheduleEvaluation("r448ScreenBoundary", triggerReceivedUptimeMs = receivedAt,
+                            freshness = KeyguardWindowFreshness.LIFECYCLE_BOUNDARY)
+                    }
                 }
             }
         }
@@ -3025,6 +3038,30 @@ class FluviKeyguardCardService : AccessibilityService() {
         inspectionQueue.hasCurrentWork(inspectionAuthority, excludingId)
     }
 
+    /** queueLock held. This checks scheduling identities, never show authority. */
+    private fun r448BoundaryDecisionLocked(arm: KeyguardR446PrintOwner.Arm,
+                                           authority: KeyguardInspectionAuthority): KeyguardR448WakeReadBoundary.Decision {
+        fun work(value: KeyguardCardInspectionRequest?) = value?.let {
+            KeyguardR448WakeReadBoundary.Work(it.id, authority.matches(it),
+                it.session == arm.session && it.diagnosticContext?.captureId == arm.capture)
+        }
+        return KeyguardR448WakeReadBoundary.decide(work(inspectionQueue.activeRequest()),
+            work(inspectionQueue.pendingRequest()), r448StartedRequest, r448StartedArm == arm.generation)
+    }
+
+    private fun r448RecordBoundary(arm: KeyguardR446PrintOwner.Arm, screenAt: Long) {
+        val context = currentDiagnosticAttempt ?: return
+        if (context.captureId != arm.capture || context.serviceSession != arm.session ||
+            context.originWakeEpoch != wakeCycleOwner.current()?.id) return
+        val observation = synchronized(queueLock) {
+            KeyguardR448BoundaryObservation(context, arm.generation, screenAt,
+                inspectionQueue.activeRequest()?.id, inspectionQueue.pendingRequest()?.id,
+                r448StartedRequest, r448StartedArm == arm.generation,
+                r448BoundaryDecisionLocked(arm, inspectionAuthority))
+        }
+        runCatching { KeyguardCardDiagnostics.recordR448Boundary(observation) }
+    }
+
     private enum class R447SystemOrigin { UNPROVEN, INTERNAL_OUTPUT_READY }
 
     /** No View/platform acquisition on this main-owned submission path. */
@@ -3081,9 +3118,25 @@ class FluviKeyguardCardService : AccessibilityService() {
                 SystemClock.uptimeMillis(), state.eligible, state.excluded, request.diagnosticCaptureId)
         else null
         if (state.excluded) {
+            val vetoAt = SystemClock.uptimeMillis()
+            val vetoArm = r446Owner.arm
+            val vetoContext = currentDiagnosticAttempt?.takeIf {
+                vetoArm != null && it.captureId == vetoArm.capture && it.serviceSession == vetoArm.session &&
+                    it.originWakeEpoch == request.authority.wakeGeneration &&
+                    r446Owner.state in setOf(KeyguardR446PrintOwner.State.WAIT_READ, KeyguardR446PrintOwner.State.ISSUED)
+            }
+            val vetoScreenAt = r442ScreenOn?.takeIf { it.session == request.authority.serviceSession }?.uptime
             if (r446Owner.state == KeyguardR446PrintOwner.State.WAIT_READ ||
                 r446Owner.state == KeyguardR446PrintOwner.State.ISSUED) r446Cancel("systemGate")
             hideImmediately("systemGate:${request.reason}", triggerReceivedUptimeMs = request.receivedAt)
+            // Preserve the actual accepted acquisition after the mandatory
+            // hide. Diagnostic failures must never delay or undo exclusion.
+            if (vetoContext != null && vetoArm != null) runCatching {
+                KeyguardCardDiagnostics.recordR448SystemVeto(KeyguardR448SystemVeto(vetoContext,
+                    vetoArm.generation, request.id, request.diagnosticCaptureId == vetoArm.capture,
+                    request.reason, request.receivedAt, request.queuedAt,
+                    vetoScreenAt, vetoAt, state))
+            }
             return
         }
         if (!state.eligible) {
@@ -3293,8 +3346,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                 it.belongsTo(authority, currentDiagnosticAttempt?.captureId) && it.captureId == KeyguardCardDiagnostics.activeCaptureId()
             },
         )
-        if (request.trigger != "surfaceRetry") cancelWakeRetry("supersededBy:${request.trigger}")
-        wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.let {
+        if (request.trigger != "surfaceRetry" && request.trigger != "r448ScreenBoundary")
+            cancelWakeRetry("supersededBy:${request.trigger}")
+        wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration && request.trigger != "r448ScreenBoundary" }?.let {
             if (it.inspectionQueuedAt == null) it.inspectionQueuedAt = now
             request.eventTimeUptimeMs?.takeIf { eventTime -> eventTime <= now }?.let { eventTime ->
                 it.eventAgeMs = now - eventTime
@@ -3302,6 +3356,16 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         var postClaimForTest: KeyguardOpeningInspectionHandoff.PostClaimSnapshot? = null
         val queueOffer = synchronized(queueLock) {
+            if (trigger == "r448ScreenBoundary") {
+                val arm = r446ReadArm ?: return null
+                val screen = r442ScreenOn ?: return null
+                if (screen.session != arm.session || arm.session != authority.serviceSession ||
+                    arm.capture != currentDiagnosticAttempt?.captureId ||
+                    arm.capture != KeyguardCardDiagnostics.activeCaptureId() ||
+                    r446Owner.state != KeyguardR446PrintOwner.State.WAIT_READ) return null
+                val decision = r448BoundaryDecisionLocked(arm, authority)
+                if (decision != KeyguardR448WakeReadBoundary.Decision.OFFER) return null
+            }
             val isProvedDuplicate = if (sampleDuplicate == null) false else {
                 val active = inspectionQueue.activeRequest()
                 val sampleOrder = active?.let { firstAuthorizedOrb.sampleOrder(it.id, firstAuthorizedOrb.sceneSerial()) }
@@ -3342,6 +3406,12 @@ class FluviKeyguardCardService : AccessibilityService() {
                 activeAfter = inspectionQueue.activeRequest(),
                 superseded = promoted?.ticket,
             )
+        }
+        if (request.trigger == "r448ScreenBoundary") {
+            cancelWakeRetry("supersededBy:${request.trigger}")
+            wakeTiming?.takeIf { it.wakeGeneration == request.wakeGeneration }?.let {
+                if (it.inspectionQueuedAt == null) it.inspectionQueuedAt = now
+            }
         }
         val r41OfferNs = if (request.diagnosticContext?.captureId != null &&
             request.diagnosticContext.captureId == KeyguardCardDiagnostics.activeCaptureId()) System.nanoTime() else Long.MIN_VALUE
@@ -3536,7 +3606,16 @@ class FluviKeyguardCardService : AccessibilityService() {
         }
         val concurrent = activeInspectionCount.incrementAndGet()
         recordMaximum(maximumConcurrentInspections, concurrent)
-        val started = SystemClock.uptimeMillis()
+        val (started, startedArm) = synchronized(queueLock) {
+            val now = SystemClock.uptimeMillis()
+            val screen = r442ScreenOn
+            val arm = r446ReadArm
+            r448StartedRequest = request.id
+            r448StartedArm = arm?.takeIf { screen != null && screen.session == request.session &&
+                now >= screen.uptime && it.session == request.session &&
+                it.capture == request.diagnosticContext?.captureId }?.generation
+            now to r448StartedArm
+        }
         val claimedOpening = if (openingHandoff.claimedRequestId == request.id)
             synchronized(queueLock) {
                 openingHandoff.successorStarted(request, started)?.let { KeyguardCardDiagnostics.recordR22PostClaim(it) }
@@ -3561,6 +3640,11 @@ class FluviKeyguardCardService : AccessibilityService() {
             }
         } catch (failure: Throwable) {
             val cancelledAt = SystemClock.uptimeMillis()
+            if (startedArm != null) request.diagnosticContext?.let { context ->
+                runCatching { KeyguardCardDiagnostics.recordR448Worker(KeyguardR448WorkerObservation(
+                    context, startedArm, request.id, request.queuedAtUptimeMs, started, cancelledAt,
+                    "FAILED_${failure.javaClass.simpleName.take(40)}", "UNOBSERVED", authorityIsCurrent(request))) }
+            }
             if (claimedOpening != null) synchronized(queueLock) {
                 openingHandoff.successorFinished(request, cancelledAt, "CANCELLED")
                 openingHandoff.followReadFinished(request, cancelledAt, null, "CANCELLED")
@@ -3574,6 +3658,13 @@ class FluviKeyguardCardService : AccessibilityService() {
             throw failure
         } finally { activeInspectionCount.decrementAndGet() }
         val finished = SystemClock.uptimeMillis()
+        if (startedArm != null) request.diagnosticContext?.let { context ->
+            val completed = (result as? InspectionOutcome.Completed)?.inspection
+            runCatching { KeyguardCardDiagnostics.recordR448Worker(KeyguardR448WorkerObservation(
+                context, startedArm, request.id, request.queuedAtUptimeMs, started, finished,
+                if (result is InspectionOutcome.Yielded) "YIELDED" else if (completed?.abortedStale == true) "STALE" else "COMPLETED",
+                completed?.r446Eligibility?.reason ?: "UNOBSERVED", authorityIsCurrent(request))) }
+        }
         val opening = if (openingHandoff.openingRequestId == request.id) synchronized(queueLock) {
             openingHandoff.readFinished(request, finished)
             openingHandoff.snapshot(request.id)

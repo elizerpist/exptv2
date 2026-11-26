@@ -1,5 +1,32 @@
 package com.fluvi.app.lockscreen
 
+internal data class KeyguardR448BoundaryObservation(
+    val context: KeyguardDiagnosticContext, val arm: Long, val screenAt: Long,
+    val active: Long?, val pending: Long?, val started: Long?,
+    val startedForArm: Boolean, val decision: KeyguardR448WakeReadBoundary.Decision,
+)
+
+internal data class KeyguardR448WorkerObservation(
+    val context: KeyguardDiagnosticContext, val arm: Long, val request: Long,
+    val queued: Long, val started: Long, val finished: Long,
+    val outcome: String, val eligibility: String, val authorityAtEnd: Boolean,
+)
+
+/** The exact sampler result that revoked an armed sample. This is evidence,
+ * not a reusable system-state grant, and contains no window or user data. */
+internal data class KeyguardR448SystemVeto(
+    val context: KeyguardDiagnosticContext,
+    val armGeneration: Long,
+    val requestId: Long,
+    val requestCaptureMatched: Boolean,
+    val reason: String,
+    val receivedAt: Long,
+    val queuedAt: Long,
+    val screenOnAt: Long?,
+    val mainAt: Long,
+    val state: KeyguardSystemState,
+)
+
 /** Only allowlisted role and timings are exported; hierarchy data stays on the reader. */
 internal data class KeyguardR445IndexCall(
     val role: String, val outcome: String, val durationMs: Long, val ageMs: Long, val overrunMs: Long,

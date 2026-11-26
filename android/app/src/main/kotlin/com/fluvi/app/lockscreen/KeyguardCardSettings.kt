@@ -802,6 +802,9 @@ internal object KeyguardCardDiagnostics {
         var r447FirstTerminal: KeyguardR446Observation? = null,
         var r447Arm: KeyguardR446Observation? = null,
         var r447ArmGeneration: Long = 0,
+        var r448SystemVeto: KeyguardR448SystemVeto? = null,
+        var r448Boundary: KeyguardR448BoundaryObservation? = null,
+        var r448Worker: KeyguardR448WorkerObservation? = null,
         var r447LatestOrdinal: Long = 0,
         var r447DecisionCount: Int = 0,
         var firstExclusionSignalAtUptimeMs: Long? = null,
@@ -1718,6 +1721,58 @@ internal object KeyguardCardDiagnostics {
                     attempt.r44FirstRestriction == null) attempt.r44FirstRestriction = observation
                 if (attempt.r44Reads.size < 12) attempt.r44Reads.addLast(observation)
                 else { attempt.r44ReadsOmitted += 1; attempt.r44Last = observation }
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
+    internal fun recordR448Boundary(observation: KeyguardR448BoundaryObservation) {
+        val token = ingress ?: return
+        val owner = observation.context
+        if (owner.captureId != token.id || owner.attemptId == null) return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
+                    ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
+                if (attempt != null && attempt.serviceSession == owner.serviceSession &&
+                    attempt.wakeEpoch == owner.originWakeEpoch && attempt.r448Boundary == null)
+                    attempt.r448Boundary = observation
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
+    internal fun recordR448Worker(observation: KeyguardR448WorkerObservation) {
+        val token = ingress ?: return
+        val owner = observation.context
+        if (owner.captureId != token.id || owner.attemptId == null) return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
+                    ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
+                if (attempt != null && attempt.serviceSession == owner.serviceSession &&
+                    attempt.wakeEpoch == owner.originWakeEpoch && attempt.r448Worker == null)
+                    attempt.r448Worker = observation
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
+    /** Keep the first actual system veto independently of the raw event ring. */
+    internal fun recordR448SystemVeto(observation: KeyguardR448SystemVeto) {
+        val token = ingress ?: return
+        val owner = observation.context
+        if (owner.captureId != token.id || owner.attemptId == null) return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
+                    ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
+                if (attempt != null && attempt.serviceSession == owner.serviceSession &&
+                    attempt.wakeEpoch == owner.originWakeEpoch && attempt.r448SystemVeto == null)
+                    attempt.r448SystemVeto = observation
             }
         }
         if (!accepted) token.r44Dropped.incrementAndGet()
@@ -3269,6 +3324,16 @@ internal object KeyguardCardDiagnostics {
             select("r447:armTerminal", "R44_7_ARM generation=${terminal.generation} terminal=${terminal.at}/${terminal.reason} clock=uptimeMs\n")
         }
         val r44Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
+        r44Attempts.forEach { attempt ->
+            attempt.r448Boundary?.let { b ->
+                val w = attempt.r448Worker
+                select("a${attempt.id}:r448boundary", "R44_8_READ_BOUNDARY wake=${attempt.wakeEpoch} arm=${b.arm} screenOn=${b.screenAt} active=${b.active ?: "UNOBSERVED"} pending=${b.pending ?: "UNOBSERVED"} started=${b.started ?: "UNOBSERVED"} startedForArm=${b.startedForArm} boundaryDecision=${b.decision} workerRequest=${w?.request ?: "UNOBSERVED"} workerQueued=${w?.queued ?: "UNOBSERVED"} workerStart=${w?.started ?: "UNOBSERVED"} workerEnd=${w?.finished ?: "UNOBSERVED"} workerOutcome=${w?.outcome ?: "UNOBSERVED"} eligibility=${w?.eligibility ?: "UNOBSERVED"} authorityAtEnd=${w?.authorityAtEnd ?: "UNOBSERVED"} clock=uptimeMs\n", attempt.id)
+            }
+            attempt.r448SystemVeto?.let { v ->
+                val s = v.state
+                select("a${attempt.id}:r448gate", "R44_8_SYSTEM_VETO wake=${attempt.wakeEpoch} arm=${v.armGeneration} request=${v.requestId} requestCaptureMatched=${v.requestCaptureMatched} reason=${technicalValue(v.reason)} screenOn=${v.screenOnAt ?: "UNOBSERVED"} received=${v.receivedAt} queued=${v.queuedAt} readStart=${s.startedAt} readEnd=${s.finishedAt} main=${v.mainAt} available=${s.available} primaryDisplay=${s.primaryDisplay} interactive=${s.interactive} displayOn=${s.displayOn} displayOff=${s.displayOff} keyguardLocked=${s.keyguardLocked} userUnlocked=${s.userUnlocked} excluded=${s.excluded} clock=uptimeMs\n", attempt.id)
+            }
+        }
         // The once-per-wake sample boundary is reserved before verbose reads.
         r44Attempts.forEach { attempt ->
             val first = attempt.r446
