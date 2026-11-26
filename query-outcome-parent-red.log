@@ -1,0 +1,141 @@
+Picked up JAVA_TOOL_OPTIONS: -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080 -Duser.home=/workspace/.toolchains/r14-test-home -Drobolectric.dependency.repo.url=https://maven-central.storage-download.googleapis.com/maven2
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :gradle:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle:compileKotlin UP-TO-DATE
+> Task :gradle:compileJava NO-SOURCE
+> Task :gradle:compileGroovy NO-SOURCE
+> Task :gradle:pluginDescriptors UP-TO-DATE
+> Task :gradle:processResources UP-TO-DATE
+> Task :gradle:classes UP-TO-DATE
+> Task :gradle:jar UP-TO-DATE
+
+> Configure project :app
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by plugin 'dev.flutter.flutter-gradle-plugin'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by plugin 'dev.flutter.flutter-gradle-plugin'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by plugin 'dev.flutter.flutter-gradle-plugin'
+Build was configured to prefer settings repositories over project repositories but repository 'maven' was added by plugin 'dev.flutter.flutter-gradle-plugin'
+
+> Configure project :integration_test
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file '/workspace/.toolchains/flutter/packages/integration_test/android/build.gradle.kts'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file '/workspace/.toolchains/flutter/packages/integration_test/android/build.gradle.kts'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file '/workspace/.toolchains/flutter/packages/integration_test/android/build.gradle.kts'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file '/workspace/.toolchains/flutter/packages/integration_test/android/build.gradle.kts'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file '/workspace/.toolchains/flutter/packages/integration_test/android/build.gradle.kts'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file '/workspace/.toolchains/flutter/packages/integration_test/android/build.gradle.kts'
+Build was configured to prefer settings repositories over project repositories but repository 'Google' was added by build file '/workspace/.toolchains/flutter/packages/integration_test/android/build.gradle.kts'
+Build was configured to prefer settings repositories over project repositories but repository 'MavenRepo' was added by build file '/workspace/.toolchains/flutter/packages/integration_test/android/build.gradle.kts'
+Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:compileFlutterBuildDebug UP-TO-DATE
+> Task :app:packJniLibsflutterBuildDebug UP-TO-DATE
+> Task :app:generateKeyguardHeaderMaterial UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :fluvi-core:preBuild UP-TO-DATE
+> Task :fluvi-core:preDebugBuild UP-TO-DATE
+> Task :fluvi-core:writeDebugAarMetadata UP-TO-DATE
+> Task :integration_test:preBuild UP-TO-DATE
+> Task :integration_test:preDebugBuild UP-TO-DATE
+> Task :integration_test:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:cleanMergeDebugAssets
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :fluvi-core:mergeDebugShaders UP-TO-DATE
+> Task :fluvi-core:compileDebugShaders NO-SOURCE
+> Task :fluvi-core:generateDebugAssets UP-TO-DATE
+> Task :fluvi-core:mergeDebugAssets UP-TO-DATE
+> Task :integration_test:mergeDebugShaders UP-TO-DATE
+> Task :integration_test:compileDebugShaders NO-SOURCE
+> Task :integration_test:generateDebugAssets UP-TO-DATE
+> Task :integration_test:mergeDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:copyFlutterAssetsDebug
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :fluvi-core:generateDebugResValues UP-TO-DATE
+> Task :fluvi-core:generateDebugResources UP-TO-DATE
+> Task :fluvi-core:packageDebugResources UP-TO-DATE
+> Task :integration_test:generateDebugResValues UP-TO-DATE
+> Task :integration_test:generateDebugResources UP-TO-DATE
+> Task :integration_test:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :fluvi-core:extractDeepLinksDebug UP-TO-DATE
+> Task :fluvi-core:processDebugManifest UP-TO-DATE
+> Task :integration_test:extractDeepLinksDebug UP-TO-DATE
+> Task :integration_test:processDebugManifest UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:outputDebugAppLinkSettings UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :fluvi-core:compileDebugLibraryResources UP-TO-DATE
+> Task :fluvi-core:parseDebugLocalResources UP-TO-DATE
+> Task :fluvi-core:generateDebugRFile UP-TO-DATE
+> Task :integration_test:compileDebugLibraryResources UP-TO-DATE
+> Task :integration_test:parseDebugLocalResources UP-TO-DATE
+> Task :integration_test:generateDebugRFile UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :fluvi-core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :fluvi-core:kspDebugKotlin UP-TO-DATE
+> Task :fluvi-core:compileDebugKotlin UP-TO-DATE
+> Task :fluvi-core:javaPreCompileDebug UP-TO-DATE
+> Task :fluvi-core:compileDebugJavaWithJavac NO-SOURCE
+> Task :fluvi-core:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :integration_test:javaPreCompileDebug UP-TO-DATE
+> Task :integration_test:compileDebugJavaWithJavac UP-TO-DATE
+> Task :integration_test:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :fluvi-core:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :fluvi-core:processDebugJavaRes UP-TO-DATE
+> Task :integration_test:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :integration_test:processDebugJavaRes NO-SOURCE
+
+> Task :app:compileDebugUnitTestKotlin
+w: file:///workspace/r43-app/android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSteadyCapacityTest.kt:112:16 Java type mismatch: inferred type is 'Any?', but 'Any' was expected.
+w: file:///workspace/r43-app/android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSteadyCapacityTest.kt:144:33 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'Any?'.
+w: file:///workspace/r43-app/android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSteadyCapacityTest.kt:150:21 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'Array<(out) CapturedType(*)!>?'.
+w: file:///workspace/r43-app/android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSteadyCapacityTest.kt:186:30 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'Array<(out) CapturedType(*)!>?'.
+w: file:///workspace/r43-app/android/app/src/test/kotlin/com/fluvi/app/lockscreen/material/KeyguardOrbSteadyCapacityTest.kt:195:35 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'Array<(out) CapturedType(*)!>?'.
+
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+
+> Task :app:testDebugUnitTest
+Picked up JAVA_TOOL_OPTIONS: -Djavax.net.ssl.trustStore=/etc/ssl/certs/java/cacerts -Dhttp.proxyHost=proxy -Dhttp.proxyPort=8080 -Dhttps.proxyHost=proxy -Dhttps.proxyPort=8080 -Duser.home=/workspace/.toolchains/r14-test-home -Drobolectric.dependency.repo.url=https://maven-central.storage-download.googleapis.com/maven2
+
+KeyguardR22ReaderHandoffTest > r445FrameworkErrorIsReportedAndStopsTheBatch FAILED
+    org.junit.ComparisonFailure at KeyguardR22ReaderHandoffTest.kt:1147
+
+KeyguardR22ReaderHandoffTest > r445EmptyQueryIsReportedAsEmpty FAILED
+    org.junit.ComparisonFailure at KeyguardR22ReaderHandoffTest.kt:1140
+
+2 tests completed, 2 failed
+
+> Task :app:testDebugUnitTest FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///workspace/r43-app/build/app/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 32s
+67 actionable tasks: 5 executed, 62 up-to-date
