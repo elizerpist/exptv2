@@ -198,7 +198,11 @@ case "${1:-}" in
       ;;
     r447_pressure)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
-      methods=(r447LatestPreIssueDecisionSurvivesLightPressure r447LatestPreIssueDecisionSurvivesFullPressure)
+      methods=(r447LatestPreIssueDecisionSurvivesLightPressure r447LatestPreIssueDecisionSurvivesFullPressure r447ProgressAndTerminalRemainWithTheirOriginalRequest)
+      ;;
+    r447_handoff)
+      class=com.fluvi.app.lockscreen.KeyguardR447HandoffServiceInstrumentationTest
+      methods=(internalDuplicateAfterPhysicalReadIssuesOnce sameHostExternalIngressRejectsOldRead)
       ;;
     r446_stock|r446_stock_observed)
       class=com.fluvi.app.lockscreen.KeyguardR446StockServiceInstrumentationTest
