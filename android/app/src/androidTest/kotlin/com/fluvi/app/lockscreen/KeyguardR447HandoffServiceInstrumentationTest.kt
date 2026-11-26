@@ -35,8 +35,9 @@ import org.junit.runner.RunWith
 class KeyguardR447HandoffServiceInstrumentationTest {
     @Test fun internalDuplicateAfterPhysicalReadIssuesOnce() = exercise(false)
     @Test fun sameHostExternalIngressRejectsOldRead() = exercise(true)
+    @Test fun selectedWidgetsAnywhereUsesIndependentSampleFrame() = exercise(false, true)
 
-    private fun exercise(external: Boolean) {
+    private fun exercise(external: Boolean, widgetsAnywhere: Boolean = false) {
         assertEquals(37, Build.VERSION.SDK_INT)
         val ins = InstrumentationRegistry.getInstrumentation()
         val context = ins.targetContext
@@ -90,7 +91,7 @@ class KeyguardR447HandoffServiceInstrumentationTest {
         val host = AtomicInteger(-1)
         val offered = AtomicLong(0)
         val invocations = mutableListOf<Long>()
-        val note = StringBuilder("controlled=subset-of-real-inventory stock=false external=$external physical=UNOBSERVED\n")
+        val note = StringBuilder("controlled=subset-of-real-inventory stock=false external=$external widgetsAnywhere=$widgetsAnywhere physical=UNOBSERVED\n")
         var service: FluviKeyguardCardService? = null
         try {
             shell("input keyevent KEYCODE_WAKEUP")
@@ -106,8 +107,13 @@ class KeyguardR447HandoffServiceInstrumentationTest {
             waitFor("service connected") { FluviKeyguardCardServiceRegistry.connected }
             service = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
             val owner = checkNotNull(service)
+            if (widgetsAnywhere) assertTrue("NOT REACHED: native route selection", main {
+                owner.setR448DisplayRoute(KeyguardR448DisplayRoute.WIDGETS_ANYWHERE)
+            })
             val receipt = start(owner)
             assertEquals("NOT REACHED: armed input-ready presenter", true, receipt["printArmed"])
+            if (widgetsAnywhere) assertEquals("original target presenter must not be prepared", null,
+                main { owner.r446PresenterForInstrumentation() })
             owner.inspectionProbeForTest = object : KeyguardInspectionProbeForTest {
                 override fun r447ControlledSampleTopology() = true
                 override fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> {
@@ -162,10 +168,12 @@ class KeyguardR447HandoffServiceInstrumentationTest {
                 assertFalse("old read reached presenter after external ingress", synchronized(invocations) { invocations.contains(first.get()) })
             } else {
                 waitFor("first read reaches service presenter") { synchronized(invocations) { invocations.contains(first.get()) } }
-                waitFor("first read submits") {
+                waitFor(if (widgetsAnywhere) "independent sample frame draws" else "first read submits") {
                     val report = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
                     report.lineSequence().any { it.startsWith("R44_6_SAMPLE ") &&
-                        it.contains("progressReq=${first.get()}") && it.contains("submit=") && !it.contains("submit=UNOBSERVED") }
+                        it.contains("progressReq=${first.get()}") &&
+                        if (widgetsAnywhere) it.contains("backend=WA_SHADER_DRAW") && !it.contains("frame=UNOBSERVED")
+                        else it.contains("submit=") && !it.contains("submit=UNOBSERVED") }
                 }
                 assertEquals("only one presenter call", 1, synchronized(invocations) { invocations.size })
                 ui.takeScreenshot()?.let { shot ->

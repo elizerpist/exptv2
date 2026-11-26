@@ -45,6 +45,9 @@ internal class KeyguardR448WidgetsAnywhereFrame(
     private var leaseLive = false
     private var event: ((Event) -> Unit)? = null
 
+    fun isAttached(): Boolean = attached && leaseLive && view?.isAttachedToWindow == true
+    fun isRetired(): Boolean = view == null && !attached && !removalFailed
+
     private fun emit(owner: Owner, stage: String, detail: String? = null) {
         runCatching { event?.invoke(Event(owner, stage, SystemClock.uptimeMillis(), detail)) }
     }

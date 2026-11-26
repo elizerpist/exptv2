@@ -151,7 +151,7 @@ void main() {
               'connected': true,
               'configured': 'WIDGETS_ANYWHERE',
               'active': 'NONE',
-              'reason': 'BACKEND_NOT_CONNECTED',
+              'reason': 'PUBLIC_SAMPLE_ONLY',
             };
           });
       final bridge = KeyguardTimingCaptureBridge(
@@ -165,7 +165,7 @@ void main() {
       expect((received?.arguments as Map)['route'], 'WIDGETS_ANYWHERE');
       expect(status.configured, KeyguardDisplayRoute.widgetsAnywhere);
       expect(status.active, 'NONE');
-      expect(status.reason, 'BACKEND_NOT_CONNECTED');
+      expect(status.reason, 'PUBLIC_SAMPLE_ONLY');
     },
   );
 

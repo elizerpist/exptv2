@@ -230,7 +230,7 @@ void main() {
                 'configured': configured,
                 'active': 'NONE',
                 'reason': configured == 'WIDGETS_ANYWHERE'
-                    ? 'BACKEND_NOT_CONNECTED'
+                    ? 'PUBLIC_SAMPLE_ONLY'
                     : 'NONE',
               };
             }
@@ -260,7 +260,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(configured, 'WIDGETS_ANYWHERE');
       expect(find.textContaining('Aktív: NONE'), findsOneWidget);
-      expect(find.textContaining('BACKEND_NOT_CONNECTED'), findsOneWidget);
+      expect(find.textContaining('PUBLIC_SAMPLE_ONLY'), findsOneWidget);
     },
   );
 
