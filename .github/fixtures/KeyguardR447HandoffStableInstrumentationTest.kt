@@ -176,9 +176,9 @@ class KeyguardR447HandoffServiceInstrumentationTest {
                 waitFor("old completed read reaches a rejecting Main decision") {
                     val report = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
                     report.lineSequence().any { it.startsWith("R44_6_SAMPLE ") &&
-                        it.contains("firstReq=${first.get()}") &&
-                        (it.contains("firstHandoff=SCENE_CHANGED") || it.contains("firstHandoff=STALE_AUTHORITY") ||
-                            it.contains("firstHandoff=RESTRICTION_OBSERVED") || it.contains("firstHandoff=ARM_MISMATCH")) }
+                        it.contains("firstEligibleReq=${first.get()}") &&
+                        (it.contains("firstEligibleHandoff=SCENE_CHANGED") || it.contains("firstEligibleHandoff=STALE_AUTHORITY") ||
+                            it.contains("firstEligibleHandoff=RESTRICTION_OBSERVED") || it.contains("firstEligibleHandoff=ARM_MISMATCH")) }
                 }
                 assertFalse("old read reached presenter after external ingress", synchronized(invocations) { invocations.contains(first.get()) })
             } else {
