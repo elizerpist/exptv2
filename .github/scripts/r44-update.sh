@@ -3,6 +3,10 @@ set -euo pipefail
 out="$RUNNER_TEMP/r44-update"
 mkdir -p "$out"
 case "${R44_BASELINE:-r44_2_owner}" in
+  r44_9)
+    base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/6af65a63b51b61e16985c613254b0f8cb7d9f71e/fluvi_R44_9_SAMPLE_ONLY_HUMAN_4ca41b7db0b2.apk'
+    base_size=121404369
+    base_sha=df3ede9507601b29dc5bfb9cf08e14d88fb3889d87a1f40fa20d2416c3d08f30;;
   r44_8)
     base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/a67dfc8d207a254a4b14b9abfa8cdfe4ec223c85/fluvi_R44_8_SAMPLE_ONLY_HUMAN_adf87004bde3.apk'
     base_size=121371601
@@ -263,7 +267,7 @@ PY
       for attempt in $(seq 1 20); do
         adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
         adb exec-out cat /sdcard/r442-window.xml > "$out/ui-$name.xml" 2>/dev/null || true
-        if [[ "$name" == r448-select-* || "$name" == r449-action || "$name" == r449-freeze ]]; then
+        if [[ "$name" == r448-select-* || "$name" == r449-action || "$name" == r449-freeze || "$name" == r45-* ]]; then
           cp "$out/ui-$name.xml" "$out/ui-$name-$attempt.xml" || true
         fi
         if wait_for_system_anr "$out/ui-$name.xml" "$name-$attempt"; then
@@ -291,18 +295,20 @@ try:
             # tap on that node as a route-selection attempt.
             if sys.argv[3].startswith('r448-select-') and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
                 continue
-            if sys.argv[3] == 'r449-action' and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
+            if sys.argv[3] in ('r449-action','r45-action','r45-shape') and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
                 continue
             if sys.argv[3] == 'r449-freeze' and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
                 continue
             m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
             if m:
-                a,b,c,d=map(int,m.groups()); print((a+c)//2,(b+d)//2); break
+                a,b,c,d=map(int,m.groups())
+                if c <= a or d <= b: continue
+                print((a+c)//2,(b+d)//2); break
 except (ET.ParseError,OSError): pass
 PY
 )
         if [[ "$coords" =~ ^[0-9]+\ [0-9]+$ ]]; then
-          if [[ "$name" == r446-action || "$name" == r449-action ]]; then
+          if [[ "$name" == r446-action || "$name" == r449-action || "$name" == r45-action ]]; then
             # uiautomator dump registers UiAutomation with flags=0 and can
             # temporarily suppress/rebind the service. Wait until the actual
             # service is bound before starting the single-use owner action.
@@ -331,6 +337,10 @@ PY
     tap_label 'Debug log' entry
     tap_label 'ZÁRKÉPERNYŐ' tab
     adb shell dumpsys accessibility > "$out/accessibility-normal.txt" 2>&1 || true
+    if [[ -n "${R45_UI_ROUTE:-}" ]]; then
+      source "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r45-ui-wakes.sh"
+      exit $?
+    fi
     if [[ -n "${R449_UI_ROUTE:-}" ]]; then
       case "$R449_UI_ROUTE" in
         FLUVI_STREAM) route_label='Fluvi adatfolyam'; route_name=fluvi;;

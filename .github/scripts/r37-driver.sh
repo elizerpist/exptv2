@@ -279,6 +279,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR448SampleOnlyInstrumentationTest
       methods=(normalPresentationIsClosedAndFixedSampleCanArm)
       ;;
+    r45_wa_session)
+      class=com.fluvi.app.lockscreen.KeyguardR448SampleOnlyInstrumentationTest
+      methods=(waSampleSessionKeepsItsOwnWakeAuthority)
+      ;;
     r449_session_diag)
       class=com.fluvi.app.lockscreen.KeyguardR449SessionEvidenceInstrumentationTest
       methods=(normalPresentationIsClosedAndFixedSampleCanArm)
