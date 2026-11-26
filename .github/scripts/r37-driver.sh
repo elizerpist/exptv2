@@ -139,6 +139,11 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR448StockServiceInstrumentationTest.kt
     sha256sum "$fixture" > "$out/fixture-r448-stock-wa.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r45_wa_session_diag ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR45WaSessionStateInstrumentationTest.kt"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR448SampleOnlyInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r45-wa-session-state.sha256"
+  fi
   if [[ "$TEST_SCOPE" == r449_session_diag ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR449SessionEvidenceInstrumentationTest.kt"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR449SessionEvidenceInstrumentationTest.kt
@@ -279,7 +284,7 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR448SampleOnlyInstrumentationTest
       methods=(normalPresentationIsClosedAndFixedSampleCanArm)
       ;;
-    r45_wa_session)
+    r45_wa_session|r45_wa_session_diag)
       class=com.fluvi.app.lockscreen.KeyguardR448SampleOnlyInstrumentationTest
       methods=(waSampleSessionKeepsItsOwnWakeAuthority)
       ;;
