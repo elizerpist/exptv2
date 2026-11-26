@@ -197,6 +197,9 @@ internal object FluviKeyguardCardSettings {
             generation = old.generation + 1L,
         )
         val residentPublisherActive = com.fluvi.app.lockscreen.host.R35MaterialPublication.inputsChanging()
+        // Revoke before writing: an in-flight frame must not use the prior
+        // generation while an updated privacy setting is being persisted.
+        com.fluvi.app.lockscreen.material.FluviActiveHeaderMaterialStore.invalidate()
         prefs(context).edit()
             .putBoolean(REQUESTED, next.requested)
             .putBoolean(DETAILS, next.showFinancialDetails)
@@ -213,6 +216,9 @@ internal object FluviKeyguardCardSettings {
             .putLong(FOCUS_GENERATION, next.focus.generation)
             .putLong(GENERATION, next.generation)
             .apply()
+        if (next.requested && next.showFinancialDetails) {
+            com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
+        }
         if (!next.showFinancialDetails) {
             com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore.redact(context)
         } else if (!old.showFinancialDetails) {
@@ -260,10 +266,12 @@ internal object FluviKeyguardCardSettings {
             orbPosition = orb,
             layoutRevision = old.layoutRevision + 1L,
         )
+        if (old.presentationMode != next.presentationMode)
+            com.fluvi.app.lockscreen.material.FluviActiveHeaderMaterialStore.invalidate()
         val residentPublisherActive = com.fluvi.app.lockscreen.host.R35MaterialPublication.inputsChanging()
         writeLayout(context, next)
         FluviKeyguardCardServiceRegistry.notifyLayoutChanged(next)
-        if (residentPublisherActive) {
+        if (residentPublisherActive || old.presentationMode != next.presentationMode) {
             com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
         }
         return next
@@ -4803,6 +4811,10 @@ internal object FluviKeyguardCardServiceRegistry {
 
     fun notifyMaterialChanged(profile: com.fluvi.app.lockscreen.material.KeyguardMaterialProfile) {
         service?.onMaterialProfileChangedFromApplication(profile)
+    }
+
+    internal fun notifyActiveHeaderChanged() {
+        service?.onActiveHeaderChangedFromApplication()
     }
 
     fun materialDiagnostics(): Map<String, Any?> = service?.materialDiagnostics()

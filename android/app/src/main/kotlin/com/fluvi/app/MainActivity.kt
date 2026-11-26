@@ -79,6 +79,7 @@ import com.fluvi.app.lockscreen.KeyguardR448ComparisonStore
 import com.fluvi.app.lockscreen.KeyguardR448Safety
 import com.fluvi.app.lockscreen.KeyguardR46RecordingStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
+import com.fluvi.app.lockscreen.material.FluviActiveHeaderMaterialStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
 import com.fluvi.app.widget.orb.OrbMaterialFrameStore
@@ -128,6 +129,7 @@ class MainActivity : FlutterActivity() {
     private var orbMaterialChannel: MethodChannel? = null
     private var keyguardMaterialChannel: MethodChannel? = null
     private var keyguardMaterialPublisherEpoch: Long = -1L
+    private var activeHeaderActivityResumed = false
     private var coreRevisionEventChannel: EventChannel? = null
     private var coreRevisionObservation: Job? = null
     private var diagnosticEventChannel: EventChannel? = null
@@ -1359,6 +1361,19 @@ class MainActivity : FlutterActivity() {
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "publishActiveHeaderProfile" -> {
+                        val values = call.arguments as? Map<*, *>
+                        if (values == null) {
+                            result.error("validation", "Hiányzó fejlécanyag.", null)
+                        } else {
+                            val unlocked = getSystemService(android.app.KeyguardManager::class.java)
+                                ?.isKeyguardLocked == false
+                            val receipt = FluviActiveHeaderMaterialStore.publish(applicationContext, values,
+                                keyguardMaterialPublisherEpoch, activeHeaderActivityResumed && unlocked)
+                            if (receipt.accepted) FluviKeyguardCardServiceRegistry.notifyActiveHeaderChanged()
+                            result.success(mapOf("accepted" to receipt.accepted, "reason" to receipt.reason))
+                        }
+                    }
                     "publishProfile" -> {
                         val values = call.arguments as? Map<*, *>
                         if (values == null) {
@@ -1449,6 +1464,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        activeHeaderActivityResumed = true
         FluviRuntimeCoordinator.reconcileHistoricalUserStop(applicationContext)
         FluviRuntimeCoordinator.onAppSurfaceVisibilityChanged(applicationContext, true)
         FluviRuntimeCoordinator.applyRecentsVisibility(this)
@@ -1459,6 +1475,11 @@ class MainActivity : FlutterActivity() {
                 runCatching { fluviCore.pulsePriority.reevaluateCurrent() }
             }
         }
+    }
+
+    override fun onPause() {
+        activeHeaderActivityResumed = false
+        super.onPause()
     }
 
     override fun onStop() {

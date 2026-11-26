@@ -21,7 +21,7 @@ internal enum class KeyguardR447Disposition {
     UNOBSERVED, SCENE_CHANGED, NEWER_COMPLETED, NEWER_BARRIER_REQUIRED,
     REDUNDANT_OFFER_ACCEPTED, FRESHNESS_UNESTABLISHED, RESTRICTION_OBSERVED,
     RESTRICTION_ONLY, STALE_AUTHORITY, ARM_MISMATCH, TARGET_MISSING,
-    PRESENTER_UNAVAILABLE, ISSUE_REJECTED, SETTINGS_UNAVAILABLE, ISSUED,
+    PRESENTER_UNAVAILABLE, ISSUE_REJECTED, SETTINGS_UNAVAILABLE, PRIVATE_NOT_AUTHORIZED, ISSUED,
 }
 
 internal object KeyguardR446PrintPolicy {
@@ -83,11 +83,11 @@ internal class KeyguardR446PrintOwner {
         return true
     }
     fun issue(session: Long, capture: String?, wake: Long, request: Long, scene: Long,
-              target: KeyguardR446Target, now: Long): Ticket? {
+              target: KeyguardR446Target, now: Long, publicFixture: Boolean = true): Ticket? {
         val current = arm ?: return null
         if (state != State.WAIT_READ || current.session != session || current.capture != capture ||
             wake <= 0 || request <= 0 || scene < 0 || !target.bounds.valid) return null
-        return Ticket(current, wake, request, scene, target, now + 2_000L).also {
+        return Ticket(current, wake, request, scene, target, if (publicFixture) now + 2_000L else Long.MAX_VALUE).also {
             ticket = it; state = State.ISSUED
         }
     }

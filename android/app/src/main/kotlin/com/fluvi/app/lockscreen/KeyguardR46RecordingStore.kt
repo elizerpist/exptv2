@@ -105,7 +105,7 @@ internal object KeyguardR46RecordingStore {
             fun append(bytes: ByteArray) { output.write(bytes); digest.update(bytes); bodyBytes += bytes.size }
             fun line(value: String) = append((value + "\n").toByteArray(Charsets.UTF_8))
             line("FLUVI_R46_RECORDING_V1")
-            line("A rögzített mintaorb fizikai láthatósága külön ellenőrizendő.")
+            line("Az orb fizikai láthatósága külön ellenőrizendő.")
             line("captureId=$id route=${p.getString("route", "UNOBSERVED")} end=$end")
             line("clock=uptimeMs source=app_private_spool")
             line("SUMMARY_BEGIN")

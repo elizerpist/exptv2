@@ -69,4 +69,17 @@ class KeyguardR446PrintPolicyTest {
         owner.screenOff()
         assertFalse(owner.wake(8, "capture-a"))
     }
+
+    @Test fun privateOwnerHasNoFixtureDeadlineButStillRequiresItsExactLease() {
+        val owner = KeyguardR446PrintOwner()
+        owner.arm(8, "capture-a")
+        owner.screenOff()
+        assertTrue(owner.wake(8, "capture-a"))
+        val target = KeyguardR446Target(7, 0, bounds)
+        val ticket = requireNotNull(owner.issue(8, "capture-a", 5, 22, 9, target, 1000, publicFixture = false))
+        assertTrue(owner.current(ticket, 8, "capture-a", 5, 9, 8000))
+        assertFalse(owner.current(ticket, 8, "capture-a", 6, 9, 8000))
+        owner.revoke()
+        assertFalse(owner.current(ticket, 8, "capture-a", 5, 9, 8000))
+    }
 }

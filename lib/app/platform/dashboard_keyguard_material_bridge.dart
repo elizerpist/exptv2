@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../../features/dashboard/application/dashboard_core_mode_controller.dart';
+import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_category_scale.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
@@ -15,8 +18,12 @@ final class DashboardKeyguardMaterialBridge {
     required this.balanceFrame,
     required this.budgetFrame,
     required this.mindFrame,
+    DashboardCoreModeController? activeMode,
+    bool Function()? activeHeaderVisible,
     MethodChannel? channel,
   }) : _controller = controller,
+       _activeMode = activeMode,
+       _activeHeaderVisible = activeHeaderVisible,
        _channel = channel ?? const MethodChannel(_channelName),
        _session =
            'keyguard-${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(controller)}' {
@@ -26,12 +33,15 @@ final class DashboardKeyguardMaterialBridge {
     balanceFrame.addListener(schedule);
     budgetFrame.addListener(schedule);
     mindFrame.addListener(schedule);
+    _activeMode?.addListener(schedule);
     _channel.setMethodCallHandler(_onNativeMethodCall);
   }
 
   static const _channelName = 'fluvi/keyguard_material';
 
   final DashboardHeaderVisualController _controller;
+  final DashboardCoreModeController? _activeMode;
+  final bool Function()? _activeHeaderVisible;
   final ValueListenable<DashboardHeaderVisualFrame> balanceFrame;
   final ValueListenable<DashboardHeaderVisualFrame> budgetFrame;
   final ValueListenable<DashboardHeaderVisualFrame> mindFrame;
@@ -43,9 +53,13 @@ final class DashboardKeyguardMaterialBridge {
   var _pending = false;
   var _generation = 0;
   var _disposed = false;
+  String? _activeVisualKey;
 
   Future<Object?> _onNativeMethodCall(MethodCall call) async {
     if (call.method == 'refreshScene') {
+      // Native may have discarded the prior generation after a privacy or
+      // service change, even when the on-screen colours did not change.
+      _activeVisualKey = null;
       _scheduleFinal();
       return null;
     }
@@ -65,6 +79,7 @@ final class DashboardKeyguardMaterialBridge {
     _generation += 1;
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 48), () {
+      _scheduleActiveHeader(_generation);
       unawaited(_publish(_generation));
     });
   }
@@ -73,7 +88,71 @@ final class DashboardKeyguardMaterialBridge {
     if (_disposed) return;
     _generation += 1;
     _debounce?.cancel();
+    _scheduleActiveHeader(_generation);
     unawaited(_publish(_generation));
+  }
+
+  /// Publishes the committed on-screen Header separately from the configured
+  /// card projection. The latter must never select this source's mode or
+  /// colour, and a pending frame must not survive a newer semantic change.
+  void _scheduleActiveHeader(int requestedGeneration) {
+    if (_disposed || _geometry == null) return;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (_disposed ||
+          requestedGeneration != _generation ||
+          !(_activeHeaderVisible?.call() ?? true)) {
+        return;
+      }
+      final geometry = _geometry;
+      if (geometry == null) return;
+      final mode = _activeMode?.committedMode.mode ?? DashboardMode.balance;
+      final frame = switch (mode) {
+        DashboardMode.balance => balanceFrame.value,
+        DashboardMode.budget => budgetFrame.value,
+        DashboardMode.mind => mindFrame.value,
+      };
+      final snapshot = DashboardHeaderMaterialSnapshot.capture(
+        controller: _controller,
+        frame: frame,
+      );
+      final modeEpoch = _activeMode?.committedModeEpoch ?? 0;
+      final key =
+          '${mode.name}|$modeEpoch|$geometry|${snapshot.orbVisualCacheKey}';
+      if (key == _activeVisualKey) return;
+      final profile = snapshot.keyguardMaterialProfile(
+        publisherSession: _session,
+        publisherRevision: requestedGeneration,
+        referenceGeometry: geometry,
+        sceneIdentity: 'active-header:${mode.name}:$modeEpoch',
+      );
+      profile['activeMode'] = mode.name;
+      profile['modeEpoch'] = modeEpoch;
+      profile['sourceAnimated'] = snapshot.isAnimated;
+      unawaited(_publishActiveHeader(profile, key, requestedGeneration));
+    });
+    SchedulerBinding.instance.scheduleFrame();
+  }
+
+  Future<void> _publishActiveHeader(
+    Map<String, Object?> profile,
+    String key,
+    int requestedGeneration,
+  ) async {
+    try {
+      final receipt = await _channel.invokeMapMethod<Object?, Object?>(
+        'publishActiveHeaderProfile',
+        profile,
+      );
+      if (!_disposed &&
+          requestedGeneration == _generation &&
+          receipt?['accepted'] == true) {
+        _activeVisualKey = key;
+      }
+    } on MissingPluginException {
+      // The optional active-header transport is unavailable on this host.
+    } on PlatformException {
+      // A rejected or detached publication must not become a cache hit.
+    }
   }
 
   Future<void> _publish(int requestedGeneration) async {
@@ -212,6 +291,7 @@ final class DashboardKeyguardMaterialBridge {
     balanceFrame.removeListener(schedule);
     budgetFrame.removeListener(schedule);
     mindFrame.removeListener(schedule);
+    _activeMode?.removeListener(schedule);
     _channel.setMethodCallHandler(null);
   }
 }

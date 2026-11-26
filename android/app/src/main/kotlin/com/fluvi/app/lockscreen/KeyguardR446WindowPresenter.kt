@@ -14,6 +14,7 @@ import android.view.View
 import com.fluvi.app.R
 import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
+import com.fluvi.app.lockscreen.material.FluviActiveHeaderMaterialStore
 import com.fluvi.app.lockscreen.material.KeyguardMaterialScene
 import com.fluvi.app.lockscreen.material.KeyguardMaterialTimeSource
 import com.fluvi.app.lockscreen.material.SystemKeyguardMaterialTimeSource
@@ -35,6 +36,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
     private var frameCallback: Choreographer.FrameCallback? = null
     private var firstDraw: Long? = null
     private var r46PublicTelemetry = false
+    private var r47Telemetry: String? = null
     internal var onR46Interval: ((String) -> Unit)? = null
     private var inputReady = false
     private var inputReadySignal = CompletableDeferred<Boolean>()
@@ -47,6 +49,16 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         return prepared
     }
 
+    /** Private input is a distinct, already captured source. Its caller must
+     * still hold and revalidate the exact generation and display authority. */
+    fun prepareActiveHeader(display: Display, material: FluviActiveHeaderMaterialStore.Snapshot,
+                            artifact: KeyguardShaderArtifact): Boolean {
+        val prepared = prepareScene(display, material.profile, artifact, false, true, material.receivedAtNanos)
+        if (prepared) r47Telemetry = "origin=active_header_semantic token=${material.correlation} " +
+            "sourceRevision=${material.profile.publisherRevision} animated=${material.profile.animated} playback=shader"
+        return prepared
+    }
+
     /** Existing neutral/private fixture stays explicit and cannot be used to
      * supply material to the public production entrypoint. */
     internal fun prepareForInstrumentation(display: Display, profile: KeyguardMaterialProfile,
@@ -54,7 +66,8 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         prepareScene(display, profile.neutralized(), artifact, diagnosticCircle)
 
     private fun prepareScene(display: Display, sample: KeyguardMaterialProfile, artifact: KeyguardShaderArtifact,
-                             diagnosticCircle: Boolean): Boolean {
+                             diagnosticCircle: Boolean, full: Boolean = false,
+                             anchorNanos: Long = System.nanoTime()): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (dispose().errorClass != null) return false
         inputReadySignal = CompletableDeferred()
@@ -66,7 +79,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
                 isClickable = false
                 isFocusable = false
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-                setScene(KeyguardMaterialScene(sample, false, System.nanoTime()), enabled = true)
+                setScene(KeyguardMaterialScene(sample, full, anchorNanos), enabled = true)
                 setBootstrapActive(false)
                 setR45DiagnosticCircle(diagnosticCircle)
                 check(installPreparedShader(artifact) in setOf(
@@ -171,6 +184,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
     private fun startFrames(token: Any, material: KeyguardHeaderMaterialView,
                             stillOwned: () -> Boolean, onInvalidated: () -> Unit) {
         if (r46PublicTelemetry) material.beginR46SampleInterval()
+        else r47Telemetry?.let { material.beginR46SampleInterval(it) }
         val callback = object : Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {
                 if (owner !== token) return
@@ -243,6 +257,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         surface = null
         view = null
         r46PublicTelemetry = false
+        r47Telemetry = null
         host = null
         firstDraw = null
         return Retirement(hideReturn, releaseReturn, errorClass)

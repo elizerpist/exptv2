@@ -347,6 +347,13 @@ class _CoreDashboardState extends State<CoreDashboard>
       balanceFrame: _balanceHeaderColorPolicy,
       budgetFrame: _budgetHeaderColorPolicy,
       mindFrame: _mindHeaderColorPolicy,
+      activeMode: modeController,
+      activeHeaderVisible: () =>
+          mounted &&
+          (ModalRoute.of(context)?.isCurrent ?? true) &&
+          (WidgetsBinding.instance.lifecycleState == null ||
+              WidgetsBinding.instance.lifecycleState ==
+                  AppLifecycleState.resumed),
     );
     FluviDiagnosticLogger.log(
       const FluviDiagnosticEvent(

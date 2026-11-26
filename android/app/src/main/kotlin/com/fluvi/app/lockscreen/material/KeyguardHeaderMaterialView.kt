@@ -253,9 +253,11 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     private var r46ShaderFrames = 0
     private var r46FallbackFrames = 0
     private var r46CircleFrames = 0
+    private var r46SourceDescription = "palette=compiled_public_v1"
 
-    internal fun beginR46SampleInterval() {
+    internal fun beginR46SampleInterval(sourceDescription: String = "palette=compiled_public_v1") {
         r46SampleActive = true
+        r46SourceDescription = sourceDescription
         r46SampleStartedAt = SystemClock.uptimeMillis()
         r46FirstFrameNs = 0L; r46SecondFrameNs = 0L
         r46FirstPhase = Float.NaN; r46SecondPhase = Float.NaN
@@ -279,7 +281,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             r46SecondFrameNs == 0L -> "NO_DISTINCT_PHASE"
             else -> "none"
         }
-        return "palette=compiled_public_v1 start=$r46SampleStartedAt end=${SystemClock.uptimeMillis()} " +
+        return "$r46SourceDescription start=$r46SampleStartedAt end=${SystemClock.uptimeMillis()} " +
             "shader=$r46ShaderFrames fallback=$r46FallbackFrames circle=$r46CircleFrames " +
             "firstFrameNs=${if (r46FirstFrameNs == 0L) "UNOBSERVED" else r46FirstFrameNs} " +
             "firstPhase=$r46FirstPhase secondFrameNs=$second secondPhase=$r46SecondPhase " +

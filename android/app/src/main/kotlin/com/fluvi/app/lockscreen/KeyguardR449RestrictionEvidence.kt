@@ -7,7 +7,8 @@ import android.view.accessibility.AccessibilityWindowInfo
  * and all its SystemUI roots were actually read to completion. */
 internal object KeyguardR449RestrictionEvidence {
     data class Result(val exclusions: KeyguardR448Admission.Exclusions, val reason: String,
-                      val lower: List<KeyguardR45LowerWindow> = emptyList())
+                      val lower: List<KeyguardR45LowerWindow> = emptyList(),
+                      val privateSurface: KeyguardSurface = KeyguardSurface.UNKNOWN)
     data class UnresolvedUpper(val host: Int, val upper: Int)
 
     /** A scheduling hint, never permission to draw. It is only produced when
@@ -90,6 +91,11 @@ internal object KeyguardR449RestrictionEvidence {
                 it.r444Active == false && it.r444Focused == false && it.packageName != null }
             .take(8).map { KeyguardR45LowerWindow(it.windowId, it.displayId, requireNotNull(it.packageName)) }.toList()
         else emptyList()
-        return Result(result, reason, lower)
+        // The public sample's CLEAR inventory is only an exclusion check.
+        // Private data additionally requires the normal positive classifier.
+        val privateSurface = if (covered) KeyguardR44SurfaceClassifier.classify(primary,
+            unavailable, truncated, strictOwnAttribution = true, syntheticTrial = false).surface
+        else KeyguardSurface.UNKNOWN
+        return Result(result, reason, lower, privateSurface)
     }
 }

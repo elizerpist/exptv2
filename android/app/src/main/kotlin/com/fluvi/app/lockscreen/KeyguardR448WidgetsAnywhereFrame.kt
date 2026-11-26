@@ -11,6 +11,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
+import com.fluvi.app.lockscreen.material.FluviActiveHeaderMaterialStore
 import com.fluvi.app.lockscreen.material.KeyguardMaterialProfile
 import com.fluvi.app.lockscreen.material.KeyguardMaterialScene
 import com.fluvi.app.lockscreen.material.KeyguardMaterialTimeSource
@@ -46,6 +47,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
     private var validating = false
     private var showSequence = 0L
     private var r46PublicTelemetry = false
+    private var r47Telemetry: String? = null
     private val openingDelay = KeyguardR46OpeningDelay()
     private var event: ((Event) -> Unit)? = null
 
@@ -107,13 +109,22 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         return prepared
     }
 
+    /** Private header data does not pass through the public sample API. */
+    fun prepareActiveHeader(owner: Owner, material: FluviActiveHeaderMaterialStore.Snapshot,
+                            artifact: KeyguardShaderArtifact, observer: (Event) -> Unit): Boolean {
+        val prepared = prepareScene(owner, material.profile, true, artifact, false, observer, material.receivedAtNanos)
+        if (prepared) r47Telemetry = "origin=active_header_semantic token=${material.correlation} " +
+            "sourceRevision=${material.profile.publisherRevision} animated=${material.profile.animated} playback=shader"
+        return prepared
+    }
+
     internal fun prepareForInstrumentation(owner: Owner, profile: KeyguardMaterialProfile, full: Boolean,
                 artifact: KeyguardShaderArtifact, observer: (Event) -> Unit): Boolean =
         prepareScene(owner, profile, full, artifact, false, observer)
 
     private fun prepareScene(owner: Owner, profile: KeyguardMaterialProfile, full: Boolean,
                 artifact: KeyguardShaderArtifact, diagnosticCircle: Boolean,
-                observer: (Event) -> Unit): Boolean {
+                observer: (Event) -> Unit, anchorNanos: Long = System.nanoTime()): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (view != null || attached || removalFailed) return false
         return runCatching {
@@ -122,7 +133,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                 isFocusable = false
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                 alpha = 1f
-                setScene(KeyguardMaterialScene(profile, full, System.nanoTime()), enabled = true)
+                setScene(KeyguardMaterialScene(profile, full, anchorNanos), enabled = true)
                 setBootstrapActive(false)
                 setR45DiagnosticCircle(diagnosticCircle)
                 check(installPreparedShader(artifact) in setOf(
@@ -236,7 +247,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                     }
                     return
                 }
-                reveal(owner, material)
+                reveal(owner, material, valid)
                 }
                 if (validateAsync == null) beginFrames(true) else {
                     validating = true
@@ -267,8 +278,9 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         return true
     }
 
-    private fun reveal(owner: Owner, material: KeyguardHeaderMaterialView) {
+    private fun reveal(owner: Owner, material: KeyguardHeaderMaterialView, valid: () -> Boolean) {
         if (r46PublicTelemetry) material.beginR46SampleInterval()
+        else r47Telemetry?.let { material.beginR46SampleInterval(it) }
         material.visibility = View.VISIBLE
         material.alpha = 1f
         emit(owner, "REVEAL", "visibility=${material.visibility},alpha=${material.alpha}")
@@ -276,6 +288,10 @@ internal class KeyguardR448WidgetsAnywhereFrame(
             override fun doFrame(frameTimeNanos: Long) {
                 if (view !== material || viewOwner != owner || !leaseLive || !attached ||
                     material.visibility != View.VISIBLE) return
+                if (!runCatching(valid).getOrDefault(false)) {
+                    conceal(owner, "OWNER_REVOKED")
+                    return
+                }
                 material.frame(frameTimeNanos)
                 Choreographer.getInstance().postFrameCallback(this)
             }
@@ -324,7 +340,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                 validating = false
                 emit(owner, "RESUME_CHECK_RESULT", allowed.toString())
                 if (allowed && leaseLive && attached && !removalFailed && runCatching(valid).getOrDefault(false))
-                    reveal(owner, material)
+                    reveal(owner, material, valid)
                 else emit(owner, "RESUME_UNVERIFIED")
             } }
         } catch (_: Exception) {
@@ -381,6 +397,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         }
         view = null
         r46PublicTelemetry = false
+        r47Telemetry = null
         viewOwner = null
         event = null
         return true
