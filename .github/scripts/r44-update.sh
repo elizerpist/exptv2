@@ -202,8 +202,9 @@ PY
     for attempt in $(seq 1 12); do
       adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
       adb exec-out cat /sdcard/r442-window.xml > "$out/ui-receipt.xml" 2>/dev/null || true
-      if grep -Fq 'Mintaorb-próba aktív' "$out/ui-receipt.xml"; then
-        printf '%s\n' 'PASS: signed profile primary control returned an active native sample receipt.' > "$out/ui-result.txt"
+      if grep -Fq 'Mintaorb-próba aktív' "$out/ui-receipt.xml" &&
+          grep -Fq 'Kibővített nézetprofil visszaigazolva' "$out/ui-receipt.xml"; then
+        printf '%s\n' 'PASS: signed profile primary control returned an active native expanded-profile sample receipt.' > "$out/ui-result.txt"
         if [[ "$bound_before" == true && "$bound_after" == true ]]; then exit 0; fi
         exit 1
       fi

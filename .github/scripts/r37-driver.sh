@@ -150,6 +150,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
       methods=(r444AppliedReasonIsSeparateFromASeparateUpperWindow)
       ;;
+    r444_pressure)
+      class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
+      methods=(r44PerWakeEvidenceSurvivesLightPressure r44PerWakeEvidenceSurvivesFullPressure r444EightWakeLightSummaryRetainsMissingAndAppliedReasons r444EightWakeFullSummaryRetainsMissingAndAppliedReasons)
+      ;;
     r444_filter)
       class=com.fluvi.app.lockscreen.KeyguardR44LazyProviderInstrumentationTest
       methods=(visibleUnimportantViewAppearsOnlyWithIncludeFlag)
