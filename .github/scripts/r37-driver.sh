@@ -158,6 +158,14 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r445_provider)
+      class=com.fluvi.app.lockscreen.KeyguardR44LazyProviderInstrumentationTest
+      methods=(exactViewIdQueryReturnsVisibleOwnedDescendant)
+      ;;
+    r445_composition)
+      class=com.fluvi.app.lockscreen.KeyguardR445WindowCompositionTest
+      methods=(actualAttachedSurfaceStaysBelowIndependentUpperWindow)
+      ;;
     r444_reason)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
       methods=(r444AppliedReasonIsSeparateFromASeparateUpperWindow)

@@ -3,6 +3,10 @@ set -euo pipefail
 out="$RUNNER_TEMP/r44-update"
 mkdir -p "$out"
 case "${R44_BASELINE:-r44_2_owner}" in
+  r44_4)
+    base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/84763fd4fa820b6e0fdb2ad5c7b4d5716ba20f1b/fluvi_R44_4_HUMAN_157539474803.apk'
+    base_size=121236240
+    base_sha=ccbc29660930b76a97c36a919a9b5eea772eee4725063224f39af385926d66c3;;
   r44_1)
     base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/1f842db6394e0a44904133ae4825820cf61418f7/Fluvi_R44.1_HUMAN_1cd0b8fb31f6.apk'
     base_size=121072400
@@ -247,8 +251,8 @@ PY
       adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
       adb exec-out cat /sdcard/r442-window.xml > "$out/ui-receipt.xml" 2>/dev/null || true
       if grep -Fq 'Mintaorb-próba aktív' "$out/ui-receipt.xml" &&
-          grep -Fq 'Kibővített nézetprofil visszaigazolva' "$out/ui-receipt.xml"; then
-        printf '%s\n' 'PASS: signed profile primary control returned an active native expanded-profile sample receipt.' > "$out/ui-result.txt"
+          grep -Fq 'Szokásos nézetprofil visszaigazolva' "$out/ui-receipt.xml"; then
+        printf '%s\n' 'PASS: signed profile primary control returned an active native standard-profile sample receipt.' > "$out/ui-result.txt"
         receipt=true
         break
       fi
@@ -259,7 +263,7 @@ PY
       sleep 1
     done
     if [[ "$receipt" != true ]]; then
-      printf '%s\n' 'FAIL: no active expanded sample receipt observed after the signed profile action.' > "$out/ui-result.txt"
+      printf '%s\n' 'FAIL: no active standard sample receipt observed after the signed profile action.' > "$out/ui-result.txt"
       exit 1
     fi
     adb shell dumpsys accessibility > "$out/accessibility-expanded.txt" 2>&1 || true
