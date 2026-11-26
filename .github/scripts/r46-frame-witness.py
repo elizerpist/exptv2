@@ -14,7 +14,7 @@ from pathlib import Path
 
 root, log_path, cycles, output = Path(sys.argv[1]), Path(sys.argv[2]), int(sys.argv[3]), Path(sys.argv[4])
 brackets = {}
-pattern = re.compile(r'^\[\s*(\d+)\.(\d+)\].*R46Optical\s*:\s*(before|after)\s+(\d+)\s+(\d+)\s+(\d+)')
+pattern = re.compile(r'^\s*\[?\s*(\d+)\.(\d+)\]?\s+.*R46Optical\s*:\s*(before|after)\s+(\d+)\s+(\d+)\s+(\d+)')
 for line in log_path.read_text(errors='replace').splitlines():
     m = pattern.search(line)
     if not m:
