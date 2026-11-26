@@ -45,6 +45,8 @@ internal class KeyguardR448WidgetsAnywhereFrame(
     private var leaseLive = false
     private var validating = false
     private var showSequence = 0L
+    private var r46PublicTelemetry = false
+    private val openingDelay = KeyguardR46OpeningDelay()
     private var event: ((Event) -> Unit)? = null
 
     fun isAttached(): Boolean = attached && leaseLive && view?.isAttachedToWindow == true
@@ -83,6 +85,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
             viewOwner != prepared || prepared.wake != 0L || next.wake <= 0 ||
             prepared.route != next.route || prepared.material != next.material) return false
         viewOwner = next
+        openingDelay.reset()
         return true
     }
 
@@ -96,11 +99,19 @@ internal class KeyguardR448WidgetsAnywhereFrame(
     }
 
     /** Preparation cannot display a frame or replace an unretired window. */
-    fun prepare(owner: Owner, profile: KeyguardMaterialProfile, full: Boolean,
-                artifact: KeyguardShaderArtifact, observer: (Event) -> Unit): Boolean =
-        prepare(owner, profile, full, artifact, false, observer)
+    fun preparePublic(owner: Owner, sample: KeyguardR46PublicMaterial,
+                      artifact: KeyguardShaderArtifact, diagnosticCircle: Boolean,
+                      observer: (Event) -> Unit): Boolean {
+        val prepared = prepareScene(owner, sample.sceneProfile(), false, artifact, diagnosticCircle, observer)
+        r46PublicTelemetry = prepared
+        return prepared
+    }
 
-    fun prepare(owner: Owner, profile: KeyguardMaterialProfile, full: Boolean,
+    internal fun prepareForInstrumentation(owner: Owner, profile: KeyguardMaterialProfile, full: Boolean,
+                artifact: KeyguardShaderArtifact, observer: (Event) -> Unit): Boolean =
+        prepareScene(owner, profile, full, artifact, false, observer)
+
+    private fun prepareScene(owner: Owner, profile: KeyguardMaterialProfile, full: Boolean,
                 artifact: KeyguardShaderArtifact, diagnosticCircle: Boolean,
                 observer: (Event) -> Unit): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
@@ -141,6 +152,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         if (pending != null || validating) { emit(owner, "COALESCED"); return true }
         if (!runCatching(valid).getOrDefault(false)) { emit(owner, "DENIED_FIRST_CHECK"); return false }
         emit(owner, "FIRST_CHECK_ALLOWED")
+        val delay = openingDelay.allow(SystemClock.uptimeMillis())
         val sequence = ++showSequence
         val task = Runnable {
             pending = null
@@ -246,8 +258,8 @@ internal class KeyguardR448WidgetsAnywhereFrame(
             }
         }
         pending = task
-        emit(owner, "DEBOUNCE_SCHEDULED", "50")
-        if (!main.postDelayed(task, 50)) {
+        emit(owner, "DEBOUNCE_SCHEDULED", "due=${openingDelay.dueAt},delay=$delay")
+        if (!main.postDelayed(task, delay)) {
             pending = null
             emit(owner, "DEBOUNCE_POST_FAILED")
             return false
@@ -256,6 +268,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
     }
 
     private fun reveal(owner: Owner, material: KeyguardHeaderMaterialView) {
+        if (r46PublicTelemetry) material.beginR46SampleInterval()
         material.visibility = View.VISIBLE
         material.alpha = 1f
         emit(owner, "REVEAL", "visibility=${material.visibility},alpha=${material.alpha}")
@@ -278,6 +291,10 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         check(Looper.myLooper() == Looper.getMainLooper())
         val material = view ?: return false
         if (viewOwner != owner || !leaseLive || removalFailed) return false
+        // Already-hidden duplicate notifications do not alter the retained
+        // first deadline. They still leave the view without display authority.
+        if (pending == null && !validating && frame == null &&
+            (!attached || (material.visibility == View.INVISIBLE && material.alpha == 0f))) return true
         showSequence++
         pending?.let { main.removeCallbacks(it); emit(owner, "DEBOUNCE_CANCELED") }
         pending = null
@@ -286,6 +303,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         frame = null
         material.visibility = View.INVISIBLE
         material.alpha = 0f
+        material.endR46SampleInterval()?.let { emit(owner, "MOTION", it) }
         emit(owner, "CONCEAL", reason)
         return true
     }
@@ -335,6 +353,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         check(Looper.myLooper() == Looper.getMainLooper())
         if (viewOwner != owner) return false
         leaseLive = false
+        openingDelay.reset()
         showSequence++
         validating = false
         pending?.let { main.removeCallbacks(it); emit(owner, "DEBOUNCE_CANCELED") }
@@ -346,6 +365,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         old.onNextDrawForDiagnostic = null
         old.visibility = View.INVISIBLE
         old.alpha = 0f
+        old.endR46SampleInterval()?.let { emit(owner, "MOTION", it) }
         emit(owner, "HIDE", reason)
         if (attached || old.isAttachedToWindow || removalFailed) {
             try {
@@ -360,6 +380,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
             }
         }
         view = null
+        r46PublicTelemetry = false
         viewOwner = null
         event = null
         return true

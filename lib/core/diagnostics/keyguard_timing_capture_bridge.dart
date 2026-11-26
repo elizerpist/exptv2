@@ -127,6 +127,41 @@ class KeyguardTimingCaptureBridge {
 
   bool get isSupportedPlatform => _isAndroid();
 
+  Future<Map<Object?, Object?>> _r46(
+    String method, [
+    Map<String, Object?>? arguments,
+  ]) async {
+    if (!_isAndroid()) {
+      return const {'state': 'UNAVAILABLE', 'reason': 'unsupportedBuild'};
+    }
+    return await _channel.invokeMapMethod<Object?, Object?>(
+          method,
+          arguments,
+        ) ??
+        const {'state': 'UNAVAILABLE', 'reason': 'missingReceipt'};
+  }
+
+  Future<Map<Object?, Object?>> r46Status() => _r46('getR46Recording');
+
+  Future<Map<Object?, Object?>> startR46({
+    required String requestId,
+    required KeyguardDisplayRoute route,
+  }) => _r46('startR46Recording', {
+    'requestId': requestId,
+    'route': route.wireValue,
+    'build': buildCommit,
+    'buildMode': buildMode,
+  });
+
+  Future<Map<Object?, Object?>> stopR46(String captureId) =>
+      _r46('stopR46Recording', {'captureId': captureId});
+
+  Future<Map<Object?, Object?>> sealedR46(String captureId) =>
+      _r46('getR46SealedReport', {'captureId': captureId});
+
+  Future<Map<Object?, Object?>> copiedR46(String captureId) =>
+      _r46('markR46Copied', {'captureId': captureId});
+
   Future<KeyguardTimingCaptureSnapshot> start({
     KeyguardTimingCaptureMode mode = KeyguardTimingCaptureMode.light,
     bool r43Evidence = false,

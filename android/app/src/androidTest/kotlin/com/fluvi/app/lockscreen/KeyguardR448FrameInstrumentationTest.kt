@@ -119,7 +119,7 @@ class KeyguardR448FrameInstrumentationTest {
             val preCheck = AtomicReference<((Boolean) -> Unit)?>(null)
             main {
                 frame = KeyguardR448WidgetsAnywhereFrame(service, KeyguardMaterialTimeSource { _, _ -> phase.get() })
-                assertTrue(checkNotNull(frame).prepare(cancelledOwner, profile, false, artifact) { synchronized(events) { events.add(it) } })
+                assertTrue(checkNotNull(frame).prepareForInstrumentation(cancelledOwner, profile, false, artifact) { synchronized(events) { events.add(it) } })
                 assertTrue(checkNotNull(frame).requestShowChecked(cancelledOwner, geometry, { true }) {
                     preCheck.set(it)
                 })
@@ -139,7 +139,7 @@ class KeyguardR448FrameInstrumentationTest {
             val postCheck = AtomicReference<((Boolean) -> Unit)?>(null)
             val checkCount = AtomicInteger()
             main {
-                assertTrue(checkNotNull(frame).prepare(postAddOwner, profile, false, artifact) { synchronized(events) { events.add(it) } })
+                assertTrue(checkNotNull(frame).prepareForInstrumentation(postAddOwner, profile, false, artifact) { synchronized(events) { events.add(it) } })
                 assertTrue(checkNotNull(frame).requestShowChecked(postAddOwner, geometry, { true }) {
                     if (checkCount.incrementAndGet() == 1) it(true) else postCheck.set(it)
                 })
@@ -161,7 +161,7 @@ class KeyguardR448FrameInstrumentationTest {
             val refreshedCheck = AtomicReference<((Boolean) -> Unit)?>(null)
             val refreshedCount = AtomicInteger()
             main {
-                assertTrue(checkNotNull(frame).prepare(recheckedOwner, profile, false, artifact) { synchronized(events) { events.add(it) } })
+                assertTrue(checkNotNull(frame).prepareForInstrumentation(recheckedOwner, profile, false, artifact) { synchronized(events) { events.add(it) } })
                 assertTrue(checkNotNull(frame).requestShowChecked(recheckedOwner, geometry, { revisionAllowed.get() }) {
                     if (refreshedCount.incrementAndGet() == 1) refreshedCheck.set(it) else it(true)
                 })
@@ -181,8 +181,29 @@ class KeyguardR448FrameInstrumentationTest {
             })
             main { assertTrue(checkNotNull(frame).retire(recheckedOwner, "CONTROL_REVISION_COMPLETE")) }
             SystemClock.sleep(150)
+            val parkedOwner = KeyguardR448WidgetsAnywhereFrame.Owner(5, 1, 1)
             main {
-                assertTrue(checkNotNull(frame).prepare(owner, profile, false, artifact) { synchronized(events) { events.add(it) } })
+                assertTrue(checkNotNull(frame).prepareForInstrumentation(parkedOwner, profile, false, artifact) { synchronized(events) { events.add(it) } })
+                assertTrue(checkNotNull(frame).requestShow(parkedOwner, geometry) { true })
+                assertTrue("unknown must park the first pending attempt", checkNotNull(frame).conceal(parkedOwner, "UNKNOWN"))
+            }
+            SystemClock.sleep(100) // only fixture control; production never waits for this sleep
+            assertFalse("old authority cannot add during unknown", synchronized(events) {
+                events.any { it.owner == parkedOwner && it.stage == "ADD_BEGIN" }
+            })
+            main { assertTrue(checkNotNull(frame).requestShow(parkedOwner, geometry) { true }) }
+            waitFor("fresh proof issues exactly one real add") { synchronized(events) {
+                events.any { it.owner == parkedOwner && it.stage == "ADD_RETURN" }
+            } }
+            val parkedEvents = synchronized(events) { events.filter { it.owner == parkedOwner } }
+            assertEquals(2, parkedEvents.count { it.stage == "DEBOUNCE_SCHEDULED" })
+            assertTrue("regrant uses the original elapsed deadline", parkedEvents
+                .filter { it.stage == "DEBOUNCE_SCHEDULED" }.last().detail?.contains("delay=0") == true)
+            assertEquals(1, parkedEvents.count { it.stage == "ADD_BEGIN" })
+            main { assertTrue(checkNotNull(frame).retire(parkedOwner, "CONTROL_PARKED_COMPLETE")) }
+            SystemClock.sleep(150)
+            main {
+                assertTrue(checkNotNull(frame).prepareForInstrumentation(owner, profile, false, artifact) { synchronized(events) { events.add(it) } })
                 assertTrue(checkNotNull(frame).requestShow(owner, geometry) { true })
                 assertTrue(checkNotNull(frame).requestShow(owner, geometry) { true })
             }

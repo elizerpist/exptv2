@@ -34,12 +34,27 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
     private var owner: Any? = null
     private var frameCallback: Choreographer.FrameCallback? = null
     private var firstDraw: Long? = null
+    private var r46PublicTelemetry = false
+    internal var onR46Interval: ((String) -> Unit)? = null
     private var inputReady = false
     private var inputReadySignal = CompletableDeferred<Boolean>()
 
     /** Invoked unlocked, after private state has been retired. */
-    fun prepare(display: Display, profile: KeyguardMaterialProfile, artifact: KeyguardShaderArtifact,
-                diagnosticCircle: Boolean = false): Boolean {
+    fun preparePublic(display: Display, sample: KeyguardR46PublicMaterial, artifact: KeyguardShaderArtifact,
+                      diagnosticCircle: Boolean = false): Boolean {
+        val prepared = prepareScene(display, sample.sceneProfile(), artifact, diagnosticCircle)
+        r46PublicTelemetry = prepared
+        return prepared
+    }
+
+    /** Existing neutral/private fixture stays explicit and cannot be used to
+     * supply material to the public production entrypoint. */
+    internal fun prepareForInstrumentation(display: Display, profile: KeyguardMaterialProfile,
+                artifact: KeyguardShaderArtifact, diagnosticCircle: Boolean = false): Boolean =
+        prepareScene(display, profile.neutralized(), artifact, diagnosticCircle)
+
+    private fun prepareScene(display: Display, sample: KeyguardMaterialProfile, artifact: KeyguardShaderArtifact,
+                             diagnosticCircle: Boolean): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (dispose().errorClass != null) return false
         inputReadySignal = CompletableDeferred()
@@ -47,7 +62,6 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         return runCatching {
             val size = service.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
             require(size > 0)
-            val sample = profile.neutralized()
             val material = KeyguardHeaderMaterialView(service, materialTimeSource = timeSource).apply {
                 isClickable = false
                 isFocusable = false
@@ -156,6 +170,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
 
     private fun startFrames(token: Any, material: KeyguardHeaderMaterialView,
                             stillOwned: () -> Boolean, onInvalidated: () -> Unit) {
+        if (r46PublicTelemetry) material.beginR46SampleInterval()
         val callback = object : Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {
                 if (owner !== token) return
@@ -176,8 +191,10 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         frameCallback?.let { Choreographer.getInstance().removeFrameCallback(it) }
         frameCallback = null
         val child = surface?.surfaceControl ?: return false
-        return runCatching { SurfaceControl.Transaction().use { it.setVisibility(child, false).apply() }; true }
+        val hidden = runCatching { SurfaceControl.Transaction().use { it.setVisibility(child, false).apply() }; true }
             .getOrDefault(false)
+        view?.endR46SampleInterval()?.let { detail -> runCatching { onR46Interval?.invoke(detail) } }
+        return hidden
     }
 
     /** The service supplies freshly qualified authority for this same target. */
@@ -212,6 +229,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         }.onSuccess { hideReturn = SystemClock.uptimeMillis() }
             .onFailure { errorClass = it.javaClass.simpleName.take(48) }
         if (errorClass != null) return Retirement(hideReturn, null, errorClass)
+        view?.endR46SampleInterval()?.let { detail -> runCatching { onR46Interval?.invoke(detail) } }
         view?.onFirstShaderDraw = null
         view?.onNextShaderDrawForDiagnostic = null
         view?.onNextDrawForDiagnostic = null
@@ -224,6 +242,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         if (errorClass != null) return Retirement(hideReturn, releaseReturn, errorClass)
         surface = null
         view = null
+        r46PublicTelemetry = false
         host = null
         firstDraw = null
         return Retirement(hideReturn, releaseReturn, errorClass)

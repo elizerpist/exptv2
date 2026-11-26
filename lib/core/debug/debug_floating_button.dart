@@ -44,6 +44,9 @@ class DebugFloatingButton extends StatelessWidget {
               diagnosticStatusProvider: diagnosticStatusProvider,
               automationPermissions: automationPermissions,
               keyguardTimingCapture: keyguardTimingCapture,
+              initialKeyguard: const bool.fromEnvironment(
+                'FLUVI_R448_SAFE_SAMPLE_ONLY',
+              ),
             ),
           ),
         ),

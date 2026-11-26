@@ -240,6 +240,51 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     private var attachmentPhaseAdvancesStart = 0
     private var fallbackDrawCount = 0
     private var phaseAdvanceCount = 0
+    // Public-sample telemetry only. The hot draw path updates scalars; it
+    // does not allocate or call a diagnostic consumer for every frame.
+    private var r46SampleActive = false
+    private var r46SampleStartedAt = 0L
+    private var r46FirstFrameNs = 0L
+    private var r46SecondFrameNs = 0L
+    private var r46FirstPhase = Float.NaN
+    private var r46SecondPhase = Float.NaN
+    private var r46LastDrawAt = 0L
+    private var r46MaxGap = 0L
+    private var r46ShaderFrames = 0
+    private var r46FallbackFrames = 0
+    private var r46CircleFrames = 0
+
+    internal fun beginR46SampleInterval() {
+        r46SampleActive = true
+        r46SampleStartedAt = SystemClock.uptimeMillis()
+        r46FirstFrameNs = 0L; r46SecondFrameNs = 0L
+        r46FirstPhase = Float.NaN; r46SecondPhase = Float.NaN
+        r46LastDrawAt = 0L; r46MaxGap = 0L
+        r46ShaderFrames = 0; r46FallbackFrames = 0; r46CircleFrames = 0
+    }
+
+    private fun r46CountDraw() {
+        val at = SystemClock.uptimeMillis()
+        if (r46LastDrawAt > 0L) r46MaxGap = maxOf(r46MaxGap, at - r46LastDrawAt)
+        r46LastDrawAt = at
+    }
+
+    internal fun endR46SampleInterval(): String? {
+        if (!r46SampleActive) return null
+        r46SampleActive = false
+        val second = if (r46SecondFrameNs == 0L) "UNOBSERVED" else r46SecondFrameNs.toString()
+        val missingSecond = when {
+            r46ShaderFrames == 0 -> "NO_SHADER_FRAME"
+            r46ShaderFrames == 1 -> "ONE_SHADER_FRAME"
+            r46SecondFrameNs == 0L -> "NO_DISTINCT_PHASE"
+            else -> "none"
+        }
+        return "palette=compiled_public_v1 start=$r46SampleStartedAt end=${SystemClock.uptimeMillis()} " +
+            "shader=$r46ShaderFrames fallback=$r46FallbackFrames circle=$r46CircleFrames " +
+            "firstFrameNs=${if (r46FirstFrameNs == 0L) "UNOBSERVED" else r46FirstFrameNs} " +
+            "firstPhase=$r46FirstPhase secondFrameNs=$second secondPhase=$r46SecondPhase " +
+            "secondReason=$missingSecond maxGapMs=$r46MaxGap frameClock=choreographer"
+    }
     private var shaderCompileAttempts = 0
     private var shaderCompileSuccesses = 0
     private var shaderCompileFailures = 0
@@ -637,6 +682,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             return
         }
         if (r45DiagnosticCircle) {
+            if (r46SampleActive) { r46CircleFrames++; r46CountDraw() }
             drawKeyguardOrbCircle(canvas, r45CirclePaint, width, height)
             return
         }
@@ -719,6 +765,15 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         paint.shader = null
         paint.alpha = 255
         shaderDrawCount += 1
+        if (r46SampleActive && scene === current && alpha > 0f) {
+            r46ShaderFrames++
+            r46CountDraw()
+            if (r46FirstFrameNs == 0L) {
+                r46FirstFrameNs = frameNanos; r46FirstPhase = time.phase
+            } else if (r46SecondFrameNs == 0L && frameNanos != r46FirstFrameNs && time.phase != r46FirstPhase) {
+                r46SecondFrameNs = frameNanos; r46SecondPhase = time.phase
+            }
+        }
         onNextShaderDrawForDiagnostic?.let { callback ->
             onNextShaderDrawForDiagnostic = null
             callback(SystemClock.uptimeMillis())
@@ -743,6 +798,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 
     private fun drawFallback(canvas: Canvas, scene: KeyguardMaterialScene?) {
         drawGaps.samplingOff()
+        if (r46SampleActive) { r46FallbackFrames++; r46CountDraw() }
         fallbackDrawCount += 1
         val profile = scene?.profile
         val bitmap = fallbackBitmap

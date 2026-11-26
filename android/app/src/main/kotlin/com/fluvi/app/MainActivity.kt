@@ -77,6 +77,7 @@ import com.fluvi.app.lockscreen.KeyguardR448DisplayRoute
 import com.fluvi.app.lockscreen.KeyguardR448DisplayRouteStore
 import com.fluvi.app.lockscreen.KeyguardR448ComparisonStore
 import com.fluvi.app.lockscreen.KeyguardR448Safety
+import com.fluvi.app.lockscreen.KeyguardR46RecordingStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
@@ -367,6 +368,59 @@ class MainActivity : FlutterActivity() {
             RUNTIME_MONITORING_CHANNEL,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
+                if (call.method in setOf("startR46Recording", "getR46Recording", "stopR46Recording",
+                        "getR46SealedReport", "markR46Copied")) {
+                    val values = call.arguments as? Map<*, *>
+                    scope.launch(Dispatchers.Main.immediate) {
+                        runCatching {
+                            val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
+                            when (call.method) {
+                                "startR46Recording" -> service?.startR46Recording(
+                                    values?.get("build") as? String, values?.get("buildMode") as? String,
+                                    values?.get("requestId") as? String, values?.get("route") as? String,
+                                ) ?: mapOf("active" to false, "reason" to "serviceUnavailable")
+                                "getR46Recording" -> {
+                                    val saved = withContext(Dispatchers.IO) { KeyguardR46RecordingStore.status(applicationContext) }
+                                    val native = service?.r442SampleStatus()
+                                    if (saved["state"] == "RECORDING" &&
+                                        (native?.get("active") != true || native["captureId"] != saved["captureId"]))
+                                        saved + mapOf("state" to "INTERRUPTED", "reason" to "serviceInterrupted")
+                                    else saved
+                                }
+                                "stopR46Recording" -> {
+                                    val id = requireNotNull(values?.get("captureId") as? String)
+                                    val before = withContext(Dispatchers.IO) { KeyguardR46RecordingStore.status(applicationContext) }
+                                    check(before["captureId"] == id) { "captureMismatch" }
+                                    val native = service?.r442SampleStatus()
+                                    val interrupted = before["state"] == "INTERRUPTED" || native?.get("active") != true ||
+                                        native["captureId"] != id
+                                    if (service != null) check(service.stopR46Owner(id)) { "ownerCleanupFailed" }
+                                    withContext(Dispatchers.IO) {
+                                        val snapshot = if (KeyguardCardDiagnostics.activeCaptureId() == id)
+                                            KeyguardCardDiagnostics.freezeR46Capture(applicationContext)
+                                        else KeyguardCardDiagnostics.captureSnapshot(applicationContext)
+                                        val summary = if (snapshot["captureId"] == id) snapshot["report"] as? String ?: ""
+                                            else "A korábbi natív összefoglaló nem érhető el."
+                                        val text = KeyguardR46RecordingStore.seal(applicationContext, id, summary,
+                                            if (interrupted) "INTERRUPTED" else "USER_STOP")
+                                        mapOf("state" to "SEALED", "captureId" to id, "report" to text)
+                                    }
+                                }
+                                "getR46SealedReport" -> {
+                                    val id = requireNotNull(values?.get("captureId") as? String)
+                                    withContext(Dispatchers.IO) { mapOf("captureId" to id,
+                                        "report" to KeyguardR46RecordingStore.sealedReport(applicationContext, id)) }
+                                }
+                                else -> {
+                                    val id = requireNotNull(values?.get("captureId") as? String)
+                                    withContext(Dispatchers.IO) { KeyguardR46RecordingStore.copied(applicationContext, id) }
+                                    mapOf("state" to "COPIED", "captureId" to id)
+                                }
+                            }
+                        }.onSuccess(result::success).onFailure { result.error("R46_RECORDING", it.message, null) }
+                    }
+                    return@setMethodCallHandler
+                }
                 if (call.method == "startR442SampleCapture" || call.method == "startR446PrintCapture" ||
                     call.method == "startR449SampleCapture" || call.method == "getR442SampleCaptureStatus") {
                     val values = call.arguments as? Map<*, *>

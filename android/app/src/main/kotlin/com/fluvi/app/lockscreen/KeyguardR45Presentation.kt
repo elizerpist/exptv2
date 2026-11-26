@@ -18,6 +18,25 @@ internal enum class KeyguardR45Phase {
     PREPARED, WAIT_WAKE, OPENING, ATTACHED_HIDDEN, VISIBLE, SUSPENDED, RETIRED,
 }
 
+/** The delay belongs to the wake owner, not to each revision of its proof.
+ * Elapsing the delay is never itself permission to attach or reveal. */
+internal class KeyguardR46OpeningDelay {
+    var eligibleSince: Long? = null
+        private set
+    var dueAt: Long? = null
+        private set
+
+    fun allow(now: Long): Long {
+        if (eligibleSince == null) {
+            eligibleSince = now
+            dueAt = now + 50L
+        }
+        return (requireNotNull(dueAt) - now).coerceAtLeast(0L)
+    }
+
+    fun reset() { eligibleSince = null; dueAt = null }
+}
+
 /** WA has its own arm and wake identity; no Fluvi target, scene or ticket is
  * accepted by this controller. The caller remains responsible for actual
  * system admission and exact View cleanup. Main thread owns these fields. */

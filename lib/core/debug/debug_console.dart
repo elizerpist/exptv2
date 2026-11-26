@@ -18,12 +18,19 @@ class DebugConsoleDialog extends StatefulWidget {
     this.diagnosticStatusProvider,
     this.automationPermissions,
     this.keyguardTimingCapture,
+    this.initialKeyguard = false,
+    @visibleForTesting this.legacyKeyguardControls = false,
   });
 
   final String Function()? physicalReportProvider;
   final DebugDiagnosticStatusProvider? diagnosticStatusProvider;
   final AutomationPermissionRepository? automationPermissions;
   final KeyguardTimingCaptureBridge? keyguardTimingCapture;
+  final bool initialKeyguard;
+
+  /// Historical fixture only; no shipped entry point selects this surface.
+  @visibleForTesting
+  final bool legacyKeyguardControls;
 
   @override
   State<DebugConsoleDialog> createState() => _DebugConsoleDialogState();
@@ -34,6 +41,16 @@ enum _DebugConsoleSection { logs, keyguard, report, push }
 /// A view-only projection over the one bounded diagnostic ring.  It owns no
 /// second history, export path, or diagnostic retention policy.
 enum _DebugConsoleLogFilter { all, mindHeatmap, balanceWave, ghost }
+
+enum _R46Phase {
+  ready,
+  starting,
+  recording,
+  interrupted,
+  finalizing,
+  copied,
+  copyFailed,
+}
 
 class _DebugConsoleDialogState extends State<DebugConsoleDialog>
     with WidgetsBindingObserver {
@@ -73,10 +90,24 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
   String? _keyguardError;
   KeyguardTimingCaptureMode _keyguardCaptureMode =
       KeyguardTimingCaptureMode.light;
+  _R46Phase _r46Phase = _R46Phase.ready;
+  KeyguardDisplayRoute _r46Route = KeyguardDisplayRoute.fluviStream;
+  bool _r46RouteBusy = false;
+  bool _r46Available = false;
+  String? _r46CaptureId;
+  String? _r46Sealed;
+  String? _r46Error;
+  int _r46RequestOrdinal = 0;
 
   @override
   void initState() {
     super.initState();
+    if (widget.initialKeyguard) {
+      _section = _DebugConsoleSection.keyguard;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refreshR46();
+      });
+    }
     WidgetsBinding.instance.addObserver(this);
     _lastSessionEventCount = FluviDiagnosticLogger.sessionEventCount;
     _logsScrollController.addListener(_handleLogScroll);
@@ -100,9 +131,287 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed &&
         _section == _DebugConsoleSection.keyguard) {
-      if (mounted) setState(() => _r442Active = false);
-      _refreshKeyguard();
+      if (widget.legacyKeyguardControls) {
+        _refreshKeyguard();
+      } else {
+        _refreshR46();
+      }
     }
+  }
+
+  Future<void> _refreshR46() async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null ||
+        _r46Phase == _R46Phase.starting ||
+        _r46Phase == _R46Phase.finalizing) {
+      return;
+    }
+    try {
+      final status = await bridge.r46Status();
+      final route = await bridge.getDisplayRoute();
+      if (!mounted) return;
+      setState(() {
+        _r46Available = route.available && route.connected;
+        _r46Route = route.configured;
+        _r46CaptureId = status['captureId'] as String?;
+        _r46Phase = switch (status['state']) {
+          'RECORDING' => _R46Phase.recording,
+          'INTERRUPTED' => _R46Phase.interrupted,
+          'SEALED' => _R46Phase.copyFailed,
+          'COPIED' => _R46Phase.copied,
+          _ => _R46Phase.ready,
+        };
+        _r46Error = _r46Phase == _R46Phase.interrupted
+            ? 'A szolgáltatás megszakadt. A megőrzött riport másolható.'
+            : null;
+      });
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() {
+          _r46Available = false;
+          _r46Error = 'A rögzítő nem érhető el: $error';
+        });
+      }
+    }
+  }
+
+  Future<void> _r46Select(KeyguardDisplayRoute route) async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _r46RouteBusy || !_r46CanSelect) return;
+    setState(() {
+      _r46RouteBusy = true;
+      _r46Error = null;
+    });
+    try {
+      final status = await bridge.setDisplayRoute(route);
+      if (!status.available || status.configured != route) {
+        throw StateError('routeChanged');
+      }
+      if (mounted) {
+        setState(() {
+          _r46Route = status.configured;
+          _r46Available = status.connected;
+        });
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() => _r46Error = 'Az útvonal nem váltható: $error');
+      }
+    } finally {
+      if (mounted) setState(() => _r46RouteBusy = false);
+    }
+  }
+
+  bool get _r46CanSelect =>
+      _r46Phase == _R46Phase.ready || _r46Phase == _R46Phase.copied;
+
+  Future<void> _r46Action() async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _r46RouteBusy) return;
+    if (_r46CanSelect) {
+      final route = _r46Route;
+      final request =
+          '${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(this)}-${++_r46RequestOrdinal}';
+      setState(() {
+        _r46Phase = _R46Phase.starting;
+        _r46Error = null;
+        _r46Sealed = null;
+      });
+      try {
+        final receipt = await bridge.startR46(requestId: request, route: route);
+        final id = receipt['captureId'];
+        if (receipt['active'] != true ||
+            receipt['printArmed'] != true ||
+            id is! String ||
+            id.isEmpty ||
+            receipt['routeConfirmed'] != route.wireValue ||
+            receipt['sampleShape'] != 'ORB' ||
+            receipt['actionKind'] != 'SESSION' ||
+            receipt['policy'] != 'R46_ALL') {
+          throw StateError(receipt['reason']?.toString() ?? 'missingReceipt');
+        }
+        if (mounted) {
+          setState(() {
+            _r46CaptureId = id;
+            _r46Phase = _R46Phase.recording;
+          });
+        }
+      } on Object catch (error) {
+        if (mounted) {
+          setState(() {
+            _r46Phase = _R46Phase.ready;
+            _r46Error = 'A felvétel nem indult el: $error';
+          });
+        }
+      }
+      return;
+    }
+    if (_r46Phase != _R46Phase.recording &&
+        _r46Phase != _R46Phase.interrupted &&
+        _r46Phase != _R46Phase.copyFailed) {
+      return;
+    }
+    final retryCopy = _r46Phase == _R46Phase.copyFailed;
+    final id = _r46CaptureId;
+    if (id == null) {
+      setState(() => _r46Error = 'A felvétel azonosítója hiányzik.');
+      return;
+    }
+    setState(() {
+      _r46Phase = _R46Phase.finalizing;
+      _r46Error = null;
+    });
+    var sealed = retryCopy;
+    try {
+      final response = _r46Sealed == null
+          ? await (retryCopy ? bridge.sealedR46(id) : bridge.stopR46(id))
+          : <Object?, Object?>{'captureId': id, 'report': _r46Sealed};
+      final report = response['report'];
+      if (response['captureId'] != id ||
+          report is! String ||
+          report.isEmpty ||
+          !report.startsWith('FLUVI_R46_RECORDING_V1\n') ||
+          !report.contains('captureId=$id ')) {
+        throw StateError('invalidSealedReport');
+      }
+      _r46Sealed = report;
+      sealed = true;
+      await Clipboard.setData(ClipboardData(text: report));
+      await bridge.copiedR46(id);
+      if (mounted) {
+        setState(() {
+          _r46Phase = _R46Phase.copied;
+          _r46Error = null;
+        });
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() {
+          _r46Phase = sealed ? _R46Phase.copyFailed : _R46Phase.interrupted;
+          _r46Error = sealed
+              ? 'A riport másolása sikertelen: $error'
+              : 'A lezárás nem sikerült: $error';
+        });
+      }
+    }
+  }
+
+  Widget _r46Panel() {
+    final locked = !_r46CanSelect || _r46RouteBusy;
+    final button = switch (_r46Phase) {
+      _R46Phase.ready || _R46Phase.copied => 'Felvétel indítása',
+      _R46Phase.starting => 'Indítás…',
+      _R46Phase.recording || _R46Phase.interrupted => 'Leállítás és másolás',
+      _R46Phase.finalizing => 'Másolás…',
+      _R46Phase.copyFailed => 'Másolás újra',
+    };
+    Widget routeButton(KeyguardDisplayRoute route, String label) => Expanded(
+      child: Semantics(
+        selected: _r46Route == route,
+        child: OutlinedButton(
+          key: ValueKey('r46-route-${route.wireValue}'),
+          onPressed: locked || !_r46Available ? null : () => _r46Select(route),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: _r46Route == route
+                ? const Color(0xFF285B73)
+                : null,
+            foregroundColor: const Color(0xFFE5EEF6),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+          ),
+          child: Text(label, textAlign: TextAlign.center),
+        ),
+      ),
+    );
+    return Dialog(
+      key: const ValueKey('r46-recording-dialog'),
+      backgroundColor: const Color(0xFF1E1E2E),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Zárképernyő mérése',
+                      style: TextStyle(
+                        color: Color(0xFFE5EEF6),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Bezárás',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close, color: Color(0xFFE5EEF6)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Renderelő',
+                style: TextStyle(color: Color(0xFFCDD6F4)),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  routeButton(KeyguardDisplayRoute.fluviStream, 'Fluvi'),
+                  const SizedBox(width: 6),
+                  routeButton(
+                    KeyguardDisplayRoute.widgetsAnywhere,
+                    'Widgets Anywhere',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              FilledButton(
+                key: const ValueKey('r46-recording-action'),
+                onPressed:
+                    _r46Phase == _R46Phase.starting ||
+                        _r46Phase == _R46Phase.finalizing ||
+                        _r46RouteBusy ||
+                        (_r46CanSelect && !_r46Available)
+                    ? null
+                    : _r46Action,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Text(button, textAlign: TextAlign.center),
+                ),
+              ),
+              if (_r46Phase == _R46Phase.recording)
+                const Padding(
+                  padding: EdgeInsets.only(top: 10),
+                  child: Text(
+                    'Zárd le és ébreszd fel a telefont.',
+                    style: TextStyle(color: Color(0xFFCDD6F4)),
+                  ),
+                ),
+              if (_r46Phase == _R46Phase.copied)
+                const Padding(
+                  padding: EdgeInsets.only(top: 10),
+                  child: Text(
+                    'Riport a vágólapon.',
+                    style: TextStyle(color: Color(0xFFA6E3A1)),
+                  ),
+                ),
+              if (_r46Error case final String error)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    error,
+                    style: const TextStyle(color: Color(0xFFF38BA8)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _refreshLogs() {
@@ -679,6 +988,10 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
 
   @override
   Widget build(BuildContext context) {
+    if (_section == _DebugConsoleSection.keyguard &&
+        !widget.legacyKeyguardControls) {
+      return _r46Panel();
+    }
     final count = FluviDiagnosticLogger.retainedEntryCount;
     final status =
         widget.diagnosticStatusProvider?.call() ?? const <String, Object?>{};
@@ -1038,7 +1351,11 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                   selected: _section == _DebugConsoleSection.keyguard,
                   onPressed: () {
                     setState(() => _section = _DebugConsoleSection.keyguard);
-                    _refreshKeyguard();
+                    if (widget.legacyKeyguardControls) {
+                      _refreshKeyguard();
+                    } else {
+                      _refreshR46();
+                    }
                   },
                 ),
                 if (widget.physicalReportProvider != null)

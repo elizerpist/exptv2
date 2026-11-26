@@ -477,6 +477,7 @@ internal object KeyguardCardDiagnostics {
     private const val ACTIVE_CAPTURE_MS = 5 * 60 * 1000L
     private const val CHECKPOINT_INTERVAL_MS = 12_000L
     private val captureLock = Any()
+    private val r46OfferLock = Any()
     private val reduction = KeyguardDiagnosticQueue(Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "fluvi-keyguard-diagnostic-reducer").apply { isDaemon = true }
     })
@@ -486,6 +487,7 @@ internal object KeyguardCardDiagnostics {
         val droppedAtStart: Long,
         val failuresAtStart: Long,
         val r43Enabled: Boolean,
+        val r46: Boolean = false,
     ) {
         val r43Dropped = AtomicLong()
         val r43Skipped = AtomicLong()
@@ -516,6 +518,15 @@ internal object KeyguardCardDiagnostics {
         val r22PostClaim = AtomicReferenceArray<KeyguardOpeningInspectionHandoff.PostClaimSnapshot?>(MAX_ATTEMPTS + 1)
     }
     @Volatile private var ingress: CaptureIngress? = null
+
+    /** For R46, enqueue and the stop cut share this tiny lock. Every record
+     * accepted before the cut precedes the reducer's finalization barrier. */
+    private fun offerForToken(token: CaptureIngress?, work: () -> Unit): Boolean {
+        if (token?.r46 != true) return reduction.offer(work)
+        return synchronized(r46OfferLock) {
+            if (ingress !== token) false else reduction.offer(work)
+        }
+    }
     // Retain counters after ingress is closed, so a frozen snapshot includes
     // the final producer totals without requiring any producer-side lock.
     private var lastIngress: CaptureIngress? = null
@@ -1473,6 +1484,8 @@ internal object KeyguardCardDiagnostics {
         r43Enabled: Boolean = false,
         r442ExpectedSession: Long? = null,
         r446PrintRequested: Boolean = false,
+        r46Request: String? = null,
+        r46Route: String? = null,
     ): Map<String, Any?> = reduction.read {
         val export = synchronized(captureLock) {
         ensureRecoveredLoadedLocked(context)
@@ -1480,6 +1493,11 @@ internal object KeyguardCardDiagnostics {
         val settings = FluviKeyguardCardSettings.read(context)
         val runtime = FluviRuntimeCoordinator.status(context)
         val id = UUID.randomUUID().toString()
+        if (r46Request != null) {
+            require(mode == "FULL" && r43Enabled && r446PrintRequested)
+            require(r46Route in setOf("FLUVI_STREAM", "WIDGETS_ANYWHERE"))
+            KeyguardR46RecordingStore.begin(context, id, requireNotNull(r46Route), r46Request)
+        }
         val nowUp = SystemClock.uptimeMillis()
         val nowElapsed = SystemClock.elapsedRealtime()
         val r41MonoBefore = System.nanoTime()
@@ -1512,6 +1530,7 @@ internal object KeyguardCardDiagnostics {
                 "r442TrialRequested" to (r442ExpectedSession != null).toString(),
                 "r442TrialSession" to (r442ExpectedSession?.toString() ?: "none"),
                 "r446PrintRequested" to r446PrintRequested.toString(),
+                "r46Recording" to (r46Request != null).toString(),
             ),
             captureMode = captureMode,
             r43Enabled = r43Enabled && Build.VERSION.SDK_INT >= 37,
@@ -1521,7 +1540,8 @@ internal object KeyguardCardDiagnostics {
             coldPreparation = coldPreparation?.let { it.copy(stages = LinkedHashMap(it.stages)) },
         )
         capture = created
-        CaptureIngress(id, captureMode, reduction.dropped.get(), reduction.failed.get(), created.r43Enabled).also {
+        CaptureIngress(id, captureMode, reduction.dropped.get(), reduction.failed.get(), created.r43Enabled,
+            r46 = r46Request != null).also {
             lastIngress = it
             ingress = it
         }
@@ -1534,9 +1554,21 @@ internal object KeyguardCardDiagnostics {
         snapshotMap(export, null)
     }
 
-    fun freezeCapture(context: Context): Map<String, Any?> = reduction.read {
-        val token = ingress
-        if (token != null) {
+    fun freezeCapture(context: Context): Map<String, Any?> = freezeCaptureAfterCut(context, null)
+
+    fun freezeR46Capture(context: Context): Map<String, Any?> {
+        val token = synchronized(r46OfferLock) {
+            ingress?.takeIf { it.r46 }?.also {
+                it.cutR41()
+                if (ingress === it) ingress = null
+            }
+        }
+        return freezeCaptureAfterCut(context, token)
+    }
+
+    private fun freezeCaptureAfterCut(context: Context, cutToken: CaptureIngress?): Map<String, Any?> = reduction.read {
+        val token = cutToken ?: ingress
+        if (token != null && cutToken == null) {
             // The cut is one volatile assignment ordered against queue.offer.
             // The service performs no callback or formatting inside queueLock.
             val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
@@ -1637,7 +1669,7 @@ internal object KeyguardCardDiagnostics {
         latestLegacyReason = "session=$session|wake=$wakeEpoch"
         val token = ingress
         val ownership = token?.let { KeyguardDiagnosticContext(it.id, it.nextAttempt.getAndIncrement(), session, wakeEpoch) }
-        reduction.offer {
+        offerForToken(token) {
             resetLegacyAttempt(context, "$receivedElapsedMs|KG|WAKE|session=$session|wake=$wakeEpoch", "session=$session|wake=$wakeEpoch")
             synchronized(captureLock) {
             val active = capture?.takeIf { it.id == token?.id } ?: return@synchronized
@@ -1718,10 +1750,12 @@ internal object KeyguardCardDiagnostics {
         val token = ingress ?: return
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" }
                     ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R44_READ $observation")
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt == null || attempt.serviceSession != owner.serviceSession ||
@@ -1751,9 +1785,11 @@ internal object KeyguardCardDiagnostics {
         val token = ingress ?: return
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R449_ADMISSION $observation")
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt != null && attempt.serviceSession == owner.serviceSession &&
@@ -1769,9 +1805,11 @@ internal object KeyguardCardDiagnostics {
     internal fun recordR449Intent(captureId: String, action: String, route: String, at: Long) {
         if (action !in setOf("ONE_WAKE", "SESSION") || route !in setOf("FLUVI_STREAM", "WIDGETS_ANYWHERE")) return
         val token = ingress?.takeIf { it.id == captureId } ?: return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R449_INTENT capture=$captureId action=$action route=$route up=$at")
                 active.r449Action = action
                 active.r449ConfirmedRoute = route
                 active.r449IntentAt = at
@@ -1784,9 +1822,11 @@ internal object KeyguardCardDiagnostics {
         val token = ingress ?: return
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R449_RECOVERY $observation")
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt != null && attempt.serviceSession == owner.serviceSession &&
@@ -1803,9 +1843,11 @@ internal object KeyguardCardDiagnostics {
         val token = ingress ?: return
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R45_EVENT $observation")
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt == null || attempt.serviceSession != owner.serviceSession ||
@@ -1846,9 +1888,11 @@ internal object KeyguardCardDiagnostics {
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null ||
             observation.owner.wake != owner.originWakeEpoch) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R448_FRAME $observation")
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt == null || attempt.serviceSession != owner.serviceSession ||
@@ -1888,9 +1932,11 @@ internal object KeyguardCardDiagnostics {
         val token = ingress ?: return
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R448_BOUNDARY $observation")
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt != null && attempt.serviceSession == owner.serviceSession &&
@@ -1905,9 +1951,11 @@ internal object KeyguardCardDiagnostics {
         val token = ingress ?: return
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R448_WORKER $observation")
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt != null && attempt.serviceSession == owner.serviceSession &&
@@ -1923,9 +1971,11 @@ internal object KeyguardCardDiagnostics {
         val token = ingress ?: return
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R448_SYSTEM_VETO $observation")
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt != null && attempt.serviceSession == owner.serviceSession &&
@@ -1940,9 +1990,11 @@ internal object KeyguardCardDiagnostics {
         val token = ingress ?: return
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R446_OUTPUT $observation")
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt != null && attempt.serviceSession == owner.serviceSession &&
@@ -1994,9 +2046,11 @@ internal object KeyguardCardDiagnostics {
     internal fun recordR447ArmTerminal(captureId: String, generation: Long, at: Long, reason: String) {
         val token = ingress ?: return
         if (token.id != captureId || generation <= 0) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == captureId && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R447_TERMINAL generation=$generation up=$at reason=${technicalValue(reason).take(80)}")
                 if (active.r447ArmTerminal == null)
                     active.r447ArmTerminal = R447ArmTerminal(generation, at, technicalValue(reason).take(80))
             }
@@ -2008,9 +2062,11 @@ internal object KeyguardCardDiagnostics {
         val token = ingress ?: return
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R442_HANDOFF $observation")
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt != null && attempt.serviceSession == owner.serviceSession &&
@@ -2025,9 +2081,11 @@ internal object KeyguardCardDiagnostics {
         val token = ingress ?: return
         val owner = observation.context
         if (owner.captureId != token.id || owner.attemptId == null) return
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, "R443_BOUNDARY $observation")
                 val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
                     ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
                 if (attempt != null && attempt.serviceSession == owner.serviceSession &&
@@ -2043,7 +2101,7 @@ internal object KeyguardCardDiagnostics {
     internal fun recordR43(context: Context, observation: KeyguardR43Observation): Boolean {
         val token = ingress ?: return false
         if (!token.r43Enabled || token.id != observation.captureId) return false
-        val accepted = reduction.offer {
+        val accepted = offerForToken(token) {
             val resources = runCatching { context.packageManager.getResourcesForApplication("com.android.systemui") }.getOrNull()
             val version = runCatching {
                 @Suppress("DEPRECATION")
@@ -2080,6 +2138,8 @@ internal object KeyguardCardDiagnostics {
             }
             synchronized(captureLock) {
                 val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                if (active.configuration["r46Recording"] == "true")
+                    KeyguardR46RecordingStore.offer(active.id, row.trim())
                 active.r43Samples++
                 if (!observation.rootUnavailable && !observation.truncated && !observation.stale) {
                     if (active.r43First == null) active.r43First = row
@@ -2282,7 +2342,7 @@ internal object KeyguardCardDiagnostics {
         if (!wantsEvent(stage)) { token.skippedRecords.incrementAndGet(); return }
         val observedAt = observedUptimeMs ?: SystemClock.uptimeMillis()
         val observedElapsed = SystemClock.elapsedRealtime()
-        reduction.offer {
+        offerForToken(token) {
         val lockRequestedAtNs = SystemClock.elapsedRealtimeNanos()
         synchronized(captureLock) {
         val lockAcquiredAtNs = SystemClock.elapsedRealtimeNanos()
@@ -2339,7 +2399,7 @@ internal object KeyguardCardDiagnostics {
         if (diagnosticContext?.captureId != token.id) return
         val producerStartedAtNs = SystemClock.elapsedRealtimeNanos()
         val observedElapsed = SystemClock.elapsedRealtime()
-        reduction.offer {
+        offerForToken(token) {
             val lockRequestedAtNs = SystemClock.elapsedRealtimeNanos()
             synchronized(captureLock) {
                 val lockAcquiredAtNs = SystemClock.elapsedRealtimeNanos()
@@ -2404,6 +2464,8 @@ internal object KeyguardCardDiagnostics {
             fields = fields,
             surfaceMetrics = surfaceMetrics,
         )
+        if (active.configuration["r46Recording"] == "true")
+            KeyguardR46RecordingStore.offer(active.id, "EVENT ${event.toLine(compact = false)}")
         val retainRawEvent = active.captureMode == KeyguardDiagnosticCaptureMode.FULL || stage in TRANSITION_STAGES
         if (retainRawEvent) {
             val last = active.events.lastOrNull()
@@ -3000,6 +3062,7 @@ internal object KeyguardCardDiagnostics {
     }
 
     private fun expireIfNeededLocked(context: Context, active: TimingCapture): Boolean {
+        if (active.configuration["r46Recording"] == "true") return false
         if (SystemClock.elapsedRealtime() - active.startedElapsedMs <= ACTIVE_CAPTURE_MS) return false
         flushR22PostClaim(active, ingress)
         active.r41EndMonoBeforeNs = System.nanoTime()

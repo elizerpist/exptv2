@@ -208,7 +208,7 @@ class KeyguardR446WindowPresenterInstrumentationTest {
             main {
                 val actual = service.r446PreparePresenterForInstrumentation(KeyguardMaterialTimeSource { _, _ -> phase.get() })
                 presenter = actual
-                check(actual.prepare(checkNotNull(windowActivity.display), profile, artifact))
+                check(actual.prepareForInstrumentation(checkNotNull(windowActivity.display), profile, artifact))
             }
             waitFor("embedded input region was prepared") { main { checkNotNull(presenter).inputReadyForInstrumentation() } }
             main {

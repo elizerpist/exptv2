@@ -56,7 +56,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
 
@@ -93,7 +98,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
@@ -166,7 +176,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
@@ -226,7 +241,10 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: DebugConsoleDialog(keyguardTimingCapture: bridge),
+            body: DebugConsoleDialog(
+              legacyKeyguardControls: true,
+              keyguardTimingCapture: bridge,
+            ),
           ),
         ),
       );
@@ -284,7 +302,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
@@ -328,7 +351,10 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: DebugConsoleDialog(keyguardTimingCapture: bridge),
+            body: DebugConsoleDialog(
+              legacyKeyguardControls: true,
+              keyguardTimingCapture: bridge,
+            ),
           ),
         ),
       );
@@ -381,7 +407,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
@@ -444,7 +475,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
@@ -509,7 +545,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
@@ -561,7 +602,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
@@ -595,7 +641,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
@@ -629,7 +680,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
@@ -683,7 +739,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
@@ -719,7 +780,12 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+        home: Scaffold(
+          body: DebugConsoleDialog(
+            legacyKeyguardControls: true,
+            keyguardTimingCapture: bridge,
+          ),
+        ),
       ),
     );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
