@@ -806,6 +806,8 @@ internal object KeyguardCardDiagnostics {
         var r448Boundary: KeyguardR448BoundaryObservation? = null,
         var r448Worker: KeyguardR448WorkerObservation? = null,
         var r448Frame: KeyguardR448FrameTrace? = null,
+        var r449First: KeyguardR449AdmissionObservation? = null,
+        var r449Last: KeyguardR449AdmissionObservation? = null,
         var r447LatestOrdinal: Long = 0,
         var r447DecisionCount: Int = 0,
         var firstExclusionSignalAtUptimeMs: Long? = null,
@@ -1734,6 +1736,25 @@ internal object KeyguardCardDiagnostics {
                     attempt.r44FirstRestriction == null) attempt.r44FirstRestriction = observation
                 if (attempt.r44Reads.size < 12) attempt.r44Reads.addLast(observation)
                 else { attempt.r44ReadsOmitted += 1; attempt.r44Last = observation }
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
+    internal fun recordR449Admission(observation: KeyguardR449AdmissionObservation) {
+        val token = ingress ?: return
+        val owner = observation.context
+        if (owner.captureId != token.id || owner.attemptId == null) return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
+                    ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
+                if (attempt != null && attempt.serviceSession == owner.serviceSession &&
+                    attempt.wakeEpoch == owner.originWakeEpoch) {
+                    if (attempt.r449First == null) attempt.r449First = observation
+                    attempt.r449Last = observation
+                }
             }
         }
         if (!accepted) token.r44Dropped.incrementAndGet()
@@ -3382,6 +3403,10 @@ internal object KeyguardCardDiagnostics {
         }
         val r44Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
         r44Attempts.forEach { attempt ->
+            listOfNotNull(attempt.r449First, attempt.r449Last).distinct().forEachIndexed { index, o ->
+                val e = o.exclusions
+                select("a${attempt.id}:r449:$index", "R44_9_ADMISSION wake=${attempt.wakeEpoch} arm=${o.arm} route=WIDGETS_ANYWHERE routeGeneration=${o.routeGeneration} materialGeneration=${o.materialGeneration} restrictionRevision=${o.restrictionRevision} domain=PUBLIC_SAMPLE action=${o.action} screenOn=${o.screenAt} readStart=${o.readStart} readEnd=${o.readEnd} systemRead=${o.system.startedAt}/${o.system.finishedAt} available=${o.system.available} interactive=${o.system.interactive} displayOn=${o.system.displayOn} locked=${o.system.keyguardLocked} credential=${e.credential} shade=${e.shade} foreign=${e.foreign} power=${e.powerMenu} evidenceAt=${e.observedAt} reason=${o.reason} decision=${o.decision} issue=${o.issueAt ?: "UNOBSERVED"} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
+            }
             attempt.r448Frame?.let { f ->
                 select("a${attempt.id}:r448frame", "R44_8_WA wake=${attempt.wakeEpoch} routeGeneration=${f.owner.route} materialGeneration=${f.owner.material} firstAllowed=${f.firstAllowed ?: "UNOBSERVED"} debounceScheduled=${f.scheduled ?: "UNOBSERVED"} requestedDue=${f.scheduled?.plus(50) ?: "UNOBSERVED"} debounceFired=${f.fired ?: "UNOBSERVED"} debounceCanceled=${f.canceled ?: "UNOBSERVED"} coalesced=${f.coalesced} secondAllowed=${f.secondAllowed ?: "UNOBSERVED"} addBegin=${f.addBegin ?: "UNOBSERVED"} addReturn=${f.addReturn ?: "UNOBSERVED"} attached=${f.attached ?: "UNOBSERVED"} firstShader=${f.firstShader ?: "UNOBSERVED"} hide=${f.hide ?: "UNOBSERVED"} removeReturn=${f.removeReturn ?: "UNOBSERVED"} detached=${f.detached ?: "UNOBSERVED"} geometry=${f.geometry ?: "UNOBSERVED"} terminal=${f.terminal ?: "UNOBSERVED"} terminalAt=${f.terminalAt ?: "UNOBSERVED"} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
             }

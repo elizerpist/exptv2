@@ -179,6 +179,33 @@ void main() {
     expect(status.configured, KeyguardDisplayRoute.fluviStream);
   });
 
+  test(
+    'explicit sample request includes the selected route and action',
+    () async {
+      MethodCall? received;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            received = call;
+            return <String, Object?>{'active': false, 'reason': 'routeChanged'};
+          });
+      final bridge = KeyguardTimingCaptureBridge(
+        channel: channel,
+        isAndroid: () => true,
+      );
+      final receipt = await bridge.startR449SampleCapture(
+        route: KeyguardDisplayRoute.widgetsAnywhere,
+      );
+      expect(received?.method, 'startR449SampleCapture');
+      expect((received?.arguments as Map)['actionKind'], 'ONE_WAKE');
+      expect(
+        (received?.arguments as Map)['routeRequested'],
+        'WIDGETS_ANYWHERE',
+      );
+      expect(receipt['active'], isFalse);
+      expect(receipt['reason'], 'routeChanged');
+    },
+  );
+
   test('retrieves the two native frozen route summaries', () async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {

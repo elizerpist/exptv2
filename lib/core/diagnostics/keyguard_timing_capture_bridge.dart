@@ -189,6 +189,27 @@ class KeyguardTimingCaptureBridge {
         const {'active': false, 'reason': 'missingReceipt'};
   }
 
+  /// The selected route is checked again by the live Android service.
+  Future<Map<Object?, Object?>> startR449SampleCapture({
+    required KeyguardDisplayRoute route,
+    KeyguardTimingCaptureMode mode = KeyguardTimingCaptureMode.light,
+  }) async {
+    if (!_isAndroid()) {
+      return const {'active': false, 'reason': 'unsupportedBuild'};
+    }
+    return await _channel.invokeMapMethod<Object?, Object?>(
+          'startR449SampleCapture',
+          <String, Object?>{
+            'build': buildCommit,
+            'buildMode': buildMode,
+            'captureMode': mode.wireValue,
+            'actionKind': 'ONE_WAKE',
+            'routeRequested': route.wireValue,
+          },
+        ) ??
+        const {'active': false, 'reason': 'missingReceipt'};
+  }
+
   Future<KeyguardOrbRenderModeStatus> getRenderMode() =>
       _invokeRenderMode('getKeyguardOrbRenderMode');
 

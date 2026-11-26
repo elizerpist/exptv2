@@ -106,6 +106,78 @@ void main() {
     expect((startArguments as Map)['r43Evidence'], isTrue);
   });
 
+  testWidgets('explicit sample CTA confirms the selected native route', (
+    tester,
+  ) async {
+    var enabled = false;
+    final calls = <MethodCall>[];
+    final receipt = <String, Object?>{
+      'active': true,
+      'captureId': 'capture-test',
+      'process': 'process-test',
+      'serviceSession': 1,
+      'materialDomain': 'fixedSample',
+      'profile': 'STANDARD',
+      'profileRevision': 9,
+      'actualFlags': 0,
+      'includeNotImportant': false,
+      'printArmed': true,
+      'printPurpose': 'fixedSampleOneWake',
+      'routeConfirmed': 'WIDGETS_ANYWHERE',
+      'routeRequested': 'WIDGETS_ANYWHERE',
+      'actionKind': 'ONE_WAKE',
+    };
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(runtime, (call) async {
+          calls.add(call);
+          return switch (call.method) {
+            'getR448DisplayRoute' => <String, Object?>{
+              'available': true,
+              'connected': true,
+              'configured': 'WIDGETS_ANYWHERE',
+              'active': 'NONE',
+              'reason': 'PUBLIC_SAMPLE_ONLY',
+              'sampleOnly': true,
+            },
+            'getR44SyntheticTrial' => <String, Object?>{
+              'available': true,
+              'enabled': enabled,
+            },
+            'startR449SampleCapture' => () {
+              enabled = true;
+              return <String, Object?>{
+                ...receipt,
+                'snapshot': response('REC', 'LIVE'),
+              };
+            }(),
+            'getR442SampleCaptureStatus' =>
+              enabled ? receipt : <String, Object?>{'active': false},
+            _ => response('IDLE', ''),
+          };
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: runtime,
+      isAndroid: () => true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
+    await tester.pumpAndSettle();
+    final button = find.byKey(const ValueKey('debug-console-r449-one-wake'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    final request = calls.singleWhere(
+      (call) => call.method == 'startR449SampleCapture',
+    );
+    expect((request.arguments as Map)['routeRequested'], 'WIDGETS_ANYWHERE');
+    expect((request.arguments as Map)['actionKind'], 'ONE_WAKE');
+    expect(find.text('Egyszeri rajzpróba előkészítve.'), findsOneWidget);
+  });
+
   testWidgets(
     'copy freezes a running capture before placing native report on clipboard',
     (tester) async {

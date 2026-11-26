@@ -65,6 +65,7 @@ class KeyguardR448FrameInstrumentationTest {
         var frame: KeyguardR448WidgetsAnywhereFrame? = null
         val owner = KeyguardR448WidgetsAnywhereFrame.Owner(1, 1, 1)
         val cancelledOwner = KeyguardR448WidgetsAnywhereFrame.Owner(2, 1, 1)
+        val postAddOwner = KeyguardR448WidgetsAnywhereFrame.Owner(3, 1, 1)
         try {
             shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard")
             val others = services.orEmpty().split(':').filter { it.isNotBlank() && ComponentName.unflattenFromString(it) != component }
@@ -113,14 +114,47 @@ class KeyguardR448FrameInstrumentationTest {
                 green
             }
             val stableUnderlay = checkNotNull(underlay)
+            val preCheck = AtomicReference<((Boolean) -> Unit)?>(null)
             main {
                 frame = KeyguardR448WidgetsAnywhereFrame(service, KeyguardMaterialTimeSource { _, _ -> phase.get() })
                 assertTrue(checkNotNull(frame).prepare(cancelledOwner, profile, false, artifact) { synchronized(events) { events.add(it) } })
+                assertTrue(checkNotNull(frame).requestShowChecked(cancelledOwner, geometry, { true }) {
+                    preCheck.set(it)
+                })
+            }
+            waitFor("asynchronous pre-add check") { preCheck.get() != null }
+            main { assertTrue(checkNotNull(frame).cancelPending(cancelledOwner)) }
+            checkNotNull(preCheck.get())(true)
+            SystemClock.sleep(150)
+            assertFalse("a late pre-add check cannot revive a revoked request",
+                synchronized(events) { events.any { it.stage == "ADD_BEGIN" } })
+            main {
                 assertTrue(checkNotNull(frame).requestShow(cancelledOwner, geometry) { true })
                 assertTrue(checkNotNull(frame).retire(cancelledOwner, "CONTROL_BEFORE_DEBOUNCE"))
             }
             SystemClock.sleep(150)
             assertFalse("revoked timer cannot add a frame", synchronized(events) { events.any { it.stage == "ADD_BEGIN" } })
+            val postCheck = AtomicReference<((Boolean) -> Unit)?>(null)
+            val checkCount = AtomicInteger()
+            main {
+                assertTrue(checkNotNull(frame).prepare(postAddOwner, profile, false, artifact) { synchronized(events) { events.add(it) } })
+                assertTrue(checkNotNull(frame).requestShowChecked(postAddOwner, geometry, { true }) {
+                    if (checkCount.incrementAndGet() == 1) it(true) else postCheck.set(it)
+                })
+            }
+            waitFor("asynchronous post-add check") { postCheck.get() != null }
+            assertTrue("real add occurred before post-add check", synchronized(events) {
+                events.any { it.owner == postAddOwner && it.stage == "ADD_RETURN" }
+            })
+            assertFalse("unverified post-add frame cannot draw", synchronized(events) {
+                events.any { it.owner == postAddOwner && it.stage == "FIRST_SHADER_DRAW" }
+            })
+            main { assertTrue(checkNotNull(frame).retire(postAddOwner, "CONTROL_POST_ADD_REVOKED")) }
+            checkNotNull(postCheck.get())(true)
+            SystemClock.sleep(150)
+            assertFalse("a late post-add check cannot draw a retired view", synchronized(events) {
+                events.any { it.owner == postAddOwner && it.stage == "FIRST_SHADER_DRAW" }
+            })
             main {
                 assertTrue(checkNotNull(frame).prepare(owner, profile, false, artifact) { synchronized(events) { events.add(it) } })
                 assertTrue(checkNotNull(frame).requestShow(owner, geometry) { true })
@@ -131,7 +165,7 @@ class KeyguardR448FrameInstrumentationTest {
             }
             val observed = synchronized(events) { events.toList() }
             assertEquals("actual view bounds match the independent crop", bounds, main { checkNotNull(frame).measuredBoundsForInstrumentation() })
-            assertEquals("one actual add", 1, observed.count { it.stage == "ADD_BEGIN" })
+            assertEquals("one actual add for the active owner", 1, observed.count { it.owner == owner && it.stage == "ADD_BEGIN" })
             assertTrue("duplicate did not reset timer", observed.any { it.stage == "COALESCED" })
             reference.awaitServiceMatch("r448-controlled-A", bounds, reference.a, stableUnderlay)
             phase.set(KeyguardR22VisualCalibration.timeB)
@@ -152,7 +186,12 @@ class KeyguardR448FrameInstrumentationTest {
             assertTrue("first removed crop returns to underlay",
                 KeyguardR22VisualCalibration.compare(stableUnderlay, samples.first()).nearlyEqual())
         } finally {
-            main { frame?.retire(owner, "CLEANUP"); activity?.finish() }
+            main {
+                frame?.retire(owner, "CLEANUP")
+                frame?.retire(postAddOwner, "CLEANUP")
+                frame?.retire(cancelledOwner, "CLEANUP")
+                activity?.finish()
+            }
             calibration?.close()
             File(out, "r448-controlled-events.txt").writeText(synchronized(events) { events.joinToString("\n", postfix = "\n") })
             KeyguardR44Trial.set(false, false)

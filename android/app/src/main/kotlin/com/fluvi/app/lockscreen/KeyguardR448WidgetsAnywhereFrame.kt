@@ -43,6 +43,8 @@ internal class KeyguardR448WidgetsAnywhereFrame(
     private var attached = false
     private var removalFailed = false
     private var leaseLive = false
+    private var validating = false
+    private var showSequence = 0L
     private var event: ((Event) -> Unit)? = null
 
     fun isAttached(): Boolean = attached && leaseLive && view?.isAttachedToWindow == true
@@ -64,7 +66,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
      * an old admission or transfers an attached surface to a new wake. */
     fun bindWake(prepared: Owner, next: Owner): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
-        if (view == null || !leaseLive || attached || removalFailed || pending != null ||
+        if (view == null || !leaseLive || attached || removalFailed || pending != null || validating ||
             viewOwner != prepared || prepared.wake != 0L || next.wake <= 0 ||
             prepared.route != next.route || prepared.material != next.material) return false
         viewOwner = next
@@ -108,14 +110,19 @@ internal class KeyguardR448WidgetsAnywhereFrame(
 
     /** Equivalent eligible requests do not restart upstream's 50 ms delay. */
     fun requestShow(owner: Owner, geometry: KeyguardOverlayGeometry,
-                    valid: () -> Boolean): Boolean {
+                    valid: () -> Boolean): Boolean = requestShowChecked(owner, geometry, valid, null)
+
+    fun requestShowChecked(owner: Owner, geometry: KeyguardOverlayGeometry,
+                           valid: () -> Boolean,
+                           validateAsync: (((Boolean) -> Unit) -> Unit)?): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         val material = view ?: return false
         if (viewOwner != owner || !leaseLive || attached || removalFailed || wm == null ||
             geometry.width <= 0 || geometry.height <= 0) return false
-        if (pending != null) { emit(owner, "COALESCED"); return true }
+        if (pending != null || validating) { emit(owner, "COALESCED"); return true }
         if (!runCatching(valid).getOrDefault(false)) { emit(owner, "DENIED_FIRST_CHECK"); return false }
         emit(owner, "FIRST_CHECK_ALLOWED")
+        val sequence = ++showSequence
         val task = Runnable {
             pending = null
             emit(owner, "DEBOUNCE_FIRED")
@@ -123,6 +130,14 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                 !runCatching(valid).getOrDefault(false)) {
                 emit(owner, "DENIED_SECOND_CHECK")
                 return@Runnable
+            }
+            fun beginAdd(confirmed: Boolean) {
+            if (view !== material || viewOwner != owner || showSequence != sequence) return
+            validating = false
+            if (!confirmed || view !== material || viewOwner != owner || !leaseLive || attached || removalFailed ||
+                !runCatching(valid).getOrDefault(false)) {
+                emit(owner, "DENIED_SECOND_CHECK")
+                return
             }
             emit(owner, "SECOND_CHECK_ALLOWED")
             @Suppress("DEPRECATION")
@@ -136,8 +151,10 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                     WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
                 PixelFormat.RGBA_8888,
             ).apply { gravity = Gravity.TOP or Gravity.START; x = geometry.left; y = geometry.top }
-            material.visibility = View.VISIBLE
-            material.alpha = 1f
+            // For asynchronous revalidation the newly added view stays
+            // hidden until the current post-add system check completes.
+            material.visibility = if (validateAsync == null) View.VISIBLE else View.INVISIBLE
+            material.alpha = if (validateAsync == null) 1f else 0f
             material.onNextShaderDrawForDiagnostic = { at ->
                 if (view === material && viewOwner == owner && leaseLive && attached) {
                     runCatching { event?.invoke(Event(owner, "FIRST_SHADER_DRAW", at)) }
@@ -161,8 +178,18 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                 emit(owner, "ADD_RETURN")
                 if (viewOwner != owner || !runCatching(valid).getOrDefault(false)) {
                     retire(owner, "POST_ADD_REVOKED")
-                    return@Runnable
+                    return
                 }
+                fun beginFrames(confirmedAfterAdd: Boolean) {
+                if (view !== material || viewOwner != owner || showSequence != sequence) return
+                validating = false
+                if (!confirmedAfterAdd || view !== material || viewOwner != owner || !leaseLive || !attached ||
+                    !runCatching(valid).getOrDefault(false)) {
+                    if (view === material && viewOwner == owner) retire(owner, "POST_ADD_REVOKED")
+                    return
+                }
+                material.visibility = View.VISIBLE
+                material.alpha = 1f
                 val callback = object : Choreographer.FrameCallback {
                     override fun doFrame(frameTimeNanos: Long) {
                         if (view !== material || viewOwner != owner || !leaseLive || !attached) return
@@ -173,11 +200,23 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                 frame = callback
                 material.frame(System.nanoTime())
                 Choreographer.getInstance().postFrameCallback(callback)
+                }
+                if (validateAsync == null) beginFrames(true) else {
+                    validating = true
+                    try { validateAsync { allowed -> main.post { beginFrames(allowed) } } }
+                    catch (_: Exception) { beginFrames(false) }
+                }
             } catch (failure: Exception) {
                 // An exception cannot imply that WindowManager did not retain
                 // the view. Attempt exact-view cleanup and block reuse on error.
                 emit(owner, "ADD_FAILED", failure.javaClass.simpleName.take(48))
                 retire(owner, "ADD_FAILED")
+            }
+            }
+            if (validateAsync == null) beginAdd(true) else {
+                validating = true
+                try { validateAsync { allowed -> main.post { beginAdd(allowed) } } }
+                catch (_: Exception) { beginAdd(false) }
             }
         }
         pending = task
@@ -190,12 +229,26 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         return true
     }
 
+    /** A new restriction revision may require a fresh read before an add.
+     * Keep the detached prepared material, but revoke every old callback. */
+    fun cancelPending(owner: Owner): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (viewOwner != owner || attached || removalFailed || !leaseLive) return false
+        showSequence++
+        pending?.let { main.removeCallbacks(it); emit(owner, "DEBOUNCE_CANCELED") }
+        pending = null
+        validating = false
+        return true
+    }
+
     /** Invalidates callbacks first, then hides and removes the captured View.
      * A failed removal retains ownership and blocks a successor. */
     fun retire(owner: Owner, reason: String): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (viewOwner != owner) return false
         leaseLive = false
+        showSequence++
+        validating = false
         pending?.let { main.removeCallbacks(it); emit(owner, "DEBOUNCE_CANCELED") }
         pending = null
         frame?.let { Choreographer.getInstance().removeFrameCallback(it) }

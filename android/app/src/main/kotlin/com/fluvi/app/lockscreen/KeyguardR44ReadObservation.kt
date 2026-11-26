@@ -1,5 +1,14 @@
 package com.fluvi.app.lockscreen
 
+/** Exact public WA admission; only bounded scalar roles/times are retained. */
+internal data class KeyguardR449AdmissionObservation(
+    val context: KeyguardDiagnosticContext, val arm: Long, val routeGeneration: Long,
+    val materialGeneration: Long, val restrictionRevision: Long, val action: String,
+    val screenAt: Long, val readStart: Long, val readEnd: Long, val system: KeyguardSystemState,
+    val exclusions: KeyguardR448Admission.Exclusions, val reason: String,
+    val decision: KeyguardR448Admission.Decision, val issueAt: Long?,
+)
+
 internal data class KeyguardR448FrameObservation(
     val context: KeyguardDiagnosticContext, val owner: KeyguardR448WidgetsAnywhereFrame.Owner,
     val stage: String, val at: Long, val detail: String?,

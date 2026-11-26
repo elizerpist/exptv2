@@ -394,6 +394,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
     'captureStopped' => 'A rögzítés leállt, a mintaadat-próba visszaállt.',
     'trialChanged' =>
       'A mintaadat beállítása megváltozott; a rögzítési visszaigazolás érvénytelen.',
+    'routeChanged' =>
+      'Az útvonal időközben megváltozott; válaszd ki és indítsd újra a próbát.',
     'normalCapture' => 'A sima rögzítés nem indít mintaorb-próbát.',
     'serviceOrCaptureChanged' =>
       'A szolgáltatás vagy a rögzítés időközben megváltozott.',
@@ -404,6 +406,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
   Future<void> _startR442SampleCapture({
     bool expanded = false,
     bool oneWakePrint = false,
+    KeyguardDisplayRoute? confirmedRoute,
   }) async {
     final bridge = widget.keyguardTimingCapture;
     if (bridge == null || _loadingKeyguard) return;
@@ -415,11 +418,16 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       _keyguardCopied = false;
     });
     try {
-      final receipt = await bridge.startR442SampleCapture(
-        mode: _keyguardCaptureMode,
-        expanded: expanded,
-        oneWakePrint: oneWakePrint,
-      );
+      final receipt = confirmedRoute == null
+          ? await bridge.startR442SampleCapture(
+              mode: _keyguardCaptureMode,
+              expanded: expanded,
+              oneWakePrint: oneWakePrint,
+            )
+          : await bridge.startR449SampleCapture(
+              mode: _keyguardCaptureMode,
+              route: confirmedRoute,
+            );
       final rawSnapshot = receipt['snapshot'];
       final snapshot = rawSnapshot is Map<Object?, Object?>
           ? KeyguardTimingCaptureSnapshot.fromMap(rawSnapshot)
@@ -437,6 +445,12 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
           current['profileRevision'] == receipt['profileRevision'] &&
           current['profile'] == receipt['profile'] &&
           current['actualFlags'] == receipt['actualFlags'] &&
+          (confirmedRoute == null ||
+              (receipt['actionKind'] == 'ONE_WAKE' &&
+                  receipt['routeRequested'] == confirmedRoute.wireValue &&
+                  receipt['routeConfirmed'] == confirmedRoute.wireValue &&
+                  current['routeConfirmed'] == confirmedRoute.wireValue &&
+                  current['actionKind'] == 'ONE_WAKE')) &&
           (!oneWakePrint ||
               (receipt['printArmed'] == true &&
                   current['printArmed'] == true &&
@@ -1222,7 +1236,9 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                     onPressed: _loadingKeyguard || unavailable || _r442Active
                         ? null
                         : () => _startR442SampleCapture(),
-                    child: const Text('Mintaorb kipróbálása és rögzítés'),
+                    child: const Text(
+                      'Csak felismerés és rögzítés (régi próba)',
+                    ),
                   ),
                 if (_r44TrialAvailable)
                   const Text(
@@ -1308,6 +1324,21 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                         Text(
                           'Natív választás: ${_keyguardDisplayRoute!.configured == KeyguardDisplayRoute.fluviStream ? 'Fluvi adatfolyam' : 'Widgets Anywhere'} · Aktív: ${_keyguardDisplayRoute!.active}',
                         ),
+                        if (_r44TrialAvailable)
+                          FilledButton(
+                            key: const ValueKey('debug-console-r449-one-wake'),
+                            onPressed:
+                                _loadingKeyguard || unavailable || _r442Active
+                                ? null
+                                : () => _startR442SampleCapture(
+                                    oneWakePrint: true,
+                                    confirmedRoute:
+                                        _keyguardDisplayRoute!.configured,
+                                  ),
+                            child: Text(
+                              'Egyszeri mintaorb és rögzítés – ${_keyguardDisplayRoute!.configured == KeyguardDisplayRoute.fluviStream ? 'Fluvi adatfolyam' : 'Widgets Anywhere'}',
+                            ),
+                          ),
                         if (_keyguardDisplayRoute!.reason != 'NONE')
                           Text('Állapot: ${_keyguardDisplayRoute!.reason}'),
                       ],
@@ -1381,7 +1412,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                             ? null
                             : () => _startKeyguardCapture(),
                         icon: const Icon(Icons.fiber_manual_record, size: 15),
-                        label: const Text('Rögzítés indítása'),
+                        label: const Text('Csak mérés'),
                       ),
                       OutlinedButton(
                         key: const ValueKey('debug-console-r43-start'),
