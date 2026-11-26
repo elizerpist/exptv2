@@ -1450,6 +1450,7 @@ internal object KeyguardCardDiagnostics {
         mode: String? = null,
         r43Enabled: Boolean = false,
         r442ExpectedSession: Long? = null,
+        r446PrintRequested: Boolean = false,
     ): Map<String, Any?> = reduction.read {
         val export = synchronized(captureLock) {
         ensureRecoveredLoadedLocked(context)
@@ -1485,6 +1486,7 @@ internal object KeyguardCardDiagnostics {
                 "notificationTimeoutMs" to "0",
                 "r442TrialRequested" to (r442ExpectedSession != null).toString(),
                 "r442TrialSession" to (r442ExpectedSession?.toString() ?: "none"),
+                "r446PrintRequested" to r446PrintRequested.toString(),
             ),
             captureMode = captureMode,
             r43Enabled = r43Enabled && Build.VERSION.SDK_INT >= 37,
@@ -3210,15 +3212,23 @@ internal object KeyguardCardDiagnostics {
         }
         val r44Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
         // The once-per-wake sample boundary is reserved before verbose reads.
-        r44Attempts.forEach { attempt -> listOfNotNull(attempt.r446, attempt.r446Last).forEachIndexed { index, o ->
+        r44Attempts.forEach { attempt ->
+            val first = attempt.r446
+            if (first == null) {
+                if (active.configuration["r446PrintRequested"] == "true" && attempt.screenOnReceivedAtUptimeMs != null) {
+                    select("a${attempt.id}:r446", "R44_6_HU Nincs rajzkérés.\nR44_6_SAMPLE wake=${attempt.wakeEpoch} arm=UNOBSERVED firstReq=UNOBSERVED firstNormal=UNOBSERVED firstEligible=UNOBSERVED firstBackend=NOT_ATTEMPTED req=UNOBSERVED normal=UNOBSERVED eligible=UNOBSERVED backend=NOT_ATTEMPTED host=UNOBSERVED scene=UNOBSERVED issue=UNOBSERVED attachBegin=UNOBSERVED attachEnd=UNOBSERVED submit=UNOBSERVED frame=UNOBSERVED withdraw=UNOBSERVED/UNOBSERVED hideReturn=UNOBSERVED releaseReturn=UNOBSERVED retireError=none physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
+                }
+                return@forEach
+            }
+            val o = attempt.r446Last ?: first
             val status = when {
                 o.frameAt != null -> "Képkocka beküldve, láthatóság ismeretlen."
                 o.submittedAt != null -> "Felület beküldve, képkocka nem megfigyelt."
                 o.backend.contains("FAILED") -> "Csatolás vagy beküldés sikertelen."
                 else -> "Nincs rajzkérés."
             }
-            select("a${attempt.id}:r446:$index", "R44_6_HU $status\nR44_6_SAMPLE wake=${o.wake} arm=${o.armAt} req=${o.request} normal=${o.normal} eligible=${o.eligibility} backend=${o.backend} host=${o.host ?: "UNOBSERVED"} scene=${o.scene ?: "UNOBSERVED"} issue=${o.issuedAt ?: "UNOBSERVED"} attachBegin=${o.attachBegin ?: "UNOBSERVED"} attachEnd=${o.attachEnd ?: "UNOBSERVED"} submit=${o.submittedAt ?: "UNOBSERVED"} frame=${o.frameAt ?: "UNOBSERVED"} withdraw=${o.withdrawAt ?: "UNOBSERVED"}/${o.withdrawReason} hideReturn=${o.hideReturn ?: "UNOBSERVED"} releaseReturn=${o.releaseReturn ?: "UNOBSERVED"} retireError=${o.retireError ?: "none"} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
-        } }
+            select("a${attempt.id}:r446", "R44_6_HU $status\nR44_6_SAMPLE wake=${o.wake} arm=${o.armAt} firstReq=${first.request} firstNormal=${first.normal} firstEligible=${first.eligibility} firstBackend=${first.backend} req=${o.request} normal=${o.normal} eligible=${o.eligibility} backend=${o.backend} host=${o.host ?: "UNOBSERVED"} scene=${o.scene ?: "UNOBSERVED"} issue=${o.issuedAt ?: "UNOBSERVED"} attachBegin=${o.attachBegin ?: "UNOBSERVED"} attachEnd=${o.attachEnd ?: "UNOBSERVED"} submit=${o.submittedAt ?: "UNOBSERVED"} frame=${o.frameAt ?: "UNOBSERVED"} withdraw=${o.withdrawAt ?: "UNOBSERVED"}/${o.withdrawReason} hideReturn=${o.hideReturn ?: "UNOBSERVED"} releaseReturn=${o.releaseReturn ?: "UNOBSERVED"} retireError=${o.retireError ?: "none"} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
+        }
         r44Attempts.filter { it.r44Reads.isNotEmpty() ||
             (Build.VERSION.SDK_INT == 37 && it.presentationMode == "ORB") }.forEach { attempt ->
             select("a${attempt.id}:r44Core", r44Record(active.id, attempt,

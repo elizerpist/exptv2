@@ -384,6 +384,7 @@ class FluviKeyguardCardService : AccessibilityService() {
      * the resulting ID. No receipt survives a rebind or capture replacement. */
     internal suspend fun startR442SampleCapture(
         build: String?, buildMode: String?, captureMode: String?, expanded: Boolean = false,
+        oneWakePrint: Boolean = false,
     ): Map<String, Any?> {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (r442Starting) return mapOf("active" to false, "reason" to "startInProgress")
@@ -419,7 +420,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             val expectedProfileRevision = r444ProfileOwner.snapshot.revision
             val snapshot = withContext(Dispatchers.IO) {
                 KeyguardCardDiagnostics.startCapture(applicationContext, build, buildMode, captureMode, false,
-                    r442ExpectedSession = expectedSession)
+                    r442ExpectedSession = expectedSession, r446PrintRequested = oneWakePrint)
             }
             val id = snapshot["captureId"] as? String
             if (id == null || snapshot["captureState"] != "REC" ||
@@ -509,7 +510,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (r446Preparing) return mapOf("active" to false, "reason" to "startInProgress")
         r446Preparing = true
         try {
-            val receipt = startR442SampleCapture(build, buildMode, mode, expanded = false)
+            val receipt = startR442SampleCapture(build, buildMode, mode, expanded = false, oneWakePrint = true)
             val capture = receipt["captureId"] as? String
             if (receipt["active"] != true || capture == null) return receipt
             val sample = KeyguardR44Trial.profile(null)

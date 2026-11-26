@@ -34,7 +34,8 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r446ProtectedSampleEndpointsSurviveFullPressure() = r446Pressure("FULL")
 
     private fun r446Pressure(mode: String) {
-        KeyguardCardDiagnostics.startCapture(context, "r446-pressure", "profile", mode, r442ExpectedSession = 9446)
+        KeyguardCardDiagnostics.startCapture(context, "r446-pressure", "profile", mode,
+            r442ExpectedSession = 9446, r446PrintRequested = true)
         var first: KeyguardR446Observation? = null
         repeat(5) { index ->
             val wake = index + 1L; val base = wake * 1000
@@ -55,9 +56,14 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             repeat(50) { n -> KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure",
                 diagnosticContext = owner, requestId = base + 100 + n, observedUptimeMs = base + 100 + n) }
         }
+        val pending = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9446, 6, "wake", 6000))
+        KeyguardCardDiagnostics.captureEvent(context, "SCREEN_ON_RECEIVED", "test",
+            diagnosticContext = pending, observedUptimeMs = 6010)
         val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
         assertTrue(frozen.toByteArray(Charsets.UTF_8).size <= 32_768)
-        assertEquals(10, frozen.lineSequence().count { it.startsWith("R44_6_SAMPLE ") })
+        assertEquals(6, frozen.lineSequence().count { it.startsWith("R44_6_SAMPLE ") })
+        assertTrue(frozen, frozen.contains("wake=1 arm=990 firstReq=1001 firstNormal=UNKNOWN/NO_MAIN_MARKER firstEligible=HOST_BOUNDS firstBackend=NOT_ATTEMPTED req=1002"))
+        assertTrue(frozen, frozen.contains("wake=6 arm=UNOBSERVED firstReq=UNOBSERVED"))
         assertTrue(frozen, frozen.contains("backend=SUBMITTED"))
         assertTrue(frozen, frozen.contains("frame=UNOBSERVED"))
         assertTrue(frozen, frozen.contains("hideReturn=1051 releaseReturn=1052"))
