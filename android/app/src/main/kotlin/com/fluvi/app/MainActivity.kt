@@ -1361,6 +1361,18 @@ class MainActivity : FlutterActivity() {
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "beginActiveHeaderPublisher", "invalidateActiveHeaderProfile" -> {
+                        val values = call.arguments as? Map<*, *>
+                        val publisherSession = values?.get("publisherSession") as? String
+                        val instance = (values?.get("publisherInstance") as? Number)?.toLong()
+                        val revision = (values?.get("publisherRevision") as? Number)?.toLong()
+                        val accepted = if (publisherSession == null || instance == null || revision == null) false
+                        else if (call.method == "beginActiveHeaderPublisher")
+                            FluviActiveHeaderMaterialStore.bindPublisher(keyguardMaterialPublisherEpoch, instance, publisherSession)
+                        else FluviActiveHeaderMaterialStore.invalidatePublisher(keyguardMaterialPublisherEpoch, instance, publisherSession, revision)
+                        if (accepted) FluviKeyguardCardServiceRegistry.notifyActiveHeaderChanged()
+                        result.success(mapOf("accepted" to accepted))
+                    }
                     "publishActiveHeaderProfile" -> {
                         val values = call.arguments as? Map<*, *>
                         if (values == null) {
@@ -1465,6 +1477,7 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         activeHeaderActivityResumed = true
+        FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
         FluviRuntimeCoordinator.reconcileHistoricalUserStop(applicationContext)
         FluviRuntimeCoordinator.onAppSurfaceVisibilityChanged(applicationContext, true)
         FluviRuntimeCoordinator.applyRecentsVisibility(this)

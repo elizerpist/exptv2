@@ -24,10 +24,13 @@ final class DashboardKeyguardMaterialBridge {
   }) : _controller = controller,
        _activeMode = activeMode,
        _activeHeaderVisible = activeHeaderVisible,
+       _observedMotionEnabled = controller.motionEnabled,
+       _publisherInstance = ++_nextPublisherInstance,
        _channel = channel ?? const MethodChannel(_channelName),
        _session =
            'keyguard-${DateTime.now().microsecondsSinceEpoch}-${identityHashCode(controller)}' {
     _controller.tuning.addListener(schedule);
+    _controller.addListener(_handleMotionPreference);
     _controller.portalSettingsGeneration.addListener(schedule);
     _controller.orbExportCommitGeneration.addListener(_scheduleFinal);
     balanceFrame.addListener(schedule);
@@ -35,9 +38,11 @@ final class DashboardKeyguardMaterialBridge {
     mindFrame.addListener(schedule);
     _activeMode?.addListener(schedule);
     _channel.setMethodCallHandler(_onNativeMethodCall);
+    unawaited(_sendActiveControl('beginActiveHeaderPublisher'));
   }
 
   static const _channelName = 'fluvi/keyguard_material';
+  static int _nextPublisherInstance = 0;
 
   final DashboardHeaderVisualController _controller;
   final DashboardCoreModeController? _activeMode;
@@ -47,6 +52,7 @@ final class DashboardKeyguardMaterialBridge {
   final ValueListenable<DashboardHeaderVisualFrame> mindFrame;
   final MethodChannel _channel;
   final String _session;
+  final int _publisherInstance;
   Size? _geometry;
   Timer? _debounce;
   var _publishing = false;
@@ -54,6 +60,14 @@ final class DashboardKeyguardMaterialBridge {
   var _generation = 0;
   var _disposed = false;
   String? _activeVisualKey;
+  bool _observedMotionEnabled;
+
+  void _handleMotionPreference() {
+    final enabled = _controller.motionEnabled;
+    if (enabled == _observedMotionEnabled) return;
+    _observedMotionEnabled = enabled;
+    schedule();
+  }
 
   Future<Object?> _onNativeMethodCall(MethodCall call) async {
     if (call.method == 'refreshScene') {
@@ -77,6 +91,8 @@ final class DashboardKeyguardMaterialBridge {
   void schedule() {
     if (_disposed) return;
     _generation += 1;
+    _activeVisualKey = null;
+    unawaited(_sendActiveControl('invalidateActiveHeaderProfile'));
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 48), () {
       _scheduleActiveHeader(_generation);
@@ -87,6 +103,8 @@ final class DashboardKeyguardMaterialBridge {
   void _scheduleFinal() {
     if (_disposed) return;
     _generation += 1;
+    _activeVisualKey = null;
+    unawaited(_sendActiveControl('invalidateActiveHeaderProfile'));
     _debounce?.cancel();
     _scheduleActiveHeader(_generation);
     unawaited(_publish(_generation));
@@ -117,7 +135,7 @@ final class DashboardKeyguardMaterialBridge {
       );
       final modeEpoch = _activeMode?.committedModeEpoch ?? 0;
       final key =
-          '${mode.name}|$modeEpoch|$geometry|${snapshot.orbVisualCacheKey}';
+          '${mode.name}|$modeEpoch|$geometry|$_observedMotionEnabled|${snapshot.orbVisualCacheKey}';
       if (key == _activeVisualKey) return;
       final profile = snapshot.keyguardMaterialProfile(
         publisherSession: _session,
@@ -127,7 +145,9 @@ final class DashboardKeyguardMaterialBridge {
       );
       profile['activeMode'] = mode.name;
       profile['modeEpoch'] = modeEpoch;
-      profile['sourceAnimated'] = snapshot.isAnimated;
+      profile['publisherInstance'] = _publisherInstance;
+      profile['motionEnabled'] = _observedMotionEnabled;
+      profile['sourceAnimated'] = _observedMotionEnabled && snapshot.isAnimated;
       unawaited(_publishActiveHeader(profile, key, requestedGeneration));
     });
     SchedulerBinding.instance.scheduleFrame();
@@ -152,6 +172,20 @@ final class DashboardKeyguardMaterialBridge {
       // The optional active-header transport is unavailable on this host.
     } on PlatformException {
       // A rejected or detached publication must not become a cache hit.
+    }
+  }
+
+  Future<void> _sendActiveControl(String method) async {
+    try {
+      await _channel.invokeMethod<Object?>(method, <String, Object>{
+        'publisherSession': _session,
+        'publisherInstance': _publisherInstance,
+        'publisherRevision': _generation,
+      });
+    } on MissingPluginException {
+      // No native material sink on a non-Android host.
+    } on PlatformException {
+      // A detached engine cannot authorize a stale generation.
     }
   }
 
@@ -286,6 +320,7 @@ final class DashboardKeyguardMaterialBridge {
     _disposed = true;
     _debounce?.cancel();
     _controller.tuning.removeListener(schedule);
+    _controller.removeListener(_handleMotionPreference);
     _controller.portalSettingsGeneration.removeListener(schedule);
     _controller.orbExportCommitGeneration.removeListener(_scheduleFinal);
     balanceFrame.removeListener(schedule);

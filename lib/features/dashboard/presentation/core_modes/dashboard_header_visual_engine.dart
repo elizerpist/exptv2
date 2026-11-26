@@ -2483,6 +2483,7 @@ final class DashboardHeaderVisualController extends ChangeNotifier {
   bool get tickerIsActive => _ticker.isActive;
   double get phase => _phase;
   Duration get elapsed => _elapsed;
+  bool get motionEnabled => _motionEnabled;
   DashboardHeaderPortalChannelState get portalInnerMotion => _portalInnerMotion;
   DashboardHeaderPortalChannelState get portalBackgroundMorph =>
       _portalBackgroundMorph;

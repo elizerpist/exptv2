@@ -104,6 +104,16 @@ void main() {
           active.last['colors'],
           contains(const Color(0xff229954).toARGB32()),
         );
+        visual.setMotionEnabled(false);
+        await tester.pump(const Duration(milliseconds: 60));
+        await tester.pump();
+        expect(active.last['motionEnabled'], isFalse);
+        expect(active.last['sourceAnimated'], isFalse);
+        visual.setMotionEnabled(true);
+        await tester.pump(const Duration(milliseconds: 60));
+        await tester.pump();
+        expect(active.last['motionEnabled'], isTrue);
+        expect(active.last['sourceAnimated'], isTrue);
       } finally {
         bridge.dispose();
         mode.dispose();
@@ -138,8 +148,9 @@ void main() {
     final firstReceipt = Completer<Object?>();
     final sent = <Map<Object?, Object?>>[];
     messenger.setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'sceneTarget')
+      if (call.method == 'sceneTarget') {
         return <String, Object?>{'mode': 'budget', 'projectionAvailable': true};
+      }
       if (call.method == 'publishActiveHeaderProfile') {
         sent.add(Map<Object?, Object?>.from(call.arguments as Map));
         if (sent.length == 1) return firstReceipt.future;
@@ -167,8 +178,9 @@ void main() {
       expect(sent.length, 2);
       firstReceipt.complete(<String, Object?>{'accepted': true});
       await tester.pump();
-      bridge.schedule();
-      await tester.pump(const Duration(milliseconds: 60));
+      // Ordinary animation ticks must not republish material or make the old
+      // receipt current. Native independently enforces the revision floor.
+      await tester.pump(const Duration(milliseconds: 1000));
       await tester.pump();
       expect(
         sent.length,
@@ -176,8 +188,9 @@ void main() {
         reason: 'a stale receipt must not replace the newer cache identity',
       );
     } finally {
-      if (!firstReceipt.isCompleted)
+      if (!firstReceipt.isCompleted) {
         firstReceipt.complete(<String, Object?>{'accepted': false});
+      }
       bridge.dispose();
       mode.dispose();
       visual.dispose();

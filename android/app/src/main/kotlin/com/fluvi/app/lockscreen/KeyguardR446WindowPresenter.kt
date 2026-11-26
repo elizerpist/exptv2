@@ -53,9 +53,10 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
      * still hold and revalidate the exact generation and display authority. */
     fun prepareActiveHeader(display: Display, material: FluviActiveHeaderMaterialStore.Snapshot,
                             artifact: KeyguardShaderArtifact): Boolean {
-        val prepared = prepareScene(display, material.profile, artifact, false, true, material.receivedAtNanos)
+        val prepared = prepareScene(display, material.profile, artifact, false, true, material.receivedAtNanos,
+            freezeClock = !material.motionEnabled)
         if (prepared) r47Telemetry = "origin=active_header_semantic token=${material.correlation} " +
-            "sourceRevision=${material.profile.publisherRevision} animated=${material.profile.animated} playback=shader"
+            "sourceRevision=${material.profile.publisherRevision} animated=${material.motionEnabled && material.profile.animated} playback=shader"
         return prepared
     }
 
@@ -67,7 +68,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
 
     private fun prepareScene(display: Display, sample: KeyguardMaterialProfile, artifact: KeyguardShaderArtifact,
                              diagnosticCircle: Boolean, full: Boolean = false,
-                             anchorNanos: Long = System.nanoTime()): Boolean {
+                             anchorNanos: Long = System.nanoTime(), freezeClock: Boolean = false): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (dispose().errorClass != null) return false
         inputReadySignal = CompletableDeferred()
@@ -75,7 +76,9 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         return runCatching {
             val size = service.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
             require(size > 0)
-            val material = KeyguardHeaderMaterialView(service, materialTimeSource = timeSource).apply {
+            val source = if (freezeClock) KeyguardMaterialTimeSource { scene, _ -> scene.timeAt(scene.appliedAtNanos) }
+                else timeSource
+            val material = KeyguardHeaderMaterialView(service, materialTimeSource = source).apply {
                 isClickable = false
                 isFocusable = false
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS

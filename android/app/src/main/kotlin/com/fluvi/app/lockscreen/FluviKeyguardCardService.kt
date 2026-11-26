@@ -1025,7 +1025,7 @@ class FluviKeyguardCardService : AccessibilityService() {
             r47Header = header
             if (header != null) KeyguardR46RecordingStore.offer(capture,
                 "R47_MATERIAL origin=active_header_semantic token=${header.correlation} " +
-                    "sourceRevision=${header.profile.publisherRevision} animated=${header.profile.animated} playback=shader")
+                    "sourceRevision=${header.profile.publisherRevision} animated=${header.motionEnabled && header.profile.animated} playback=shader")
             val sample = header?.profile ?: KeyguardR44Trial.profile(null)
             if (sample == null) { stopR444Trial("samplePreparationFailed"); return mapOf("active" to false, "reason" to "samplePreparationFailed") }
             val artifact = runCatching { withContext(Dispatchers.IO) {

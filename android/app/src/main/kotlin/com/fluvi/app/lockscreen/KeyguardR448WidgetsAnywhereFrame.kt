@@ -112,9 +112,10 @@ internal class KeyguardR448WidgetsAnywhereFrame(
     /** Private header data does not pass through the public sample API. */
     fun prepareActiveHeader(owner: Owner, material: FluviActiveHeaderMaterialStore.Snapshot,
                             artifact: KeyguardShaderArtifact, observer: (Event) -> Unit): Boolean {
-        val prepared = prepareScene(owner, material.profile, true, artifact, false, observer, material.receivedAtNanos)
+        val prepared = prepareScene(owner, material.profile, true, artifact, false, observer, material.receivedAtNanos,
+            freezeClock = !material.motionEnabled)
         if (prepared) r47Telemetry = "origin=active_header_semantic token=${material.correlation} " +
-            "sourceRevision=${material.profile.publisherRevision} animated=${material.profile.animated} playback=shader"
+            "sourceRevision=${material.profile.publisherRevision} animated=${material.motionEnabled && material.profile.animated} playback=shader"
         return prepared
     }
 
@@ -124,11 +125,13 @@ internal class KeyguardR448WidgetsAnywhereFrame(
 
     private fun prepareScene(owner: Owner, profile: KeyguardMaterialProfile, full: Boolean,
                 artifact: KeyguardShaderArtifact, diagnosticCircle: Boolean,
-                observer: (Event) -> Unit, anchorNanos: Long = System.nanoTime()): Boolean {
+                observer: (Event) -> Unit, anchorNanos: Long = System.nanoTime(), freezeClock: Boolean = false): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (view != null || attached || removalFailed) return false
         return runCatching {
-            val material = KeyguardHeaderMaterialView(service, materialTimeSource = timeSource).apply {
+            val source = if (freezeClock) KeyguardMaterialTimeSource { scene, _ -> scene.timeAt(scene.appliedAtNanos) }
+                else timeSource
+            val material = KeyguardHeaderMaterialView(service, materialTimeSource = source).apply {
                 isClickable = false
                 isFocusable = false
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
