@@ -491,6 +491,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     private val r446Owner = KeyguardR446PrintOwner()
     @Volatile private var r446ReadArm: KeyguardR446PrintOwner.Arm? = null
     @Volatile private var r446CaptureId: String? = null
+    @Volatile private var r446Preparing = false
     @Volatile private var r446RestrictionSeen = false
     @Volatile private var r446TicketActive = false
     private var r446Presenter: KeyguardR446WindowPresenter? = null
@@ -505,34 +506,46 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     internal suspend fun startR446PrintCapture(build: String?, buildMode: String?, mode: String?): Map<String, Any?> {
         check(Looper.myLooper() == Looper.getMainLooper())
-        val receipt = startR442SampleCapture(build, buildMode, mode, expanded = false)
-        val capture = receipt["captureId"] as? String
-        if (receipt["active"] != true || capture == null) return receipt
-        val sample = KeyguardR44Trial.profile(null)
-        if (sample == null) { stopR444Trial("samplePreparationFailed"); return mapOf("active" to false, "reason" to "samplePreparationFailed") }
-        val artifact = runCatching { withContext(Dispatchers.IO) {
-            AndroidKeyguardShaderArtifactReader.load(applicationContext, sample.effectId, sample.usesPortal)
-        } }.getOrNull()
-        val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
-        if (artifact == null || display == null || r442Receipt?.capture != capture ||
-            KeyguardCardDiagnostics.activeCaptureId() != capture || !KeyguardR44Trial.active ||
-            getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != false) {
-            stopR444Trial("samplePreparationFailed")
-            return mapOf("active" to false, "reason" to "samplePreparationFailed")
+        if (r446Preparing) return mapOf("active" to false, "reason" to "startInProgress")
+        r446Preparing = true
+        try {
+            val receipt = startR442SampleCapture(build, buildMode, mode, expanded = false)
+            val capture = receipt["captureId"] as? String
+            if (receipt["active"] != true || capture == null) return receipt
+            val sample = KeyguardR44Trial.profile(null)
+            if (sample == null) { stopR444Trial("samplePreparationFailed"); return mapOf("active" to false, "reason" to "samplePreparationFailed") }
+            val artifact = runCatching { withContext(Dispatchers.IO) {
+                AndroidKeyguardShaderArtifactReader.load(applicationContext, sample.effectId, sample.usesPortal)
+            } }.getOrNull()
+            val display = displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+            if (artifact == null || display == null || r442Receipt?.capture != capture ||
+                KeyguardCardDiagnostics.activeCaptureId() != capture || !KeyguardR44Trial.active ||
+                getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != false) {
+                stopR444Trial("samplePreparationFailed")
+                return mapOf("active" to false, "reason" to "samplePreparationFailed")
+            }
+            val presenter = KeyguardR446WindowPresenter(this)
+            if (!presenter.prepare(display, sample, artifact)) {
+                stopR444Trial("samplePreparationFailed")
+                return mapOf("active" to false, "reason" to "samplePreparationFailed")
+            }
+            if (r442Receipt?.capture != capture || KeyguardCardDiagnostics.activeCaptureId() != capture ||
+                !KeyguardR44Trial.active || getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != false) {
+                presenter.dispose()
+                stopR444Trial("serviceOrCaptureChanged")
+                return mapOf("active" to false, "reason" to "serviceOrCaptureChanged")
+            }
+            r446Presenter = presenter
+            r446Observation = null
+            r446RestrictionSeen = false
+            r446ReadArm = null
+            r446ArmAt = SystemClock.uptimeMillis()
+            r446CaptureId = capture
+            r446Owner.arm(session.get(), capture)
+            return receipt + mapOf("printPurpose" to "fixedSampleOneWake", "printArmed" to true)
+        } finally {
+            r446Preparing = false
         }
-        val presenter = KeyguardR446WindowPresenter(this)
-        if (!presenter.prepare(display, sample, artifact)) {
-            stopR444Trial("samplePreparationFailed")
-            return mapOf("active" to false, "reason" to "samplePreparationFailed")
-        }
-        r446Presenter = presenter
-        r446Observation = null
-        r446RestrictionSeen = false
-        r446ReadArm = null
-        r446ArmAt = SystemClock.uptimeMillis()
-        r446CaptureId = capture
-        r446Owner.arm(session.get(), capture)
-        return receipt + mapOf("printPurpose" to "fixedSampleOneWake", "printArmed" to true)
     }
 
     private fun r446Cancel(reason: String) {
@@ -2926,6 +2939,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 SystemClock.uptimeMillis(), state.eligible, state.excluded, request.diagnosticCaptureId)
         else null
         if (state.excluded) {
+            if (r446Owner.state == KeyguardR446PrintOwner.State.WAIT_READ ||
+                r446Owner.state == KeyguardR446PrintOwner.State.ISSUED) r446Cancel("systemGate")
             hideImmediately("systemGate:${request.reason}", triggerReceivedUptimeMs = request.receivedAt)
             return
         }
@@ -5482,18 +5497,23 @@ class FluviKeyguardCardService : AccessibilityService() {
             }
         }
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)
-        if (r446CaptureId != null && r446CaptureId == request.diagnosticContext?.captureId) {
+        if (r446Preparing) return
+        val printCapture = r446CaptureId != null && r446CaptureId == request.diagnosticContext?.captureId
+        if (printCapture) {
+            if (r446Owner.state == KeyguardR446PrintOwner.State.ISSUED) return
             if (r446ReadArm != null && inspection.r446Arm == r446ReadArm &&
-                !r446Apply(inspection, request) && inspection.r446Eligibility?.reason == "RESTRICTION")
+                r446Apply(inspection, request)) return
+            if (inspection.r446Eligibility?.reason == "RESTRICTION")
                     r446Cancel("restriction")
-            // An owner-requested sample must never fall through into the
-            // ordinary grant or a second, display-global overlay route.
-            return
         }
         var signals = inspection.signals.copy(requested = settings.requested,
             serviceConnected = FluviKeyguardCardServiceRegistry.connected,
             showFinancialDetails = settings.showFinancialDetails && !KeyguardR44Trial.active)
         var decision = KeyguardCardVisibilityPolicy.decide(signals)
+        // Preserve the normal negative/retry machinery, but never grant a
+        // second, display-global route during a print-only capture.
+        if (printCapture && (decision == KeyguardCardVisibility.SHOW_FULL ||
+                decision == KeyguardCardVisibility.SHOW_DISCREET)) return
         if (KeyguardSystemAdmission.requiresFreshRead(overlay.isAttached, appliedDecision, decision)) {
             // The only inspection-apply Main acquisition: actual admission or
             // disclosure increase. One snapshot feeds all final system gates.
