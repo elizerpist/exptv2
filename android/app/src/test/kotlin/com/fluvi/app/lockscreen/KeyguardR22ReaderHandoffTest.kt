@@ -279,6 +279,58 @@ class KeyguardR22ReaderHandoffTest {
         assertFalse(checkNotNull(read.snapshots.single().r44).complete)
     }
 
+    /** Seven equal-status candidates replay the owner's observed four-of-seven
+     * inventory. The classifier result is from the real reader, not a guessed
+     * role for the three unread values on the physical phone. */
+    private fun r443Scene(latePosition: Int, lateValue: String, withEarlyClock: Boolean = false): KeyguardSurface {
+        Platform.reset()
+        val host = Platform.node("element:lockscreen")
+        repeat(7) { index ->
+            val node = Platform.node(null)
+            checkNotNull(Platform.nodes[node]).apply {
+                advertised = true
+                lazyTag = when {
+                    index + 1 == latePosition -> lateValue
+                    withEarlyClock && index == 0 -> "element:LargeClock"
+                    else -> "component:unrelated"
+                }
+            }
+            checkNotNull(Platform.nodes[host]).children.add(node)
+        }
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 1, true, host))
+        KeyguardR44Trial.set(true, true)
+        return try {
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+                r44Enabled = true, r44DeviceEntryResourceVerified = true), { true })
+            KeyguardR44SurfaceClassifier.classify(read.snapshots, read.rootUnavailable,
+                read.walkTruncated, false, true).surface
+        } finally { KeyguardR44Trial.set(false, false) }
+    }
+
+    @Test fun r443LateClockFifthIsFound() {
+        assertEquals(KeyguardSurface.MAIN_KEYGUARD, r443Scene(5, "element:LargeClock"))
+        assertEquals(7, Platform.extraCalls)
+    }
+    @Test fun r443LateClockSixthIsFound() {
+        assertEquals(KeyguardSurface.MAIN_KEYGUARD, r443Scene(6, "element:LargeClock"))
+        assertEquals(7, Platform.extraCalls)
+    }
+    @Test fun r443LateClockSeventhIsFound() {
+        assertEquals(KeyguardSurface.MAIN_KEYGUARD, r443Scene(7, "element:LargeClock"))
+        assertEquals(7, Platform.extraCalls)
+    }
+    @Test fun r443LateRestrictionsOverrideEarlierClock() {
+        for (index in 5..7) {
+            assertEquals(KeyguardSurface.CREDENTIAL, r443Scene(index, "overlay:bouncer", true))
+            assertEquals("stop at the first restrictive value", index, Platform.extraCalls)
+            assertEquals(KeyguardSurface.SHADE, r443Scene(index, "scene:shade", true))
+            assertEquals(index, Platform.extraCalls)
+            assertEquals(KeyguardSurface.SHADE, r443Scene(index, "overlay:quick_settings_shade", true))
+            assertEquals(index, Platform.extraCalls)
+        }
+    }
+
     @Test fun r44EagerAndLazyTagsTraverseTheActualReader() {
         for (lazy in listOf(false, true)) {
             Platform.reset()
