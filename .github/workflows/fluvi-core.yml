@@ -1,4 +1,4 @@
-name: R18 Phone Candidate Builder (orchestration only)
+name: R44.8 fixed-sample-only phone candidate builder (orchestration only)
 on:
   workflow_dispatch:
     inputs:
@@ -30,6 +30,7 @@ jobs:
     timeout-minutes: 45
     env:
       FLUVI_R18_APP_SHA: ${{ inputs.app_sha }}
+      FLUVI_R448_SAFE_SAMPLE_ONLY: 'true'
     steps:
       - name: Require a full immutable source SHA
         shell: bash
@@ -56,7 +57,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$FLUVI_R18_APP_SHA"
           test -z "$(git status --porcelain --untracked-files=no)"
           mkdir -p "$RUNNER_TEMP/r18-phone"
-          printf 'application_sha=%s\norchestration_sha=%s\n' "$FLUVI_R18_APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r18-phone/source.txt"
+          printf 'application_sha=%s\norchestration_sha=%s\nsample_only=%s\n' "$FLUVI_R18_APP_SHA" "$GITHUB_SHA" "$FLUVI_R448_SAFE_SAMPLE_ONLY" > "$RUNNER_TEMP/r18-phone/source.txt"
           java -version 2>&1 | head -3 > "$RUNNER_TEMP/r18-phone/java.txt"
           flutter --version > "$RUNNER_TEMP/r18-phone/flutter.txt"
       - name: Prefer Maven Central storage mirror on this builder
