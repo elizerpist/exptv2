@@ -232,6 +232,7 @@ internal class KeyguardWindowSnapshotReader(
         val r445LargeClockVerified: Boolean = false,
         /** Claims this physical wake's only optional ID batch, or returns null. */
         val r445ClaimBatch: (() -> Long?)? = null,
+        val r446Print: Boolean = false,
         val r443Boundary: ((String) -> Unit)? = null,
     )
 
@@ -866,6 +867,11 @@ internal class KeyguardWindowSnapshotReader(
                     visible?.ids?.contains("com.android.systemui:id/udfps_view") == true)
                     "UDFPS_NODE_VERIFIED" else r444RootRole,
                 r444OwnGeneration = if (request.r443Diagnostics && own) request.attachGeneration else null,
+                r446Bounds = if (request.r446Print) runCatching {
+                    val rect = android.graphics.Rect()
+                    window.getBoundsInScreen(rect)
+                    KeyguardR446Bounds(rect.left, rect.top, rect.right, rect.bottom)
+                }.getOrNull() else null,
             )
         }
         activeRoot?.recycle()

@@ -795,6 +795,8 @@ internal object KeyguardCardDiagnostics {
         var r44ReadsOmitted: Int = 0,
         var r442Handoff: KeyguardR442HandoffObservation? = null,
         var r443Boundary: KeyguardR443BoundaryObservation? = null,
+        var r446: KeyguardR446Observation? = null,
+        var r446Last: KeyguardR446Observation? = null,
         var firstExclusionSignalAtUptimeMs: Long? = null,
         var firstExclusionSignalSource: String? = null,
         var firstInspectionRequestId: Long? = null,
@@ -1704,6 +1706,27 @@ internal object KeyguardCardDiagnostics {
                     attempt.r44FirstRestriction == null) attempt.r44FirstRestriction = observation
                 if (attempt.r44Reads.size < 12) attempt.r44Reads.addLast(observation)
                 else { attempt.r44ReadsOmitted += 1; attempt.r44Last = observation }
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
+    internal fun recordR446(observation: KeyguardR446Observation) {
+        val token = ingress ?: return
+        val owner = observation.context
+        if (owner.captureId != token.id || owner.attemptId == null) return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
+                    ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
+                if (attempt != null && attempt.serviceSession == owner.serviceSession &&
+                    attempt.wakeEpoch == owner.originWakeEpoch) {
+                    if (attempt.r446 == null || attempt.r446?.request == observation.request)
+                        attempt.r446 = observation
+                    else if (attempt.r446Last == null || attempt.r446Last?.request == observation.request ||
+                        observation.backend != "NOT_ATTEMPTED") attempt.r446Last = observation
+                }
             }
         }
         if (!accepted) token.r44Dropped.incrementAndGet()
@@ -3186,6 +3209,16 @@ internal object KeyguardCardDiagnostics {
             return true
         }
         val r44Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
+        // The once-per-wake sample boundary is reserved before verbose reads.
+        r44Attempts.forEach { attempt -> listOfNotNull(attempt.r446, attempt.r446Last).forEachIndexed { index, o ->
+            val status = when {
+                o.frameAt != null -> "Képkocka beküldve, láthatóság ismeretlen."
+                o.submittedAt != null -> "Felület beküldve, képkocka nem megfigyelt."
+                o.backend.contains("FAILED") -> "Csatolás vagy beküldés sikertelen."
+                else -> "Nincs rajzkérés."
+            }
+            select("a${attempt.id}:r446:$index", "R44_6_HU $status\nR44_6_SAMPLE wake=${o.wake} arm=${o.armAt} req=${o.request} normal=${o.normal} eligible=${o.eligibility} backend=${o.backend} host=${o.host ?: "UNOBSERVED"} scene=${o.scene ?: "UNOBSERVED"} issue=${o.issuedAt ?: "UNOBSERVED"} attachBegin=${o.attachBegin ?: "UNOBSERVED"} attachEnd=${o.attachEnd ?: "UNOBSERVED"} submit=${o.submittedAt ?: "UNOBSERVED"} frame=${o.frameAt ?: "UNOBSERVED"} withdraw=${o.withdrawAt ?: "UNOBSERVED"}/${o.withdrawReason} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
+        } }
         r44Attempts.filter { it.r44Reads.isNotEmpty() ||
             (Build.VERSION.SDK_INT == 37 && it.presentationMode == "ORB") }.forEach { attempt ->
             select("a${attempt.id}:r44Core", r44Record(active.id, attempt,

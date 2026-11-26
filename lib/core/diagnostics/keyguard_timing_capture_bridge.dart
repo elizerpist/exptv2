@@ -116,12 +116,13 @@ class KeyguardTimingCaptureBridge {
   Future<Map<Object?, Object?>> startR442SampleCapture({
     KeyguardTimingCaptureMode mode = KeyguardTimingCaptureMode.light,
     bool expanded = false,
+    bool oneWakePrint = false,
   }) async {
     if (!_isAndroid()) {
       return const {'active': false, 'reason': 'unsupportedBuild'};
     }
     return await _channel.invokeMapMethod<Object?, Object?>(
-          'startR442SampleCapture',
+          oneWakePrint ? 'startR446PrintCapture' : 'startR442SampleCapture',
           <String, Object?>{
             'build': buildCommit,
             'buildMode': buildMode,

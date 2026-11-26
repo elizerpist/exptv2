@@ -58,6 +58,8 @@ internal data class KeyguardWindowSnapshot(
     val r444Visited: Int? = null,
     val r444RootRole: String = "UNOBSERVED",
     val r444OwnGeneration: Long? = null,
+    /** Captured only for an explicitly armed print-only diagnostic. */
+    val r446Bounds: KeyguardR446Bounds? = null,
 )
 
 internal object KeyguardSurfaceClassifier {

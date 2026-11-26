@@ -59,6 +59,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
   bool _r44TrialAvailable = false;
   bool _r44TrialEnabled = false;
   bool _r442Active = false;
+  bool _r446Armed = false;
   String? _r442Reason;
   String? _r444Profile;
   bool _loadingKeyguard = false;
@@ -317,6 +318,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
               snapshot.recording &&
               _r44TrialEnabled &&
               _validR442Receipt(receipt, snapshot.captureId);
+          _r446Armed = _r442Active && receipt['printArmed'] == true;
           _r442Reason = receipt['reason']?.toString();
           _r444Profile = _r442Active ? receipt['profile']?.toString() : null;
         });
@@ -391,12 +393,16 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       'A mintaorb-próba nem indult el: ${reason ?? 'hiányzó visszaigazolás'}.',
   };
 
-  Future<void> _startR442SampleCapture({bool expanded = false}) async {
+  Future<void> _startR442SampleCapture({
+    bool expanded = false,
+    bool oneWakePrint = false,
+  }) async {
     final bridge = widget.keyguardTimingCapture;
     if (bridge == null || _loadingKeyguard) return;
     setState(() {
       _loadingKeyguard = true;
       _r442Active = false;
+      _r446Armed = false;
       _keyguardError = null;
       _keyguardCopied = false;
     });
@@ -404,6 +410,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       final receipt = await bridge.startR442SampleCapture(
         mode: _keyguardCaptureMode,
         expanded: expanded,
+        oneWakePrint: oneWakePrint,
       );
       final rawSnapshot = receipt['snapshot'];
       final snapshot = rawSnapshot is Map<Object?, Object?>
@@ -422,6 +429,10 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
           current['profileRevision'] == receipt['profileRevision'] &&
           current['profile'] == receipt['profile'] &&
           current['actualFlags'] == receipt['actualFlags'] &&
+          (!oneWakePrint ||
+              (receipt['printArmed'] == true &&
+                  current['printArmed'] == true &&
+                  receipt['printPurpose'] == 'fixedSampleOneWake')) &&
           (expanded
               ? receipt['profile'] == 'EXPANDED' &&
                     receipt['includeNotImportant'] == true
@@ -431,6 +442,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
         setState(() {
           _keyguardSnapshot = snapshot ?? _keyguardSnapshot;
           _r442Active = confirmed;
+          _r446Armed = confirmed && oneWakePrint;
           _r444Profile = confirmed ? receipt['profile']?.toString() : null;
           _r44TrialEnabled = trial['enabled'] == true;
           _r442Reason = confirmed
@@ -1131,6 +1143,18 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                 ),
                 if (_r44TrialAvailable)
                   FilledButton(
+                    key: const ValueKey('debug-console-r446-print'),
+                    onPressed: _loadingKeyguard || unavailable || _r442Active
+                        ? null
+                        : () => _startR442SampleCapture(oneWakePrint: true),
+                    child: const Text('Egyszeri rajzpróba – fix minta'),
+                  ),
+                if (_r44TrialAvailable)
+                  const Text(
+                    'A következő lezárt ébresztésnél semleges minta jelenhet meg akkor is, ha a pontos képernyő nem azonosítható. Valós adatot nem használ.',
+                  ),
+                if (_r44TrialAvailable)
+                  FilledButton(
                     key: const ValueKey('debug-console-r442-start'),
                     onPressed: _loadingKeyguard || unavailable || _r442Active
                         ? null
@@ -1166,6 +1190,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                     'Mintaorb-próba aktív',
                     key: ValueKey('debug-console-r442-active'),
                   ),
+                if (_r442Active && _r446Armed)
+                  const Text('Egyszeri rajzpróba előkészítve.'),
                 if (_r442Active)
                   Text(
                     _r444Profile == 'EXPANDED'

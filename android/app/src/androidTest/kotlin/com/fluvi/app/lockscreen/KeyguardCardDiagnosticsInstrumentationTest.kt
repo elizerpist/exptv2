@@ -30,6 +30,40 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r44PerWakeEvidenceSurvivesLightPressure() = r44EvidencePressure("LIGHT")
     @Test fun r44PerWakeEvidenceSurvivesFullPressure() = r44EvidencePressure("FULL")
 
+    @Test fun r446ProtectedSampleEndpointsSurviveLightPressure() = r446Pressure("LIGHT")
+    @Test fun r446ProtectedSampleEndpointsSurviveFullPressure() = r446Pressure("FULL")
+
+    private fun r446Pressure(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r446-pressure", "profile", mode, r442ExpectedSession = 9446)
+        var first: KeyguardR446Observation? = null
+        repeat(5) { index ->
+            val wake = index + 1L; val base = wake * 1000
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9446, wake, "wake", base))
+            KeyguardCardDiagnostics.captureEvent(context, "SCREEN_ON_RECEIVED", "test",
+                diagnosticContext = owner, observedUptimeMs = base + 10)
+            val missing = KeyguardR446Observation(owner, base - 10, wake, base + 1,
+                "UNKNOWN/NO_MAIN_MARKER", "HOST_BOUNDS", "NOT_ATTEMPTED", null, 1,
+                null, null, null, null, null, null, "UNOBSERVED")
+            if (first == null) first = missing
+            KeyguardCardDiagnostics.recordR446(missing)
+            val shown = missing.copy(request = base + 2, eligibility = "ELIGIBLE_SAMPLE", backend = "SUBMITTED",
+                host = 30, issuedAt = base + 20, attachBegin = base + 21, attachEnd = base + 22,
+                submittedAt = base + 23, frameAt = if (index == 0) null else base + 24,
+                withdrawAt = base + 50, withdrawReason = "externalWindowTransition")
+            KeyguardCardDiagnostics.recordR446(shown)
+            repeat(50) { n -> KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure",
+                diagnosticContext = owner, requestId = base + 100 + n, observedUptimeMs = base + 100 + n) }
+        }
+        val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(frozen.toByteArray(Charsets.UTF_8).size <= 32_768)
+        assertEquals(10, frozen.lineSequence().count { it.startsWith("R44_6_SAMPLE ") })
+        assertTrue(frozen, frozen.contains("backend=SUBMITTED"))
+        assertTrue(frozen, frozen.contains("frame=UNOBSERVED"))
+        assertTrue(frozen, frozen.contains("physical=UNOBSERVED"))
+        KeyguardCardDiagnostics.recordR446(checkNotNull(first).copy(backend = "LATE_CALLBACK"))
+        assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+    }
+
     @Test fun r444AppliedReasonIsSeparateFromASeparateUpperWindow() {
         KeyguardCardDiagnostics.startCapture(context, "r444-reason", "profile", "LIGHT", r442ExpectedSession = 9444)
         fun add(wake: Long, reason: KeyguardSurfaceReason, complete: Boolean, failed: Int) {

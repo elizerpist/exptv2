@@ -249,6 +249,8 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     /** One timestamp per physical attach is enough for wake diagnostics; this
      * is not a per-frame observation hook. */
     var onFirstShaderDraw: ((Long) -> Unit)? = null
+    /** Optional one-shot observation for an explicitly armed sample host. */
+    var onNextShaderDrawForDiagnostic: ((Long) -> Unit)? = null
     /** Once per actually drawn current scene, used to qualify transitions. */
     var onCurrentShaderDraw: ((KeyguardMaterialScene) -> Unit)? = null
     private var lastReportedCurrentScene: KeyguardMaterialScene? = null
@@ -699,6 +701,10 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         paint.shader = null
         paint.alpha = 255
         shaderDrawCount += 1
+        onNextShaderDrawForDiagnostic?.let { callback ->
+            onNextShaderDrawForDiagnostic = null
+            callback(SystemClock.uptimeMillis())
+        }
         if (scene === current && alpha > 0f && lastReportedCurrentScene !== scene) {
             lastReportedCurrentScene = scene
             onCurrentShaderDraw?.invoke(scene)

@@ -363,7 +363,7 @@ class MainActivity : FlutterActivity() {
             RUNTIME_MONITORING_CHANNEL,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
-                if (call.method == "startR442SampleCapture" || call.method == "getR442SampleCaptureStatus") {
+                if (call.method == "startR442SampleCapture" || call.method == "startR446PrintCapture" || call.method == "getR442SampleCaptureStatus") {
                     val values = call.arguments as? Map<*, *>
                     scope.launch(Dispatchers.Main.immediate) {
                         val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
@@ -371,7 +371,10 @@ class MainActivity : FlutterActivity() {
                             result.success(mapOf("active" to false, "reason" to "serviceUnavailable"))
                         } else {
                             runCatching {
-                                if (call.method == "startR442SampleCapture") service.startR442SampleCapture(
+                                if (call.method == "startR446PrintCapture") service.startR446PrintCapture(
+                                    values?.get("build") as? String, values?.get("buildMode") as? String,
+                                    values?.get("captureMode") as? String,
+                                ) else if (call.method == "startR442SampleCapture") service.startR442SampleCapture(
                                     values?.get("build") as? String, values?.get("buildMode") as? String,
                                     values?.get("captureMode") as? String, values?.get("expanded") == true,
                                 ) else service.r442SampleStatus()

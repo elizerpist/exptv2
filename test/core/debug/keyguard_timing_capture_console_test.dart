@@ -288,6 +288,60 @@ void main() {
     expect(find.text('Próba leállítása és riport megtartása'), findsOneWidget);
   });
 
+  testWidgets('one wake print requires its own native acknowledgement', (
+    tester,
+  ) async {
+    var enabled = false;
+    final calls = <String>[];
+    final receipt = <String, Object?>{
+      'active': true,
+      'captureId': 'capture-test',
+      'process': 'process-test',
+      'serviceSession': 1,
+      'materialDomain': 'fixedSample',
+      'profile': 'STANDARD',
+      'profileRevision': 9,
+      'actualFlags': 0,
+      'includeNotImportant': false,
+      'printArmed': true,
+      'printPurpose': 'fixedSampleOneWake',
+    };
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(runtime, (call) async {
+          calls.add(call.method);
+          if (call.method == 'getR44SyntheticTrial') {
+            return <String, Object?>{'available': true, 'enabled': enabled};
+          }
+          if (call.method == 'startR446PrintCapture') {
+            enabled = true;
+            return <String, Object?>{
+              ...receipt,
+              'snapshot': response('REC', 'LIVE'),
+            };
+          }
+          if (call.method == 'getR442SampleCaptureStatus') return receipt;
+          return response('IDLE', '');
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: runtime,
+      isAndroid: () => true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
+    await tester.pumpAndSettle();
+    final button = find.byKey(const ValueKey('debug-console-r446-print'));
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(calls, contains('startR446PrintCapture'));
+    expect(calls, isNot(contains('startR442SampleCapture')));
+    expect(find.text('Egyszeri rajzpróba előkészítve.'), findsOneWidget);
+  });
+
   testWidgets('a separate expanded sample start records its actual profile', (
     tester,
   ) async {

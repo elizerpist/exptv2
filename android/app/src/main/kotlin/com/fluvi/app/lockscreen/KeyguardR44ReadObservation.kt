@@ -7,6 +7,16 @@ internal data class KeyguardR445IndexCall(
     val rawHits: Int = 0, val firstRejection: String = "NONE",
 )
 
+/** Immutable, bounded sample-only telemetry associated with the original
+ * wake/capture. All endpoints use uptime; none claim physical visibility. */
+internal data class KeyguardR446Observation(
+    val context: KeyguardDiagnosticContext, val armAt: Long, val wake: Long, val request: Long,
+    val normal: String, val eligibility: String, val backend: String,
+    val host: Int?, val scene: Long?, val issuedAt: Long?, val attachBegin: Long?,
+    val attachEnd: Long?, val submittedAt: Long?, val frameAt: Long?,
+    val withdrawAt: Long?, val withdrawReason: String,
+)
+
 /** Immutable, capture-owned scalars from the same physical inspection used
  * for authorization. No tree, arbitrary tag, text or foreign name survives. */
 internal data class KeyguardR443CandidateObservation(
