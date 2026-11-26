@@ -263,6 +263,9 @@ PY
       for attempt in $(seq 1 20); do
         adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
         adb exec-out cat /sdcard/r442-window.xml > "$out/ui-$name.xml" 2>/dev/null || true
+        if [[ "$name" == r448-select-* || "$name" == r449-action || "$name" == r449-freeze ]]; then
+          cp "$out/ui-$name.xml" "$out/ui-$name-$attempt.xml" || true
+        fi
         if wait_for_system_anr "$out/ui-$name.xml" "$name-$attempt"; then
           if [[ "$name" == entry ]]; then adb shell am start -n com.fluvi.app/.MainActivity >> "$out/launch.txt" 2>&1 || true; fi
           continue
@@ -289,6 +292,8 @@ try:
             if sys.argv[3].startswith('r448-select-') and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
                 continue
             if sys.argv[3] == 'r449-action' and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
+                continue
+            if sys.argv[3] == 'r449-freeze' and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
                 continue
             m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
             if m:
@@ -332,6 +337,9 @@ PY
         WIDGETS_ANYWHERE) route_label='Widgets Anywhere'; route_name=wa;;
         *) printf 'Unknown R449 route\n' >&2; exit 2;;
       esac
+      # The default is Fluvi. Switch away first so that this case also
+      # exercises an actual user change and then return to the requested route.
+      if [[ "$R449_UI_ROUTE" == FLUVI_STREAM ]]; then tap_label 'Widgets Anywhere' r448-select-wa; fi
       tap_label "$route_label" "r448-select-$route_name"
       confirmed=false
       for attempt in $(seq 1 18); do
