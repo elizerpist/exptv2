@@ -33,6 +33,36 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r446ProtectedSampleEndpointsSurviveLightPressure() = r446Pressure("LIGHT")
     @Test fun r446ProtectedSampleEndpointsSurviveFullPressure() = r446Pressure("FULL")
 
+    @Test fun r447LatestPreIssueDecisionSurvivesLightPressure() = r447LatestDecision("LIGHT")
+    @Test fun r447LatestPreIssueDecisionSurvivesFullPressure() = r447LatestDecision("FULL")
+
+    /** Each observation is a different physical request on the same armed
+     * wake. A later failed attempt must not disappear behind the first two. */
+    private fun r447LatestDecision(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r447-pressure", "profile", mode,
+            r442ExpectedSession = 9447, r446PrintRequested = true)
+        val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9447, 3, "wake", 1000))
+        KeyguardCardDiagnostics.captureEvent(context, "SCREEN_ON_RECEIVED", "test",
+            diagnosticContext = owner, observedUptimeMs = 1010)
+        val first = KeyguardR446Observation(owner, 990, 3, 40,
+            "UNKNOWN/NO_MAIN_MARKER", "ELIGIBLE_SAMPLE", "NOT_ATTEMPTED", 9, 109,
+            null, null, null, null, null, null, "UNOBSERVED")
+        KeyguardCardDiagnostics.recordR446(first)
+        KeyguardCardDiagnostics.recordR446(first.copy(request = 43, eligibility = "SCENE_CHANGED"))
+        KeyguardCardDiagnostics.recordR446(first.copy(request = 44, eligibility = "NEWER_COMPLETED"))
+        KeyguardCardDiagnostics.recordR446(first.copy(request = 45, eligibility = "NEWER_BARRIER_REQUIRED"))
+        repeat(150) { n -> KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure",
+            diagnosticContext = owner, requestId = 1000L + n, observedUptimeMs = 1100L + n) }
+        val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        val row = frozen.lineSequence().single { it.startsWith("R44_6_SAMPLE ") }
+        assertTrue(row, row.contains("firstReq=40"))
+        assertTrue(row, row.contains("req=45"))
+        assertTrue(row, row.contains("eligible=NEWER_BARRIER_REQUIRED"))
+        assertTrue(frozen.toByteArray(Charsets.UTF_8).size <= 32_768)
+        KeyguardCardDiagnostics.recordR446(first.copy(request = 46, eligibility = "LATE_CALLBACK"))
+        assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+    }
+
     private fun r446Pressure(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r446-pressure", "profile", mode,
             r442ExpectedSession = 9446, r446PrintRequested = true)
