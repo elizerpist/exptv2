@@ -573,6 +573,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         check(Looper.myLooper() == Looper.getMainLooper())
         val at = SystemClock.uptimeMillis()
         val cancelledArm = r446Owner.arm
+        if (cancelledArm != null)
+            KeyguardCardDiagnostics.recordR447ArmTerminal(cancelledArm.capture, cancelledArm.generation, at, reason)
         r446ReadArm = null
         r446RestrictionSeen = true
         r446TicketActive = false

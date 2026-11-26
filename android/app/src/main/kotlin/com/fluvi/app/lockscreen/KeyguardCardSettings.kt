@@ -943,6 +943,8 @@ internal object KeyguardCardDiagnostics {
         }
     }
 
+    private data class R447ArmTerminal(val generation: Long, val at: Long, val reason: String)
+
     private data class TimingCapture(
         val id: String,
         val generation: Long,
@@ -965,6 +967,7 @@ internal object KeyguardCardDiagnostics {
         var r43Dropped: Long = 0,
         var r43Skipped: Long = 0,
         var r44Dropped: Long = 0,
+        var r447ArmTerminal: R447ArmTerminal? = null,
         val r41StartMonoBeforeNs: Long? = null,
         val r41StartElapsedNs: Long? = null,
         val r41StartMonoAfterNs: Long? = null,
@@ -1766,6 +1769,21 @@ internal object KeyguardCardDiagnostics {
                     if (observation.withdrawAt != null && attempt.r447FirstTerminal == null)
                         attempt.r447FirstTerminal = observation
                 }
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
+    /** An arm can be cancelled while unlocked, before a wake has an attempt.
+     * Preserve that first terminal independently of the bounded wake rows. */
+    internal fun recordR447ArmTerminal(captureId: String, generation: Long, at: Long, reason: String) {
+        val token = ingress ?: return
+        if (token.id != captureId || generation <= 0) return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == captureId && it.state == "REC" } ?: return@synchronized
+                if (active.r447ArmTerminal == null)
+                    active.r447ArmTerminal = R447ArmTerminal(generation, at, technicalValue(reason).take(80))
             }
         }
         if (!accepted) token.r44Dropped.incrementAndGet()
@@ -3246,6 +3264,9 @@ internal object KeyguardCardDiagnostics {
             selected[id] = text
             bytes += size
             return true
+        }
+        active.r447ArmTerminal?.let { terminal ->
+            select("r447:armTerminal", "R44_7_ARM generation=${terminal.generation} terminal=${terminal.at}/${terminal.reason} clock=uptimeMs\n")
         }
         val r44Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
         // The once-per-wake sample boundary is reserved before verbose reads.

@@ -102,6 +102,18 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
     }
 
+    @Test fun r447TerminalBeforeAnyWakeSurvivesFreezeAndLateCleanup() {
+        KeyguardCardDiagnostics.startCapture(context, "r447-arm", "profile", "LIGHT",
+            r442ExpectedSession = 9449, r446PrintRequested = true)
+        val capture = checkNotNull(KeyguardCardDiagnostics.activeCaptureId())
+        KeyguardCardDiagnostics.recordR447ArmTerminal(capture, 4, 111, "serviceLost")
+        KeyguardCardDiagnostics.recordR447ArmTerminal(capture, 4, 222, "duplicateCleanup")
+        val frozen = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(frozen, frozen.contains("R44_7_ARM generation=4 terminal=111/serviceLost"))
+        KeyguardCardDiagnostics.recordR447ArmTerminal(capture, 4, 333, "lateCallback")
+        assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])
+    }
+
     private fun r446Pressure(mode: String) {
         KeyguardCardDiagnostics.startCapture(context, "r446-pressure", "profile", mode,
             r442ExpectedSession = 9446, r446PrintRequested = true)
