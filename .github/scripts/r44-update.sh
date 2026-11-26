@@ -116,8 +116,27 @@ XML
     }
     bound_before=true
     if ! observe before; then
-      bound_before=false
-      printf '%s\n' 'NOT REACHED: original accessibility service was not observed bound before update.' >> "$out/service-gate.txt"
+      # On a fresh emulator install the asynchronous package monitor can
+      # remove the secure setting we wrote before it has registered the app.
+      # Preserve that observation and re-arm only the disposable pre-update
+      # fixture when the setting is demonstrably absent. Never repair it after
+      # install -r: the candidate must preserve the real enabled service.
+      initial_setting=$(tr -d '\r' < "$out/enabled-before.txt")
+      printf 'initial_before_setting=%s initial_bind=NOT_REACHED\n' "$initial_setting" >> "$out/service-gate.txt"
+      if [[ "$initial_setting" == null || -z "$initial_setting" ]]; then
+        adb shell settings put secure enabled_accessibility_services "$component"
+        adb shell settings put secure accessibility_enabled 1
+        if observe before-rearm; then
+          printf '%s\n' 'Pre-update fixture re-armed after Android removed its initial setting; original service observed bound.' >> "$out/service-gate.txt"
+        else
+          bound_before=false
+        fi
+      else
+        bound_before=false
+      fi
+      if [[ "$bound_before" != true ]]; then
+        printf '%s\n' 'NOT REACHED: original accessibility service was not observed bound before update.' >> "$out/service-gate.txt"
+      fi
     fi
     adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$out/prefs-before.xml"
     adb exec-out run-as com.fluvi.app cat files/r44-update-sentinel.txt > "$out/sentinel-before.txt"
