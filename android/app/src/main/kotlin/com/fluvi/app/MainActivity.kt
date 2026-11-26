@@ -363,6 +363,25 @@ class MainActivity : FlutterActivity() {
             RUNTIME_MONITORING_CHANNEL,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
+                if (call.method == "startR442SampleCapture" || call.method == "getR442SampleCaptureStatus") {
+                    val values = call.arguments as? Map<*, *>
+                    scope.launch(Dispatchers.Main.immediate) {
+                        val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
+                        if (service == null) {
+                            result.success(mapOf("active" to false, "reason" to "serviceUnavailable"))
+                        } else {
+                            runCatching {
+                                if (call.method == "startR442SampleCapture") service.startR442SampleCapture(
+                                    values?.get("build") as? String, values?.get("buildMode") as? String,
+                                    values?.get("captureMode") as? String,
+                                ) else service.r442SampleStatus()
+                            }.onSuccess(result::success).onFailure {
+                                result.error("R442_START", it.message ?: "A rögzítés nem indult el.", null)
+                            }
+                        }
+                    }
+                    return@setMethodCallHandler
+                }
                 if (call.method == "getR44SyntheticTrial" || call.method == "setR44SyntheticTrial") {
                     scope.launch(Dispatchers.Main.immediate) {
                         val available = android.os.Build.VERSION.SDK_INT == 37 &&

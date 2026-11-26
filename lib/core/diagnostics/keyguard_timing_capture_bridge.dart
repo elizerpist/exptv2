@@ -112,6 +112,32 @@ class KeyguardTimingCaptureBridge {
     };
   }
 
+  /// The native service, not this bridge, owns the sample/capture receipt.
+  Future<Map<Object?, Object?>> startR442SampleCapture({
+    KeyguardTimingCaptureMode mode = KeyguardTimingCaptureMode.light,
+  }) async {
+    if (!_isAndroid())
+      return const {'active': false, 'reason': 'unsupportedBuild'};
+    return await _channel.invokeMapMethod<Object?, Object?>(
+          'startR442SampleCapture',
+          <String, Object?>{
+            'build': buildCommit,
+            'buildMode': buildMode,
+            'captureMode': mode.wireValue,
+          },
+        ) ??
+        const {'active': false, 'reason': 'missingReceipt'};
+  }
+
+  Future<Map<Object?, Object?>> r442SampleStatus() async {
+    if (!_isAndroid())
+      return const {'active': false, 'reason': 'unsupportedBuild'};
+    return await _channel.invokeMapMethod<Object?, Object?>(
+          'getR442SampleCaptureStatus',
+        ) ??
+        const {'active': false, 'reason': 'missingReceipt'};
+  }
+
   Future<KeyguardOrbRenderModeStatus> getRenderMode() =>
       _invokeRenderMode('getKeyguardOrbRenderMode');
 

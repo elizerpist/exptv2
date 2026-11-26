@@ -213,7 +213,9 @@ void main() {
     expect(find.textContaining('következő elrejtés'), findsOneWidget);
   });
 
-  testWidgets('one action requests an acknowledged sample capture', (tester) async {
+  testWidgets('one action requests an acknowledged sample capture', (
+    tester,
+  ) async {
     final calls = <String>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(runtime, (call) async {
@@ -227,15 +229,30 @@ void main() {
               'captureId': 'capture-test',
               'process': 'process-test',
               'serviceSession': 1,
+              'materialDomain': 'fixedSample',
               'snapshot': response('REC', 'LIVE'),
+            };
+          }
+          if (call.method == 'getR442SampleCaptureStatus') {
+            return <String, Object?>{
+              'active': true,
+              'captureId': 'capture-test',
+              'process': 'process-test',
+              'serviceSession': 1,
+              'materialDomain': 'fixedSample',
             };
           }
           return response('IDLE', '');
         });
-    final bridge = KeyguardTimingCaptureBridge(channel: runtime, isAndroid: () => true);
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
-    ));
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: runtime,
+      isAndroid: () => true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+      ),
+    );
     await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
     await tester.pumpAndSettle();
     final start = find.byKey(const ValueKey('debug-console-r442-start'));
@@ -246,6 +263,89 @@ void main() {
     expect(calls, contains('startR442SampleCapture'));
     expect(calls, isNot(contains('setR44SyntheticTrial')));
     expect(find.text('Mintaorb-próba aktív'), findsOneWidget);
+  });
+
+  testWidgets('a rejected start reports its reason and never claims active', (
+    tester,
+  ) async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(runtime, (call) async {
+          if (call.method == 'getR44SyntheticTrial') {
+            return <String, Object?>{'available': true, 'enabled': false};
+          }
+          if (call.method == 'startR442SampleCapture') {
+            return <String, Object?>{'active': false, 'reason': 'phoneLocked'};
+          }
+          if (call.method == 'getR442SampleCaptureStatus') {
+            return <String, Object?>{'active': false, 'reason': 'notStarted'};
+          }
+          return response('IDLE', '');
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: runtime,
+      isAndroid: () => true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
+    await tester.pumpAndSettle();
+    final start = find.byKey(const ValueKey('debug-console-r442-start'));
+    await tester.ensureVisible(start);
+    await tester.tap(start);
+    await tester.pumpAndSettle();
+    expect(find.text('Mintaorb-próba aktív'), findsNothing);
+    expect(find.textContaining('telefon zárolva'), findsOneWidget);
+  });
+
+  testWidgets('a replaced native receipt cannot leave a trial active', (
+    tester,
+  ) async {
+    const receipt = <String, Object?>{
+      'active': true,
+      'captureId': 'capture-test',
+      'process': 'process-test',
+      'serviceSession': 1,
+      'materialDomain': 'fixedSample',
+    };
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(runtime, (call) async {
+          if (call.method == 'getR44SyntheticTrial') {
+            return <String, Object?>{'available': true, 'enabled': false};
+          }
+          if (call.method == 'startR442SampleCapture') {
+            return <String, Object?>{
+              ...receipt,
+              'snapshot': response('REC', 'LIVE'),
+            };
+          }
+          if (call.method == 'getR442SampleCaptureStatus') {
+            return <String, Object?>{...receipt, 'serviceSession': 2};
+          }
+          return response('IDLE', '');
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: runtime,
+      isAndroid: () => true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
+    await tester.pumpAndSettle();
+    final start = find.byKey(const ValueKey('debug-console-r442-start'));
+    await tester.ensureVisible(start);
+    await tester.tap(start);
+    await tester.pumpAndSettle();
+    expect(find.text('Mintaorb-próba aktív'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('debug-console-keyguard-error')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('R44 synthetic data requires an explicit switch', (tester) async {

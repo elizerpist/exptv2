@@ -793,6 +793,7 @@ internal object KeyguardCardDiagnostics {
         var r44FirstGrant: KeyguardR44ReadObservation? = null,
         var r44FirstRestriction: KeyguardR44ReadObservation? = null,
         var r44ReadsOmitted: Int = 0,
+        var r442Handoff: KeyguardR442HandoffObservation? = null,
         var firstExclusionSignalAtUptimeMs: Long? = null,
         var firstExclusionSignalSource: String? = null,
         var firstInspectionRequestId: Long? = null,
@@ -1445,6 +1446,7 @@ internal object KeyguardCardDiagnostics {
         buildMode: String?,
         mode: String? = null,
         r43Enabled: Boolean = false,
+        r442ExpectedSession: Long? = null,
     ): Map<String, Any?> = reduction.read {
         val export = synchronized(captureLock) {
         ensureRecoveredLoadedLocked(context)
@@ -1478,6 +1480,8 @@ internal object KeyguardCardDiagnostics {
                 "privacyMode" to if (settings.showFinancialDetails) "full" else "discreet",
                 "r12ConfiguredRoute" to KeyguardOrbRenderModeStore.read(context).name,
                 "notificationTimeoutMs" to "0",
+                "r442TrialRequested" to (r442ExpectedSession != null).toString(),
+                "r442TrialSession" to (r442ExpectedSession?.toString() ?: "none"),
             ),
             captureMode = captureMode,
             r43Enabled = r43Enabled && Build.VERSION.SDK_INT >= 37,
@@ -1659,6 +1663,9 @@ internal object KeyguardCardDiagnostics {
     /** Capture-qualified scalar for observations already made by the service. */
     fun activeCaptureId(): String? = ingress?.id
 
+    /** Stable for this process only; never a persisted authorization. */
+    internal fun currentProcessInstanceId(): String = processInstanceId
+
     internal fun r43Enabled(captureId: String?): Boolean =
         captureId != null && ingress?.let { it.r43Enabled && it.id == captureId } == true
 
@@ -1700,6 +1707,22 @@ internal object KeyguardCardDiagnostics {
             }
         }
         if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
+    internal fun recordR442Handoff(observation: KeyguardR442HandoffObservation) {
+        val token = ingress ?: return
+        val owner = observation.context
+        if (owner.captureId != token.id || owner.attemptId == null) return
+        reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
+                    ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
+                if (attempt != null && attempt.serviceSession == owner.serviceSession &&
+                    attempt.wakeEpoch == owner.originWakeEpoch && attempt.r442Handoff == null)
+                    attempt.r442Handoff = observation
+            }
+        }
     }
 
     /** Bounded capture-only evidence. Resource verification/formatting run on
@@ -3147,7 +3170,8 @@ internal object KeyguardCardDiagnostics {
         val r44Attempts = (listOfNotNull(active.firstAttempt) + active.attempts).distinctBy { it.id }
         r44Attempts.filter { it.r44Reads.isNotEmpty() ||
             (Build.VERSION.SDK_INT == 37 && it.presentationMode == "ORB") }.forEach { attempt ->
-            select("a${attempt.id}:r44Core", r44Record(active.id, attempt), attempt.id)
+            select("a${attempt.id}:r44Core", r44Record(active.id, attempt,
+                active.configuration["r442TrialRequested"] == "true"), attempt.id)
         }
         // These bounded scene records are the purpose of the opted-in R43
         // capture and precede verbose per-request and raw-event detail.
@@ -3519,7 +3543,7 @@ internal object KeyguardCardDiagnostics {
         return sized
     }
 
-    private fun r44Record(captureId: String, attempt: TimingAttempt): String = buildString {
+    private fun r44Record(captureId: String, attempt: TimingAttempt, trialRequested: Boolean): String = buildString {
         val reads = attempt.r44Reads.toList()
         val screen = attempt.screenOnReceivedAtUptimeMs
         val post = attempt.r44FirstPostScreen ?: screen?.let { t -> reads.filter {
@@ -3531,12 +3555,19 @@ internal object KeyguardCardDiagnostics {
         val hide = attempt.hides.lastOrNull()
         val outcome = if (show != null) "megjelenítési_kérelem" else "nincs_megjelenítési_kérelem"
         appendLine("R44_HU próba=${attempt.id} eredmény=$outcome első_ébredés_utáni_olvasás=${post?.request ?: "HIÁNYZIK"} fizikailag_látható=ISMERETLEN")
+        if (!trialRequested) appendLine("R44_2_HU A mintaorb-próba nem volt elindítva; ez csak rögzítés.")
+        else if (post != null && (!post.synthetic || post.receipt != "armed"))
+            appendLine("R44_2_HU FIGYELEM: a mintaorb-próba visszaigazolása vagy üzemmódja elveszett.")
+        appendLine("R44_2_TRIAL requested=$trialRequested receipt=${post?.receipt ?: "UNOBSERVED"} domain=${if (post?.synthetic == true) "fixedSample" else "normal"}")
+        val handoff = attempt.r442Handoff
+        appendLine("R44_2_HANDOFF old=${handoff?.oldRequest ?: "UNOBSERVED"} next=${handoff?.nextRequest ?: "UNOBSERVED"} screen=${handoff?.screenAt ?: "UNOBSERVED"} offer=${handoff?.offerAt ?: "UNOBSERVED"} oldStart=${handoff?.oldStart ?: "UNOBSERVED"} boundary=${handoff?.boundaryAt ?: "UNOBSERVED"} oldReturn=${handoff?.oldReturn ?: "UNOBSERVED"} where=${handoff?.boundary ?: "UNOBSERVED"} newStart=${post?.start ?: "UNOBSERVED"} newEnd=${post?.end ?: "UNOBSERVED"}")
         appendLine("R44_WAKE capture=$captureId session=${attempt.serviceSession} wake=${attempt.wakeEpoch} screenOn=${screen ?: "UNOBSERVED"} firstPostRead=${post?.request ?: "missing"} omitted=${attempt.r44ReadsOmitted} showRequest=${show?.requestId ?: "none"}")
         fun line(kind: String, read: KeyguardR44ReadObservation) {
             val host = read.host
             val content = read.content
             appendLine("R44_READ kind=$kind wake=${attempt.wakeEpoch} req=${read.request} epoch=${read.epoch} scene=${read.scene ?: "UNOBSERVED"} start=${read.start} end=${read.end} owner=${if (read.hostVerified) "verified" else "rejected"} hostWin=${read.hostWindow ?: "UNOBSERVED"} hostLayer=${read.hostLayer ?: "UNOBSERVED"} complete=${read.coverageComplete} legacy=${read.legacy} host=${host?.marker ?: "none"}/${host?.carrier ?: "none"} content=${content?.marker ?: "none"}/${content?.carrier ?: "none"} relation=${if (read.relation) "descendant" else "unknown"} extra=${read.advertised}/${read.fetched}/${read.failed} unsupported=${read.unsupported} budgetHit=${read.budgetHit} extraMs=${read.extraMs} stale=${read.stale} unavailable=${read.unavailable} truncated=${read.truncated}")
             appendLine("R44_DECISION wake=${attempt.wakeEpoch} req=${read.request} mode=${if (read.synthetic) "syntheticTrial" else "normal"} testProbeInjected=${read.testProbeInjected} verdict=${read.verdict} reason=${read.reason}")
+            appendLine("R44_2_EVIDENCE req=${read.request} lookup=${read.lookupStatus} lookupIdentity=${read.lookupIdentity ?: "UNOBSERVED"} rawHost=${read.rawHost} rawEntry=${read.rawEntry} rawClock=${read.rawClock} candidate=${read.firstCandidate ?: "none"}/${read.firstCarrier ?: "none"} rejectUnverified=${read.rejectedUnverified} rejectAncestry=${read.rejectedAncestry} rejectExcluded=${read.rejectedExcluded} rejectForeign=${read.rejectedForeign} rejectHidden=${read.rejectedHidden} cover=${read.cover} shadow=${read.shadowVerdict ?: "UNOBSERVED"}/${read.shadowReason ?: "UNOBSERVED"}")
         }
         post?.let { line("firstPost", it) }
         val emitted = mutableSetOf<Long>()

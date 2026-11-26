@@ -450,6 +450,16 @@ internal class KeyguardCardWindow(
         current.visibility = View.VISIBLE
     }
 
+    /** Sample receipt checks the retained owner's actual material, not just a
+     * process-global toggle. This check never authorizes showing the root. */
+    internal fun r442SamplePrepared(): Boolean {
+        checkMainThread()
+        return !isAttached && root != null && KeyguardR44Trial.active &&
+            materialProfile === KeyguardR44Trial.profile(null) &&
+            !materialSettings.showFinancialDetails &&
+            materialSettings.presentationMode == KeyguardCardPresentationMode.ORB
+    }
+
     /** Request one private direct output; FULL is legal only after a current
      * positive admission has independently allowed that disclosure. */
     fun prepareR18(full: Boolean? = null, authorizedFull: Boolean = false,

@@ -35,7 +35,8 @@ enum _DebugConsoleSection { logs, keyguard, report, push }
 /// second history, export path, or diagnostic retention policy.
 enum _DebugConsoleLogFilter { all, mindHeatmap, balanceWave, ghost }
 
-class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
+class _DebugConsoleDialogState extends State<DebugConsoleDialog>
+    with WidgetsBindingObserver {
   static const _followThreshold = 36.0;
   final ScrollController _logsScrollController = ScrollController();
   final TextEditingController _reportController = TextEditingController();
@@ -57,6 +58,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   KeyguardOrbRenderModeStatus? _keyguardRenderMode;
   bool _r44TrialAvailable = false;
   bool _r44TrialEnabled = false;
+  bool _r442Active = false;
+  String? _r442Reason;
   bool _loadingKeyguard = false;
   bool _copyingKeyguard = false;
   bool _keyguardCopied = false;
@@ -67,6 +70,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _lastSessionEventCount = FluviDiagnosticLogger.sessionEventCount;
     _logsScrollController.addListener(_handleLogScroll);
     FluviDiagnosticLogger.notifier.addListener(_refreshLogs);
@@ -76,12 +80,22 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     FluviDiagnosticLogger.notifier.removeListener(_refreshLogs);
     _logsScrollController
       ..removeListener(_handleLogScroll)
       ..dispose();
     _reportController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _section == _DebugConsoleSection.keyguard) {
+      if (mounted) setState(() => _r442Active = false);
+      _refreshKeyguard();
+    }
   }
 
   void _refreshLogs() {
@@ -295,6 +309,12 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
       } on Object catch (_) {
         if (mounted) setState(() => _r44TrialAvailable = false);
       }
+      final receipt = await bridge.r442SampleStatus();
+      if (mounted)
+        setState(() {
+          _r442Active = _validR442Receipt(receipt, snapshot.captureId);
+          _r442Reason = receipt['reason']?.toString();
+        });
     } on Object catch (error) {
       if (mounted) setState(() => _keyguardError = '$error');
     } finally {
@@ -308,10 +328,76 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     setState(() {
       _loadingKeyguard = true;
       _keyguardError = null;
+      _r442Active = false;
     });
     try {
       final trial = await bridge.r44SyntheticTrial(enabled: enabled);
       if (mounted) setState(() => _r44TrialEnabled = trial['enabled'] == true);
+    } on Object catch (error) {
+      if (mounted) setState(() => _keyguardError = '$error');
+    } finally {
+      if (mounted) setState(() => _loadingKeyguard = false);
+    }
+  }
+
+  bool _validR442Receipt(Map<Object?, Object?> receipt, String captureId) =>
+      receipt['active'] == true &&
+      captureId != '-' &&
+      receipt['captureId'] == captureId &&
+      receipt['process'] is String &&
+      (receipt['process'] as String).isNotEmpty &&
+      receipt['serviceSession'] is int &&
+      receipt['materialDomain'] == 'fixedSample';
+
+  String _r442Failure(Object? reason) => switch (reason) {
+    'phoneLocked' => 'A telefon zárolva van; előbb oldd fel.',
+    'serviceUnavailable' => 'A zárképernyő-szolgáltatás nem érhető el.',
+    'orbServiceNotEnabled' =>
+      'A zárképernyő ORB-szolgáltatása nincs bekapcsolva.',
+    'unsupportedBuild' => 'A mintaorb-próba ezen a rendszeren nem érhető el.',
+    'startInProgress' => 'A próba indítása már folyamatban van.',
+    'samplePreparationFailed' => 'A mintaorb előkészítése sikertelen.',
+    'serviceOrCaptureChanged' =>
+      'A szolgáltatás vagy a rögzítés időközben megváltozott.',
+    _ =>
+      'A mintaorb-próba nem indult el: ${reason ?? 'hiányzó visszaigazolás'}.',
+  };
+
+  Future<void> _startR442SampleCapture() async {
+    final bridge = widget.keyguardTimingCapture;
+    if (bridge == null || _loadingKeyguard) return;
+    setState(() {
+      _loadingKeyguard = true;
+      _r442Active = false;
+      _keyguardError = null;
+      _keyguardCopied = false;
+    });
+    try {
+      final receipt = await bridge.startR442SampleCapture(
+        mode: _keyguardCaptureMode,
+      );
+      final rawSnapshot = receipt['snapshot'];
+      final snapshot = rawSnapshot is Map<Object?, Object?>
+          ? KeyguardTimingCaptureSnapshot.fromMap(rawSnapshot)
+          : null;
+      final current = await bridge.r442SampleStatus();
+      final confirmed =
+          snapshot != null &&
+          snapshot.recording &&
+          _validR442Receipt(receipt, snapshot.captureId) &&
+          _validR442Receipt(current, snapshot.captureId) &&
+          current['serviceSession'] == receipt['serviceSession'] &&
+          current['process'] == receipt['process'];
+      if (mounted)
+        setState(() {
+          _keyguardSnapshot = snapshot ?? _keyguardSnapshot;
+          _r442Active = confirmed;
+          _r44TrialEnabled = confirmed;
+          _r442Reason = confirmed
+              ? 'armed'
+              : (receipt['reason'] ?? current['reason'])?.toString();
+          if (!confirmed) _keyguardError = _r442Failure(_r442Reason);
+        });
     } on Object catch (error) {
       if (mounted) setState(() => _keyguardError = '$error');
     } finally {
@@ -343,6 +429,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
       _loadingKeyguard = true;
       _keyguardError = null;
       _keyguardCopied = false;
+      _r442Active = false;
     });
     try {
       final snapshot = await bridge.start(
@@ -363,6 +450,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     setState(() {
       _loadingKeyguard = true;
       _keyguardError = null;
+      _r442Active = false;
     });
     try {
       final snapshot = await bridge.freeze();
@@ -977,7 +1065,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
                   child: Text(
-                    'Android 17: kapcsold be a demópróbát, indíts rögzítést, zárd le és ébreszd fel egyszer a telefont. Figyeld meg az orbot, majd oldd fel és másold a riportot. A PIN és a panel külön próbálható. A demópróba nem használ valós adatot.',
+                    'Android 17: indítsd a mintaorb-próbát, várd meg az aktív visszaigazolást, majd zárd le és ébreszd fel egyszer a telefont. Figyeld meg az orbot, oldd fel és másold a riportot. A PIN és a panel külön próbálható. A próba nem használ valós adatot.',
                     key: const ValueKey('debug-console-keyguard-help'),
                     style: const TextStyle(
                       color: Color(0xFFBAC2DE),
@@ -995,6 +1083,11 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                     ),
                     value: _r44TrialEnabled,
                     onChanged: _loadingKeyguard ? null : _setR44Trial,
+                  ),
+                if (_r442Active)
+                  const Text(
+                    'Mintaorb-próba aktív',
+                    key: ValueKey('debug-console-r442-active'),
                   ),
                 if (_keyguardRenderMode?.available == true)
                   Padding(
@@ -1066,11 +1159,23 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                         label: const Text('Rögzítés indítása'),
                       ),
                       OutlinedButton(
+                        key: const ValueKey('debug-console-r442-start'),
+                        onPressed:
+                            _loadingKeyguard ||
+                                unavailable ||
+                                !_r44TrialAvailable
+                            ? null
+                            : _startR442SampleCapture,
+                        child: const Text('Mintaorb kipróbálása és rögzítés'),
+                      ),
+                      OutlinedButton(
                         key: const ValueKey('debug-console-r43-start'),
                         onPressed: _loadingKeyguard || unavailable
                             ? null
                             : () => _startKeyguardCapture(r43Evidence: true),
-                        child: const Text('Android 17 zárképernyőpróba'),
+                        child: const Text(
+                          'Android 17 részletes mérés · csak rögzítés',
+                        ),
                       ),
                       OutlinedButton.icon(
                         key: const ValueKey('debug-console-keyguard-freeze'),

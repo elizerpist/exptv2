@@ -44,8 +44,39 @@ internal class KeyguardR44TreeReader(
     private var unsupported = 0
     private var extraMs = 0L
     private var budgetHit = false
+    private var rawHost = 0
+    private var rawEntry = 0
+    private var rawClock = 0
+    private var rejectedUnverified = 0
+    private var rejectedAncestry = 0
+    private var rejectedExcluded = 0
+    private var rejectedForeign = 0
+    private var rejectedHidden = 0
+    private var firstCandidate: KeyguardR44Markers.Marker? = null
+    private var firstCarrier: KeyguardR44Markers.Carrier? = null
 
-    data class NodeResult(val hostAncestor: Int?, val excluded: Boolean, val exclusions: List<String>)
+    private fun observe(marker: KeyguardR44Markers.Marker, carrier: KeyguardR44Markers.Carrier) {
+        when (marker) {
+            KeyguardR44Markers.Marker.HOST -> rawHost = (rawHost + 1).coerceAtMost(255)
+            KeyguardR44Markers.Marker.DEVICE_ENTRY -> rawEntry = (rawEntry + 1).coerceAtMost(255)
+            KeyguardR44Markers.Marker.LARGE_CLOCK, KeyguardR44Markers.Marker.SMALL_CLOCK ->
+                rawClock = (rawClock + 1).coerceAtMost(255)
+            else -> return
+        }
+        if (firstCandidate == null && marker != KeyguardR44Markers.Marker.HOST) {
+            firstCandidate = marker
+            firstCarrier = carrier
+        }
+    }
+
+    fun hiddenNode(viewId: String?) {
+        val marker = KeyguardR44Markers.exact(viewId) ?: return
+        observe(marker, KeyguardR44Markers.Carrier.VIEW_ID)
+        rejectedHidden = (rejectedHidden + 1).coerceAtMost(255)
+    }
+
+    data class NodeResult(val hostAncestor: Int?, val excluded: Boolean, val exclusions: List<String>,
+                          val yieldedTo: KeyguardCardInspectionRequest? = null)
 
     fun restrictionObserved() { budget.restrictionObserved = true }
 
@@ -57,6 +88,7 @@ internal class KeyguardR44TreeReader(
         excludedAncestor: Boolean,
         viewId: String?,
         authorityIsCurrent: () -> Boolean,
+        beforeOptional: (() -> KeyguardCardInspectionRequest?)? = null,
     ): NodeResult {
         if (!verifiedRoot || !authorityIsCurrent()) {
             complete = false
@@ -66,6 +98,10 @@ internal class KeyguardR44TreeReader(
             node.packageName?.toString() == "com.android.systemui" && node.windowId == windowId && node.isVisibleToUser
         }.getOrDefault(false)
         if (!owned) {
+            KeyguardR44Markers.exact(viewId)?.let {
+                observe(it, KeyguardR44Markers.Carrier.VIEW_ID)
+                rejectedForeign = (rejectedForeign + 1).coerceAtMost(255)
+            }
             foreign = true
             complete = false
             return NodeResult(ancestor, true, emptyList())
@@ -95,6 +131,11 @@ internal class KeyguardR44TreeReader(
             if (!excludedAncestor && !budget.restrictionObserved && !hasDirectTag && !hasEagerTag &&
                 node.availableExtraData.contains(KeyguardR44Markers.EXTRA)) {
                 advertised += 1
+                // Consume this node's direct/eager exclusions before giving
+                // the single reader to a newer request. Do not start another
+                // optional framework call after a successful transfer.
+                val next = if (complete && !knownRestriction) beforeOptional?.invoke() else null
+                if (next != null) return NodeResult(ancestor, excludedAncestor, emptyList(), next)
                 if (!authorityIsCurrent()) {
                     complete = false
                 } else if (!budget.reserve()) {
@@ -145,6 +186,20 @@ internal class KeyguardR44TreeReader(
         val excluded = excludedAncestor || exclusions.isNotEmpty() ||
             viewId == "com.android.systemui:id/notification_stack_scroller" ||
             viewId == "com.android.systemui:id/notificationShelf"
+        markers.forEach { (marker, carrier) ->
+            observe(marker, carrier)
+            if (marker == KeyguardR44Markers.Marker.DEVICE_ENTRY ||
+                marker == KeyguardR44Markers.Marker.LARGE_CLOCK || marker == KeyguardR44Markers.Marker.SMALL_CLOCK) {
+                when {
+                    excluded -> rejectedExcluded = (rejectedExcluded + 1).coerceAtMost(255)
+                    marker == KeyguardR44Markers.Marker.DEVICE_ENTRY &&
+                        (!genuineDeviceEntryResource || carrier != KeyguardR44Markers.Carrier.VIEW_ID) ->
+                        rejectedUnverified = (rejectedUnverified + 1).coerceAtMost(255)
+                    ancestor == null || ancestor != host?.ordinal || ordinal == ancestor ->
+                        rejectedAncestry = (rejectedAncestry + 1).coerceAtMost(255)
+                }
+            }
+        }
         var childAncestor = ancestor
         if (!excluded) {
             val nodeHost = markers.firstOrNull { it.first == KeyguardR44Markers.Marker.HOST }
@@ -170,5 +225,9 @@ internal class KeyguardR44TreeReader(
         verifiedRoot, active, host, content, below, complete, foreign,
         advertised = advertised, fetched = fetched, failed = failed, unsupported = unsupported,
         budgetHit = budgetHit, extraMs = extraMs,
+        rawHost = rawHost, rawEntry = rawEntry, rawClock = rawClock,
+        rejectedUnverified = rejectedUnverified, rejectedAncestry = rejectedAncestry,
+        rejectedExcluded = rejectedExcluded, rejectedForeign = rejectedForeign, rejectedHidden = rejectedHidden,
+        firstCandidate = firstCandidate, firstCarrier = firstCarrier,
     )
 }

@@ -613,7 +613,7 @@ internal class KeyguardWindowSnapshotReader(
                 activeWindowId = candidate.id
                 // Inspect the returned root's own exclusion markers before
                 // abandoning this read. No node is retained after transfer.
-                val next = if (request.r37YieldHint?.invoke() == true)
+                val next = if (!request.r44Enabled && request.r37YieldHint?.invoke() == true)
                     returned?.let { maybeR37("AFTER_ACTIVE_ROOT", r37SafeRoot(it, candidate.id), 0) } else null
                 if (next != null) {
                     returned?.recycle()
@@ -893,6 +893,7 @@ internal class KeyguardWindowSnapshotReader(
             try {
                 val visibleNode = node.isVisibleToUser
                 if (!visibleNode) {
+                    r44Window?.hiddenNode(node.viewIdResourceName)
                     r43Window?.node(false, false, null, nodeOrdinal, parentOrdinal, depth)
                     return
                 }
@@ -904,8 +905,15 @@ internal class KeyguardWindowSnapshotReader(
                 viewId?.let(::recordId)
                 node.className?.toString()?.takeIf { it.contains("BouncerContent") }?.let { recordId("element:BouncerContent") }
                 val r44Node = r44Window?.readNode(node, parent, nodeOrdinal, r44Ancestor, r44Excluded,
-                    viewId, authorityIsCurrent)
+                    viewId, authorityIsCurrent,
+                    if (!decisiveReported && !truncated && tryR37AfterNode != null)
+                        { { tryR37AfterNode(visited) } } else null)
                 r44Node?.exclusions?.forEach(::recordId)
+                if (r44Node?.yieldedTo != null) {
+                    yieldedTo = r44Node.yieldedTo
+                    yieldReason = KeyguardOpeningYieldReason.CLEAN_OPENING
+                    return
+                }
                 if (!authorityIsCurrent()) { aborted = true; return }
                 // The returned node's own restrictive markers must be read
                 // first, including when this is the final child or a leaf.

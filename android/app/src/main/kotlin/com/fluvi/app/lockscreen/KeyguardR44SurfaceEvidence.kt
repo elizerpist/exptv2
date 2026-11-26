@@ -57,6 +57,16 @@ internal data class KeyguardR44WindowEvidence(
     val unsupported: Int = 0,
     val budgetHit: Boolean = false,
     val extraMs: Long = 0,
+    val rawHost: Int = 0,
+    val rawEntry: Int = 0,
+    val rawClock: Int = 0,
+    val rejectedUnverified: Int = 0,
+    val rejectedAncestry: Int = 0,
+    val rejectedExcluded: Int = 0,
+    val rejectedForeign: Int = 0,
+    val rejectedHidden: Int = 0,
+    val firstCandidate: KeyguardR44Markers.Marker? = null,
+    val firstCarrier: KeyguardR44Markers.Carrier? = null,
 )
 
 internal object KeyguardR44SurfaceClassifier {
