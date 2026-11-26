@@ -301,6 +301,7 @@ jobs:
       R45_UI_SHAPE: ${{ endsWith(inputs.test_scope, '_circle') && 'CIRCLE' || 'ORB' }}
       R46_UI_ROUTE: ${{ startsWith(inputs.test_scope, 'r46_ui_fluvi') && 'FLUVI_STREAM' || startsWith(inputs.test_scope, 'r46_ui_wa') && 'WIDGETS_ANYWHERE' || '' }}
       R46_LONG: ${{ endsWith(inputs.test_scope, '_long') }}
+      R46_SINGLE: ${{ endsWith(inputs.test_scope, '_single') }}
     steps:
       - uses: actions/checkout@v5
         with:

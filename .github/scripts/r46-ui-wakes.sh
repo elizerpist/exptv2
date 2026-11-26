@@ -56,6 +56,7 @@ PY
 mkdir -p "$out/r46frames"
 result=0
 trials=(1 3)
+if [[ "${R46_SINGLE:-false}" == true ]]; then trials=(1); fi
 if [[ "${R46_LONG:-false}" == true ]]; then trials=(3); fi
 for wakes in "${trials[@]}"; do
   tap_label "$label" "r448-select-r46-$route-$wakes"
