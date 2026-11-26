@@ -46,10 +46,11 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                 null, null, null, null, null, null, "UNOBSERVED")
             if (first == null) first = missing
             KeyguardCardDiagnostics.recordR446(missing)
-            val shown = missing.copy(request = base + 2, eligibility = "ELIGIBLE_SAMPLE", backend = "SUBMITTED",
+            val submitted = missing.copy(request = base + 2, eligibility = "ELIGIBLE_SAMPLE", backend = "SUBMITTED",
                 host = 30, issuedAt = base + 20, attachBegin = base + 21, attachEnd = base + 22,
-                submittedAt = base + 23, frameAt = if (index == 0) null else base + 24,
-                withdrawAt = base + 50, withdrawReason = "externalWindowTransition")
+                submittedAt = base + 23, frameAt = if (index == 0) null else base + 24)
+            val shown = submitted.retireOnce(base + 50, "externalWindowTransition", base + 51, base + 52, null)
+            assertEquals(shown, shown.retireOnce(base + 90, "captureBoundary", null, null, null))
             KeyguardCardDiagnostics.recordR446(shown)
             repeat(50) { n -> KeyguardCardDiagnostics.captureEvent(context, "INSPECTION_QUEUED", "pressure",
                 diagnosticContext = owner, requestId = base + 100 + n, observedUptimeMs = base + 100 + n) }
@@ -59,6 +60,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertEquals(10, frozen.lineSequence().count { it.startsWith("R44_6_SAMPLE ") })
         assertTrue(frozen, frozen.contains("backend=SUBMITTED"))
         assertTrue(frozen, frozen.contains("frame=UNOBSERVED"))
+        assertTrue(frozen, frozen.contains("hideReturn=1051 releaseReturn=1052"))
         assertTrue(frozen, frozen.contains("physical=UNOBSERVED"))
         KeyguardCardDiagnostics.recordR446(checkNotNull(first).copy(backend = "LATE_CALLBACK"))
         assertEquals(frozen, KeyguardCardDiagnostics.captureSnapshot(context)["report"])

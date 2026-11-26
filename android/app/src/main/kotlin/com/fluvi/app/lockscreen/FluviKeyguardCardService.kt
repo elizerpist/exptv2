@@ -563,9 +563,10 @@ class FluviKeyguardCardService : AccessibilityService() {
         val presenter = r446Presenter
         r446Presenter = null
         val retired = presenter?.dispose()
+        // A later freeze, unlock or duplicate cleanup must not relabel or
+        // erase the original withdrawal and its actual return timestamps.
         r446Observation?.let { previous ->
-            val next = previous.copy(withdrawAt = at, withdrawReason = reason,
-                hideReturn = retired?.hideReturn, releaseReturn = retired?.releaseReturn, retireError = retired?.errorClass)
+            val next = previous.retireOnce(at, reason, retired?.hideReturn, retired?.releaseReturn, retired?.errorClass)
             r446Observation = next
             KeyguardCardDiagnostics.recordR446(next)
         }

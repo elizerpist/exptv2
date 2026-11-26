@@ -16,7 +16,13 @@ internal data class KeyguardR446Observation(
     val attachEnd: Long?, val submittedAt: Long?, val frameAt: Long?,
     val withdrawAt: Long?, val withdrawReason: String,
     val hideReturn: Long? = null, val releaseReturn: Long? = null, val retireError: String? = null,
-)
+) {
+    /** Preserve the original owner and first withdrawal when later freeze or
+     * unlock cleanup repeats the operation. */
+    fun retireOnce(at: Long, reason: String, hide: Long?, release: Long?, error: String?): KeyguardR446Observation =
+        if (withdrawAt != null) this else copy(withdrawAt = at, withdrawReason = reason,
+            hideReturn = hide, releaseReturn = release, retireError = error)
+}
 
 /** Immutable, capture-owned scalars from the same physical inspection used
  * for authorization. No tree, arbitrary tag, text or foreign name survives. */
