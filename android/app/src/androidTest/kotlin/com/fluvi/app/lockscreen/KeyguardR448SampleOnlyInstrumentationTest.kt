@@ -117,6 +117,18 @@ class KeyguardR448SampleOnlyInstrumentationTest {
                 val status = main { owner.r442SampleStatus() }
                 status["actionKind"] == "SESSION" && status["printState"] == "WAIT_OFF" && status["printArmed"] == true
             }
+            shell("input keyevent KEYCODE_SLEEP")
+            waitFor("second session screen off") { !context.getSystemService(PowerManager::class.java).isInteractive }
+            waitFor("second session arm observes screen off") {
+                main { owner.r442SampleStatus()["printState"] == "WAIT_WAKE" }
+            }
+            shell("input keyevent KEYCODE_WAKEUP")
+            waitFor("second session locked wake") { context.getSystemService(KeyguardManager::class.java).isKeyguardLocked }
+            waitFor("second session wake reaches its own decision") {
+                val status = main { owner.r442SampleStatus() }
+                status["actionKind"] == "SESSION" &&
+                    status["printState"] in setOf("WAIT_READ", "ISSUED", "CONSUMED")
+            }
         } finally {
             service?.let { owner -> runCatching { main { owner.stopR444Trial("safeTestCleanup") } } }
             KeyguardCardDiagnostics.clearCapture(context)

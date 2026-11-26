@@ -3471,6 +3471,19 @@ class FluviKeyguardCardService : AccessibilityService() {
                 sampleRequest.r41ScreenOrdinal else if (r41CaptureId == currentDiagnosticAttempt?.captureId) r41Ordinal else 0
             KeyguardCardDiagnostics.r41Bind(currentDiagnosticAttempt, screenOrdinal, screen = true)
         }
+        // SCREEN_ON can precede the asynchronous system sample that creates
+        // the wake cycle.  Start the selected public route once that exact
+        // cycle and its diagnostic owner exist, even when no Fluvi inspection
+        // or target has completed.  Its own fresh checks still grant or veto.
+        val boundaryArm = r446ReadArm
+        val boundaryScreen = r442ScreenOn
+        if (r448DisplayRoute == KeyguardR448DisplayRoute.WIDGETS_ANYWHERE && r449Wake == null &&
+            boundaryArm != null && r446Owner.arm === boundaryArm &&
+            r446Owner.state == KeyguardR446PrintOwner.State.WAIT_READ &&
+            boundaryScreen?.session == boundaryArm.session &&
+            wakeCycleOwner.current()?.id == wakeEpoch) {
+            r449BeginWake(boundaryArm, boundaryScreen.uptime)
+        }
         if (early != null && r18AdoptedSampleId == early.sampleId) {
             r18FallbackWake = null
             startR18Stage(early.token, early.preparation, settings, currentDiagnosticAttempt, freshState, early.reservedAt)
@@ -3603,6 +3616,16 @@ class FluviKeyguardCardService : AccessibilityService() {
             if (r446Owner.state == KeyguardR446PrintOwner.State.WAIT_READ ||
                 r446Owner.state == KeyguardR446PrintOwner.State.ISSUED) r446Cancel("systemGate")
             hideImmediately("systemGate:${request.reason}", triggerReceivedUptimeMs = request.receivedAt)
+            // If USER_PRESENT precedes delivery of this wake's unlock
+            // exclusion, the receiver can still see the old active arm and
+            // cannot prepare its successor.
+            // Once the real unlocked state has revoked and hidden that arm,
+            // prepare only the already-authorized session's *next* wake.  The
+            // new arm still requires screen-off, wake and fresh admission.
+            if (vetoArm != null && state.available && state.primaryDisplay && state.interactive &&
+                state.displayOn && !state.keyguardLocked && r449Session != null) {
+                r449PrepareSessionWake()
+            }
             // Preserve the actual accepted acquisition after the mandatory
             // hide. Diagnostic failures must never delay or undo exclusion.
             if (vetoContext != null && vetoArm != null) runCatching {
