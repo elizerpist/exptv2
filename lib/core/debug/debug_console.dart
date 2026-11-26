@@ -316,6 +316,17 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                 ? const Color(0xFF285B73)
                 : null,
             foregroundColor: const Color(0xFFE5EEF6),
+            disabledBackgroundColor: _r46Route == route
+                ? const Color(0xFF285B73)
+                : const Color(0xFF252737),
+            disabledForegroundColor: _r46Route == route
+                ? const Color(0xFFF1F7FA)
+                : const Color(0xFFB8C1D5),
+            side: BorderSide(
+              color: _r46Route == route
+                  ? const Color(0xFF73C4D6)
+                  : const Color(0xFF6F788D),
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
           ),
           child: Text(label, textAlign: TextAlign.center),
