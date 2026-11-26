@@ -300,6 +300,43 @@ PY
     tap_label 'Debug log' entry
     tap_label 'ZÁRKÉPERNYŐ' tab
     adb shell dumpsys accessibility > "$out/accessibility-normal.txt" 2>&1 || true
+    if [[ "${R448_UI_PROBE:-false}" == true ]]; then
+      # Observe the signed Flutter control and its native readback, then the
+      # persisted preference after a normal activity reopen. This verifies the
+      # selector; it does not claim a stock-keyguard visual pass.
+      wait_route() {
+        local label=$1 wire=$2 phase=$3 ok=false
+        for attempt in $(seq 1 18); do
+          adb shell uiautomator dump /sdcard/r448-route.xml > /dev/null 2>&1 || true
+          adb exec-out cat /sdcard/r448-route.xml > "$out/ui-route-$phase-$attempt.xml" 2>/dev/null || true
+          if wait_for_system_anr "$out/ui-route-$phase-$attempt.xml" "route-$phase-$attempt"; then continue; fi
+          adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_keyguard_r448_display_route.xml > "$out/prefs-route-$phase.xml" 2>/dev/null || true
+          if grep -Fq "Natív választás: $label" "$out/ui-route-$phase-$attempt.xml" &&
+             grep -Fq ">$wire</string>" "$out/prefs-route-$phase.xml"; then ok=true; break; fi
+          if (( attempt <= 10 )); then scroll_controls "$out/ui-route-$phase-$attempt.xml" down
+          else scroll_controls "$out/ui-route-$phase-$attempt.xml" up; fi
+          sleep 1
+        done
+        "$ok" || { printf 'FAIL: native route %s not observed at %s\n' "$wire" "$phase" >> "$out/ui-route-result.txt"; return 1; }
+        printf 'PASS: native route %s acknowledged at %s\n' "$wire" "$phase" >> "$out/ui-route-result.txt"
+      }
+      reopen_route_panel() {
+        adb shell input keyevent KEYCODE_BACK
+        adb shell input keyevent KEYCODE_BACK
+        adb shell am start -n com.fluvi.app/.MainActivity >> "$out/reopen-r448.txt" 2>&1
+        tap_label 'Debug log' entry
+        tap_label 'ZÁRKÉPERNYŐ' tab
+      }
+      tap_label 'Widgets Anywhere' r448-select-wa
+      wait_route 'Widgets Anywhere' WIDGETS_ANYWHERE wa-selected
+      reopen_route_panel
+      wait_route 'Widgets Anywhere' WIDGETS_ANYWHERE wa-reopened
+      tap_label 'Fluvi adatfolyam' r448-select-fluvi
+      wait_route 'Fluvi adatfolyam' FLUVI_STREAM fluvi-selected
+      reopen_route_panel
+      wait_route 'Fluvi adatfolyam' FLUVI_STREAM fluvi-reopened
+      printf '%s\n' 'Selector only: no window or physical-pixel assertion.' >> "$out/ui-route-result.txt"
+    fi
     if [[ "${R446_UI_PROBE:-false}" == true ]]; then
       # Exercise the actual new button in the signed profile, followed by one
       # unmodified Android lock/wake. Do not run uiautomator between the tap
