@@ -25,6 +25,8 @@ tap_label() {
   for attempt in $(seq 1 25); do
     local xml="$out/ui-$name-$attempt.xml"
     if [[ "$name" == r46-paste-* ]]; then
+      # Never act on the previous receiver tree if this dump fails.
+      adb shell rm -f /sdcard/r46-paste.xml >/dev/null 2>&1 || true
       adb shell uiautomator dump /sdcard/r46-paste.xml >/dev/null 2>&1 || true
       adb exec-out cat /sdcard/r46-paste.xml > "$xml" 2>/dev/null || true
     else
@@ -57,6 +59,7 @@ mkdir -p "$out/r46frames"
 result=0
 trials=(1 3)
 if [[ "${R46_SINGLE:-false}" == true ]]; then trials=(1); fi
+if [[ "${R46_MULTI_ONLY:-false}" == true ]]; then trials=(3); fi
 if [[ "${R46_LONG:-false}" == true ]]; then trials=(3); fi
 for wakes in "${trials[@]}"; do
   tap_label "$label" "r448-select-r46-$route-$wakes"
@@ -133,6 +136,8 @@ PY
   [[ "$capture" =~ ^[a-f0-9-]{36}$ ]]
   adb exec-out run-as com.fluvi.app cat "files/r46-recordings/$capture.txt" > "$out/r46-$route-$wakes-sealed.txt"
   adb shell run-as com.fluvi.r46receiver rm -f files/report.txt >/dev/null 2>&1 || true
+  # Launch a fresh independent Activity so the app must gain clipboard focus.
+  adb shell am force-stop com.fluvi.r46receiver
   adb shell am start -n com.fluvi.r46receiver/.PasteActivity > "$out/r46-receiver-launch-$wakes.txt" 2>&1
   tap_label 'Paste report' "r46-paste-$wakes"
   pasted=false
@@ -141,6 +146,9 @@ PY
       adb exec-out run-as com.fluvi.r46receiver cat files/report.txt > "$out/r46-$route-$wakes-pasted.txt"
       pasted=true
       break
+    fi
+    if [[ "$attempt" -eq 5 || "$attempt" -eq 10 ]]; then
+      tap_label 'Paste report' "r46-paste-$wakes-retry-$attempt" || true
     fi
     sleep 1
   done

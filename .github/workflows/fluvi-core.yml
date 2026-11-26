@@ -303,6 +303,7 @@ jobs:
       R47_REQUIRE_ACTIVE_HEADER: ${{ startsWith(inputs.test_scope, 'r47_ui_') }}
       R46_LONG: ${{ endsWith(inputs.test_scope, '_long') }}
       R46_SINGLE: ${{ endsWith(inputs.test_scope, '_single') }}
+      R46_MULTI_ONLY: ${{ endsWith(inputs.test_scope, '_multi') }}
     steps:
       - uses: actions/checkout@v5
         with:
