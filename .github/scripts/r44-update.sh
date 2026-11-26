@@ -161,6 +161,29 @@ PY
     cmp "$out/sentinel.txt" "$out/sentinel-after.txt"
     printf '%s\n' 'PASS: genuine signed selected baseline to candidate install -r; synthetic preferences and sentinel survived on API 37.' > "$out/result.txt"
     printf 'bound_before=%s bound_after=%s\n' "$bound_before" "$bound_after" >> "$out/service-gate.txt"
+    if [[ "${R44_REOPEN_ONLY:-false}" == true ]]; then
+      # Independent activity reopen control: no UiAutomator connection and no
+      # forced package stop; the preceding run covers the trial and freeze.
+      [[ "$bound_before" == true && "$bound_after" == true ]]
+      adb shell am start -n com.fluvi.app/.MainActivity > "$out/reopen-first.txt" 2>&1
+      adb shell input keyevent KEYCODE_BACK
+      adb shell am start -n com.fluvi.app/.MainActivity > "$out/reopen-second.txt" 2>&1
+      observe reopened
+      adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$out/prefs-reopened.xml"
+      adb exec-out run-as com.fluvi.app cat files/r44-update-sentinel.txt > "$out/sentinel-reopened.txt"
+      cmp "$out/sentinel.txt" "$out/sentinel-reopened.txt"
+      python3 - "$out/seed.xml" "$out/prefs-reopened.xml" >> "$out/settings-check.txt" <<'PY'
+import sys,xml.etree.ElementTree as ET
+def values(p):
+    return {n.attrib['name']:(n.tag,n.attrib.get('value',n.text or '')) for n in ET.parse(p).getroot()}
+seed,after=map(values,sys.argv[1:])
+for name,expected in seed.items():
+    assert after.get(name)==expected, name
+    print(name, 'REOPEN PASS')
+PY
+      printf '%s\n' 'PASS: normal activity reopen preserved settings, sentinel and the enabled bound service.' >> "$out/result.txt"
+      exit 0
+    fi
     # Exercise the control in the installed signed profile. A missing semantic
     # node, startup crash or unacknowledged action is an explicit failure, not
     # evidence from the debug test APK or from a different source.
