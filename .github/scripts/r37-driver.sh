@@ -106,6 +106,13 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR444SystemUiExtendedObservationTest.kt
     sha256sum "$fixture" > "$out/fixture-r444-actual.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r445_composition* ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR445WindowCompositionTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR445WindowCompositionTest.kt
+    sha256sum "$fixture" > "$out/fixture-r445-composition.sha256"
+    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR445WindowCompositionTest.kt > "$out/fixture-r445-composition.patch"
+  fi
   if [[ "$TEST_SCOPE" == r43_busy_red ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR43DiagnosticsInstrumentationTest.kt"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR43DiagnosticsInstrumentationTest.kt
