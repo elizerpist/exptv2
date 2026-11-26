@@ -48,12 +48,14 @@ internal class KeyguardR448WidgetsAnywhereFrame(
     private var showSequence = 0L
     private var r46PublicTelemetry = false
     private var r47Telemetry: String? = null
+    private var r47Animated: Boolean? = null
     private val openingDelay = KeyguardR46OpeningDelay()
     private var event: ((Event) -> Unit)? = null
 
     fun isAttached(): Boolean = attached && leaseLive && view?.isAttachedToWindow == true
     fun hasOwnedWindow(): Boolean = attached && leaseLive
     fun isRetired(): Boolean = view == null && !attached && !removalFailed
+    internal fun shaderDrawCountForInstrumentation(): Int = view?.diagnostics()?.shaderDrawCount ?: 0
 
     /** The inventory may exempt only the exact current overlay, never every
      * window with our package name. An unavailable ID remains unavailable. */
@@ -114,8 +116,11 @@ internal class KeyguardR448WidgetsAnywhereFrame(
                             artifact: KeyguardShaderArtifact, observer: (Event) -> Unit): Boolean {
         val prepared = prepareScene(owner, material.profile, true, artifact, false, observer, material.receivedAtNanos,
             freezeClock = !material.motionEnabled)
-        if (prepared) r47Telemetry = "origin=active_header_semantic token=${material.correlation} " +
-            "sourceRevision=${material.profile.publisherRevision} animated=${material.motionEnabled && material.profile.animated} playback=shader"
+        if (prepared) {
+            r47Animated = material.motionEnabled && material.profile.animated
+            r47Telemetry = "origin=active_header_semantic token=${material.correlation} " +
+                "sourceRevision=${material.profile.publisherRevision} animated=$r47Animated playback=shader"
+        }
         return prepared
     }
 
@@ -287,6 +292,10 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         material.visibility = View.VISIBLE
         material.alpha = 1f
         emit(owner, "REVEAL", "visibility=${material.visibility},alpha=${material.alpha}")
+        if (r47Animated == false) {
+            material.frame(System.nanoTime())
+            return
+        }
         val callback = object : Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {
                 if (view !== material || viewOwner != owner || !leaseLive || !attached ||
@@ -401,6 +410,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         view = null
         r46PublicTelemetry = false
         r47Telemetry = null
+        r47Animated = null
         viewOwner = null
         event = null
         return true

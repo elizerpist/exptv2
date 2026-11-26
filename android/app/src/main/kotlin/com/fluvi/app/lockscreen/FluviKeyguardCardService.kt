@@ -848,6 +848,9 @@ class FluviKeyguardCardService : AccessibilityService() {
             wake.context, wake.arm.generation, wake.owner.route, wake.owner.material, revision, r449Action,
             wake.screenAt, started, ended, system, evidence.exclusions, evidence.reason, decision, wake.issueAt)) }
         if (decision != KeyguardR448Admission.Decision.ALLOW) {
+            if (r47RecordingHeader) r45RecordStage(wake.context, "WIDGETS_ANYWHERE", "MATERIAL_DENIED",
+                SystemClock.uptimeMillis(), decision.name, revision, started, ended,
+                "normalSurface=${evidence.privateSurface} inventory=${evidence.reason}")
             if (decision == KeyguardR448Admission.Decision.RESTRICTED ||
                 decision == KeyguardR448Admission.Decision.SYSTEM_EXCLUDED) r446Cancel("wa:${evidence.reason}")
             return
@@ -1015,9 +1018,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                 r47Header = null
                 r446CaptureId = capture
                 r446ArmAt = SystemClock.uptimeMillis()
-                r442Reason = "activeHeaderUnavailableOrDisclosureDisabled"
+                r442Reason = FluviActiveHeaderMaterialStore.unavailableReason(applicationContext)
                 KeyguardR46RecordingStore.offer(capture,
-                    "R47_MATERIAL origin=missing reason=activeHeaderUnavailableOrDisclosureDisabled")
+                    "R47_MATERIAL origin=missing reason=$r442Reason")
                 return receipt + mapOf("printPurpose" to "activeHeader", "printArmed" to true,
                     "sampleShape" to "ORB", "materialOrigin" to "missing", "materialReason" to r442Reason)
             }
@@ -1210,7 +1213,9 @@ class FluviKeyguardCardService : AccessibilityService() {
             try {
                 val header = if (r47RecordingHeader) FluviActiveHeaderMaterialStore.applicable(applicationContext) else null
                 if (r47RecordingHeader && header == null) {
-                    r442Reason = "activeHeaderUnavailableOrDisclosureDisabled"; return@launch
+                    r442Reason = FluviActiveHeaderMaterialStore.unavailableReason(applicationContext)
+                    KeyguardR46RecordingStore.offer(active.capture, "R47_MATERIAL origin=missing reason=$r442Reason")
+                    return@launch
                 }
                 r47Header = header
                 val sample = header?.profile ?: KeyguardR44Trial.profile(null) ?: return@launch

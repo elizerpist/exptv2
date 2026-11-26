@@ -84,6 +84,15 @@ internal object FluviActiveHeaderMaterialStore {
             settings.generation == it.settingsGeneration }
     }
 
+    fun unavailableReason(context: Context): String {
+        val settings = FluviKeyguardCardSettings.read(context)
+        if (!settings.requested) return "orbDisabled"
+        if (!settings.showFinancialDetails) return "disclosureDisabled"
+        val candidate = current ?: return "activeHeaderNotPublished"
+        if (candidate.settingsGeneration != settings.generation) return "settingsGenerationChanged"
+        return "activeHeaderChanged"
+    }
+
     fun isCurrent(context: Context, snapshot: Snapshot): Boolean = applicable(context) === snapshot
 
     /** Cheap per-owner check; settings changes invalidate the reference first. */

@@ -16,12 +16,14 @@ class DebugFloatingButton extends StatelessWidget {
     this.diagnosticStatusProvider,
     this.automationPermissions,
     this.keyguardTimingCapture,
+    this.onDialogClosed,
   });
 
   final DebugPhysicalReportProvider? physicalReportProvider;
   final DebugDiagnosticStatusProvider? diagnosticStatusProvider;
   final AutomationPermissionRepository? automationPermissions;
   final KeyguardTimingCaptureBridge? keyguardTimingCapture;
+  final VoidCallback? onDialogClosed;
 
   @override
   Widget build(BuildContext context) {
@@ -37,18 +39,22 @@ class DebugFloatingButton extends StatelessWidget {
           key: const ValueKey('debug-floating-button'),
           tooltip: 'Debug log',
           icon: const Icon(Icons.terminal, size: 18, color: Color(0xFF06B6D4)),
-          onPressed: () => showDialog<void>(
-            context: context,
-            builder: (_) => DebugConsoleDialog(
-              physicalReportProvider: physicalReportProvider,
-              diagnosticStatusProvider: diagnosticStatusProvider,
-              automationPermissions: automationPermissions,
-              keyguardTimingCapture: keyguardTimingCapture,
-              initialKeyguard: const bool.fromEnvironment(
-                'FLUVI_R448_SAFE_SAMPLE_ONLY',
+          onPressed: () async {
+            await showDialog<void>(
+              context: context,
+              builder: (_) => DebugConsoleDialog(
+                physicalReportProvider: physicalReportProvider,
+                diagnosticStatusProvider: diagnosticStatusProvider,
+                automationPermissions: automationPermissions,
+                keyguardTimingCapture: keyguardTimingCapture,
+                initialKeyguard:
+                    const bool.fromEnvironment('FLUVI_R448_SAFE_SAMPLE_ONLY') ||
+                    const String.fromEnvironment('FLUVI_BUILD_PURPOSE') ==
+                        'human_diagnostic',
               ),
-            ),
-          ),
+            );
+            if (context.mounted) onDialogClosed?.call();
+          },
         ),
       ),
     );

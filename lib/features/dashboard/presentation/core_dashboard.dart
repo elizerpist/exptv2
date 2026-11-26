@@ -114,6 +114,7 @@ class CoreDashboard extends StatefulWidget {
     this.pulseDeliveryCoordinator,
     this.onOpenPulse,
     this.onHeaderInteractionChanged,
+    this.isDashboardVisible = true,
   });
 
   final DashboardCoreController controller;
@@ -149,6 +150,7 @@ class CoreDashboard extends StatefulWidget {
   final PulseDeliveryCoordinator? pulseDeliveryCoordinator;
   final VoidCallback? onOpenPulse;
   final ValueChanged<bool>? onHeaderInteractionChanged;
+  final bool isDashboardVisible;
 
   @override
   State<CoreDashboard> createState() => _CoreDashboardState();
@@ -350,6 +352,7 @@ class _CoreDashboardState extends State<CoreDashboard>
       activeMode: modeController,
       activeHeaderVisible: () =>
           mounted &&
+          widget.isDashboardVisible &&
           (ModalRoute.of(context)?.isCurrent ?? true) &&
           (WidgetsBinding.instance.lifecycleState == null ||
               WidgetsBinding.instance.lifecycleState ==
@@ -512,6 +515,14 @@ class _CoreDashboardState extends State<CoreDashboard>
     // already selected (for example after shell-state restoration), so its
     // body and Header do not wait for an unrelated user interaction.
     _onCoreModeChanged(entrySource: 'dashboardInitialMount');
+  }
+
+  @override
+  void didUpdateWidget(covariant CoreDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isDashboardVisible && widget.isDashboardVisible) {
+      _keyguardMaterialBridge.schedule();
+    }
   }
 
   @override

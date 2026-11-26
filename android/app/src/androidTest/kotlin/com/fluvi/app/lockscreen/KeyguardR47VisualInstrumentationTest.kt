@@ -151,8 +151,22 @@ class KeyguardR47VisualInstrumentationTest {
             val geometry = KeyguardOverlayGeometry(size, size, left, top,
                 KeyguardUsableBounds(hostBounds.left, hostBounds.top, hostBounds.right, hostBounds.bottom),
                 KeyguardCardCardPosition(.5f), KeyguardCardOrbPosition(.5f, .5f))
-            val underlay = crop("underlay", bounds).also(heldBitmaps::add)
-            assertTrue("valid green underlay", Color.green(underlay.getPixel(size / 2, size / 2)) > 150)
+            var stableUnderlay: Bitmap? = null
+            var underlayAttempt = 0
+            waitFor("stable green underlay at all measured points") {
+                val candidate = crop("underlay-attempt${underlayAttempt++}", bounds).also(heldBitmaps::add)
+                val points = listOf(2 to 2, size - 3 to 2, 2 to size - 3, size - 3 to size - 3,
+                    size / 2 to size / 2)
+                val isGreen = points.all { (x, y) ->
+                    val pixel = candidate.getPixel(x, y)
+                    abs(Color.red(pixel) - 11) <= 5 && abs(Color.green(pixel) - 177) <= 5 &&
+                        abs(Color.blue(pixel) - 67) <= 5
+                }
+                log.append("underlayPrecondition attempt=${underlayAttempt - 1} green=$isGreen\n")
+                if (isGreen) stableUnderlay = candidate
+                isGreen
+            }
+            val underlay = checkNotNull(stableUnderlay)
             val times = listOf(0, 200, 500, 1000, 1900, 6000)
             for ((index, name) in listOf("tide", "braided", "static").withIndex()) {
                 val json = ins.context.assets.open("r47_reference/$name.json").bufferedReader().use { it.readText() }
@@ -162,12 +176,16 @@ class KeyguardR47VisualInstrumentationTest {
                 val elapsedMs = AtomicLong(0)
                 val liveStartNs = AtomicLong(0)
                 val live = AtomicBoolean(false)
+                val lastTime = AtomicReference<KeyguardMaterialTime>()
+                val lastFrameNs = AtomicLong(0)
                 val source = KeyguardMaterialTimeSource { _, frameNs ->
                     val seconds = if (live.get()) (frameNs - liveStartNs.get()).coerceAtLeast(0) / 1_000_000_000f
                         else elapsedMs.get() / 1000f
                     KeyguardMaterialTime(profile.elapsedSeconds + seconds, profile.phase + profile.phaseSpeed * seconds,
                         profile.background.phase + profile.background.phaseSpeed * seconds,
-                        profile.interior.phase + profile.interior.phaseSpeed * seconds)
+                        profile.interior.phase + profile.interior.phaseSpeed * seconds).also {
+                            lastTime.set(it); lastFrameNs.set(frameNs)
+                        }
                 }
                 val allowed = AtomicBoolean(true)
                 val draws = AtomicInteger()
@@ -209,7 +227,9 @@ class KeyguardR47VisualInstrumentationTest {
                             val delta = compare(reference, image)
                             val exterior = exteriorMatches(underlay, image)
                             log.append("match=$name/$time/$attempt delta=$delta exterior=$exterior\n")
-                            if (delta.mean <= 8.0 && delta.within16 >= .90 && exterior) accepted = image
+                            val matches = if (name == "static") delta.mean <= 5.0 && delta.within16 >= .97
+                                else delta.mean <= 1.0 && delta.within16 >= .99
+                            if (matches && exterior) accepted = image
                         }
                     }
                     if (accepted == null) failures += "$name $time did not match Flutter interior reference"
@@ -223,10 +243,19 @@ class KeyguardR47VisualInstrumentationTest {
                     liveStartNs.set(System.nanoTime()); live.set(true)
                     SystemClock.sleep(150)
                     val first = crop("$name-natural-start", bounds).also(heldBitmaps::add)
+                    val firstTime = lastTime.get(); val firstFrame = lastFrameNs.get()
+                    val firstDraws = main { if (direct) presenter?.shaderDrawCountForInstrumentation() ?: 0
+                        else frame?.shaderDrawCountForInstrumentation() ?: 0 }
                     SystemClock.sleep(6_000)
                     val later = crop("$name-natural-6s", bounds).also(heldBitmaps::add)
+                    val laterTime = lastTime.get(); val laterFrame = lastFrameNs.get()
+                    val laterDraws = main { if (direct) presenter?.shaderDrawCountForInstrumentation() ?: 0
+                        else frame?.shaderDrawCountForInstrumentation() ?: 0 }
                     val changeNatural = compare(first, later)
-                    log.append("natural=$name delta=$changeNatural\n")
+                    log.append("natural=$name delta=$changeNatural sourceStart=$firstTime sourceEnd=$laterTime " +
+                        "frameNs=$firstFrame/$laterFrame shaderDraws=$firstDraws/$laterDraws\n")
+                    if (firstTime == null || laterTime == null || laterTime.phase - firstTime.phase < 1f || laterDraws <= firstDraws)
+                        failures += "six-second source clock or shader draw did not advance"
                     if (changeNatural.changed < 64 || changeNatural.mean < 1.0)
                         failures += "six-second live interior did not move: $changeNatural"
                 }
@@ -239,6 +268,11 @@ class KeyguardR47VisualInstrumentationTest {
                 val withdrawal = compare(underlay, after)
                 log.append("firstAfterHide=$name delta=$withdrawal\n")
                 if (withdrawal.mean > 2.0) failures += "first sample after hide differs from underlay: $withdrawal"
+                for (laterIndex in 1..3) {
+                    SystemClock.sleep(50)
+                    val later = crop("$name-after-hide-$laterIndex", bounds).also(heldBitmaps::add)
+                    log.append("laterAfterHide=$name/$laterIndex delta=${compare(underlay, later)}\n")
+                }
                 main {
                     presenter?.dispose(); presenter = null
                     frame?.retire(checkNotNull(frameOwner), "CONTROL_DONE"); frame = null; frameOwner = null

@@ -37,6 +37,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
     private var firstDraw: Long? = null
     private var r46PublicTelemetry = false
     private var r47Telemetry: String? = null
+    private var r47Animated: Boolean? = null
     internal var onR46Interval: ((String) -> Unit)? = null
     private var inputReady = false
     private var inputReadySignal = CompletableDeferred<Boolean>()
@@ -55,8 +56,11 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
                             artifact: KeyguardShaderArtifact): Boolean {
         val prepared = prepareScene(display, material.profile, artifact, false, true, material.receivedAtNanos,
             freezeClock = !material.motionEnabled)
-        if (prepared) r47Telemetry = "origin=active_header_semantic token=${material.correlation} " +
-            "sourceRevision=${material.profile.publisherRevision} animated=${material.motionEnabled && material.profile.animated} playback=shader"
+        if (prepared) {
+            r47Animated = material.motionEnabled && material.profile.animated
+            r47Telemetry = "origin=active_header_semantic token=${material.correlation} " +
+                "sourceRevision=${material.profile.publisherRevision} animated=$r47Animated playback=shader"
+        }
         return prepared
     }
 
@@ -188,6 +192,10 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
                             stillOwned: () -> Boolean, onInvalidated: () -> Unit) {
         if (r46PublicTelemetry) material.beginR46SampleInterval()
         else r47Telemetry?.let { material.beginR46SampleInterval(it) }
+        if (r47Animated == false) {
+            material.frame(System.nanoTime())
+            return
+        }
         val callback = object : Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {
                 if (owner !== token) return
@@ -261,6 +269,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         view = null
         r46PublicTelemetry = false
         r47Telemetry = null
+        r47Animated = null
         host = null
         firstDraw = null
         return Retirement(hideReturn, releaseReturn, errorClass)

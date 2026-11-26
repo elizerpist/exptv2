@@ -1276,6 +1276,13 @@ class _FluviAppShellState extends State<FluviAppShell>
                                             key: const ValueKey(
                                               'ready-core-dashboard',
                                             ),
+                                            isDashboardVisible:
+                                                switch (_selectedNavigationItem) {
+                                                  Bnb03Item.search ||
+                                                  Bnb03Item.cart ||
+                                                  Bnb03Item.profile => false,
+                                                  _ => true,
+                                                },
                                             controller: _controller,
                                             modeController: _modeController,
                                             categoryCollection:
@@ -1420,6 +1427,19 @@ class _FluviAppShellState extends State<FluviAppShell>
                                       _automationPermissionRepository,
                                   keyguardTimingCapture:
                                       KeyguardTimingCaptureBridge(),
+                                  onDialogClosed: () async {
+                                    try {
+                                      await const MethodChannel(
+                                        'fluvi/keyguard_material',
+                                      ).invokeMethod<void>(
+                                        'requestActiveHeaderRefresh',
+                                      );
+                                    } on MissingPluginException {
+                                      // Non-Android hosts have no native sink.
+                                    } on PlatformException {
+                                      // The Activity can disappear during navigation.
+                                    }
+                                  },
                                 ),
                             ],
                           ),

@@ -33,6 +33,7 @@ void main() {
       );
       final active = <Map<Object?, Object?>>[];
       final card = <Map<Object?, Object?>>[];
+      var visible = true;
       messenger.setMockMethodCallHandler(channel, (call) async {
         if (call.method == 'sceneTarget') {
           return <String, Object?>{
@@ -54,6 +55,7 @@ void main() {
         budgetFrame: budget,
         mindFrame: mind,
         activeMode: mode,
+        activeHeaderVisible: () => visible,
         channel: channel,
       );
       try {
@@ -103,6 +105,26 @@ void main() {
         expect(
           active.last['colors'],
           contains(const Color(0xff229954).toARGB32()),
+        );
+        final visibleCount = active.length;
+        visible = false;
+        mind.value = DashboardHeaderVisualFrame.staticTone(
+          const Color(0xff771288),
+        );
+        await tester.pump(const Duration(milliseconds: 60));
+        await tester.pump();
+        expect(
+          active.length,
+          visibleCount,
+          reason: 'an offstage dashboard is not a visible header',
+        );
+        visible = true;
+        bridge.schedule();
+        await tester.pump(const Duration(milliseconds: 60));
+        await tester.pump();
+        expect(
+          active.last['colors'],
+          contains(const Color(0xff771288).toARGB32()),
         );
         visual.setMotionEnabled(false);
         await tester.pump(const Duration(milliseconds: 60));

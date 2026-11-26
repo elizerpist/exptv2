@@ -1361,6 +1361,11 @@ class MainActivity : FlutterActivity() {
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "requestActiveHeaderRefresh" -> {
+                        if (FluviActiveHeaderMaterialStore.applicable(applicationContext) == null)
+                            FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
+                        result.success(null)
+                    }
                     "beginActiveHeaderPublisher", "invalidateActiveHeaderProfile" -> {
                         val values = call.arguments as? Map<*, *>
                         val publisherSession = values?.get("publisherSession") as? String
@@ -1477,7 +1482,8 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         activeHeaderActivityResumed = true
-        FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
+        if (FluviActiveHeaderMaterialStore.applicable(applicationContext) == null)
+            FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
         FluviRuntimeCoordinator.reconcileHistoricalUserStop(applicationContext)
         FluviRuntimeCoordinator.onAppSurfaceVisibilityChanged(applicationContext, true)
         FluviRuntimeCoordinator.applyRecentsVisibility(this)
