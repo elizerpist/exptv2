@@ -126,7 +126,10 @@ class KeyguardR446StockServiceInstrumentationTest {
             var matching = 0
             var changed = 0
             var sampled = 0
+            var underlayStart = 0L
             var underlayEnd = 0L
+            var underlayWake: String? = null
+            var underlayScreenOn: Long? = null
             val samples = StringBuilder("same-wake stock control; physical=UNOBSERVED bounds=$bounds\n")
             fun numeric(row: String, name: String) = Regex("(?:^| )$name=([0-9]+)(?: |/|$)")
                 .find(row)?.groupValues?.get(1)?.toLongOrNull()
@@ -137,6 +140,8 @@ class KeyguardR446StockServiceInstrumentationTest {
                     it.contains("armState=ARMED") || numeric(it, "arm") != null
                 }?.let { Regex("(?:^| )wake=([0-9]+)").find(it)?.groupValues?.get(1) }
                 selectedRow = rows.firstOrNull { armedWake != null && it.contains("wake=$armedWake ") }
+                val screenOn = text.lineSequence().firstOrNull { it.startsWith("R44_WAKE ") &&
+                    armedWake != null && it.contains("wake=$armedWake ") }?.let { numeric(it, "screenOn") }
                 val row = selectedRow
                 val start = SystemClock.uptimeMillis()
                 val shot = ui.takeScreenshot()
@@ -147,9 +152,13 @@ class KeyguardR446StockServiceInstrumentationTest {
                     }
                     sampled++
                     val issue = row?.let { numeric(it, "issue") }
-                    if (issue == null && underlay == null) {
+                    if (issue == null && underlay == null && row != null && armedWake != null &&
+                        screenOn != null && start >= screenOn) {
                         underlay = shot.copy(Bitmap.Config.ARGB_8888, false)
+                        underlayStart = start
                         underlayEnd = end
+                        underlayWake = armedWake
+                        underlayScreenOn = screenOn
                     }
                     val before = underlay
                     if (issue != null && before != null && underlayEnd < issue && bounds.left >= 0 && bounds.top >= 0 &&
@@ -167,7 +176,7 @@ class KeyguardR446StockServiceInstrumentationTest {
                         }
                         matching = maxOf(matching, count); changed = maxOf(changed, differences)
                     }
-                    samples.append("index=$sampled before=$start after=$end issue=$issue wake=$armedWake matching=$matching changed=$changed row=$row\n")
+                    samples.append("index=$sampled before=$start after=$end issue=$issue wake=$armedWake screenOn=$screenOn matching=$matching changed=$changed row=$row\n")
                     shot.recycle()
                 }
                 if (row != null && numeric(row, "frame") != null && matching >= 64 && changed >= 64) break
@@ -192,6 +201,8 @@ class KeyguardR446StockServiceInstrumentationTest {
             assertTrue("stock wake did not submit its sample\n$row", numeric(row, "submit") != null)
             assertTrue("stock wake did not observe a shader draw\n$row", numeric(row, "frame") != null)
             assertNotNull("NOT REACHED: pre-submit same-wake background", underlay)
+            assertTrue("NOT REACHED: underlay belongs to the same post-screen-on wake",
+                underlayWake == armedWake && underlayScreenOn != null && underlayStart >= checkNotNull(underlayScreenOn))
             assertTrue("NOT REACHED: background acquisition finished before issue", underlayEnd < checkNotNull(numeric(row, "issue")))
             assertTrue("no independently matching calibrated sample; matching=$matching changed=$changed\n$row",
                 matching >= 64 && changed >= 64)
