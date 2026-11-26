@@ -166,6 +166,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR445WindowCompositionTest
       methods=(actualAttachedSurfaceStaysBelowIndependentUpperWindow)
       ;;
+    r445_composition_capture)
+      class=com.fluvi.app.lockscreen.KeyguardR445WindowCompositionTest
+      methods=(actualAttachedSurfaceWithCaptureStaysBelowIndependentUpperWindow)
+      ;;
     r444_reason)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
       methods=(r444AppliedReasonIsSeparateFromASeparateUpperWindow)
