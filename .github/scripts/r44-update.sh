@@ -286,6 +286,39 @@ PY
     tap_label 'Debug log' entry
     tap_label 'ZÁRKÉPERNYŐ' tab
     adb shell dumpsys accessibility > "$out/accessibility-normal.txt" 2>&1 || true
+    if [[ "${R446_UI_PROBE:-false}" == true ]]; then
+      # Exercise the actual new button in the signed profile, followed by one
+      # unmodified Android lock/wake.  A receipt proves arming only: save the
+      # optical frame without claiming that a sample was drawn or visible.
+      tap_label 'Egyszeri rajzpróba – fix minta' r446-action
+      r446_armed=false
+      for attempt in $(seq 1 15); do
+        adb shell uiautomator dump /sdcard/r446-window.xml > /dev/null 2>&1 || true
+        adb exec-out cat /sdcard/r446-window.xml > "$out/ui-r446-receipt.xml" 2>/dev/null || true
+        if wait_for_system_anr "$out/ui-r446-receipt.xml" "r446-receipt-$attempt"; then continue; fi
+        if grep -Fq 'Egyszeri rajzpróba előkészítve' "$out/ui-r446-receipt.xml"; then
+          r446_armed=true; break
+        fi
+        if (( attempt > 1 )); then scroll_controls "$out/ui-r446-receipt.xml" down; fi
+        sleep 1
+      done
+      "$r446_armed" || { printf '%s\n' 'FAIL: no signed R44.6 one-wake arm receipt.' >> "$out/ui-r446-result.txt"; exit 1; }
+      printf '%s\n' 'PASS: signed R44.6 one-wake console action returned the service arm receipt.' > "$out/ui-r446-result.txt"
+      adb shell locksettings set-disabled false > "$out/r446-locksettings.txt" 2>&1
+      adb shell input keyevent KEYCODE_SLEEP
+      sleep 1
+      adb shell input keyevent KEYCODE_WAKEUP
+      sleep 2
+      adb shell dumpsys window > "$out/r446-stock-window.txt" 2>&1 || true
+      adb exec-out screencap -p > "$out/r446-stock-wake.png" || true
+      printf '%s\n' 'One stock wake performed; screenshot retained. Pixel visibility and physical presentation are not inferred from this receipt.' >> "$out/ui-r446-result.txt"
+      adb shell wm dismiss-keyguard || true
+      sleep 1
+      adb shell uiautomator dump /sdcard/r446-after-wake.xml > /dev/null 2>&1 || true
+      adb exec-out cat /sdcard/r446-after-wake.xml > "$out/ui-r446-after-wake.xml" 2>/dev/null || true
+      [[ "$bound_before" == true && "$bound_after" == true ]]
+      exit 0
+    fi
     tap_label 'Mintaorb kipróbálása és rögzítés' action
     receipt=false
     for attempt in $(seq 1 12); do
@@ -343,37 +376,6 @@ PY
     "$frozen" || { printf '%s\n' 'FAIL: inactive sample control was not observed after freeze.' >> "$out/ui-result.txt"; exit 1; }
     adb shell dumpsys accessibility > "$out/accessibility-restored.txt" 2>&1 || true
     printf '%s\n' 'PASS: stop/freeze returned to the inactive sample control; service snapshots retained for flag inspection.' >> "$out/ui-result.txt"
-    if [[ "${R446_UI_PROBE:-false}" == true ]]; then
-      # Exercise the actual new button in the signed profile, followed by one
-      # unmodified Android lock/wake.  A receipt proves arming only: save the
-      # optical frame without claiming that a sample was drawn or visible.
-      tap_label 'Egyszeri rajzpróba – fix minta' r446-action
-      r446_armed=false
-      for attempt in $(seq 1 15); do
-        adb shell uiautomator dump /sdcard/r446-window.xml > /dev/null 2>&1 || true
-        adb exec-out cat /sdcard/r446-window.xml > "$out/ui-r446-receipt.xml" 2>/dev/null || true
-        if wait_for_system_anr "$out/ui-r446-receipt.xml" "r446-receipt-$attempt"; then continue; fi
-        if grep -Fq 'Egyszeri rajzpróba előkészítve' "$out/ui-r446-receipt.xml"; then
-          r446_armed=true; break
-        fi
-        if (( attempt > 1 )); then scroll_controls "$out/ui-r446-receipt.xml" down; fi
-        sleep 1
-      done
-      "$r446_armed" || { printf '%s\n' 'FAIL: no signed R44.6 one-wake arm receipt.' >> "$out/ui-r446-result.txt"; exit 1; }
-      printf '%s\n' 'PASS: signed R44.6 one-wake console action returned the service arm receipt.' > "$out/ui-r446-result.txt"
-      adb shell locksettings set-disabled false > "$out/r446-locksettings.txt" 2>&1
-      adb shell input keyevent KEYCODE_SLEEP
-      sleep 1
-      adb shell input keyevent KEYCODE_WAKEUP
-      sleep 2
-      adb shell dumpsys window > "$out/r446-stock-window.txt" 2>&1 || true
-      adb exec-out screencap -p > "$out/r446-stock-wake.png" || true
-      printf '%s\n' 'One stock wake performed; screenshot retained. Pixel visibility and physical presentation are not inferred from this receipt.' >> "$out/ui-r446-result.txt"
-      adb shell wm dismiss-keyguard || true
-      sleep 1
-      adb shell uiautomator dump /sdcard/r446-after-wake.xml > /dev/null 2>&1 || true
-      adb exec-out cat /sdcard/r446-after-wake.xml > "$out/ui-r446-after-wake.xml" 2>/dev/null || true
-    fi
     # Reopen through the ordinary user flow. Force-stop is not an activity
     # close: on this API 37 image it removed the enabled accessibility
     # service and made the subsequent rebind check test a different action.

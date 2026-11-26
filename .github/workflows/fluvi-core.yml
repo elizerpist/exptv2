@@ -330,6 +330,7 @@ jobs:
           path: |
             ${{ runner.temp }}/r44-update/*.txt
             ${{ runner.temp }}/r44-update/*.xml
+            ${{ runner.temp }}/r44-update/*.png
           if-no-files-found: warn
           retention-days: 14
 
