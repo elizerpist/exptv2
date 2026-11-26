@@ -128,7 +128,7 @@ class KeyguardR446StockServiceInstrumentationTest {
             var sampled = 0
             var underlayEnd = 0L
             val samples = StringBuilder("same-wake stock control; physical=UNOBSERVED bounds=$bounds\n")
-            fun numeric(row: String, name: String) = Regex("(?:^| )$name=([0-9]+)(?: |$)")
+            fun numeric(row: String, name: String) = Regex("(?:^| )$name=([0-9]+)(?: |/|$)")
                 .find(row)?.groupValues?.get(1)?.toLongOrNull()
             while (SystemClock.uptimeMillis() < waitEnd) {
                 val text = KeyguardCardDiagnostics.captureSnapshot(context)["report"] as String
@@ -142,7 +142,7 @@ class KeyguardR446StockServiceInstrumentationTest {
                 val shot = ui.takeScreenshot()
                 val end = SystemClock.uptimeMillis()
                 if (shot != null) {
-                    if (sampled < 20) File(out, "r447-stock-$sampled.png").outputStream().use {
+                    File(out, "r447-stock-$sampled.png").outputStream().use {
                         shot.compress(Bitmap.CompressFormat.PNG, 100, it)
                     }
                     sampled++
@@ -172,7 +172,10 @@ class KeyguardR446StockServiceInstrumentationTest {
                 }
                 if (row != null && numeric(row, "frame") != null && matching >= 64 && changed >= 64) break
                 if (row != null && numeric(row, "withdraw") != null) break
-                SystemClock.sleep(150)
+                // Keep every acquired frame while bounding both the strip and
+                // its existing fifteen-second observation window.
+                if (sampled >= 20) break
+                SystemClock.sleep(650)
             }
             File(out, "r447-stock-samples.txt").writeText(samples.toString())
             ui.takeScreenshot()?.let { shot ->
