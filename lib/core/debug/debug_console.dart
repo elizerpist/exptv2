@@ -310,11 +310,12 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
         if (mounted) setState(() => _r44TrialAvailable = false);
       }
       final receipt = await bridge.r442SampleStatus();
-      if (mounted)
+      if (mounted) {
         setState(() {
           _r442Active = _validR442Receipt(receipt, snapshot.captureId);
           _r442Reason = receipt['reason']?.toString();
         });
+      }
     } on Object catch (error) {
       if (mounted) setState(() => _keyguardError = '$error');
     } finally {
@@ -357,6 +358,8 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
     'unsupportedBuild' => 'A mintaorb-próba ezen a rendszeren nem érhető el.',
     'startInProgress' => 'A próba indítása már folyamatban van.',
     'samplePreparationFailed' => 'A mintaorb előkészítése sikertelen.',
+    'captureFailed' => 'A natív rögzítés indítása sikertelen.',
+    'startCancelled' => 'A mintaorb-próba indítása megszakadt.',
     'serviceOrCaptureChanged' =>
       'A szolgáltatás vagy a rögzítés időközben megváltozott.',
     _ =>
@@ -380,24 +383,29 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       final snapshot = rawSnapshot is Map<Object?, Object?>
           ? KeyguardTimingCaptureSnapshot.fromMap(rawSnapshot)
           : null;
+      final trial = await bridge.r44SyntheticTrial();
       final current = await bridge.r442SampleStatus();
       final confirmed =
           snapshot != null &&
           snapshot.recording &&
+          trial['enabled'] == true &&
           _validR442Receipt(receipt, snapshot.captureId) &&
           _validR442Receipt(current, snapshot.captureId) &&
           current['serviceSession'] == receipt['serviceSession'] &&
           current['process'] == receipt['process'];
-      if (mounted)
+      if (mounted) {
         setState(() {
           _keyguardSnapshot = snapshot ?? _keyguardSnapshot;
           _r442Active = confirmed;
-          _r44TrialEnabled = confirmed;
+          _r44TrialEnabled = trial['enabled'] == true;
           _r442Reason = confirmed
               ? 'armed'
+              : receipt['active'] == true
+              ? 'serviceOrCaptureChanged'
               : (receipt['reason'] ?? current['reason'])?.toString();
           if (!confirmed) _keyguardError = _r442Failure(_r442Reason);
         });
+      }
     } on Object catch (error) {
       if (mounted) setState(() => _keyguardError = '$error');
     } finally {
@@ -469,6 +477,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       _copyingKeyguard = true;
       _keyguardCopied = false;
       _keyguardError = null;
+      _r442Active = false;
     });
     try {
       // A running capture is frozen first so the clipboard receives one

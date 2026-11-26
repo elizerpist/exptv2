@@ -31,7 +31,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r44PerWakeEvidenceSurvivesFullPressure() = r44EvidencePressure("FULL")
 
     private fun r44EvidencePressure(mode: String) {
-        KeyguardCardDiagnostics.startCapture(context, "r44-fixture", "profile", mode)
+        KeyguardCardDiagnostics.startCapture(context, "r44-fixture", "profile", mode, r442ExpectedSession = 944)
         var firstOwner: KeyguardDiagnosticContext? = null
         repeat(6) { i ->
             val wake = i + 1L
@@ -47,7 +47,16 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                     true, false, false, false, false, 10, 2, true,
                     KeyguardR44Witness(KeyguardR44Markers.Marker.HOST, KeyguardR44Markers.Carrier.VIEW_ID, 1),
                     KeyguardR44Witness(KeyguardR44Markers.Marker.DEVICE_ENTRY, KeyguardR44Markers.Carrier.EXTRA_EAGER, 2),
-                    true, true, 1, 1, 0, 0, false, 2))
+                    true, true, 1, 1, 0, 0, false, 2,
+                    lookupStatus = "VERIFIED", lookupIdentity = "17000001:1780000000000",
+                    shadowVerdict = verdict, shadowReason = KeyguardSurfaceReason.NO_MAIN_MARKER,
+                    rawHost = 1, rawEntry = 2, rawClock = 1, rejectedUnverified = 1,
+                    rejectedAncestry = 1, rejectedExcluded = 1, rejectedForeign = 1, rejectedHidden = 1,
+                    firstCandidate = KeyguardR44Markers.Marker.DEVICE_ENTRY,
+                    firstCarrier = KeyguardR44Markers.Carrier.VIEW_ID, cover = "VETO_UNKNOWN_OR_COVER", receipt = "armed"))
+            KeyguardCardDiagnostics.recordR442Handoff(KeyguardR442HandoffObservation(
+                owner, base + 1, base + 2, base + 20, base + 22, base + 10,
+                base + 23, base + 24, "R442_AFTER_NODE:3/1/2"))
             // Exhaust the verbose ring before the first post-screen read.
             repeat(14) { n -> record(base + 500 + n, base + 1 + n, KeyguardSurface.UNKNOWN) }
             record(base + 1, base + 10, KeyguardSurface.UNKNOWN)
@@ -68,6 +77,8 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             val row = report.lineSequence().single { it.startsWith("R44_WAKE ") && it.contains("wake=$wake ") }
             assertTrue(row, row.contains("screenOn=${wake * 1000 + 20}"))
             assertTrue(row, row.contains("firstPostRead=${wake * 1000 + 2}"))
+            assertTrue(report, report.contains("R44_2_HANDOFF old=${wake * 1000 + 1} next=${wake * 1000 + 2} "))
+            assertTrue(report, report.contains("R44_2_EVIDENCE req=${wake * 1000 + 2} lookup=VERIFIED"))
             assertTrue(report, report.contains("kind=firstRestrictionClassification wake=$wake req=${wake * 1000 + 400} "))
         }
         assertEquals(6, report.lineSequence().count { it.startsWith("R44_HU ") })

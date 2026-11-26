@@ -217,13 +217,18 @@ void main() {
     tester,
   ) async {
     final calls = <String>[];
+    var sampleEnabled = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(runtime, (call) async {
           calls.add(call.method);
           if (call.method == 'getR44SyntheticTrial') {
-            return <String, Object?>{'available': true, 'enabled': false};
+            return <String, Object?>{
+              'available': true,
+              'enabled': sampleEnabled,
+            };
           }
           if (call.method == 'startR442SampleCapture') {
+            sampleEnabled = true;
             return <String, Object?>{
               'active': true,
               'captureId': 'capture-test',
@@ -303,6 +308,7 @@ void main() {
   testWidgets('a replaced native receipt cannot leave a trial active', (
     tester,
   ) async {
+    var sampleEnabled = false;
     const receipt = <String, Object?>{
       'active': true,
       'captureId': 'capture-test',
@@ -313,9 +319,13 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(runtime, (call) async {
           if (call.method == 'getR44SyntheticTrial') {
-            return <String, Object?>{'available': true, 'enabled': false};
+            return <String, Object?>{
+              'available': true,
+              'enabled': sampleEnabled,
+            };
           }
           if (call.method == 'startR442SampleCapture') {
+            sampleEnabled = true;
             return <String, Object?>{
               ...receipt,
               'snapshot': response('REC', 'LIVE'),

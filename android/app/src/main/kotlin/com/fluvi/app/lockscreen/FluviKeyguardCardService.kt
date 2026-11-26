@@ -287,10 +287,17 @@ class FluviKeyguardCardService : AccessibilityService() {
     @Volatile private var r442Receipt: R442Receipt? = null
     private var r442Starting = false
     private var r442Reason = "notStarted"
+    private var r442ReceiptRevision = 0L
 
     private fun invalidateR442Receipt(reason: String) {
         r442Receipt = null
         r442Reason = reason
+        r442ReceiptRevision += 1
+    }
+
+    private fun rejectR442Start(reason: String): Map<String, Any?> {
+        invalidateR442Receipt(reason)
+        return mapOf("active" to false, "reason" to reason)
     }
 
     /** The service owns both the sample domain and the capture receipt. The
@@ -303,16 +310,16 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (r442Starting) return mapOf("active" to false, "reason" to "startInProgress")
         invalidateR442Receipt("starting")
         if (Build.VERSION.SDK_INT != 37 || !KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext))
-            return mapOf("active" to false, "reason" to "unsupportedBuild")
+            return rejectR442Start("unsupportedBuild")
         if (FluviKeyguardCardServiceRegistry.serviceForInstrumentation() !== this ||
             !FluviKeyguardCardServiceRegistry.connected || !::overlay.isInitialized)
-            return mapOf("active" to false, "reason" to "serviceUnavailable")
+            return rejectR442Start("serviceUnavailable")
         val km = getSystemService(android.app.KeyguardManager::class.java)
-            ?: return mapOf("active" to false, "reason" to "keyguardUnavailable")
-        if (km.isKeyguardLocked) return mapOf("active" to false, "reason" to "phoneLocked")
+            ?: return rejectR442Start("keyguardUnavailable")
+        if (km.isKeyguardLocked) return rejectR442Start("phoneLocked")
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)
         if (!settings.requested || settings.presentationMode != KeyguardCardPresentationMode.ORB)
-            return mapOf("active" to false, "reason" to "orbServiceNotEnabled")
+            return rejectR442Start("orbServiceNotEnabled")
         val wasEnabled = KeyguardR44Trial.active
         r442Starting = true
         var started = false
@@ -320,9 +327,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             if (!setR44SyntheticTrial(true) || !KeyguardR44Trial.active ||
                 KeyguardR44Trial.profile(null) == null || KeyguardR44Trial.settings(settings).showFinancialDetails ||
                 !overlay.r442SamplePrepared())
-                return mapOf("active" to false, "reason" to "samplePreparationFailed")
+                return rejectR442Start("samplePreparationFailed")
             val expectedSession = session.get()
             val expectedProcess = KeyguardCardDiagnostics.currentProcessInstanceId()
+            val expectedRevision = r442ReceiptRevision
             val snapshot = withContext(Dispatchers.IO) {
                 KeyguardCardDiagnostics.startCapture(applicationContext, build, buildMode, captureMode, false,
                     r442ExpectedSession = expectedSession)
@@ -334,17 +342,25 @@ class FluviKeyguardCardService : AccessibilityService() {
                 FluviKeyguardCardServiceRegistry.serviceForInstrumentation() !== this ||
                 !FluviKeyguardCardServiceRegistry.connected || session.get() != expectedSession ||
                 KeyguardCardDiagnostics.currentProcessInstanceId() != expectedProcess || !KeyguardR44Trial.active ||
-                !overlay.r442SamplePrepared()) {
+                r442ReceiptRevision != expectedRevision || !overlay.r442SamplePrepared()) {
                 invalidateR442Receipt("serviceOrCaptureChanged")
                 return mapOf("active" to false, "reason" to r442Reason, "snapshot" to snapshot)
             }
             r442Receipt = R442Receipt(id, expectedSession, expectedProcess)
             r442Reason = "armed"
             return r442SampleStatus() + mapOf("snapshot" to snapshot)
+        } catch (cancelled: CancellationException) {
+            invalidateR442Receipt("startCancelled")
+            throw cancelled
+        } catch (failure: Exception) {
+            invalidateR442Receipt("captureFailed")
+            return mapOf("active" to false, "reason" to "captureFailed", "errorClass" to failure.javaClass.simpleName)
         } finally {
             if (!started && !wasEnabled && KeyguardR44Trial.active &&
                 FluviKeyguardCardServiceRegistry.serviceForInstrumentation() === this && !km.isKeyguardLocked) {
+                val failureReason = r442Reason
                 setR44SyntheticTrial(false)
+                r442Reason = failureReason
             }
             r442Starting = false
         }

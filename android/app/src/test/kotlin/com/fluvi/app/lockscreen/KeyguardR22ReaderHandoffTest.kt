@@ -174,6 +174,54 @@ class KeyguardR22ReaderHandoffTest {
             KeyguardSurface.MAIN_KEYGUARD, decision.surface)
     }
 
+    @Test fun r442SameWalkDistinguishesUnverifiedEntryFromMissingContent() {
+        val root = Platform.node("element:lockscreen")
+        checkNotNull(Platform.nodes[root]).children.add(Platform.node("com.android.systemui:id/device_entry_icon_view"))
+        Platform.activeRoot = root
+        Platform.inventory = listOf(Platform.window(10, 1, true, root))
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5,
+            r44Enabled = true, r44DeviceEntryResourceVerified = false), { true })
+        val evidence = checkNotNull(read.snapshots.single().r44)
+        assertEquals(1, evidence.rawHost)
+        assertEquals(1, evidence.rawEntry)
+        assertEquals(1, evidence.rejectedUnverified)
+        assertEquals(KeyguardR44Markers.Marker.DEVICE_ENTRY, evidence.firstCandidate)
+        assertEquals(KeyguardSurface.UNKNOWN, KeyguardR44SurfaceClassifier.classify(
+            read.snapshots, false, false, false, false).surface)
+        assertEquals(KeyguardSurface.UNKNOWN, KeyguardR44SurfaceClassifier.classify(
+            read.snapshots, false, false, false, true).surface)
+    }
+
+    @Test fun r442YieldsBeforeOptionalCallButConsumesReturnedRestriction() {
+        for (restrictive in listOf(false, true)) {
+            Platform.reset()
+            val root = Platform.node("element:lockscreen")
+            val child = Platform.node(null)
+            checkNotNull(Platform.nodes[child]).apply {
+                if (restrictive) extras.putCharSequence(KeyguardR44Markers.EXTRA, "scene:shade")
+                else { advertised = true; lazyTag = "element:LargeClock" }
+            }
+            checkNotNull(Platform.nodes[root]).children.add(child)
+            Platform.activeRoot = root
+            Platform.inventory = listOf(Platform.window(10, 1, true, root))
+            var offered = false
+            Platform.afterChild = { offered = true }
+            val successor = KeyguardCardInspectionRequest(2, "window", 1, 2, 3, 4, 5, 20)
+            val request = KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true,
+                r37YieldHint = { offered }, claimR37Yield = { _, _, _, _, _ -> successor })
+            val read = reader.read(request, { true })
+            if (restrictive) {
+                assertNull(read.yieldedTo)
+                assertEquals(KeyguardSurface.SHADE, KeyguardR44SurfaceClassifier.classify(
+                    read.snapshots, false, false, false, true).surface)
+            } else {
+                assertEquals(successor, read.yieldedTo)
+                assertEquals(0, Platform.extraCalls)
+                assertEquals(1, checkNotNull(Platform.nodes[child]).recycled)
+            }
+        }
+    }
+
     @Test fun r44EagerAndLazyTagsTraverseTheActualReader() {
         for (lazy in listOf(false, true)) {
             Platform.reset()
