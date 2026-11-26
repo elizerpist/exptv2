@@ -272,7 +272,11 @@ PY
     "$frozen" || { printf '%s\n' 'FAIL: inactive sample control was not observed after freeze.' >> "$out/ui-result.txt"; exit 1; }
     adb shell dumpsys accessibility > "$out/accessibility-restored.txt" 2>&1 || true
     printf '%s\n' 'PASS: stop/freeze returned to the inactive sample control; service snapshots retained for flag inspection.' >> "$out/ui-result.txt"
-    adb shell am force-stop com.fluvi.app
+    # Reopen through the ordinary user flow. Force-stop is not an activity
+    # close: on this API 37 image it removed the enabled accessibility
+    # service and made the subsequent rebind check test a different action.
+    adb shell input keyevent KEYCODE_BACK
+    adb shell input keyevent KEYCODE_BACK
     adb shell am start -n com.fluvi.app/.MainActivity > "$out/reopen.txt" 2>&1
     observe reopened
     adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$out/prefs-reopened.xml"
