@@ -153,6 +153,14 @@ class KeyguardR448StockServiceInstrumentationTest {
                 val screenOn = text.lineSequence().firstOrNull { it.startsWith("R44_WAKE ") &&
                     armedWake != null && it.contains("wake=$armedWake ") }?.let { numeric(it, "screenOn") }
                 val row = selectedRow
+                // The preceding wake's screenshot request may stall across
+                // the real SCREEN_ON. Do not issue it until the armed wake
+                // and its own screen boundary are present in diagnostics.
+                // This test-side wait does not hold or delay the service.
+                if (armedWake == null || row == null || screenOn == null) {
+                    SystemClock.sleep(10)
+                    continue
+                }
                 val start = SystemClock.uptimeMillis()
                 val shot = ui.takeScreenshot()
                 val end = SystemClock.uptimeMillis()
@@ -161,9 +169,8 @@ class KeyguardR448StockServiceInstrumentationTest {
                         shot.compress(Bitmap.CompressFormat.PNG, 100, it)
                     }
                     sampled++
-                    val issue = row?.let { numeric(it, "issue") }
-                    if (issue == null && underlay == null && row != null && armedWake != null &&
-                        screenOn != null && start >= screenOn) {
+                    val issue = numeric(row, "issue")
+                    if (issue == null && underlay == null && start >= screenOn) {
                         underlay = shot.copy(Bitmap.Config.ARGB_8888, false)
                         underlayStart = start
                         underlayEnd = end
@@ -203,8 +210,8 @@ class KeyguardR448StockServiceInstrumentationTest {
                     samples.append("index=$sampled before=$start after=$end issue=$issue wake=$armedWake screenOn=$screenOn matching=$matching changed=$changed row=$row\n")
                     shot.recycle()
                 }
-                if (row != null && numeric(row, "frame") != null && matchingFrames >= 2 && animationChanges >= 64) break
-                if (row != null && numeric(row, "withdraw") != null) break
+                if (numeric(row, "frame") != null && matchingFrames >= 2 && animationChanges >= 64) break
+                if (numeric(row, "withdraw") != null) break
                 // Keep every acquired frame while bounding both the strip and
                 // its existing fifteen-second observation window.
                 if (sampled >= 20) break
