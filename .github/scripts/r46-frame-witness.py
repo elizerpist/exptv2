@@ -28,15 +28,23 @@ for line in log_path.read_text(errors='replace').splitlines():
 runs = []
 for wake in range(1, cycles + 1):
     frames = []
-    for image in sorted((root / f'{cycles}-{wake}').glob('*.png'), key=lambda p: int(p.stem)):
+    wake_dir = root / f'{cycles}-{wake}'
+    # The R47 hold sample has a descriptive name and no R46Optical bracket.
+    # Keep it separately; never interpret it as a numbered wake frame.
+    for image in sorted((p for p in wake_dir.glob('*.png') if p.stem.isdecimal()), key=lambda p: int(p.stem)):
         timing = brackets.get((wake, int(image.stem)), {})
         frames.append({'file': str(image.relative_to(root)), 'sha256': hashlib.sha256(image.read_bytes()).hexdigest(),
                        'capture_start_up_ms': timing.get('before'), 'capture_end_up_ms': timing.get('after'),
                        'orb_match': None, 'underlay_match': None})
+    hold = wake_dir / 'after-seven-seconds.png'
+    hold_sample = ({'file': str(hold.relative_to(root)), 'sha256': hashlib.sha256(hold.read_bytes()).hexdigest(),
+                    'capture_start_up_ms': None, 'capture_end_up_ms': None, 'orb_match': None}
+                   if hold.is_file() else None)
     runs.append({'signed_ui': True, 'wake_index': wake,
                  'calibration': {'same_route': False, 'same_geometry': False, 'positive': False,
                                  'negative': False, 'clock_aligned': False},
                  'frames': frames,
+                 'unbracketed_hold_sample': hold_sample,
                  'reason': 'PNG intervals retained; same-wake calibrated ORB/underlay and physical presentation are unobserved',
                  'first_forbidden': {'observed': False}})
 output.write_text(json.dumps({'runs': runs}, indent=2) + '\n')
