@@ -57,7 +57,7 @@ permissions:
   contents: read
 jobs:
   service:
-    if: ${{ inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' && inputs.test_scope != 'r44_update' && inputs.test_scope != 'r448_update_routes' && inputs.test_scope != 'r446_update_once' && inputs.test_scope != 'r446_update_arm' && inputs.test_scope != 'r44_update_reopen' && inputs.test_scope != 'r44_update_private' && inputs.test_scope != 'r43_flutter' }}
+    if: ${{ inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' && inputs.test_scope != 'r44_update' && inputs.test_scope != 'r448_update_routes' && inputs.test_scope != 'r448_update_restart' && inputs.test_scope != 'r446_update_once' && inputs.test_scope != 'r446_update_arm' && inputs.test_scope != 'r44_update_reopen' && inputs.test_scope != 'r44_update_private' && inputs.test_scope != 'r43_flutter' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -273,7 +273,7 @@ jobs:
           retention-days: 14
 
   r44-update:
-    if: ${{ inputs.test_scope == 'r44_update' || inputs.test_scope == 'r448_update_routes' || inputs.test_scope == 'r446_update_once' || inputs.test_scope == 'r446_update_arm' || inputs.test_scope == 'r44_update_reopen' || inputs.test_scope == 'r44_update_private' }}
+    if: ${{ inputs.test_scope == 'r44_update' || inputs.test_scope == 'r448_update_routes' || inputs.test_scope == 'r448_update_restart' || inputs.test_scope == 'r446_update_once' || inputs.test_scope == 'r446_update_arm' || inputs.test_scope == 'r44_update_reopen' || inputs.test_scope == 'r44_update_private' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
@@ -292,7 +292,8 @@ jobs:
       R44_REOPEN_ONLY: ${{ inputs.test_scope == 'r44_update_reopen' }}
       R446_UI_PROBE: ${{ inputs.test_scope == 'r446_update_once' || inputs.test_scope == 'r446_update_arm' }}
       R446_ARM_ONLY: ${{ inputs.test_scope == 'r446_update_arm' }}
-      R448_UI_PROBE: ${{ inputs.test_scope == 'r448_update_routes' }}
+      R448_UI_PROBE: ${{ inputs.test_scope == 'r448_update_routes' || inputs.test_scope == 'r448_update_restart' }}
+      R448_RESTART_PROBE: ${{ inputs.test_scope == 'r448_update_restart' }}
     steps:
       - uses: actions/checkout@v5
         with:

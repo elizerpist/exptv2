@@ -332,13 +332,28 @@ PY
         tap_label 'Debug log' entry
         tap_label 'ZÁRKÉPERNYŐ' tab
       }
+      restart_route_panel() {
+        local phase=$1 old_pid new_pid=''
+        old_pid=$(adb shell pidof com.fluvi.app | tr -d '\r' | awk '{print $1}')
+        [[ "$old_pid" =~ ^[0-9]+$ ]]
+        adb shell run-as com.fluvi.app kill -9 "$old_pid"
+        adb shell am start -n com.fluvi.app/.MainActivity >> "$out/restart-r448.txt" 2>&1
+        observe "route-restart-$phase"
+        new_pid=$(adb shell pidof com.fluvi.app | tr -d '\r' | awk '{print $1}')
+        [[ "$new_pid" =~ ^[0-9]+$ && "$new_pid" != "$old_pid" ]]
+        printf '%s old_pid=%s new_pid=%s\n' "$phase" "$old_pid" "$new_pid" >> "$out/ui-route-result.txt"
+        tap_label 'Debug log' entry
+        tap_label 'ZÁRKÉPERNYŐ' tab
+      }
       tap_label 'Widgets Anywhere' r448-select-wa
       wait_route 'Widgets Anywhere' WIDGETS_ANYWHERE wa-selected
-      reopen_route_panel
+      if [[ "${R448_RESTART_PROBE:-false}" == true ]]; then restart_route_panel wa
+      else reopen_route_panel; fi
       wait_route 'Widgets Anywhere' WIDGETS_ANYWHERE wa-reopened
       tap_label 'Fluvi adatfolyam' r448-select-fluvi
       wait_route 'Fluvi adatfolyam' FLUVI_STREAM fluvi-selected
-      reopen_route_panel
+      if [[ "${R448_RESTART_PROBE:-false}" == true ]]; then restart_route_panel fluvi
+      else reopen_route_panel; fi
       wait_route 'Fluvi adatfolyam' FLUVI_STREAM fluvi-reopened
       printf '%s\n' 'Selector only: no window or physical-pixel assertion.' >> "$out/ui-route-result.txt"
     fi
