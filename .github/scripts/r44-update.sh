@@ -220,10 +220,34 @@ PY
       fi
     }
     tap_label() {
-      local label=$1 name=$2 coords=''
-      for attempt in $(seq 1 12); do
+      local label=$1 name=$2 coords='' wait_coords=''
+      for attempt in $(seq 1 20); do
         adb shell uiautomator dump /sdcard/r442-window.xml > /dev/null 2>&1 || true
         adb exec-out cat /sdcard/r442-window.xml > "$out/ui-$name.xml" 2>/dev/null || true
+        if grep -Fq "Quickstep isn't responding" "$out/ui-$name.xml"; then
+          # A system launcher ANR dialog blocked the prior signed UI
+          # probe. Retain the actual dialog and select Wait on this disposable
+          # emulator; never treat this as the requested button's receipt.
+          cp "$out/ui-$name.xml" "$out/ui-quickstep-anr-$name-$attempt.xml"
+          wait_coords=$(python3 - "$out/ui-$name.xml" <<'PY'
+import re,sys,xml.etree.ElementTree as ET
+try:
+    for n in ET.parse(sys.argv[1]).getroot().iter():
+        if n.attrib.get('resource-id') != 'android:id/aerr_wait': continue
+        m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
+        if m:
+            a,b,c,d=map(int,m.groups()); print((a+c)//2,(b+d)//2); break
+except (ET.ParseError,OSError): pass
+PY
+)
+          if [[ "$wait_coords" =~ ^[0-9]+\ [0-9]+$ ]]; then
+            printf 'Quickstep ANR before %s attempt %s; selected Wait.\n' "$name" "$attempt" >> "$out/ui-environment.txt"
+            adb shell input tap $wait_coords
+            sleep 2
+            adb shell am start -n com.fluvi.app/.MainActivity >> "$out/launch.txt" 2>&1 || true
+            continue
+          fi
+        fi
         coords=$(python3 - "$out/ui-$name.xml" "$label" <<'PY'
 import re,sys,xml.etree.ElementTree as ET
 try:
