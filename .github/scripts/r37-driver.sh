@@ -133,6 +133,13 @@ case "${1:-}" in
     sha256sum "$fixture" > "$out/fixture-r447-stock.sha256"
     git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR446StockServiceInstrumentationTest.kt > "$out/fixture-r447-stock.patch"
   fi
+  if [[ "$TEST_SCOPE" == r447_handoff_stable ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR447HandoffStableInstrumentationTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR447HandoffServiceInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r447-handoff.sha256"
+    git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR447HandoffServiceInstrumentationTest.kt > "$out/fixture-r447-handoff.patch"
+  fi
   if [[ "$TEST_SCOPE" == r446_parent_mutation ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR446ParentMutationInstrumentationTest.kt"
     test -f "$fixture"
@@ -207,7 +214,7 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
       methods=(r447LatestPreIssueDecisionSurvivesLightPressure r447LatestPreIssueDecisionSurvivesFullPressure r447ProgressAndTerminalRemainWithTheirOriginalRequest)
       ;;
-    r447_handoff)
+    r447_handoff|r447_handoff_stable)
       class=com.fluvi.app.lockscreen.KeyguardR447HandoffServiceInstrumentationTest
       methods=(internalDuplicateAfterPhysicalReadIssuesOnce sameHostExternalIngressRejectsOldRead)
       ;;
