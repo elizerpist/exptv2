@@ -1,5 +1,5 @@
 name: R44 Android 17 service and evidence controls
-run-name: R46 ${{ inputs.test_scope }} app ${{ inputs.app_sha }}
+run-name: R47 ${{ inputs.test_scope }} app ${{ inputs.app_sha }}
 on:
   workflow_dispatch:
     inputs:

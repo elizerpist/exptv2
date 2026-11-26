@@ -248,6 +248,14 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r47_visual_direct)
+      class=com.fluvi.app.lockscreen.KeyguardR47VisualInstrumentationTest
+      methods=(directPresenterMatchesFlutterAndWithdraws)
+      ;;
+    r47_visual_wa)
+      class=com.fluvi.app.lockscreen.KeyguardR47VisualInstrumentationTest
+      methods=(waPresenterMatchesFlutterAndWithdraws)
+      ;;
     r446_composition)
       class=com.fluvi.app.lockscreen.KeyguardR446WindowPresenterInstrumentationTest
       methods=(actualAttachedSurfaceStaysBelowIndependentUpperWindow)
