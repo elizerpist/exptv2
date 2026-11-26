@@ -3,6 +3,10 @@ set -euo pipefail
 out="$RUNNER_TEMP/r44-update"
 mkdir -p "$out"
 case "${R44_BASELINE:-r44_2_owner}" in
+  r44_8)
+    base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/a67dfc8d207a254a4b14b9abfa8cdfe4ec223c85/fluvi_R44_8_SAMPLE_ONLY_HUMAN_adf87004bde3.apk'
+    base_size=121371601
+    base_sha=4ead8ab16911bd30a920690a167483e1b47ae3afb1fc03cdc27b8b293097728c;;
   r44_7)
     base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/32f179cc771e430487a045b7b7d034dd6a297d13/fluvi_R44_7_HUMAN_ee8528501758.apk'
     base_size=121301776
@@ -283,6 +287,8 @@ try:
             # tap on that node as a route-selection attempt.
             if sys.argv[3].startswith('r448-select-') and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
                 continue
+            if sys.argv[3] == 'r449-action' and (n.attrib.get('clickable') != 'true' or n.attrib.get('enabled') != 'true'):
+                continue
             m=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',n.attrib.get('bounds',''))
             if m:
                 a,b,c,d=map(int,m.groups()); print((a+c)//2,(b+d)//2); break
@@ -290,7 +296,7 @@ except (ET.ParseError,OSError): pass
 PY
 )
         if [[ "$coords" =~ ^[0-9]+\ [0-9]+$ ]]; then
-          if [[ "$name" == r446-action ]]; then
+          if [[ "$name" == r446-action || "$name" == r449-action ]]; then
             # uiautomator dump registers UiAutomation with flags=0 and can
             # temporarily suppress/rebind the service. Wait until the actual
             # service is bound before starting the single-use owner action.
@@ -319,6 +325,69 @@ PY
     tap_label 'Debug log' entry
     tap_label 'ZÁRKÉPERNYŐ' tab
     adb shell dumpsys accessibility > "$out/accessibility-normal.txt" 2>&1 || true
+    if [[ -n "${R449_UI_ROUTE:-}" ]]; then
+      case "$R449_UI_ROUTE" in
+        FLUVI_STREAM) route_label='Fluvi adatfolyam'; route_name=fluvi;;
+        WIDGETS_ANYWHERE) route_label='Widgets Anywhere'; route_name=wa;;
+        *) printf 'Unknown R449 route\n' >&2; exit 2;;
+      esac
+      tap_label "$route_label" "r448-select-$route_name"
+      confirmed=false
+      for attempt in $(seq 1 18); do
+        adb shell uiautomator dump /sdcard/r449-route.xml > /dev/null 2>&1 || true
+        adb exec-out cat /sdcard/r449-route.xml > "$out/ui-r449-route-$attempt.xml" 2>/dev/null || true
+        adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_keyguard_r448_display_route.xml > "$out/r449-route-prefs.xml" 2>/dev/null || true
+        if grep -Fq "Natív választás: $route_label" "$out/ui-r449-route-$attempt.xml" &&
+            grep -Fq ">$R449_UI_ROUTE</string>" "$out/r449-route-prefs.xml"; then confirmed=true; break; fi
+        scroll_controls "$out/ui-r449-route-$attempt.xml" down fine
+        sleep 1
+      done
+      "$confirmed" || { printf 'FAIL: native route %s was not acknowledged\n' "$R449_UI_ROUTE" > "$out/r449-result.txt"; exit 1; }
+      tap_label "Egyszeri mintaorb és rögzítés – $route_label" r449-action
+      sleep 8
+      adb exec-out screencap -p > "$out/r449-$route_name-prewake.png" || true
+      adb shell locksettings set-disabled false > "$out/r449-locksettings.txt" 2>&1
+      # Independent continuous capture. Monotonic logcat brackets every
+      # screenshot. Retain all frames, even if none qualifies as a baseline.
+      adb shell 'mkdir -p /data/local/tmp/r449frames; for n in $(seq 1 32); do log -t R449Optical "before $n"; screencap -p "/data/local/tmp/r449frames/$n.png"; log -t R449Optical "after $n"; sleep 0.1; done' > "$out/r449-frame-stream.txt" 2>&1 &
+      stream_pid=$!
+      sleep 1
+      adb shell input keyevent KEYCODE_SLEEP
+      sleep 1
+      adb shell input keyevent KEYCODE_WAKEUP
+      sleep 5
+      adb exec-out screencap -p > "$out/r449-$route_name-wake.png" || true
+      adb shell wm dismiss-keyguard || true
+      sleep 2
+      wait "$stream_pid" || true
+      adb pull /data/local/tmp/r449frames "$out/r449frames" > "$out/r449-pull.txt" 2>&1 || true
+      adb logcat -b all -d -v monotonic -s R449Optical:I > "$out/r449-frame-times.txt" 2>&1 || true
+      # Read the frozen route report from the signed app's own capture store.
+      # UiAutomation is only reattached after the observed wake has ended.
+      adb shell am start -n com.fluvi.app/.MainActivity > "$out/r449-reopen.txt" 2>&1
+      tap_label 'Debug log' entry
+      tap_label 'ZÁRKÉPERNYŐ' tab
+      tap_label 'Próba leállítása és riport megtartása' r449-freeze
+      sleep 2
+      adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_keyguard_r448_comparison.xml > "$out/r449-comparison.xml" 2>/dev/null || true
+      python3 - "$out/r449-comparison.xml" "$R449_UI_ROUTE" > "$out/r449-result.txt" <<'PY'
+import sys, xml.etree.ElementTree as ET
+try:
+    root=ET.parse(sys.argv[1]).getroot()
+    report=next((e.text or '' for e in root if e.attrib.get('name') == sys.argv[2]), '')
+    rows=[s for s in report.splitlines() if s.startswith('R44_9_OUTCOME ')]
+    assert rows, 'NOT REACHED: no protected R44.9 outcome in the frozen report'
+    assert any('routeConfirmed='+sys.argv[2] in s and 'action=ONE_WAKE' in s for s in rows), 'FAIL: route/action was not confirmed by service'
+    print('PASS: signed UI action and frozen native route receipt')
+    print('\n'.join(rows))
+    print('OPTICAL=NOT QUALIFIED: raw continuous frames retained; no calibrated same-wake comparison performed by this script.')
+except (ET.ParseError,OSError,AssertionError) as e:
+    print(e)
+    sys.exit(1)
+PY
+      [[ "$bound_before" == true && "$bound_after" == true ]]
+      exit 0
+    fi
     if [[ "${R448_UI_PROBE:-false}" == true ]]; then
       # Observe the signed Flutter control and its native readback, then the
       # persisted preference after a normal activity reopen. This verifies the
