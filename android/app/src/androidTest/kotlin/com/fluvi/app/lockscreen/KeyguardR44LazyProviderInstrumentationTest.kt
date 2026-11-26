@@ -1,5 +1,6 @@
 package com.fluvi.app.lockscreen
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Activity
 import android.app.UiAutomation
 import android.content.Intent
@@ -8,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
+import android.widget.FrameLayout
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityNodeProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -22,6 +24,53 @@ import org.junit.runner.RunWith
  * provider is Fluvi-owned test content, not SystemUI or OEM qualification. */
 @RunWith(AndroidJUnit4::class)
 class KeyguardR44LazyProviderInstrumentationTest {
+    /** Collection-only platform control. This activity is Fluvi-owned; it
+     * cannot qualify an OEM SystemUI clock or the actual ORB renderer. */
+    @Test fun visibleUnimportantViewAppearsOnlyWithIncludeFlag() {
+        assertEquals(37, Build.VERSION.SDK_INT)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val ui = instrumentation.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
+        val activity = instrumentation.startActivitySync(Intent(instrumentation.targetContext,
+            KeyguardMaterialTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val bit = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+        val original = checkNotNull(ui.serviceInfo).flags and bit
+        fun change(enable: Boolean) {
+            val current = checkNotNull(ui.serviceInfo)
+            current.flags = if (enable) current.flags or bit else current.flags and bit.inv()
+            ui.serviceInfo = current
+            assertEquals(enable, checkNotNull(ui.serviceInfo).flags and bit != 0)
+        }
+        fun isPresent(): Boolean {
+            val root = ui.rootInActiveWindow ?: return false
+            return try {
+                val nodes = root.findAccessibilityNodeInfosByViewId("android:id/button1")
+                try { nodes.any { it.isVisibleToUser } } finally { nodes.forEach { it.recycle() } }
+            } finally { root.recycle() }
+        }
+        try {
+            instrumentation.runOnMainSync {
+                val root = FrameLayout(activity)
+                val clock = View(activity).apply {
+                    id = android.R.id.button1
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }
+                root.addView(clock, FrameLayout.LayoutParams(200, 200))
+                activity.setContentView(root)
+            }
+            instrumentation.waitForIdleSync()
+            change(false)
+            SystemClock.sleep(300)
+            assertFalse("standard flag unexpectedly exposed fixture", isPresent())
+            change(true)
+            val until = SystemClock.uptimeMillis() + 5_000
+            while (!isPresent() && SystemClock.uptimeMillis() < until) SystemClock.sleep(50)
+            assertTrue("expanded flag did not expose visible fixture", isPresent())
+        } finally {
+            runCatching { change(original != 0) }
+            instrumentation.runOnMainSync { activity.finish() }
+        }
+    }
+
     @Test fun advertisedTagIsFilledOnlyAfterRealExtraRequest() {
         assertEquals(37, Build.VERSION.SDK_INT)
         val instrumentation = InstrumentationRegistry.getInstrumentation()

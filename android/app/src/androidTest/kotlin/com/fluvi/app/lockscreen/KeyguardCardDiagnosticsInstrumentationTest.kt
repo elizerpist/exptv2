@@ -30,6 +30,29 @@ class KeyguardCardDiagnosticsInstrumentationTest {
     @Test fun r44PerWakeEvidenceSurvivesLightPressure() = r44EvidencePressure("LIGHT")
     @Test fun r44PerWakeEvidenceSurvivesFullPressure() = r44EvidencePressure("FULL")
 
+    @Test fun r444AppliedReasonIsSeparateFromASeparateUpperWindow() {
+        KeyguardCardDiagnostics.startCapture(context, "r444-reason", "profile", "LIGHT", r442ExpectedSession = 9444)
+        fun add(wake: Long, reason: KeyguardSurfaceReason, complete: Boolean, failed: Int) {
+            val base = wake * 1000
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9444, wake, "wake", base))
+            KeyguardCardDiagnostics.captureEvent(context, "SCREEN_ON_RECEIVED", "test",
+                diagnosticContext = owner, observedUptimeMs = base + 10)
+            KeyguardCardDiagnostics.recordR44(KeyguardR44ReadObservation(owner, base + 20, wake, wake,
+                base + 11, base + 20, KeyguardSurface.UNKNOWN, KeyguardSurface.UNKNOWN, reason,
+                true, false, false, false, false, 969, 0, true,
+                KeyguardR44Witness(KeyguardR44Markers.Marker.HOST, KeyguardR44Markers.Carrier.EXTRA_LAZY, 20),
+                null, false, complete, 1, 1, failed, 0, false, 2,
+                cover = "VETO_UNKNOWN_OR_COVER", receipt = "armed"))
+        }
+        add(1, KeyguardSurfaceReason.NO_MAIN_MARKER, true, 0)
+        add(2, KeyguardSurfaceReason.WALK_TRUNCATED, false, 1)
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report, report.contains("Hiányzik a külön óra- vagy belépési jel"))
+        assertTrue(report, report.contains("Üres kiegészítő adat miatt hiányos az olvasás"))
+        assertTrue(report, report.contains("további, nem minősített ablak"))
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+    }
+
     @Test fun r442FirstIncompleteReadAndMissingSuccessorRemainExplicit() {
         KeyguardCardDiagnostics.startCapture(context, "r442-fixture", "profile", "LIGHT", r442ExpectedSession = 945)
         val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 945, 7, "wake", 1000))
