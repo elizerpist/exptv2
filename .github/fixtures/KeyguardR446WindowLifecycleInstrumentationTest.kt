@@ -196,8 +196,16 @@ class KeyguardR446WindowLifecycleInstrumentationTest {
                 KeyguardCardCardPosition(.5f), KeyguardCardOrbPosition(.5f, .5f))
             val touchX = orbBounds.left + size / 8
             val touchY = orbBounds.centerY()
+            val outsideX = (orbBounds.left - size / 2).coerceAtLeast(hostBounds.left + 24)
+            val outsideY = orbBounds.centerY()
+            assertTrue("NOT REACHED: outside input point belongs to lower window",
+                hostBounds.contains(outsideX, outsideY) && !orbBounds.contains(outsideX, outsideY) &&
+                    !patchBounds.contains(outsideX, outsideY))
             shell("input tap $touchX $touchY")
             waitFor("lower-window input before attachment") { lowerTouches.get() >= 1 }
+            shell("input tap $outsideX $outsideY")
+            waitFor("lower-window outside input before attachment") { lowerTouches.get() >= 2 }
+            evidence.append("lowerInputBefore inside=$touchX,$touchY outside=$outsideX,$outsideY count=${lowerTouches.get()}\n")
             val draws = AtomicInteger()
             main {
                 val actual = service.r446PreparePresenterForInstrumentation(KeyguardMaterialTimeSource { _, _ -> phase.get() })
@@ -251,9 +259,10 @@ class KeyguardR446WindowLifecycleInstrumentationTest {
             shell("input tap ${patchBounds.centerX()} ${patchBounds.centerY()}")
             waitFor("upper-window touch after attach") { touches.get() >= 2 }
             shell("input tap $touchX $touchY")
-            waitFor("lower-window input through the orb") { lowerTouches.get() >= 2 }
-            shell("input tap ${hostBounds.left + 12} ${hostBounds.top + 12}")
-            waitFor("lower-window input outside the orb") { lowerTouches.get() >= 3 }
+            waitFor("lower-window input through the orb") { lowerTouches.get() >= 3 }
+            shell("input tap $outsideX $outsideY")
+            waitFor("lower-window input outside the orb") { lowerTouches.get() >= 4 }
+            evidence.append("lowerInputAfter inside=$touchX,$touchY outside=$outsideX,$outsideY count=${lowerTouches.get()}\n")
             val transitionAt = SystemClock.uptimeMillis()
             main {
                 service.acceptAccessibilityMetadataForTest(KeyguardAccessibilityEventMeta(
