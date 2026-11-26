@@ -46,6 +46,7 @@ case "$1" in
     rm "$out/libapp.so"
     ;;
   run)
+    trap 'adb logcat -b all -d -v monotonic > "$out/logcat.txt" 2>&1 || true' EXIT
     { adb devices -l; adb shell getprop ro.build.version.sdk; adb shell getprop ro.build.fingerprint; } > "$out/device.txt"
     test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 37
     adb install "$out/r43.apk" > "$out/install-r43.txt" 2>&1
@@ -90,11 +91,19 @@ XML
       adb shell settings get secure enabled_accessibility_services > "$out/enabled-$label.txt"
       "$ok" && grep -Fq "$component" "$out/enabled-$label.txt"
     }
-    observe before
+    bound_before=true
+    if ! observe before; then
+      bound_before=false
+      printf '%s\n' 'NOT REACHED: original accessibility service was not observed bound before update.' >> "$out/service-gate.txt"
+    fi
     adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$out/prefs-before.xml"
     adb exec-out run-as com.fluvi.app cat files/r44-update-sentinel.txt > "$out/sentinel-before.txt"
     adb install -r "$out/r44.apk" > "$out/install-r44.txt" 2>&1
-    observe after
+    bound_after=true
+    if ! observe after; then
+      bound_after=false
+      printf '%s\n' 'NOT REACHED: accessibility service was not observed bound after update.' >> "$out/service-gate.txt"
+    fi
     adb exec-out run-as com.fluvi.app cat shared_prefs/fluvi_native_keyguard_card.xml > "$out/prefs-after.xml"
     adb exec-out run-as com.fluvi.app cat files/r44-update-sentinel.txt > "$out/sentinel-after.txt"
     python3 - "$out/seed.xml" "$out/prefs-before.xml" "$out/prefs-after.xml" > "$out/settings-check.txt" <<'PY'
@@ -108,7 +117,8 @@ for name,expected in seed.items():
 PY
     cmp "$out/sentinel.txt" "$out/sentinel-before.txt"
     cmp "$out/sentinel.txt" "$out/sentinel-after.txt"
-    printf '%s\n' 'PASS: genuine signed R44.1 to candidate install -r; synthetic preferences, sentinel and live bound service survived on API 37.' > "$out/result.txt"
+    printf '%s\n' 'PASS: genuine signed R44.1 to candidate install -r; synthetic preferences and sentinel survived on API 37.' > "$out/result.txt"
+    printf 'bound_before=%s bound_after=%s\n' "$bound_before" "$bound_after" >> "$out/service-gate.txt"
     # Exercise the control in the installed signed profile. A missing semantic
     # node, startup crash or unacknowledged action is an explicit failure, not
     # evidence from the debug test APK or from a different source.
@@ -150,7 +160,8 @@ PY
       adb exec-out cat /sdcard/r442-window.xml > "$out/ui-receipt.xml" 2>/dev/null || true
       if grep -Fq 'Mintaorb-próba aktív' "$out/ui-receipt.xml"; then
         printf '%s\n' 'PASS: signed profile primary control returned an active native sample receipt.' > "$out/ui-result.txt"
-        exit 0
+        if [[ "$bound_before" == true && "$bound_after" == true ]]; then exit 0; fi
+        exit 1
       fi
       sleep 1
     done
