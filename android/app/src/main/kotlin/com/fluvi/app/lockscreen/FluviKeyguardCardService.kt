@@ -1,6 +1,7 @@
 package com.fluvi.app.lockscreen
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -55,9 +56,26 @@ import kotlinx.coroutines.withContext
  */
 class FluviKeyguardCardService : AccessibilityService() {
     private val mainHandler = Handler(Looper.getMainLooper())
+    /** The only persistent item is a recovery obligation for a bit we set;
+     * it cannot activate a trial or carry display authority across processes. */
+    private val r444ProfileOwner by lazy {
+        val prefs = getSharedPreferences("fluvi_r444_flag_recovery", Context.MODE_PRIVATE)
+        KeyguardR444ProfileOwner(AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS,
+            readFlags = { runCatching { serviceInfo?.flags }.getOrNull() },
+            writeFlags = { flags -> runCatching {
+                val current = requireNotNull(serviceInfo)
+                current.flags = flags
+                serviceInfo = current
+                true
+            }.getOrDefault(false) },
+            pendingRestore = { runCatching { prefs.getBoolean("restore_owned_bit", false) }.getOrNull() },
+            setPendingRestore = { pending -> prefs.edit().putBoolean("restore_owned_bit", pending).commit() })
+    }
+    @Volatile private var r444ConfigurationReady = Build.VERSION.SDK_INT != 37
     private data class R442ScreenOn(val session: Long, val uptime: Long)
     @Volatile private var r442ScreenOn: R442ScreenOn? = null
-    private data class R442Lookup(val status: String, val identity: String?, val verified: Boolean)
+    private data class R442Lookup(val status: String, val identity: String?, val verified: Boolean,
+                                  val clockVerified: Boolean = false, val udfpsVerified: Boolean = false)
     @Volatile private var r442Lookup = R442Lookup("UNAVAILABLE", null, false)
     private var r442LookupGeneration = 0L
     private var r442PackageReceiverRegistered = false
@@ -84,10 +102,13 @@ class FluviKeyguardCardService : AccessibilityService() {
                 val info = packageManager.getPackageInfo("com.android.systemui", 0)
                 val identity = "${info.longVersionCode}:${info.lastUpdateTime}"
                 val resources = packageManager.getResourcesForApplication("com.android.systemui")
-                val id = resources.getIdentifier("device_entry_icon_view", "id", "com.android.systemui")
-                val verified = id != 0 &&
-                    resources.getResourceName(id) == "com.android.systemui:id/device_entry_icon_view"
-                R442Lookup(if (verified) "VERIFIED" else "MISSING", identity, verified)
+                fun verifiedId(name: String): Boolean = runCatching {
+                    val id = resources.getIdentifier(name, "id", "com.android.systemui")
+                    id != 0 && resources.getResourceName(id) == "com.android.systemui:id/$name"
+                }.getOrDefault(false)
+                val verified = verifiedId("device_entry_icon_view")
+                R442Lookup(if (verified) "VERIFIED" else "MISSING", identity, verified,
+                    clockVerified = verifiedId("keyguard_clock_switch"), udfpsVerified = verifiedId("udfps_view"))
             } catch (_: Exception) {
                 R442Lookup("FAILURE", null, false)
             }
@@ -107,7 +128,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     private var referenceLocalPresentationAttempted = false
     private var referenceServiceSerial = 0L
 
-    private fun localPresentationAllowed(): Boolean = referenceOwnership?.appMayShow() != false
+    private fun localPresentationAllowed(): Boolean = r444ConfigurationReady && referenceOwnership?.appMayShow() != false
 
     /** A prior process may have left native work behind. Only a genuinely
      * fresh reference installation's first service can assert no prior owner. */
@@ -252,7 +273,7 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     /** Explicit unlocked owner action. Dispose every previously prepared
      * surface before switching material domains and invalidate old reads. */
-    internal fun setR44SyntheticTrial(enabled: Boolean): Boolean {
+    internal fun setR44SyntheticTrial(enabled: Boolean, expanded: Boolean = false): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         invalidateR442Receipt("trialChanged")
         if (Build.VERSION.SDK_INT != 37 || !KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext)) return false
@@ -260,9 +281,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         if (km.isKeyguardLocked || !::overlay.isInitialized || !FluviKeyguardCardServiceRegistry.connected) return false
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)
         if (enabled && (!settings.requested || settings.presentationMode != KeyguardCardPresentationMode.ORB)) return false
-        if (enabled == KeyguardR44Trial.active) return true
-        val resourceVerified = r442Lookup.verified
-        hideImmediately("r44TrialChange")
+        val current = r444ProfileOwner.snapshot
+        if (enabled && KeyguardR44Trial.active &&
+            ((expanded && current.kind == KeyguardR444ProfileOwner.Kind.EXPANDED) ||
+                (!expanded && current.kind in setOf(KeyguardR444ProfileOwner.Kind.STANDARD,
+                    KeyguardR444ProfileOwner.Kind.STANDARD_ALREADY_INCLUDED)))) return true
+        if (!enabled) return stopR444Trial("trialStopped")
+        hideImmediately("r444ProfileChange")
         if (overlay.isAttached) return false
         visibilityEpoch.incrementAndGet()
         interactionEpoch.incrementAndGet()
@@ -272,18 +297,51 @@ class FluviKeyguardCardService : AccessibilityService() {
         invalidateFullContent()
         overlay.clearPrivateOrbPoster()
         overlay.dispose()
-        KeyguardR44Trial.set(enabled, resourceVerified)
+        KeyguardR44Trial.set(false, false)
+        val configured = r444ProfileOwner.start(expanded)
+        r444ConfigurationReady = r444ProfileOwner.snapshot.ready
+        if (!configured || !r444ConfigurationReady) return false
+        KeyguardR44Trial.set(true, r442Lookup.verified)
         return runCatching {
             overlay.prepareRetainedView(settings, lastMaterialProfile)
             true
         }.getOrElse {
             KeyguardR44Trial.set(false, false)
+            r444ConfigurationReady = r444ProfileOwner.stop()
             runCatching { overlay.dispose() }
             false
         }
     }
 
-    private data class R442Receipt(val capture: String, val session: Long, val process: String)
+    /** Safe even when no capture is open or the device has just locked. */
+    internal fun stopR444Trial(reason: String = "captureStopped"): Boolean {
+        check(Looper.myLooper() == Looper.getMainLooper())
+        if (Build.VERSION.SDK_INT != 37) return true
+        val active = KeyguardR44Trial.active || r444ProfileOwner.snapshot.kind != KeyguardR444ProfileOwner.Kind.INACTIVE
+        invalidateR442Receipt(reason)
+        if (active) {
+            if (::overlay.isInitialized) hideImmediately("r444:$reason")
+            visibilityEpoch.incrementAndGet()
+            interactionEpoch.incrementAndGet()
+            synchronized(queueLock) { inspectionQueue.clearPending() }
+            publishInspectionAuthority()
+            stopFinancialObservation()
+            invalidateFullContent()
+            if (::overlay.isInitialized) {
+                overlay.clearPrivateOrbPoster()
+                overlay.dispose()
+            }
+            KeyguardR44Trial.set(false, false)
+        }
+        r444ConfigurationReady = r444ProfileOwner.stop()
+        if (active && r444ConfigurationReady && ::overlay.isInitialized) runCatching {
+            overlay.prepareRetainedView(lastSettings ?: FluviKeyguardCardSettings.read(applicationContext), lastMaterialProfile)
+        }
+        return r444ConfigurationReady
+    }
+
+    private data class R442Receipt(val capture: String, val session: Long, val process: String,
+                                   val profileRevision: Long)
     @Volatile private var r442Receipt: R442Receipt? = null
     private var r442Starting = false
     private var r442Reason = "notStarted"
@@ -304,10 +362,15 @@ class FluviKeyguardCardService : AccessibilityService() {
      * reducer may run off Main, but only this service/session can acknowledge
      * the resulting ID. No receipt survives a rebind or capture replacement. */
     internal suspend fun startR442SampleCapture(
-        build: String?, buildMode: String?, captureMode: String?,
+        build: String?, buildMode: String?, captureMode: String?, expanded: Boolean = true,
     ): Map<String, Any?> {
         check(Looper.myLooper() == Looper.getMainLooper())
         if (r442Starting) return mapOf("active" to false, "reason" to "startInProgress")
+        val previousReceipt = r442Receipt
+        if (previousReceipt != null && KeyguardCardDiagnostics.activeCaptureId() == previousReceipt.capture)
+            return mapOf("active" to false, "reason" to "trialAlreadyActive")
+        if (previousReceipt != null && KeyguardR44Trial.active && !stopR444Trial("captureReplaced"))
+            return mapOf("active" to false, "reason" to "profileRestoreFailed")
         invalidateR442Receipt("starting")
         if (Build.VERSION.SDK_INT != 37 || !KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext))
             return rejectR442Start("unsupportedBuild")
@@ -320,34 +383,35 @@ class FluviKeyguardCardService : AccessibilityService() {
         val settings = lastSettings ?: FluviKeyguardCardSettings.read(applicationContext)
         if (!settings.requested || settings.presentationMode != KeyguardCardPresentationMode.ORB)
             return rejectR442Start("orbServiceNotEnabled")
-        val wasEnabled = KeyguardR44Trial.active
         r442Starting = true
-        var started = false
+        var accepted = false
         try {
-            if (!setR44SyntheticTrial(true) || !KeyguardR44Trial.active ||
+            if (!setR44SyntheticTrial(true, expanded) || !KeyguardR44Trial.active ||
                 KeyguardR44Trial.profile(null) == null || KeyguardR44Trial.settings(settings).showFinancialDetails ||
                 !overlay.r442SamplePrepared())
                 return rejectR442Start("samplePreparationFailed")
             val expectedSession = session.get()
             val expectedProcess = KeyguardCardDiagnostics.currentProcessInstanceId()
             val expectedRevision = r442ReceiptRevision
+            val expectedProfileRevision = r444ProfileOwner.snapshot.revision
             val snapshot = withContext(Dispatchers.IO) {
                 KeyguardCardDiagnostics.startCapture(applicationContext, build, buildMode, captureMode, false,
                     r442ExpectedSession = expectedSession)
             }
-            started = true
             val id = snapshot["captureId"] as? String
             if (id == null || snapshot["captureState"] != "REC" ||
                 KeyguardCardDiagnostics.activeCaptureId() != id ||
                 FluviKeyguardCardServiceRegistry.serviceForInstrumentation() !== this ||
                 !FluviKeyguardCardServiceRegistry.connected || session.get() != expectedSession ||
                 KeyguardCardDiagnostics.currentProcessInstanceId() != expectedProcess || !KeyguardR44Trial.active ||
-                r442ReceiptRevision != expectedRevision || !overlay.r442SamplePrepared()) {
+                r442ReceiptRevision != expectedRevision || !overlay.r442SamplePrepared() ||
+                r444ProfileOwner.snapshot.revision != expectedProfileRevision || !r444ProfileOwner.snapshot.ready) {
                 invalidateR442Receipt("serviceOrCaptureChanged")
                 return mapOf("active" to false, "reason" to r442Reason, "snapshot" to snapshot)
             }
-            r442Receipt = R442Receipt(id, expectedSession, expectedProcess)
+            r442Receipt = R442Receipt(id, expectedSession, expectedProcess, expectedProfileRevision)
             r442Reason = "armed"
+            accepted = true
             return r442SampleStatus() + mapOf("snapshot" to snapshot)
         } catch (cancelled: CancellationException) {
             invalidateR442Receipt("startCancelled")
@@ -356,10 +420,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             invalidateR442Receipt("captureFailed")
             return mapOf("active" to false, "reason" to "captureFailed", "errorClass" to failure.javaClass.simpleName)
         } finally {
-            if (!started && !wasEnabled && KeyguardR44Trial.active &&
-                FluviKeyguardCardServiceRegistry.serviceForInstrumentation() === this && !km.isKeyguardLocked) {
+            if (!accepted && KeyguardR44Trial.active &&
+                FluviKeyguardCardServiceRegistry.serviceForInstrumentation() === this) {
                 val failureReason = r442Reason
-                setR44SyntheticTrial(false)
+                stopR444Trial("startFailed")
                 r442Reason = failureReason
             }
             r442Starting = false
@@ -369,15 +433,31 @@ class FluviKeyguardCardService : AccessibilityService() {
     internal fun r442SampleStatus(): Map<String, Any?> {
         check(Looper.myLooper() == Looper.getMainLooper())
         val receipt = r442Receipt
+        val observedFlags = runCatching { serviceInfo?.flags }.getOrNull()
+        val profileBefore = r444ProfileOwner.snapshot
+        val included = observedFlags?.let { it and AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS != 0 }
+        val flagMatches = included != null && when (profileBefore.kind) {
+            KeyguardR444ProfileOwner.Kind.EXPANDED, KeyguardR444ProfileOwner.Kind.STANDARD_ALREADY_INCLUDED -> included
+            KeyguardR444ProfileOwner.Kind.STANDARD -> !included
+            else -> false
+        }
         if (receipt != null && (FluviKeyguardCardServiceRegistry.serviceForInstrumentation() !== this ||
                 !FluviKeyguardCardServiceRegistry.connected || session.get() != receipt.session ||
                 KeyguardCardDiagnostics.currentProcessInstanceId() != receipt.process ||
-                KeyguardCardDiagnostics.activeCaptureId() != receipt.capture || !KeyguardR44Trial.active))
-            invalidateR442Receipt("serviceOrCaptureChanged")
+                KeyguardCardDiagnostics.activeCaptureId() != receipt.capture || !KeyguardR44Trial.active ||
+                r444ProfileOwner.snapshot.revision != receipt.profileRevision || !profileBefore.ready || !flagMatches)) {
+            if (KeyguardR44Trial.active) stopR444Trial("serviceOrCaptureChanged")
+            else invalidateR442Receipt("serviceOrCaptureChanged")
+        }
         val current = r442Receipt
+        val profile = r444ProfileOwner.snapshot
         return mapOf("active" to (current != null), "reason" to r442Reason,
             "captureId" to current?.capture, "serviceSession" to current?.session,
-            "process" to current?.process, "materialDomain" to if (current != null) "fixedSample" else "none")
+            "process" to current?.process, "materialDomain" to if (current != null) "fixedSample" else "none",
+            "profile" to profile.kind.name, "profileRevision" to profile.revision,
+            "previousFlags" to profile.before, "actualFlags" to if (current != null) observedFlags else profile.actual,
+            "includeNotImportant" to (if (current != null) included else
+                profile.actual?.let { it and AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS != 0 }) )
     }
     private var nextSystemGateId = 0L
     private val systemGateExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { task ->
@@ -1936,8 +2016,12 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        if (::overlay.isInitialized && overlay.isAttached) hideImmediately("r444ServiceRebound")
+        stopFinancialObservation()
+        invalidateFullContent()
         invalidateR442Receipt("serviceRebound")
         KeyguardR44Trial.set(false, false)
+        r444ConfigurationReady = if (Build.VERSION.SDK_INT == 37) r444ProfileOwner.recover() else true
         r43EffectiveFlags = runCatching { serviceInfo?.flags }.getOrNull()
         KeyguardCardDiagnostics.activeCaptureId()?.let { id ->
             if (KeyguardCardDiagnostics.r43Enabled(id)) armR43Capture(id)
@@ -2133,13 +2217,13 @@ class FluviKeyguardCardService : AccessibilityService() {
         val settings = FluviKeyguardCardSettings.read(applicationContext)
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "SETTINGS_LOAD_END")
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "PROFILE_LOAD_START")
-        val profile = FluviKeyguardMaterialStore.read(applicationContext)
+        val profile = if (r444ConfigurationReady) FluviKeyguardMaterialStore.read(applicationContext) else null
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "PROFILE_LOAD_END")
         lastSettings = settings
         lastMaterialProfile = profile
         registerRuntimeSignals()
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "ROOT_PREPARE_START")
-        overlay.prepareRetainedView(settings, profile)
+        if (r444ConfigurationReady) overlay.prepareRetainedView(settings, profile)
         refreshR18RouteOnMain()
         publishReadAheadState()
         KeyguardCardDiagnostics.recordColdPreparation(session.get(), "ROOT_PREPARE_END")
@@ -2308,6 +2392,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     }
 
     override fun onInterrupt() {
+        if (Build.VERSION.SDK_INT == 37) stopR444Trial("serviceInterrupted")
         hideImmediately("interrupt")
     }
 
@@ -4415,16 +4500,19 @@ class FluviKeyguardCardService : AccessibilityService() {
         var sceneAtRead: Long? = null
         val r44Mode = Build.VERSION.SDK_INT == 37 && settings.presentationMode == KeyguardCardPresentationMode.ORB
         val syntheticAtRead = r44Mode && KeyguardR44Trial.active
+        val profileAtRead = if (syntheticAtRead) r444ProfileOwner.snapshot else null
+        val expandedAtRead = syntheticAtRead && profileAtRead?.expandedPolicy == true
         val lookupAtRead = r442Lookup
         val read = readSystemWindows(request, startedAt, r38MilestoneOrdered, r40Read, lookupAtRead,
-            syntheticAtRead) { sceneAtRead = it }
+            syntheticAtRead, profileAtRead) { sceneAtRead = it }
         if (read.yieldedTo != null) return InspectionOutcome.Yielded(read.yieldedTo, read,
             requireNotNull(sceneAtRead), requireNotNull(read.yieldReason))
-        if (read.abortedStale || !authorityIsCurrent(request)) {
+        if (read.abortedStale || !authorityIsCurrent(request) ||
+            (profileAtRead != null && r444ProfileOwner.snapshot.revision != profileAtRead.revision)) {
             if (!read.abortedStale) inspectionsAbortedDuringWalk.incrementAndGet()
             if (r44Mode) recordR44Read(request, read, sceneAtRead, startedAt, syntheticAtRead, true,
                 KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.NO_MAIN_MARKER),
-                lookup = lookupAtRead)
+                lookup = lookupAtRead, profile = profileAtRead)
             return InspectionOutcome.Completed(Inspection(
                 baseline,
                 KeyguardCardVisibility.HIDDEN_UNKNOWN,
@@ -4448,12 +4536,12 @@ class FluviKeyguardCardService : AccessibilityService() {
         val strictOwn = r18Active != null || r18ProvisionalWake?.targetAuthority?.matches(request) == true
         val classification = if (r44Mode) {
             KeyguardR44SurfaceClassifier.classify(snapshots, read.rootUnavailable, read.walkTruncated,
-                strictOwn, syntheticTrial = syntheticAtRead)
+                strictOwn, syntheticTrial = syntheticAtRead, expanded = expandedAtRead)
         } else KeyguardSurfaceClassifier.classifyDetailed(snapshots,
             unavailableRoot = read.rootUnavailable, walkTruncated = read.walkTruncated,
             strictOwnAttribution = strictOwn)
         if (r44Mode) recordR44Read(request, read, sceneAtRead, startedAt, syntheticAtRead, false, classification,
-            snapshots, inspectionProbeForTest != null, strictOwn, lookupAtRead)
+            snapshots, inspectionProbeForTest != null, strictOwn, lookupAtRead, profileAtRead)
         if (read.r43Evidence != null) runCatching { recordR43Passive(request, read, classification, sceneAtRead) }
         val signals = quickSignals(settings, classification.surface)
         return InspectionOutcome.Completed(Inspection(
@@ -4482,7 +4570,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                               result: KeyguardSurfaceClassification,
                               windows: List<KeyguardWindowSnapshot> = read.snapshots,
                               injected: Boolean = false, strictOwn: Boolean = false,
-                              lookup: R442Lookup = r442Lookup) {
+                              lookup: R442Lookup = r442Lookup,
+                              profile: KeyguardR444ProfileOwner.Snapshot? = null) {
         val owner = request.diagnosticContext ?: return
         if (owner.captureId == null || owner.captureId != KeyguardCardDiagnostics.activeCaptureId()) return
         val host = windows.firstOrNull { it.r44?.let { e -> e.active && e.host != null } == true }
@@ -4493,7 +4582,8 @@ class FluviKeyguardCardService : AccessibilityService() {
             unavailableRoot = read.rootUnavailable, walkTruncated = read.walkTruncated,
             strictOwnAttribution = strictOwn).surface
         val shadow = if (stale) null else KeyguardR44SurfaceClassifier.classify(windows,
-            read.rootUnavailable, read.walkTruncated, strictOwn, syntheticTrial = true)
+            read.rootUnavailable, read.walkTruncated, strictOwn, syntheticTrial = true,
+            expanded = synthetic && profile?.expandedPolicy == true)
         val cover = when {
             stale || read.rootUnavailable || read.walkTruncated -> "UNOBSERVED"
             hostEvidence?.host == null -> "HOST_ABSENT"
@@ -4502,6 +4592,21 @@ class FluviKeyguardCardService : AccessibilityService() {
             shadow?.reason == KeyguardSurfaceReason.FOREIGN_ABOVE -> "VETO_UNKNOWN_OR_COVER"
             shadow?.surface == KeyguardSurface.MAIN_KEYGUARD -> "CHECKED_CLEAR"
             else -> "NOT_REACHED"
+        }
+        val secondary = if (host == null) emptyList() else windows.filter { w ->
+            w !== host && !w.ownOverlay && w.displayId == 0 && w.layer >= host.layer
+        }.sortedByDescending { it.layer }
+        fun describe(w: KeyguardWindowSnapshot): KeyguardR444WindowObservation {
+            val category = when {
+                w.ownOverlay -> "OWN"
+                w.packageName == null -> "UNKNOWN"
+                w.packageName == "com.android.systemui" -> "SYSTEMUI"
+                w.packageName == "android" || w.packageName == "com.android.keyguard" -> "SYSTEM"
+                else -> "FOREIGN"
+            }
+            return KeyguardR444WindowObservation(w.windowId, w.layer - (host?.layer ?: w.layer),
+                w.type, w.r444Active, w.r444Focused, category, w.r444OwnGeneration,
+                w.r44?.verifiedRoot == true, w.r444Visited, w.r444RootRole)
         }
         val receipt = r442Receipt?.let {
             if (it.capture == owner.captureId && it.session == owner.serviceSession &&
@@ -4524,6 +4629,14 @@ class FluviKeyguardCardService : AccessibilityService() {
                 w.windowId, e.advertised, e.fetched, e.r443Overflow, e.complete) } }
                 .sortedByDescending { it.advertised }.take(8),
             evidence.flatMap { it.r443Candidates }.take(7),
+            appliedGate = result.r444Gate, profile = profile?.kind?.name ?: "UNOBSERVED",
+            profileRevision = profile?.revision, previousFlags = profile?.before, actualFlags = profile?.actual,
+            clockResourceVerified = lookup.clockVerified,
+            hostNodes = evidence.sumOf { it.r444HostNodes },
+            hostCarriers = evidence.fold(0) { mask, item -> mask or item.r444HostCarriers },
+            hostParent = hostEvidence?.r444HostParent, contentParent = hostEvidence?.r444ContentParent,
+            secondaryCount = secondary.size, secondaryOverflow = (secondary.size - 4).coerceAtLeast(0),
+            r444Windows = (listOfNotNull(host) + secondary.take(4)).map(::describe),
         ))
     }
 
@@ -4550,7 +4663,7 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     private fun readSystemWindows(request: KeyguardCardInspectionRequest, startedAt: Long, r38MilestoneOrdered: Boolean,
                                   r40Read: R40Read?, lookup: R442Lookup, syntheticAtRead: Boolean,
-                                  onInventoryScene: (Long) -> Unit): SystemWindowsRead {
+                                  profileAtRead: KeyguardR444ProfileOwner.Snapshot?, onInventoryScene: (Long) -> Unit): SystemWindowsRead {
         // Resolve the outstanding requirement at acquisition, not when an
         // event happened to replace a timer/pending request. A successful
         // boundary is consumed once, without clearing on every later event.
@@ -4627,6 +4740,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                 // Unknown attachment state takes the immediate, conservative route.
                 r443Live = r40Read != null || readAheadSnapshot?.detached != true,
                 r443Diagnostics = captureOpening,
+                r444Expanded = syntheticAtRead && profileAtRead?.expandedPolicy == true,
+                r444ClockVerified = lookup.clockVerified,
+                r444UdfpsVerified = lookup.udfpsVerified,
                 r443Boundary = if (captureOpening && r442Enabled) { structuralReason ->
                     val at = SystemClock.uptimeMillis()
                     synchronized(queueLock) {
@@ -4860,7 +4976,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 },
                 r43Evidence = r43Evidence,
             ),
-            authorityIsCurrent = { freshness != null && authorityIsCurrent(request) },
+            authorityIsCurrent = { freshness != null && authorityIsCurrent(request) &&
+                (profileAtRead == null || r444ProfileOwner.snapshot.revision == profileAtRead.revision) },
             onFreshnessEstablished = { freshness?.let(inspectionFreshness::boundaryEstablished) },
         )
         if (captureOpening && r443ScreenAt != null && r443BoundaryAt != null) {
@@ -5544,7 +5661,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         diagnosticContext: KeyguardDiagnosticContext?,
         causingInspectionRequestId: Long?,
     ) {
-        if (KeyguardR44Trial.active) return
+        if (!r444ConfigurationReady || KeyguardR44Trial.active) return
         val focusChanged = activeFocusGeneration != focusGeneration
         if (focusChanged) {
             showEvent = false
@@ -5592,6 +5709,7 @@ class FluviKeyguardCardService : AccessibilityService() {
         diagnosticContext: KeyguardDiagnosticContext?,
         causingInspectionRequestId: Long?,
     ) {
+        if (!r444ConfigurationReady || KeyguardR44Trial.active) return
         if (coreObservation?.isActive == true && observedFocusGeneration == focusGeneration) return
         stopFinancialObservation(keepRenderedContent = true)
         observedFocusGeneration = focusGeneration
@@ -5623,6 +5741,9 @@ class FluviKeyguardCardService : AccessibilityService() {
         causingInspectionRequestId: Long?,
     ) {
         check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+        // A queued core-revision callback can outlive the subscription that
+        // produced it.  It must not start private work in the sample domain.
+        if (!r444ConfigurationReady || KeyguardR44Trial.active) return
         if (contentJob?.isActive == true) {
             if (resolvingFocusGeneration == focusGeneration) {
                 // A core observer's initial emission commonly follows the
@@ -6696,6 +6817,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     }
 
     private fun cleanup(reason: String) {
+        if (Build.VERSION.SDK_INT == 37) stopR444Trial("serviceLost")
         invalidateR442Receipt("serviceLost")
         r442ScreenOn = null
         r442LookupGeneration += 1

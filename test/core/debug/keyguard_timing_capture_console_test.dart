@@ -235,6 +235,10 @@ void main() {
               'process': 'process-test',
               'serviceSession': 1,
               'materialDomain': 'fixedSample',
+              'profile': 'EXPANDED',
+              'profileRevision': 9,
+              'actualFlags': 2,
+              'includeNotImportant': true,
               'snapshot': response('REC', 'LIVE'),
             };
           }
@@ -245,6 +249,10 @@ void main() {
               'process': 'process-test',
               'serviceSession': 1,
               'materialDomain': 'fixedSample',
+              'profile': 'EXPANDED',
+              'profileRevision': 9,
+              'actualFlags': 2,
+              'includeNotImportant': true,
             };
           }
           return response('IDLE', '');
@@ -278,6 +286,90 @@ void main() {
       isNull,
     );
     expect(find.text('Próba leállítása és riport megtartása'), findsOneWidget);
+  });
+
+  testWidgets('a separate standard sample start records its actual profile', (
+    tester,
+  ) async {
+    var enabled = false;
+    Object? selected;
+    final receipt = <String, Object?>{
+      'active': true,
+      'captureId': 'capture-test',
+      'process': 'process-test',
+      'serviceSession': 1,
+      'materialDomain': 'fixedSample',
+      'profile': 'STANDARD',
+      'profileRevision': 10,
+      'actualFlags': 0,
+      'includeNotImportant': false,
+    };
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(runtime, (call) async {
+          if (call.method == 'getR44SyntheticTrial') {
+            return <String, Object?>{'available': true, 'enabled': enabled};
+          }
+          if (call.method == 'startR442SampleCapture') {
+            enabled = true;
+            selected = (call.arguments as Map)['expanded'];
+            return <String, Object?>{
+              ...receipt,
+              'snapshot': response('REC', 'LIVE'),
+            };
+          }
+          if (call.method == 'getR442SampleCaptureStatus') return receipt;
+          return response('IDLE', '');
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: runtime,
+      isAndroid: () => true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
+    await tester.pumpAndSettle();
+    final standard = find.byKey(const ValueKey('debug-console-r444-standard'));
+    await tester.ensureVisible(standard);
+    await tester.tap(standard);
+    await tester.pumpAndSettle();
+    expect(selected, false);
+    expect(find.text('Szokásos nézetprofil visszaigazolva.'), findsOneWidget);
+  });
+
+  testWidgets('stop remains available for a trial without an open capture', (
+    tester,
+  ) async {
+    var freezeCalls = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(runtime, (call) async {
+          if (call.method == 'getR44SyntheticTrial') {
+            return <String, Object?>{'available': true, 'enabled': false};
+          }
+          if (call.method == 'getR442SampleCaptureStatus') {
+            return <String, Object?>{'active': false};
+          }
+          if (call.method == 'freezeKeyguardDiagnosticCapture') freezeCalls++;
+          return response('IDLE', '');
+        });
+    final bridge = KeyguardTimingCaptureBridge(
+      channel: runtime,
+      isAndroid: () => true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: DebugConsoleDialog(keyguardTimingCapture: bridge)),
+      ),
+    );
+    await tester.tap(find.byKey(const ValueKey('debug-console-keyguard-tab')));
+    await tester.pumpAndSettle();
+    final stop = find.byKey(const ValueKey('debug-console-keyguard-freeze'));
+    await tester.ensureVisible(stop);
+    await tester.tap(stop);
+    await tester.pumpAndSettle();
+    expect(freezeCalls, 1);
   });
 
   testWidgets('a rejected start reports its reason and never claims active', (
@@ -325,6 +417,10 @@ void main() {
       'process': 'process-test',
       'serviceSession': 1,
       'materialDomain': 'fixedSample',
+      'profile': 'EXPANDED',
+      'profileRevision': 9,
+      'actualFlags': 2,
+      'includeNotImportant': true,
     };
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(runtime, (call) async {

@@ -373,7 +373,7 @@ class MainActivity : FlutterActivity() {
                             runCatching {
                                 if (call.method == "startR442SampleCapture") service.startR442SampleCapture(
                                     values?.get("build") as? String, values?.get("buildMode") as? String,
-                                    values?.get("captureMode") as? String,
+                                    values?.get("captureMode") as? String, values?.get("expanded") != false,
                                 ) else service.r442SampleStatus()
                             }.onSuccess(result::success).onFailure {
                                 result.error("R442_START", it.message ?: "A rögzítés nem indult el.", null)
@@ -427,6 +427,11 @@ class MainActivity : FlutterActivity() {
                     val values = call.arguments as? Map<*, *>
                     scope.launch {
                         runCatching {
+                            if (call.method != "getKeyguardDiagnosticCapture") {
+                                val owner = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
+                                if (owner != null && !owner.stopR444Trial("captureBoundary"))
+                                    error("Az Android-próbaprofil visszaállítása nem igazolt.")
+                            }
                             withContext(Dispatchers.IO) {
                                 when (call.method) {
                                     "startKeyguardDiagnosticCapture" -> KeyguardCardDiagnostics.startCapture(

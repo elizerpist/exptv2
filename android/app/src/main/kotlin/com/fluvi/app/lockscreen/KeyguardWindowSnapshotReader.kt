@@ -225,6 +225,9 @@ internal class KeyguardWindowSnapshotReader(
         val r443Sample: Boolean = r44Enabled && KeyguardR44Trial.active,
         val r443Live: Boolean = false,
         val r443Diagnostics: Boolean = false,
+        val r444Expanded: Boolean = false,
+        val r444ClockVerified: Boolean = false,
+        val r444UdfpsVerified: Boolean = false,
         val r443Boundary: ((String) -> Unit)? = null,
     )
 
@@ -680,6 +683,9 @@ internal class KeyguardWindowSnapshotReader(
                 snapshots += KeyguardWindowSnapshot(
                     windowId = window.id, packageName = ownPackageName, type = window.type,
                     layer = window.layer, displayId = displayId(window), ownOverlay = true,
+                    r444Active = if (request.r443Diagnostics) window.isActive else null,
+                    r444Focused = if (request.r443Diagnostics) window.isFocused else null,
+                    r444OwnGeneration = if (request.r443Diagnostics) request.attachGeneration else null,
                 )
                 request.r43Evidence?.let { evidence -> runCatching {
                     evidence.window(window.id, window.type, window.layer, displayId(window),
@@ -712,6 +718,11 @@ internal class KeyguardWindowSnapshotReader(
                     activeLayer?.let { window.layer.toLong() - it.toLong() }, "perWindow")
             }
             val rootPackage = root?.packageName?.toString()
+            val r444RootRole = if (request.r443Diagnostics && rootPackage == "com.android.systemui" && root != null) {
+                val id = runCatching { root.viewIdResourceName }.getOrNull()
+                if (request.r444UdfpsVerified && id == "com.android.systemui:id/udfps_view") "UDFPS_VERIFIED"
+                else "UNCLASSIFIED"
+            } else "UNOBSERVED"
             // No identity extraction on the opening path: this object exists
             // only for a separately started read after the exact reveal ACK.
             val r40 = request.r40Provenance
@@ -745,7 +756,8 @@ internal class KeyguardWindowSnapshotReader(
                     liveSampleExtension = request.r443Sample && request.r443Live &&
                         primary.none { other -> other.id != window.id && other.layer >= window.layer &&
                             !isExactKnownOwn(other, scopedRequest) },
-                    collectDiagnostics = request.r443Diagnostics).also {
+                    collectDiagnostics = request.r443Diagnostics, expanded = request.r444Expanded,
+                    genuineClockResource = request.r444ClockVerified).also {
                     if (r443Inventory != null) deferredReaders[window.id] = it
                 }
             } else null
@@ -826,6 +838,13 @@ internal class KeyguardWindowSnapshotReader(
             snapshots += KeyguardWindowSnapshot(
                 windowId = window.id, packageName = rootPackage, type = window.type, layer = window.layer,
                 displayId = displayId(window), ownOverlay = own, visibleViewIds = visible?.ids.orEmpty(), r44 = visible?.r44,
+                r444Active = if (request.r443Diagnostics) window.isActive else null,
+                r444Focused = if (request.r443Diagnostics) window.isFocused else null,
+                r444Visited = if (request.r443Diagnostics) visible?.visited else null,
+                r444RootRole = if (r444RootRole == "UNCLASSIFIED" && request.r444UdfpsVerified &&
+                    visible?.ids?.contains("com.android.systemui:id/udfps_view") == true)
+                    "UDFPS_NODE_VERIFIED" else r444RootRole,
+                r444OwnGeneration = if (request.r443Diagnostics && own) request.attachGeneration else null,
             )
         }
         activeRoot?.recycle()

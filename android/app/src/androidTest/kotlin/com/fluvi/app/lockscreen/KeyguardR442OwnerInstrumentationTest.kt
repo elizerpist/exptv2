@@ -1,6 +1,7 @@
 package com.fluvi.app.lockscreen
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.KeyguardManager
 import android.app.UiAutomation
 import android.content.ComponentName
@@ -82,21 +83,34 @@ class KeyguardR442OwnerInstrumentationTest {
             waitFor("service connected") { FluviKeyguardCardServiceRegistry.connected }
             owner = checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation())
             val service = checkNotNull(owner)
+            val originalFlags = main { checkNotNull(service.serviceInfo).flags }
             val receipt = start(service)
             assertEquals("armed", receipt["reason"])
             assertEquals(true, receipt["active"])
             assertEquals("fixedSample", receipt["materialDomain"])
+            assertEquals("EXPANDED", receipt["profile"])
+            assertEquals(true, receipt["includeNotImportant"])
+            assertEquals(originalFlags, receipt["previousFlags"])
+            assertTrue((receipt["actualFlags"] as Int) and AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS != 0)
+            assertTrue(receipt["profileRevision"] is Long)
             assertEquals(KeyguardCardDiagnostics.activeCaptureId(), receipt["captureId"])
             assertEquals(receipt["captureId"], main { service.r442SampleStatus()["captureId"] })
             assertTrue(KeyguardR44Trial.active)
             assertNotNull(KeyguardR44Trial.profile(null))
             assertFalse(KeyguardR44Trial.settings(KeyguardCardSettings(showFinancialDetails = true)).showFinancialDetails)
+            val duplicate = start(service)
+            assertEquals("trialAlreadyActive", duplicate["reason"])
+            assertEquals(true, main { service.r442SampleStatus()["active"] })
 
             // A different capture invalidates this receipt; it is not silently
             // re-associated with the new recording.
             KeyguardCardDiagnostics.startCapture(context, "other", "debug", "LIGHT")
             assertEquals(false, main { service.r442SampleStatus()["active"] })
             assertEquals("serviceOrCaptureChanged", main { service.r442SampleStatus()["reason"] })
+            val restored = main { checkNotNull(service.serviceInfo).flags }
+            val bit = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+            assertEquals(originalFlags and bit, restored and bit)
+            assertFalse(KeyguardR44Trial.active)
             assertTrue(main { service.setR44SyntheticTrial(false) })
             val again = start(service)
             assertEquals(true, again["active"])

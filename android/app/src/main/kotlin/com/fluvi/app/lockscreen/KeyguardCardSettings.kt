@@ -3578,18 +3578,25 @@ internal object KeyguardCardDiagnostics {
             appendLine("R44_2_HU FIGYELEM: a mintaorb-próba visszaigazolása vagy üzemmódja elveszett.")
         val domain = when { post == null -> "UNOBSERVED"; post.synthetic -> "fixedSample"; else -> "normal" }
         appendLine("R44_2_TRIAL requested=$trialRequested receipt=${post?.receipt ?: "UNOBSERVED"} domain=$domain")
+        val emptyExtra = post?.r443Candidates?.any { it.status == "EMPTY" } == true
         val reasonHu = when {
-            post == null -> "első_olvasás_nem_figyelhető_meg"
-            !trialRequested || !post.synthetic || post.receipt != "armed" -> "mintaadat_nem_visszaigazolt"
-            post.cover == "VETO_UNKNOWN_OR_COVER" -> "másik_ablak_tilt"
-            post.budgetHit -> "olvasási_keret_elfogyott"
-            !post.coverageComplete -> "ellenőrzés_hiányos"
-            post.rejectedAncestry > 0 || post.rejectedUnverified > 0 -> "jel_kapcsolata_nem_igazolt"
-            post.host != null && post.content == null -> "teljes_keresés_de_nincs_óratanú"
-            post.verdict == KeyguardSurface.MAIN_KEYGUARD && show == null -> "engedély_utáni_megjelenítés_nem_igazolt"
+            post == null -> "Első olvasás: UNOBSERVED"
+            !trialRequested || !post.synthetic || post.receipt != "armed" -> "A mintaadat nem visszaigazolt."
+            post.stale -> "Az olvasás elavult."
+            post.reason == KeyguardSurfaceReason.WALK_TRUNCATED && emptyExtra -> "Üres kiegészítő adat miatt hiányos az olvasás."
+            post.reason == KeyguardSurfaceReason.WALK_TRUNCATED || !post.coverageComplete -> "Az olvasás hiányos."
+            post.appliedGate == KeyguardR444Gate.COVER_VETO -> "Az elfogadott jel mellett egy másik ablak kizárja a megjelenítést."
+            post.reason == KeyguardSurfaceReason.NO_MAIN_MARKER || post.appliedGate == KeyguardR444Gate.NO_CONTENT ->
+                "Hiányzik a külön óra- vagy belépési jel."
+            post.reason == KeyguardSurfaceReason.CREDENTIAL_MARKER -> "PIN-képernyő: az orb rejtve marad."
+            post.reason == KeyguardSurfaceReason.SHADE_MARKER -> "Értesítési panel: az orb rejtve marad."
+            post.verdict == KeyguardSurface.MAIN_KEYGUARD && show == null -> "Engedély után a megjelenítés nem igazolt."
             else -> post.reason.name
         }
-        appendLine("R44_3_HU próba=${attempt.id} ok=$reasonHu takarás=${post?.cover ?: "UNOBSERVED"}")
+        val additionalWindow = post != null && (post.secondaryCount > 0 || post.cover == "VETO_UNKNOWN_OR_COVER")
+        appendLine("R44_4_HU próba=${attempt.id} $reasonHu" +
+            if (additionalWindow && post?.appliedGate != KeyguardR444Gate.COVER_VETO)
+                " Van egy további, nem minősített ablak." else "")
         val handoff = attempt.r442Handoff
         val successorRead = handoff?.let { h ->
             listOfNotNull(post, attempt.r44FirstGrant, attempt.r44FirstRestriction, last)
@@ -3602,6 +3609,10 @@ internal object KeyguardCardDiagnostics {
         fun line(kind: String, read: KeyguardR44ReadObservation) {
             val host = read.host
             val content = read.content
+            if (kind != "firstPost") {
+                appendLine("R44_READ kind=$kind wake=${attempt.wakeEpoch} req=${read.request} start=${read.start} end=${read.end} verdict=${read.verdict} reason=${read.reason} stale=${read.stale}")
+                return
+            }
             appendLine("R44_READ kind=$kind wake=${attempt.wakeEpoch} req=${read.request} epoch=${read.epoch} scene=${read.scene ?: "UNOBSERVED"} start=${read.start} end=${read.end} owner=${if (read.hostVerified) "verified" else "rejected"} hostWin=${read.hostWindow ?: "UNOBSERVED"} hostLayer=${read.hostLayer ?: "UNOBSERVED"} complete=${read.coverageComplete} legacy=${read.legacy} host=${host?.marker ?: "none"}/${host?.carrier ?: "none"} content=${content?.marker ?: "none"}/${content?.carrier ?: "none"} relation=${if (read.relation) "descendant" else "unknown"} extra=${read.advertised}/${read.fetched}/${read.failed} unsupported=${read.unsupported} budgetHit=${read.budgetHit} extraMs=${read.extraMs} stale=${read.stale} unavailable=${read.unavailable} truncated=${read.truncated}")
             if (kind == "firstPost" && read.r443Windows.isNotEmpty()) {
                 val windowSummary = read.r443Windows.joinToString(";") { w ->
@@ -3611,6 +3622,16 @@ internal object KeyguardCardDiagnostics {
                 read.r443Candidates.forEach { c ->
                     appendLine("R44_3_JEL req=${read.request} window=${c.window} ordinal=${c.ordinal} branch=${c.branch} rank=${c.rank} status=${c.status} role=${c.role} costMs=${c.costMs} remaining=${c.remaining} remainingMs=${c.remainingMs} parentChecks=${c.parentChecks} parentMs=${c.parentMs}")
                 }
+            }
+            val coverReached = when (read.appliedGate) {
+                KeyguardR444Gate.COVER_VETO -> "VETO"
+                KeyguardR444Gate.ACCEPTED -> "CLEAR"
+                else -> "NOT_REACHED"
+            }
+            appendLine("R44_4_PROFILE req=${read.request} profile=${read.profile} revision=${read.profileRevision ?: "UNOBSERVED"} previousFlags=${read.previousFlags ?: "UNOBSERVED"} actualFlags=${read.actualFlags ?: "UNOBSERVED"} clockResource=${read.clockResourceVerified} hostNodes=${read.hostNodes} hostCarriers=${read.hostCarriers} hostParent=${read.hostParent ?: "UNOBSERVED"} contentParent=${read.contentParent ?: "UNOBSERVED"}")
+            appendLine("R44_4_GATE req=${read.request} applied=${read.appliedGate} coverReached=$coverReached structural=${read.cover} secondary=${read.secondaryCount} overflow=${read.secondaryOverflow}")
+            read.r444Windows.forEach { w ->
+                appendLine("R44_4_WINDOW req=${read.request} id=${w.id} relativeLayer=${w.relativeLayer} type=${w.type} active=${w.active ?: "UNOBSERVED"} focused=${w.focused ?: "UNOBSERVED"} owner=${w.owner} ownGen=${w.ownGeneration ?: "UNOBSERVED"} verified=${w.verifiedRoot} visited=${w.visited ?: "UNOBSERVED"} root=${w.rootRole}")
             }
             appendLine("R44_DECISION wake=${attempt.wakeEpoch} req=${read.request} mode=${if (read.synthetic) "syntheticTrial" else "normal"} testProbeInjected=${read.testProbeInjected} verdict=${read.verdict} reason=${read.reason}")
             appendLine("R44_2_EVIDENCE req=${read.request} lookup=${read.lookupStatus} lookupIdentity=${read.lookupIdentity ?: "UNOBSERVED"} rawHost=${read.rawHost} rawEntry=${read.rawEntry} rawClock=${read.rawClock} candidate=${read.firstCandidate ?: "none"}/${read.firstCarrier ?: "none"} rejectUnverified=${read.rejectedUnverified} rejectAncestry=${read.rejectedAncestry} rejectExcluded=${read.rejectedExcluded} rejectForeign=${read.rejectedForeign} rejectHidden=${read.rejectedHidden} cover=${read.cover} shadow=${read.shadowVerdict ?: "UNOBSERVED"}/${read.shadowReason ?: "UNOBSERVED"}")
@@ -3623,9 +3644,8 @@ internal object KeyguardCardDiagnostics {
         }
         unique("firstMainClassification", attempt.r44FirstGrant)
         unique("firstRestrictionClassification", attempt.r44FirstRestriction)
-        unique("pre", pre)
-        unique("change", change)
-        unique("last", last)
+        // Pre/change/last remain in the bounded read ring; the compact
+        // pinned record preserves the first post-screen and decisive reads.
         appendLine("R44_END wake=${attempt.wakeEpoch} last=${attempt.finalState} grant=${show?.decisionAtUptimeMs ?: "UNOBSERVED"} attach=${show?.addReturnAtUptimeMs ?: "UNOBSERVED"} post=${show?.r12Evidence?.get("firstPost") ?: "UNOBSERVED"} postDelivery=${show?.r12Evidence?.get("firstPostMain") ?: "UNOBSERVED"} ack=${show?.r11Evidence?.get("ack") ?: "UNOBSERVED"} remove=${hide?.removeReturnAtUptimeMs ?: "UNOBSERVED"} physicalPixels=UNOBSERVED")
     }
 

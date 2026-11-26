@@ -36,9 +36,13 @@ internal class KeyguardR44TreeReader(
     private val deferred: KeyguardR443Inventory? = null,
     private val liveSampleExtension: Boolean = false,
     private val collectDiagnostics: Boolean = false,
+    private val expanded: Boolean = false,
+    private val genuineClockResource: Boolean = false,
 ) {
     private var host: KeyguardR44Witness? = null
     private var content: KeyguardR44Witness? = null
+    private var hostParent: Int? = null
+    private var contentParent: Int? = null
     private var below = false
     private var complete = verifiedRoot
     private var foreign = false
@@ -49,6 +53,8 @@ internal class KeyguardR44TreeReader(
     private var extraMs = 0L
     private var budgetHit = false
     private var rawHost = 0
+    private val r444HostOrdinals = if (collectDiagnostics) BooleanArray(97) else null
+    private var r444HostCarriers = 0
     private var rawEntry = 0
     private var rawClock = 0
     private var rejectedUnverified = 0
@@ -187,11 +193,11 @@ internal class KeyguardR44TreeReader(
             return
         }
         candidateDone(ordinal, "READ", marker.name, duration, budget.fetched)
-        observe(marker, KeyguardR44Markers.Carrier.EXTRA_LAZY)
+        observe(marker, KeyguardR44Markers.Carrier.EXTRA_LAZY, ordinal)
         addFact(ordinal, marker, KeyguardR44Markers.Carrier.EXTRA_LAZY)
         if (marker == KeyguardR44Markers.Marker.HOST) {
             if (host != null && host?.ordinal != ordinal) complete = false
-            else host = KeyguardR44Witness(marker, KeyguardR44Markers.Carrier.EXTRA_LAZY, ordinal)
+            else { host = KeyguardR44Witness(marker, KeyguardR44Markers.Carrier.EXTRA_LAZY, ordinal); hostParent = parentOrdinal }
         }
         KeyguardR44Markers.exclusion(marker)?.let {
             excludedHere[ordinal] = true
@@ -211,8 +217,10 @@ internal class KeyguardR44TreeReader(
         if (hostOrdinal == null) host = null else {
             val item = facts[hostOrdinal]!!.first { it.first == KeyguardR44Markers.Marker.HOST }
             host = KeyguardR44Witness(item.first, item.second, hostOrdinal)
+            hostParent = parents[hostOrdinal]
         }
         content = null
+        contentParent = null
         below = false
         rejectedUnverified = 0
         rejectedAncestry = 0
@@ -222,26 +230,34 @@ internal class KeyguardR44TreeReader(
             val values = facts[ordinal] ?: continue
             val item = values.firstOrNull {
                 it.first == KeyguardR44Markers.Marker.LARGE_CLOCK || it.first == KeyguardR44Markers.Marker.SMALL_CLOCK ||
-                    it.first == KeyguardR44Markers.Marker.DEVICE_ENTRY
+                    it.first == KeyguardR44Markers.Marker.DEVICE_ENTRY || it.first == KeyguardR44Markers.Marker.CLOCK_SWITCH
             } ?: continue
             when {
                 hasExcludedAncestor(ordinal) -> rejectedExcluded++
                 item.first == KeyguardR44Markers.Marker.DEVICE_ENTRY &&
                     (!genuineDeviceEntryResource || item.second != KeyguardR44Markers.Carrier.VIEW_ID) -> rejectedUnverified++
+                item.first == KeyguardR44Markers.Marker.CLOCK_SWITCH &&
+                    (!expanded || !genuineClockResource || item.second != KeyguardR44Markers.Carrier.VIEW_ID) -> rejectedUnverified++
                 !descendsFrom(parents[ordinal], hostOrdinal) -> rejectedAncestry++
                 content == null -> {
                     content = KeyguardR44Witness(item.first, item.second, ordinal)
+                    contentParent = parents[ordinal]
                     below = true
                 }
             }
         }
     }
 
-    private fun observe(marker: KeyguardR44Markers.Marker, carrier: KeyguardR44Markers.Carrier) {
+    private fun observe(marker: KeyguardR44Markers.Marker, carrier: KeyguardR44Markers.Carrier, ordinal: Int = 0) {
+        if (marker == KeyguardR44Markers.Marker.HOST && r444HostOrdinals != null && ordinal in 1 until r444HostOrdinals.size) {
+            r444HostOrdinals[ordinal] = true
+            r444HostCarriers = r444HostCarriers or (1 shl carrier.ordinal)
+        }
         when (marker) {
             KeyguardR44Markers.Marker.HOST -> rawHost = (rawHost + 1).coerceAtMost(255)
             KeyguardR44Markers.Marker.DEVICE_ENTRY -> rawEntry = (rawEntry + 1).coerceAtMost(255)
-            KeyguardR44Markers.Marker.LARGE_CLOCK, KeyguardR44Markers.Marker.SMALL_CLOCK ->
+            KeyguardR44Markers.Marker.LARGE_CLOCK, KeyguardR44Markers.Marker.SMALL_CLOCK,
+            KeyguardR44Markers.Marker.CLOCK_SWITCH ->
                 rawClock = (rawClock + 1).coerceAtMost(255)
             else -> return
         }
@@ -297,7 +313,9 @@ internal class KeyguardR44TreeReader(
         }
         if (deferred != null && ordinal in parents.indices) parents[ordinal] = parentOrdinal
         val markers = ArrayList<Pair<KeyguardR44Markers.Marker, KeyguardR44Markers.Carrier>>(2)
-        val directMarker = KeyguardR44Markers.exact(viewId)
+        val directMarker = KeyguardR44Markers.exact(viewId)?.takeIf {
+            expanded || it != KeyguardR44Markers.Marker.CLOCK_SWITCH
+        }
         directMarker?.let { markers += it to KeyguardR44Markers.Carrier.VIEW_ID }
         if (viewId != null && directMarker == null &&
             KeyguardR44Markers.unknownMayRestrict(viewId, ancestor != null)) {
@@ -397,13 +415,17 @@ internal class KeyguardR44TreeReader(
             markers.forEach { (marker, carrier) -> addFact(ordinal, marker, carrier) }
         }
         markers.forEach { (marker, carrier) ->
-            observe(marker, carrier)
+            observe(marker, carrier, ordinal)
             if (marker == KeyguardR44Markers.Marker.DEVICE_ENTRY ||
-                marker == KeyguardR44Markers.Marker.LARGE_CLOCK || marker == KeyguardR44Markers.Marker.SMALL_CLOCK) {
+                marker == KeyguardR44Markers.Marker.LARGE_CLOCK || marker == KeyguardR44Markers.Marker.SMALL_CLOCK ||
+                marker == KeyguardR44Markers.Marker.CLOCK_SWITCH) {
                 when {
                     excluded -> rejectedExcluded = (rejectedExcluded + 1).coerceAtMost(255)
                     marker == KeyguardR44Markers.Marker.DEVICE_ENTRY &&
                         (!genuineDeviceEntryResource || carrier != KeyguardR44Markers.Carrier.VIEW_ID) ->
+                        rejectedUnverified = (rejectedUnverified + 1).coerceAtMost(255)
+                    marker == KeyguardR44Markers.Marker.CLOCK_SWITCH &&
+                        (!expanded || !genuineClockResource || carrier != KeyguardR44Markers.Carrier.VIEW_ID) ->
                         rejectedUnverified = (rejectedUnverified + 1).coerceAtMost(255)
                     ancestor == null || ancestor != host?.ordinal || ordinal == ancestor ->
                         rejectedAncestry = (rejectedAncestry + 1).coerceAtMost(255)
@@ -415,16 +437,19 @@ internal class KeyguardR44TreeReader(
             val nodeHost = markers.firstOrNull { it.first == KeyguardR44Markers.Marker.HOST }
             if (nodeHost != null) {
                 if (host != null && host?.ordinal != ordinal) complete = false
-                else host = KeyguardR44Witness(nodeHost.first, nodeHost.second, ordinal)
+                else { host = KeyguardR44Witness(nodeHost.first, nodeHost.second, ordinal); hostParent = parentOrdinal }
                 childAncestor = ordinal
             }
             val candidate = markers.firstOrNull {
                 it.first == KeyguardR44Markers.Marker.LARGE_CLOCK || it.first == KeyguardR44Markers.Marker.SMALL_CLOCK ||
                     (it.first == KeyguardR44Markers.Marker.DEVICE_ENTRY && genuineDeviceEntryResource &&
+                        it.second == KeyguardR44Markers.Carrier.VIEW_ID) ||
+                    (it.first == KeyguardR44Markers.Marker.CLOCK_SWITCH && expanded && genuineClockResource &&
                         it.second == KeyguardR44Markers.Carrier.VIEW_ID)
             }
             if (candidate != null && ancestor != null && ancestor == host?.ordinal && ordinal != ancestor && content == null) {
                 content = KeyguardR44Witness(candidate.first, candidate.second, ordinal)
+                contentParent = parentOrdinal
                 below = true
             }
         }
@@ -442,6 +467,10 @@ internal class KeyguardR44TreeReader(
         rejectedExcluded = rejectedExcluded, rejectedForeign = rejectedForeign, rejectedHidden = rejectedHidden,
         firstCandidate = firstCandidate, firstCarrier = firstCarrier,
         r443Overflow = candidateOverflow,
+        r444HostNodes = r444HostOrdinals?.count { it } ?: 0,
+        r444HostCarriers = r444HostCarriers,
+        r444HostParent = hostParent, r444ContentParent = contentParent,
+        r444ClockResourceVerified = expanded && genuineClockResource,
         r443Candidates = candidateMetrics.orEmpty().map { metric -> KeyguardR443CandidateObservation(
             windowId, metric.ordinal,
             if (hasExcludedAncestor(metric.ordinal)) "EXCLUDED" else if (descendsFrom(metric.parentOrdinal, host?.ordinal)) "HOST" else "OTHER",

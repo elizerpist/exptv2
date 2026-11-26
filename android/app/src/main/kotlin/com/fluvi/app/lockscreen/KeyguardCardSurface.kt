@@ -24,11 +24,14 @@ internal enum class KeyguardSurfaceReason {
     MAIN_CONFIRMED,
 }
 
+internal enum class KeyguardR444Gate { UNOBSERVED, RESTRICTION, INCOMPLETE, NO_HOST, NO_CONTENT, INVALID_PAIR, COVER_VETO, ACCEPTED, LEGACY }
+
 internal data class KeyguardSurfaceClassification(
     val surface: KeyguardSurface,
     val reason: KeyguardSurfaceReason,
     /** Counts only classifier marker categories, never screen text. */
     val markers: KeyguardSurfaceMarkers = KeyguardSurfaceMarkers(),
+    val r444Gate: KeyguardR444Gate = KeyguardR444Gate.UNOBSERVED,
 )
 
 internal data class KeyguardSurfaceMarkers(
@@ -50,6 +53,11 @@ internal data class KeyguardWindowSnapshot(
     val windowId: Int = -1,
     /** Non-null only for a current API-37 ORB inspection. */
     val r44: KeyguardR44WindowEvidence? = null,
+    val r444Active: Boolean? = null,
+    val r444Focused: Boolean? = null,
+    val r444Visited: Int? = null,
+    val r444RootRole: String = "UNOBSERVED",
+    val r444OwnGeneration: Long? = null,
 )
 
 internal object KeyguardSurfaceClassifier {

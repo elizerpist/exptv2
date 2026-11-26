@@ -42,7 +42,9 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                 true, false, false, false, false, 969, 0, true,
                 KeyguardR44Witness(KeyguardR44Markers.Marker.HOST, KeyguardR44Markers.Carrier.EXTRA_LAZY, 20),
                 null, false, complete, 1, 1, failed, 0, false, 2,
-                cover = "VETO_UNKNOWN_OR_COVER", receipt = "armed"))
+                cover = "VETO_UNKNOWN_OR_COVER", receipt = "armed",
+                r443Candidates = if (failed > 0) listOf(KeyguardR443CandidateObservation(
+                    969, 20, "HOST", 1, "EMPTY", "UNOBSERVED", 2, 6, 48, 3, 1)) else emptyList()))
         }
         add(1, KeyguardSurfaceReason.NO_MAIN_MARKER, true, 0)
         add(2, KeyguardSurfaceReason.WALK_TRUNCATED, false, 1)
@@ -51,6 +53,45 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(report, report.contains("Üres kiegészítő adat miatt hiányos az olvasás"))
         assertTrue(report, report.contains("további, nem minősített ablak"))
         assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+    }
+
+    @Test fun r444EightWakeLightSummaryRetainsMissingAndAppliedReasons() = r444Pressure("LIGHT")
+    @Test fun r444EightWakeFullSummaryRetainsMissingAndAppliedReasons() = r444Pressure("FULL")
+
+    private fun r444Pressure(mode: String) {
+        KeyguardCardDiagnostics.startCapture(context, "r444-pressure", "profile", mode, r442ExpectedSession = 9445)
+        repeat(8) { index ->
+            val wake = index + 1L
+            val base = wake * 1000
+            val owner = checkNotNull(KeyguardCardDiagnostics.beginLockAttempt(context, 9445, wake, "wake", base))
+            KeyguardCardDiagnostics.captureEvent(context, "SCREEN_ON_RECEIVED", "test",
+                diagnosticContext = owner, observedUptimeMs = base + 20)
+            val missing = index >= 5
+            val empty = index % 2 == 1
+            val start = if (missing) base + 5 else base + 21
+            val candidates = (1..7).map { n -> KeyguardR443CandidateObservation(969, n, "HOST", n,
+                if (empty && n == 7) "EMPTY" else "READ", "UNRELATED", n.toLong(), 7 - n, 50L - n, 3, 2) }
+            KeyguardCardDiagnostics.recordR44(KeyguardR44ReadObservation(owner, base + 30, wake, wake,
+                start, start + 5, KeyguardSurface.UNKNOWN, KeyguardSurface.UNKNOWN,
+                if (empty) KeyguardSurfaceReason.WALK_TRUNCATED else KeyguardSurfaceReason.NO_MAIN_MARKER,
+                true, false, false, false, false, 969, 0, true,
+                KeyguardR44Witness(KeyguardR44Markers.Marker.HOST, KeyguardR44Markers.Carrier.EXTRA_LAZY, 20),
+                null, false, !empty, 7, 7, if (empty) 1 else 0, 4, false, 5,
+                cover = "VETO_UNKNOWN_OR_COVER", receipt = "armed", r443Candidates = candidates,
+                appliedGate = if (empty) KeyguardR444Gate.INCOMPLETE else KeyguardR444Gate.NO_CONTENT,
+                profile = "EXPANDED", profileRevision = 5, previousFlags = 48, actualFlags = 50,
+                hostNodes = 1, hostCarriers = 5, hostParent = 2, secondaryCount = 1,
+                r444Windows = listOf(KeyguardR444WindowObservation(972, 0, 3, false, false,
+                    "SYSTEMUI", null, true, 4, "UDFPS_NODE_VERIFIED"))))
+        }
+        val report = KeyguardCardDiagnostics.freezeCapture(context)["report"] as String
+        assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
+        assertEquals(8, report.lineSequence().count { it.startsWith("R44_4_HU ") })
+        assertEquals(3, report.lineSequence().count { it.startsWith("R44_WAKE ") && it.contains("firstPostRead=missing") })
+        assertTrue(report.contains("Hiányzik a külön óra- vagy belépési jel"))
+        assertTrue(report.contains("Üres kiegészítő adat miatt hiányos az olvasás"))
+        assertTrue(report.contains("további, nem minősített ablak"))
+        assertTrue(report.contains("root=UDFPS_NODE_VERIFIED"))
     }
 
     @Test fun r442FirstIncompleteReadAndMissingSuccessorRemainExplicit() {

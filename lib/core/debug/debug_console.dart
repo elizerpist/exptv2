@@ -60,6 +60,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
   bool _r44TrialEnabled = false;
   bool _r442Active = false;
   String? _r442Reason;
+  String? _r444Profile;
   bool _loadingKeyguard = false;
   bool _copyingKeyguard = false;
   bool _keyguardCopied = false;
@@ -317,6 +318,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
               _r44TrialEnabled &&
               _validR442Receipt(receipt, snapshot.captureId);
           _r442Reason = receipt['reason']?.toString();
+          _r444Profile = _r442Active ? receipt['profile']?.toString() : null;
         });
       }
     } on Object catch (error) {
@@ -352,6 +354,16 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       receipt['process'] is String &&
       (receipt['process'] as String).isNotEmpty &&
       receipt['serviceSession'] is int &&
+      receipt['profileRevision'] is int &&
+      receipt['actualFlags'] is int &&
+      receipt['profile'] is String &&
+      ((receipt['profile'] == 'EXPANDED' ||
+              receipt['profile'] == 'STANDARD_ALREADY_INCLUDED')
+          ? receipt['includeNotImportant'] == true &&
+                ((receipt['actualFlags'] as int) & 2) != 0
+          : receipt['profile'] == 'STANDARD' &&
+                receipt['includeNotImportant'] == false &&
+                ((receipt['actualFlags'] as int) & 2) == 0) &&
       receipt['materialDomain'] == 'fixedSample';
 
   String _r442Failure(Object? reason) => switch (reason) {
@@ -361,14 +373,15 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       'A zárképernyő ORB-szolgáltatása nincs bekapcsolva.',
     'unsupportedBuild' => 'A mintaorb-próba ezen a rendszeren nem érhető el.',
     'startInProgress' => 'A próba indítása már folyamatban van.',
+    'trialAlreadyActive' => 'A mintaorb-próba már aktív; előbb állítsd le.',
+    'profileRestoreFailed' => 'A próbaprofil visszaállítása nem igazolt.',
     'samplePreparationFailed' => 'A mintaorb előkészítése sikertelen.',
     'captureFailed' => 'A natív rögzítés indítása sikertelen.',
     'startCancelled' => 'A mintaorb-próba indítása megszakadt.',
     'serviceRebound' =>
       'A szolgáltatás újraindult; a próbát újra kell indítani.',
     'serviceLost' => 'A zárképernyő-szolgáltatás leállt.',
-    'captureStopped' =>
-      'A rögzítés leállt; a mintaadat kapcsolóval külön kikapcsolható.',
+    'captureStopped' => 'A rögzítés leállt, a mintaadat-próba visszaállt.',
     'trialChanged' =>
       'A mintaadat beállítása megváltozott; a rögzítési visszaigazolás érvénytelen.',
     'normalCapture' => 'A sima rögzítés nem indít mintaorb-próbát.',
@@ -378,7 +391,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       'A mintaorb-próba nem indult el: ${reason ?? 'hiányzó visszaigazolás'}.',
   };
 
-  Future<void> _startR442SampleCapture() async {
+  Future<void> _startR442SampleCapture({bool expanded = true}) async {
     final bridge = widget.keyguardTimingCapture;
     if (bridge == null || _loadingKeyguard) return;
     setState(() {
@@ -390,6 +403,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
     try {
       final receipt = await bridge.startR442SampleCapture(
         mode: _keyguardCaptureMode,
+        expanded: expanded,
       );
       final rawSnapshot = receipt['snapshot'];
       final snapshot = rawSnapshot is Map<Object?, Object?>
@@ -404,11 +418,20 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
           _validR442Receipt(receipt, snapshot.captureId) &&
           _validR442Receipt(current, snapshot.captureId) &&
           current['serviceSession'] == receipt['serviceSession'] &&
-          current['process'] == receipt['process'];
+          current['process'] == receipt['process'] &&
+          current['profileRevision'] == receipt['profileRevision'] &&
+          current['profile'] == receipt['profile'] &&
+          current['actualFlags'] == receipt['actualFlags'] &&
+          (expanded
+              ? receipt['profile'] == 'EXPANDED' &&
+                    receipt['includeNotImportant'] == true
+              : receipt['profile'] == 'STANDARD' ||
+                    receipt['profile'] == 'STANDARD_ALREADY_INCLUDED');
       if (mounted) {
         setState(() {
           _keyguardSnapshot = snapshot ?? _keyguardSnapshot;
           _r442Active = confirmed;
+          _r444Profile = confirmed ? receipt['profile']?.toString() : null;
           _r44TrialEnabled = trial['enabled'] == true;
           _r442Reason = confirmed
               ? 'armed'
@@ -476,7 +499,12 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
     });
     try {
       final snapshot = await bridge.freeze();
-      if (mounted) setState(() => _keyguardSnapshot = snapshot);
+      if (mounted) {
+        setState(() {
+          _keyguardSnapshot = snapshot;
+          _r44TrialEnabled = false;
+        });
+      }
     } on Object catch (error) {
       if (mounted) setState(() => _keyguardError = '$error');
     } finally {
@@ -498,8 +526,9 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       // A running capture is frozen first so the clipboard receives one
       // coherent native snapshot rather than a Flutter-side reconstruction.
       var snapshot = _keyguardSnapshot;
-      if (snapshot == null || snapshot.recording) {
+      if (snapshot == null || snapshot.recording || _r44TrialEnabled) {
         snapshot = await bridge.freeze();
+        if (mounted) setState(() => _r44TrialEnabled = false);
       }
       if (snapshot.report.isEmpty) {
         snapshot = await bridge.get();
@@ -1105,8 +1134,20 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                     key: const ValueKey('debug-console-r442-start'),
                     onPressed: _loadingKeyguard || unavailable || _r442Active
                         ? null
-                        : _startR442SampleCapture,
+                        : () => _startR442SampleCapture(),
                     child: const Text('Mintaorb kipróbálása és rögzítés'),
+                  ),
+                if (_r44TrialAvailable)
+                  const Text(
+                    'A próba több SystemUI-nézetazonosítót olvas, kizárólag mintaadattal.',
+                  ),
+                if (_r44TrialAvailable)
+                  TextButton(
+                    key: const ValueKey('debug-console-r444-standard'),
+                    onPressed: _loadingKeyguard || unavailable || _r442Active
+                        ? null
+                        : () => _startR442SampleCapture(expanded: false),
+                    child: const Text('Mintaorb-rögzítés szokásos profillal'),
                   ),
                 if (_r44TrialAvailable)
                   SwitchListTile(
@@ -1124,6 +1165,14 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                   const Text(
                     'Mintaorb-próba aktív',
                     key: ValueKey('debug-console-r442-active'),
+                  ),
+                if (_r442Active)
+                  Text(
+                    _r444Profile == 'EXPANDED'
+                        ? 'Kibővített nézetprofil visszaigazolva.'
+                        : _r444Profile == 'STANDARD_ALREADY_INCLUDED'
+                        ? 'A szokásos profilban a bővítés már aktív volt.'
+                        : 'Szokásos nézetprofil visszaigazolva.',
                   ),
                 if (!_r442Active &&
                     _keyguardError == null &&
@@ -1217,7 +1266,10 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                       OutlinedButton.icon(
                         key: const ValueKey('debug-console-keyguard-freeze'),
                         onPressed:
-                            _loadingKeyguard || snapshot?.recording != true
+                            _loadingKeyguard ||
+                                (snapshot?.recording != true &&
+                                    !_r44TrialEnabled &&
+                                    !_r44TrialAvailable)
                             ? null
                             : _freezeKeyguardCapture,
                         icon: const Icon(Icons.stop_circle_outlined, size: 15),

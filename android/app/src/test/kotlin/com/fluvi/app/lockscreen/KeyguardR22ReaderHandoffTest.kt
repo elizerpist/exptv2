@@ -36,7 +36,7 @@ class KeyguardR22ReaderHandoffTest {
     private data class Node(val id: String?, val windowId: Int, val pkg: String = "com.android.systemui",
         val children: MutableList<AccessibilityNodeInfo> = mutableListOf(), var recycled: Int = 0,
         val extras: Bundle = Bundle(), var advertised: Boolean = false, var lazyTag: String? = null,
-        var refreshSucceeds: Boolean = true)
+        var refreshSucceeds: Boolean = true, var visible: Boolean = true)
     private data class Window(val id: Int, val layer: Int, val active: Boolean, val root: AccessibilityNodeInfo)
     private object Platform {
         val nodes = IdentityHashMap<AccessibilityNodeInfo, Node>()
@@ -96,7 +96,7 @@ class KeyguardR22ReaderHandoffTest {
         @Implementation fun getWindowId(): Int = checkNotNull(Platform.nodes[real]).windowId
         @Implementation fun getPackageName(): CharSequence = checkNotNull(Platform.nodes[real]).pkg
         @Implementation fun getClassName(): CharSequence = "android.view.View"
-        @Implementation fun isVisibleToUser(): Boolean = true
+        @Implementation fun isVisibleToUser(): Boolean = checkNotNull(Platform.nodes[real]).visible
         @Implementation fun getViewIdResourceName(): String? = checkNotNull(Platform.nodes[real]).id
         @Implementation fun getExtras(): Bundle = checkNotNull(Platform.nodes[real]).extras
         @Implementation fun getAvailableExtraData(): List<String> =
@@ -510,6 +510,74 @@ class KeyguardR22ReaderHandoffTest {
             assertEquals(KeyguardSurface.CREDENTIAL, KeyguardR44SurfaceClassifier.classify(
                 read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
         } finally { KeyguardR44Trial.set(false, false) }
+    }
+
+    @Test fun r444ClockSwitchRequiresVerifiedResourceAndHostRelationship() {
+        for (verified in listOf(false, true)) {
+            Platform.reset()
+            val host = Platform.node("element:lockscreen")
+            val clock = Platform.node("com.android.systemui:id/keyguard_clock_switch")
+            checkNotNull(Platform.nodes[host]).children.add(clock)
+            Platform.activeRoot = host
+            Platform.inventory = listOf(Platform.window(10, 1, true, host))
+            KeyguardR44Trial.set(true, true)
+            try {
+                val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true,
+                    r444Expanded = true, r444ClockVerified = verified), { true })
+                val decision = KeyguardR44SurfaceClassifier.classify(read.snapshots,
+                    read.rootUnavailable, read.walkTruncated, false, syntheticTrial = true, expanded = true)
+                assertEquals(if (verified) KeyguardSurface.MAIN_KEYGUARD else KeyguardSurface.UNKNOWN, decision.surface)
+            } finally { KeyguardR44Trial.set(false, false) }
+        }
+    }
+
+    @Test fun r444HiddenSpoofedOrWrongWindowClockCannotGrant() {
+        for (variant in listOf("hiddenHost", "hiddenClock", "foreignClock", "otherWindow", "inactive")) {
+            Platform.reset()
+            val host = Platform.node("element:lockscreen")
+            val clock = Platform.node("com.android.systemui:id/keyguard_clock_switch",
+                window = if (variant == "otherWindow") 11 else 10,
+                pkg = if (variant == "foreignClock") "foreign.app" else "com.android.systemui")
+            checkNotNull(Platform.nodes[host]).children.add(clock)
+            if (variant == "hiddenHost") checkNotNull(Platform.nodes[host]).visible = false
+            if (variant == "hiddenClock") checkNotNull(Platform.nodes[clock]).visible = false
+            Platform.activeRoot = host
+            Platform.inventory = listOf(Platform.window(10, 1, variant != "inactive", host))
+            KeyguardR44Trial.set(true, true)
+            try {
+                val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true,
+                    r444Expanded = true, r444ClockVerified = true), { true })
+                val result = KeyguardR44SurfaceClassifier.classify(read.snapshots,
+                    read.rootUnavailable, read.walkTruncated, false, syntheticTrial = true, expanded = true)
+                assertFalse("must not grant $variant", result.surface == KeyguardSurface.MAIN_KEYGUARD)
+            } finally { KeyguardR44Trial.set(false, false) }
+        }
+    }
+
+    @Test fun r444ClockOutsideHostOrUnderShadeCannotGrant() {
+        for (scene in listOf("sibling", "shade")) {
+            Platform.reset()
+            val root = Platform.node(null)
+            val host = Platform.node("element:lockscreen")
+            val clock = Platform.node("com.android.systemui:id/keyguard_clock_switch")
+            if (scene == "sibling") checkNotNull(Platform.nodes[root]).children.addAll(listOf(host, clock))
+            else {
+                val shade = Platform.node("scene:shade")
+                checkNotNull(Platform.nodes[shade]).children.add(clock)
+                checkNotNull(Platform.nodes[host]).children.add(shade)
+                checkNotNull(Platform.nodes[root]).children.add(host)
+            }
+            Platform.activeRoot = root
+            Platform.inventory = listOf(Platform.window(10, 1, true, root))
+            KeyguardR44Trial.set(true, true)
+            try {
+                val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true,
+                    r444Expanded = true, r444ClockVerified = true), { true })
+                val result = KeyguardR44SurfaceClassifier.classify(read.snapshots,
+                    read.rootUnavailable, read.walkTruncated, false, syntheticTrial = true, expanded = true)
+                assertEquals(if (scene == "shade") KeyguardSurface.SHADE else KeyguardSurface.UNKNOWN, result.surface)
+            } finally { KeyguardR44Trial.set(false, false) }
+        }
     }
 
     @Test fun r443LateHostCanOwnAnAlreadyVisitedChild() {

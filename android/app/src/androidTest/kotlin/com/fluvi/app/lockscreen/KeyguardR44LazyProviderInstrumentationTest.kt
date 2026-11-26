@@ -39,12 +39,24 @@ class KeyguardR44LazyProviderInstrumentationTest {
             current.flags = if (enable) current.flags or bit else current.flags and bit.inv()
             ui.serviceInfo = current
             assertEquals(enable, checkNotNull(ui.serviceInfo).flags and bit != 0)
+            ui.clearCache()
         }
         fun isPresent(): Boolean {
             val root = ui.rootInActiveWindow ?: return false
+            fun walk(node: AccessibilityNodeInfo, depth: Int): Boolean {
+                if (depth > 20) return false
+                if (node.viewIdResourceName == "android:id/button1" && node.isVisibleToUser) return true
+                for (i in 0 until node.childCount) {
+                    val child = node.getChild(i) ?: continue
+                    try { if (walk(child, depth + 1)) return true } finally { child.recycle() }
+                }
+                return false
+            }
             return try {
-                val nodes = root.findAccessibilityNodeInfosByViewId("android:id/button1")
-                try { nodes.any { it.isVisibleToUser } } finally { nodes.forEach { it.recycle() } }
+                check(root.packageName?.toString() == instrumentation.targetContext.packageName) {
+                    "NOT REACHED: fixture activity is not the active window"
+                }
+                walk(root, 0)
             } finally { root.recycle() }
         }
         try {

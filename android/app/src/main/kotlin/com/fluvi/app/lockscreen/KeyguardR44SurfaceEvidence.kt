@@ -7,13 +7,14 @@ import android.view.accessibility.AccessibilityWindowInfo
 internal object KeyguardR44Markers {
     const val EXTRA = "androidx.compose.ui.semantics.testTag"
 
-    enum class Marker { HOST, DEVICE_ENTRY, LARGE_CLOCK, SMALL_CLOCK, BOUNCER, SHADE, QUICK_SETTINGS }
+    enum class Marker { HOST, DEVICE_ENTRY, CLOCK_SWITCH, LARGE_CLOCK, SMALL_CLOCK, BOUNCER, SHADE, QUICK_SETTINGS }
     enum class Carrier { VIEW_ID, EXTRA_EAGER, EXTRA_LAZY }
 
     fun exact(value: CharSequence?): Marker? = when {
         value == null -> null
         value.contentEquals("element:lockscreen") -> Marker.HOST
         value.contentEquals("com.android.systemui:id/device_entry_icon_view") -> Marker.DEVICE_ENTRY
+        value.contentEquals("com.android.systemui:id/keyguard_clock_switch") -> Marker.CLOCK_SWITCH
         value.contentEquals("element:LargeClock") -> Marker.LARGE_CLOCK
         value.contentEquals("element:SmallClock") -> Marker.SMALL_CLOCK
         value.contentEquals("overlay:bouncer") -> Marker.BOUNCER
@@ -69,6 +70,11 @@ internal data class KeyguardR44WindowEvidence(
     val firstCarrier: KeyguardR44Markers.Carrier? = null,
     val r443Overflow: Int = 0,
     val r443Candidates: List<KeyguardR443CandidateObservation> = emptyList(),
+    val r444HostNodes: Int = 0,
+    val r444HostCarriers: Int = 0,
+    val r444HostParent: Int? = null,
+    val r444ContentParent: Int? = null,
+    val r444ClockResourceVerified: Boolean = false,
 )
 
 internal object KeyguardR44SurfaceClassifier {
@@ -80,6 +86,7 @@ internal object KeyguardR44SurfaceClassifier {
         walkTruncated: Boolean,
         strictOwnAttribution: Boolean,
         syntheticTrial: Boolean,
+        expanded: Boolean = false,
     ): KeyguardSurfaceClassification {
         val legacy = KeyguardSurfaceClassifier.classifyDetailed(
             windows, unavailableRoot = unavailableRoot, walkTruncated = walkTruncated,
@@ -90,58 +97,65 @@ internal object KeyguardR44SurfaceClassifier {
         }.flatMap { it.visibleViewIds.asSequence() }
         val r44Restrictions = systemIds.mapNotNull(KeyguardR44Markers::exact).toSet()
         if (KeyguardR44Markers.Marker.BOUNCER in r44Restrictions) return KeyguardSurfaceClassification(
-            KeyguardSurface.CREDENTIAL, KeyguardSurfaceReason.CREDENTIAL_MARKER, legacy.markers)
+            KeyguardSurface.CREDENTIAL, KeyguardSurfaceReason.CREDENTIAL_MARKER, legacy.markers, KeyguardR444Gate.RESTRICTION)
         if (KeyguardR44Markers.Marker.SHADE in r44Restrictions ||
             KeyguardR44Markers.Marker.QUICK_SETTINGS in r44Restrictions) return KeyguardSurfaceClassification(
-            KeyguardSurface.SHADE, KeyguardSurfaceReason.SHADE_MARKER, legacy.markers)
+            KeyguardSurface.SHADE, KeyguardSurfaceReason.SHADE_MARKER, legacy.markers, KeyguardR444Gate.RESTRICTION)
         // Known restrictions remain useful even when a different root is
         // incomplete.  They always precede any positive proof.
         if (legacy.surface == KeyguardSurface.CREDENTIAL || legacy.surface == KeyguardSurface.SHADE ||
-            legacy.surface == KeyguardSurface.OCCLUDED) return legacy
-        if (unavailableRoot || walkTruncated) return legacy
+            legacy.surface == KeyguardSurface.OCCLUDED) return legacy.copy(r444Gate = KeyguardR444Gate.RESTRICTION)
+        if (unavailableRoot || walkTruncated) return legacy.copy(r444Gate = KeyguardR444Gate.INCOMPLETE)
         val primary = windows.filter { it.displayId == 0 && !it.ownOverlay }
         val observed = primary.mapNotNull { it.r44 }
         if (observed.any { !it.complete }) return KeyguardSurfaceClassification(
-            KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.WALK_TRUNCATED, legacy.markers)
+            KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.WALK_TRUNCATED, legacy.markers, KeyguardR444Gate.INCOMPLETE)
         // A duplicate host is ambiguous for either positive route. The
         // restriction applies only to the explicitly enabled sample.
         if (syntheticTrial && observed.count { it.verifiedRoot && it.host != null } > 1)
             return KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN,
-                KeyguardSurfaceReason.WALK_TRUNCATED, legacy.markers)
+                KeyguardSurfaceReason.WALK_TRUNCATED, legacy.markers, KeyguardR444Gate.INCOMPLETE)
         // A legacy positive also has to survive new global restriction and
         // occlusion checks relative to the active host on API 37.
-        if (legacy.surface == KeyguardSurface.MAIN_KEYGUARD) {
+        if (legacy.surface == KeyguardSurface.MAIN_KEYGUARD && !(syntheticTrial && expanded)) {
             val active = primary.filter { w -> w.packageName == "com.android.systemui" &&
                 w.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
                 w.r44?.let { it.verifiedRoot && it.active } == true }
             if (active.size != 1 || primary.any { it !== active.single() &&
                     it.layer >= active.single().layer && it.r44?.verifiedPassive != true }) {
                 return KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN,
-                    KeyguardSurfaceReason.FOREIGN_ABOVE, legacy.markers)
+                    KeyguardSurfaceReason.FOREIGN_ABOVE, legacy.markers, KeyguardR444Gate.COVER_VETO)
             }
-            return legacy
+            return legacy.copy(r444Gate = KeyguardR444Gate.LEGACY)
         }
-        if (!syntheticTrial) return legacy
+        if (!syntheticTrial) return legacy.copy(r444Gate = KeyguardR444Gate.LEGACY)
+        val fallback = if (expanded && legacy.surface == KeyguardSurface.MAIN_KEYGUARD)
+            KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN, KeyguardSurfaceReason.NO_MAIN_MARKER, legacy.markers)
+        else legacy
         val hosts = primary.filter { w ->
             w.type == AccessibilityWindowInfo.TYPE_SYSTEM && w.packageName == "com.android.systemui" &&
                 w.r44?.let { it.verifiedRoot && it.active && it.host != null } == true
         }
-        if (hosts.size != 1) return legacy
+        if (hosts.size != 1) return fallback.copy(r444Gate = KeyguardR444Gate.NO_HOST)
         val host = hosts.single()
         val evidence = requireNotNull(host.r44)
-        val content = evidence.content ?: return legacy
+        val content = evidence.content ?: return fallback.copy(r444Gate = KeyguardR444Gate.NO_CONTENT)
         if (!evidence.complete || evidence.foreignNode || !evidence.contentBelowHost ||
-            evidence.host?.ordinal == content.ordinal) return legacy
+            evidence.host?.ordinal == content.ordinal) return fallback.copy(r444Gate = KeyguardR444Gate.INVALID_PAIR)
         if (content.marker != KeyguardR44Markers.Marker.DEVICE_ENTRY &&
             content.marker != KeyguardR44Markers.Marker.LARGE_CLOCK &&
-            content.marker != KeyguardR44Markers.Marker.SMALL_CLOCK) return legacy
+            content.marker != KeyguardR44Markers.Marker.SMALL_CLOCK &&
+            !(expanded && evidence.r444ClockResourceVerified &&
+                content.marker == KeyguardR44Markers.Marker.CLOCK_SWITCH &&
+                content.carrier == KeyguardR44Markers.Carrier.VIEW_ID))
+            return fallback.copy(r444Gate = KeyguardR444Gate.INVALID_PAIR)
         // Compare against the actual host, not the highest SystemUI layer.
         // Unknown or covering windows are not assumed to be transparent.
         if (primary.any { it !== host && it.layer >= host.layer && it.r44?.verifiedPassive != true }) {
             return KeyguardSurfaceClassification(KeyguardSurface.UNKNOWN,
-                KeyguardSurfaceReason.FOREIGN_ABOVE, legacy.markers)
+                KeyguardSurfaceReason.FOREIGN_ABOVE, legacy.markers, KeyguardR444Gate.COVER_VETO)
         }
         return KeyguardSurfaceClassification(KeyguardSurface.MAIN_KEYGUARD,
-            KeyguardSurfaceReason.MAIN_CONFIRMED, legacy.markers.copy(main = 1))
+            KeyguardSurfaceReason.MAIN_CONFIRMED, legacy.markers.copy(main = 1), KeyguardR444Gate.ACCEPTED)
     }
 }

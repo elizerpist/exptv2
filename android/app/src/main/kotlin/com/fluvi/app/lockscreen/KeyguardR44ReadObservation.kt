@@ -12,6 +12,12 @@ internal data class KeyguardR443WindowObservation(
     val complete: Boolean,
 )
 
+internal data class KeyguardR444WindowObservation(
+    val id: Int, val relativeLayer: Int, val type: Int, val active: Boolean?, val focused: Boolean?,
+    val owner: String, val ownGeneration: Long?, val verifiedRoot: Boolean,
+    val visited: Int?, val rootRole: String,
+)
+
 internal data class KeyguardR44ReadObservation(
     val context: KeyguardDiagnosticContext,
     val request: Long,
@@ -58,6 +64,14 @@ internal data class KeyguardR44ReadObservation(
     val receipt: String = "UNOBSERVED",
     val r443Windows: List<KeyguardR443WindowObservation> = emptyList(),
     val r443Candidates: List<KeyguardR443CandidateObservation> = emptyList(),
+    val appliedGate: KeyguardR444Gate = KeyguardR444Gate.UNOBSERVED,
+    val profile: String = "UNOBSERVED", val profileRevision: Long? = null,
+    val previousFlags: Int? = null, val actualFlags: Int? = null,
+    val clockResourceVerified: Boolean = false,
+    val hostNodes: Int = 0, val hostCarriers: Int = 0,
+    val hostParent: Int? = null, val contentParent: Int? = null,
+    val secondaryCount: Int = 0, val secondaryOverflow: Int = 0,
+    val r444Windows: List<KeyguardR444WindowObservation> = emptyList(),
 )
 
 internal data class KeyguardR442HandoffObservation(

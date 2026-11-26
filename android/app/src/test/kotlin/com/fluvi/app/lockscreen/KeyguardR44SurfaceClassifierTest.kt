@@ -54,6 +54,20 @@ class KeyguardR44SurfaceClassifierTest {
             "com.android.systemui:id/keyguard_status_view", "scene:shade")), trial = false))
     }
 
+    @Test fun expandedProfileRejectsLegacyOnlyMarkerAndDistinguishesCover() {
+        val legacyOnly = window(ids = setOf("com.android.systemui:id/keyguard_status_view"),
+            e = evidence(content = null))
+        val missing = KeyguardR44SurfaceClassifier.classify(listOf(legacyOnly), false, false,
+            false, syntheticTrial = true, expanded = true)
+        assertEquals(KeyguardSurface.UNKNOWN, missing.surface)
+        assertEquals(KeyguardR444Gate.NO_CONTENT, missing.r444Gate)
+        val covered = KeyguardR44SurfaceClassifier.classify(listOf(window(),
+            window(id = 11, layer = 11, e = evidence(host = null, content = null, active = false))),
+            false, false, false, syntheticTrial = true, expanded = true)
+        assertEquals(KeyguardSurface.UNKNOWN, covered.surface)
+        assertEquals(KeyguardR444Gate.COVER_VETO, covered.r444Gate)
+    }
+
     @Test fun duplicateVerifiedHostIsAmbiguousEvenIfOneIsInactive() {
         assertEquals(KeyguardSurface.UNKNOWN, decide(window(),
             window(id = 11, layer = 9, e = evidence(active = false))))
