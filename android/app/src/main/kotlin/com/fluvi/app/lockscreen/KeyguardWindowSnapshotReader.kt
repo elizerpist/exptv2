@@ -817,8 +817,11 @@ internal class KeyguardWindowSnapshotReader(
                 KeyguardSurfaceClassifier.isDecisiveExclusionMarker(it) ||
                     (request.r44Enabled && KeyguardR44Markers.exact(it)?.let(KeyguardR44Markers::exclusion) != null)
             } }
+            val incompleteR44 = request.r44Enabled && snapshots.any { snap ->
+                snap.r44?.let { !it.complete || it.foreignNode } == true
+            }
             maybeR37("BEFORE_RESULT", !unavailableRoot && !walkTruncated &&
-                !timing.ownAttributionAmbiguous && !hasRestrictiveMarker, visited)
+                !timing.ownAttributionAmbiguous && !hasRestrictiveMarker && !incompleteR44, visited)
         } else null
         if (finalNext != null) return Result(emptyList(), false, false, windowsReadMs,
             SystemClock.uptimeMillis() - treeStartedAt, visited,
@@ -917,7 +920,8 @@ internal class KeyguardWindowSnapshotReader(
                 if (!authorityIsCurrent()) { aborted = true; return }
                 // The returned node's own restrictive markers must be read
                 // first, including when this is the final child or a leaf.
-                if (!decisiveReported && !truncated && tryR37AfterNode != null) {
+                if (!decisiveReported && !truncated && tryR37AfterNode != null &&
+                    r44Window?.safeToYield() != false) {
                     yieldedTo = tryR37AfterNode(visited)
                     if (yieldedTo != null) { yieldReason = KeyguardOpeningYieldReason.CLEAN_OPENING; return }
                 }
@@ -932,7 +936,8 @@ internal class KeyguardWindowSnapshotReader(
                             KeyguardOpeningYieldReason.INCOMPLETE_NULL_CHILD
                         else -> null
                     }
-                    if (eligibleReason != null && !decisiveReported && tryOpeningYield != null) {
+                    if (eligibleReason != null && !decisiveReported && tryOpeningYield != null &&
+                        r44Window?.safeToYield() != false) {
                         // The previously returned node's own marker was read
                         // before this test-only boundary; no queue lock is held.
                         if (visited > 1 && openingEligibleCheckpoint != null)
@@ -947,7 +952,8 @@ internal class KeyguardWindowSnapshotReader(
                         if (pauseOpeningAfterYieldAttempt?.invoke() == true) { aborted = true; return }
                     } else if (timing.captureOpening && timing.checkpointState == null && openingYieldHint?.invoke() == true) {
                         timing.checkpointState = if (truncated) "SKIPPED_TRUNCATED" else if (decisiveReported)
-                            "SKIPPED_DECISIVE" else "NOT_INSTALLED"
+                            "SKIPPED_DECISIVE" else if (r44Window?.safeToYield() == false)
+                            "SKIPPED_R44_INCOMPLETE" else "NOT_INSTALLED"
                         timing.checkpointWindow = windowId
                         timing.checkpointIndex = index
                     }

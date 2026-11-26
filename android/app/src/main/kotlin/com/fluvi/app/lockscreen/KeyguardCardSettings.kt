@@ -3558,7 +3558,8 @@ internal object KeyguardCardDiagnostics {
         if (!trialRequested) appendLine("R44_2_HU A mintaorb-próba nem volt elindítva; ez csak rögzítés.")
         else if (post != null && (!post.synthetic || post.receipt != "armed"))
             appendLine("R44_2_HU FIGYELEM: a mintaorb-próba visszaigazolása vagy üzemmódja elveszett.")
-        appendLine("R44_2_TRIAL requested=$trialRequested receipt=${post?.receipt ?: "UNOBSERVED"} domain=${if (post?.synthetic == true) "fixedSample" else "normal"}")
+        val domain = when { post == null -> "UNOBSERVED"; post.synthetic -> "fixedSample"; else -> "normal" }
+        appendLine("R44_2_TRIAL requested=$trialRequested receipt=${post?.receipt ?: "UNOBSERVED"} domain=$domain")
         val handoff = attempt.r442Handoff
         val successorRead = handoff?.let { h ->
             listOfNotNull(post, attempt.r44FirstGrant, attempt.r44FirstRestriction, last)

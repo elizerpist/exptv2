@@ -80,6 +80,11 @@ internal class KeyguardR44TreeReader(
 
     fun restrictionObserved() { budget.restrictionObserved = true }
 
+    /** An unresolved or potentially restrictive observed marker remains a
+     * fail-closed obligation of this read. It cannot be discarded merely
+     * because a later request is waiting. */
+    fun safeToYield(): Boolean = complete && !foreign && !budget.restrictionObserved
+
     fun readNode(
         node: AccessibilityNodeInfo,
         expectedParent: AccessibilityNodeInfo?,
