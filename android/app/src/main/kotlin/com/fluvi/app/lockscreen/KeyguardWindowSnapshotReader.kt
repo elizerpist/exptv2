@@ -221,6 +221,11 @@ internal class KeyguardWindowSnapshotReader(
         /** API-37 ORB only. This is independent of capture being enabled. */
         val r44Enabled: Boolean = false,
         val r44DeviceEntryResourceVerified: Boolean = false,
+        /** Explicit process-local sample only; never expands ordinary policy. */
+        val r443Sample: Boolean = r44Enabled && KeyguardR44Trial.active,
+        val r443Live: Boolean = false,
+        val r443Diagnostics: Boolean = false,
+        val r443Boundary: ((String) -> Unit)? = null,
     )
 
     /** One immutable, bounded original-A observation; never owns a node. */
@@ -478,6 +483,9 @@ internal class KeyguardWindowSnapshotReader(
         val treeStartedAt = SystemClock.uptimeMillis()
         val timing = Accumulator(windowsReadMs, request.captureOriginalOpeningEvidence)
         val r44Budget = if (request.r44Enabled) KeyguardR44ExtraBudget() else null
+        val r443Inventory = if (r44Budget != null && request.r443Sample && !request.r443Live)
+            KeyguardR443Inventory(r44Budget) { authorityIsCurrent() && KeyguardR44Trial.active } else null
+        try {
         fun observeIngressCall(kind: String, begin: Long, end: Long) {
             if (timing.ingressCallKind != null) return
             val ingress = request.openingFirstIngressUptime?.invoke() ?: return
@@ -653,6 +661,7 @@ internal class KeyguardWindowSnapshotReader(
         var visited = 0
         var readsAfterInvalidation = 0
         val snapshots = mutableListOf<KeyguardWindowSnapshot>()
+        val deferredReaders = mutableMapOf<Int, KeyguardR44TreeReader>()
         for (window in primary) {
             if (!authorityIsCurrent()) {
                 activeRoot?.recycle()
@@ -732,7 +741,13 @@ internal class KeyguardWindowSnapshotReader(
                     window.type == AccessibilityWindowInfo.TYPE_SYSTEM &&
                     runCatching { root.windowId == window.id }.getOrDefault(false)
                 KeyguardR44TreeReader(window.id, verified, window.isActive,
-                    request.r44DeviceEntryResourceVerified, r44Budget)
+                    request.r44DeviceEntryResourceVerified, r44Budget, r443Inventory,
+                    liveSampleExtension = request.r443Sample && request.r443Live &&
+                        primary.none { other -> other.id != window.id && other.layer >= window.layer &&
+                            !isExactKnownOwn(other, scopedRequest) },
+                    collectDiagnostics = request.r443Diagnostics).also {
+                    if (r443Inventory != null) deferredReaders[window.id] = it
+                }
             } else null
             // API 37 root extras can themselves carry an exclusion; consume
             // that node in the regular DFS before transferring the reader.
@@ -785,7 +800,9 @@ internal class KeyguardWindowSnapshotReader(
                     if (request.claimR37Yield != null && r37SafeRoot(root, window.id) &&
                         !unavailableRoot && !walkTruncated && !timing.ownAttributionAmbiguous) {
                         { count -> maybeR37("AFTER_NODE", true, visited + count) }
-                    } else null, r43Window, r44Window).also {
+                    } else null, r43Window, r44Window,
+                    request.r443Boundary?.let { observer -> { safe -> observer(
+                        if (!r37CleanInventory) "NON_SINGLETON" else if (!safe) "UNRESOLVED_RESTRICTION" else "ELIGIBLE") } }).also {
                     if (timing.firstIncompleteReason == null) timing.firstIncompleteReason = it.firstIncompleteReason
                     if (it.yieldReason != null) timing.openingYieldReason = it.yieldReason
                     walkTruncated = walkTruncated || it.truncated
@@ -812,6 +829,29 @@ internal class KeyguardWindowSnapshotReader(
             )
         }
         activeRoot?.recycle()
+        if (r443Inventory != null) {
+            val eligibleRoots = snapshots.filter { snap ->
+                deferredReaders[snap.windowId]?.isVerifiedActiveRoot() == true && !snap.ownOverlay
+            }
+            val hostWindow = eligibleRoots.singleOrNull()
+            val coverClear = hostWindow != null && !unavailableRoot && !walkTruncated &&
+                !timing.ownAttributionAmbiguous && snapshots.none { snap ->
+                    snap.windowId != hostWindow.windowId && !snap.ownOverlay &&
+                        snap.layer >= hostWindow.layer && snap.r44?.verifiedPassive != true
+                }
+            r443Inventory.resolve {
+                coverClear && deferredReaders.values.count { it.hasVerifiedHost() } == 1 &&
+                    authorityIsCurrent() && KeyguardR44Trial.active
+            }
+            for (index in snapshots.indices) {
+                val owner = deferredReaders[snapshots[index].windowId] ?: continue
+                snapshots[index] = snapshots[index].copy(r44 = owner.finish())
+            }
+            if (!authorityIsCurrent() || !KeyguardR44Trial.active) return Result(
+                snapshots, unavailableRoot, walkTruncated, windowsReadMs,
+                SystemClock.uptimeMillis() - treeStartedAt, visited,
+                timing.snapshot(SystemClock.uptimeMillis() - treeStartedAt), true, readsAfterInvalidation)
+        }
         val finalNext = if (request.r37YieldHint?.invoke() == true) {
             val hasRestrictiveMarker = snapshots.any { snap -> snap.visibleViewIds.any {
                 KeyguardSurfaceClassifier.isDecisiveExclusionMarker(it) ||
@@ -833,6 +873,9 @@ internal class KeyguardWindowSnapshotReader(
         }
         return Result(snapshots, unavailableRoot, walkTruncated, windowsReadMs, treeElapsed, visited,
             timing.snapshot(treeElapsed), false, readsAfterInvalidation, firstIncompleteReason = timing.firstIncompleteReason)
+        } finally {
+            r443Inventory?.close()
+        }
     }
 
     private fun visibleIds(
@@ -853,6 +896,7 @@ internal class KeyguardWindowSnapshotReader(
         tryR37AfterNode: ((Int) -> KeyguardCardInspectionRequest?)?,
         r43Window: KeyguardR43SurfaceEvidence.Window?,
         r44Window: KeyguardR44TreeReader?,
+        r443Boundary: ((Boolean) -> Unit)?,
     ): VisibleIds {
         val ids = linkedSetOf<String>()
         var decisiveReported = false
@@ -868,6 +912,8 @@ internal class KeyguardWindowSnapshotReader(
                 if (onDecisiveSystemMarker != null) runCatching { onDecisiveSystemMarker() }
             }
         }
+        r44Window?.onDeferredRestriction(::recordId)
+        r44Window?.onOptionalTiming(observeIngressCall)
         var visited = 0
         var truncated = false
         var aborted = false
@@ -907,7 +953,7 @@ internal class KeyguardWindowSnapshotReader(
                 }
                 viewId?.let(::recordId)
                 node.className?.toString()?.takeIf { it.contains("BouncerContent") }?.let { recordId("element:BouncerContent") }
-                val r44Node = r44Window?.readNode(node, parent, nodeOrdinal, r44Ancestor, r44Excluded,
+                val r44Node = r44Window?.readNode(node, parent, nodeOrdinal, parentOrdinal, r44Ancestor, r44Excluded,
                     viewId, authorityIsCurrent,
                     if (!decisiveReported && !truncated && tryR37AfterNode != null)
                         { { tryR37AfterNode(visited) } } else null)
@@ -918,6 +964,7 @@ internal class KeyguardWindowSnapshotReader(
                     return
                 }
                 if (!authorityIsCurrent()) { aborted = true; return }
+                r443Boundary?.invoke(!decisiveReported && !truncated && r44Window?.safeToYield() != false)
                 // The returned node's own restrictive markers must be read
                 // first, including when this is the final child or a leaf.
                 if (!decisiveReported && !truncated && tryR37AfterNode != null &&
@@ -1024,7 +1071,7 @@ internal class KeyguardWindowSnapshotReader(
             timing.checkpointWindow = windowId
         }
         return VisibleIds(ids, truncated, visited, aborted, readsAfterInvalidation, yieldedTo, yieldReason, firstIncompleteReason,
-            r44Window?.finish())
+            if (r44Window?.isDeferred() == true) null else r44Window?.finish())
     }
 
     private fun isExactKnownOwn(window: AccessibilityWindowInfo, request: Request): Boolean {

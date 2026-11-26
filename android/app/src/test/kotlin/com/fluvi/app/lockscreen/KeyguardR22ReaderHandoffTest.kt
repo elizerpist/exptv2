@@ -81,7 +81,14 @@ class KeyguardR22ReaderHandoffTest {
     }
     @Implements(AccessibilityNodeInfo::class)
     class NodeShadow {
+        companion object {
+            @Implementation @JvmStatic fun obtain(other: AccessibilityNodeInfo): AccessibilityNodeInfo =
+                Shadow.newInstanceOf(AccessibilityNodeInfo::class.java).also {
+                    Platform.nodes[it] = checkNotNull(Platform.nodes[other])
+                }
+        }
         @RealObject lateinit var real: AccessibilityNodeInfo
+        @Implementation fun getUniqueId(): String = "fixture:${System.identityHashCode(checkNotNull(Platform.nodes[real]))}"
         @Implementation fun getWindowId(): Int = checkNotNull(Platform.nodes[real]).windowId
         @Implementation fun getPackageName(): CharSequence = checkNotNull(Platform.nodes[real]).pkg
         @Implementation fun getClassName(): CharSequence = "android.view.View"
@@ -90,8 +97,12 @@ class KeyguardR22ReaderHandoffTest {
         @Implementation fun getExtras(): Bundle = checkNotNull(Platform.nodes[real]).extras
         @Implementation fun getAvailableExtraData(): List<String> =
             if (checkNotNull(Platform.nodes[real]).advertised) listOf(KeyguardR44Markers.EXTRA) else emptyList()
-        @Implementation fun getParent(): AccessibilityNodeInfo? =
-            Platform.nodes.entries.firstOrNull { it.value.children.contains(real) }?.key
+        @Implementation fun getParent(): AccessibilityNodeInfo? {
+            val data = checkNotNull(Platform.nodes[real])
+            return Platform.nodes.entries.firstOrNull { entry ->
+                entry.value.children.any { Platform.nodes[it] === data }
+            }?.key
+        }
         @Implementation fun refreshWithExtraData(key: String, arguments: Bundle?): Boolean {
             Platform.extraCalls += 1
             Platform.onExtra?.invoke()
@@ -329,6 +340,142 @@ class KeyguardR22ReaderHandoffTest {
             assertEquals(KeyguardSurface.SHADE, r443Scene(index, "overlay:quick_settings_shade", true))
             assertEquals(index, Platform.extraCalls)
         }
+    }
+
+    @Test fun r443UnarmedModeKeepsFourCallBudget() {
+        val host = Platform.node("element:lockscreen")
+        repeat(7) { index ->
+            val node = Platform.node(null)
+            checkNotNull(Platform.nodes[node]).apply {
+                advertised = true; lazyTag = if (index == 4) "element:LargeClock" else "component:unrelated"
+            }
+            checkNotNull(Platform.nodes[host]).children.add(node)
+        }
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 1, true, host))
+        KeyguardR44Trial.set(false, false)
+        val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true), { true })
+        assertEquals(4, Platform.extraCalls)
+        assertEquals(KeyguardSurface.UNKNOWN, KeyguardR44SurfaceClassifier.classify(
+            read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+    }
+
+    @Test fun r443OverflowAndUnknownOverlayRemainHidden() {
+        assertEquals(KeyguardSurface.UNKNOWN, r443Scene(5, "overlay:unrecognised", true))
+        assertEquals(5, Platform.extraCalls)
+        Platform.reset()
+        val host = Platform.node("element:lockscreen")
+        checkNotNull(Platform.nodes[host]).children.add(Platform.node("element:LargeClock"))
+        repeat(8) {
+            val node = Platform.node(null)
+            checkNotNull(Platform.nodes[node]).apply { advertised = true; lazyTag = "component:unrelated" }
+            checkNotNull(Platform.nodes[host]).children.add(node)
+        }
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 1, true, host))
+        KeyguardR44Trial.set(true, true)
+        try {
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true), { true })
+            assertFalse(checkNotNull(read.snapshots.single().r44).complete)
+            assertEquals(1, read.snapshots.single().r44?.r443Overflow)
+            assertTrue(Platform.extraCalls <= 7)
+            assertEquals(KeyguardSurface.UNKNOWN, KeyguardR44SurfaceClassifier.classify(
+                read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+        } finally { KeyguardR44Trial.set(false, false) }
+    }
+
+    @Test fun r443ChangedParentOnSixthCallRejectsAndReleasesOwnedCopies() {
+        val host = Platform.node("element:lockscreen")
+        val otherParent = Platform.node(null)
+        val children = (1..7).map { index ->
+            Platform.node(null).also { node ->
+                checkNotNull(Platform.nodes[node]).apply {
+                    advertised = true; lazyTag = if (index == 5) "element:LargeClock" else "component:unrelated"
+                }
+                checkNotNull(Platform.nodes[host]).children.add(node)
+            }
+        }
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 1, true, host))
+        Platform.onExtra = {
+            if (Platform.extraCalls == 6) {
+                checkNotNull(Platform.nodes[host]).children.removeAll { it === children[5] }
+                checkNotNull(Platform.nodes[otherParent]).children.add(children[5])
+            }
+        }
+        KeyguardR44Trial.set(true, true)
+        try {
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true), { true })
+            assertEquals(6, Platform.extraCalls)
+            assertFalse(checkNotNull(read.snapshots.single().r44).complete)
+            assertEquals(KeyguardSurface.UNKNOWN, KeyguardR44SurfaceClassifier.classify(
+                read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+            children.forEach { child -> assertEquals("borrowed plus owned handle", 2, checkNotNull(Platform.nodes[child]).recycled) }
+        } finally { KeyguardR44Trial.set(false, false) }
+    }
+
+    @Test fun r443VisibleSampleWithdrawsAtLateShade() {
+        for (position in 5..7) {
+            Platform.reset()
+            val host = Platform.node("element:lockscreen")
+            repeat(7) { index ->
+                val node = Platform.node(null)
+                checkNotNull(Platform.nodes[node]).apply {
+                    advertised = true
+                    lazyTag = when (index + 1) {
+                        1 -> "element:LargeClock"
+                        position -> "scene:shade"
+                        else -> "component:unrelated"
+                    }
+                }
+                checkNotNull(Platform.nodes[host]).children.add(node)
+            }
+            Platform.activeRoot = host
+            Platform.inventory = listOf(Platform.window(10, 1, true, host))
+            var withdrawals = 0
+            KeyguardR44Trial.set(true, true)
+            try {
+                val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true,
+                    r443Live = true, onDecisiveSystemMarker = { withdrawals++ }), { true })
+                assertEquals(position, Platform.extraCalls)
+                assertEquals(1, withdrawals)
+                assertEquals(KeyguardSurface.SHADE, KeyguardR44SurfaceClassifier.classify(
+                    read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+            } finally { KeyguardR44Trial.set(false, false) }
+        }
+    }
+
+    @Test fun r443DirectHostCannotHideALazyRestrictionOnTheSameNode() {
+        val host = Platform.node("element:lockscreen")
+        checkNotNull(Platform.nodes[host]).apply {
+            advertised = true; lazyTag = "overlay:bouncer"
+            children.add(Platform.node("element:LargeClock"))
+        }
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 1, true, host))
+        KeyguardR44Trial.set(true, true)
+        try {
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true), { true })
+            assertEquals(1, Platform.extraCalls)
+            assertEquals(KeyguardSurface.CREDENTIAL, KeyguardR44SurfaceClassifier.classify(
+                read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+        } finally { KeyguardR44Trial.set(false, false) }
+    }
+
+    @Test fun r443LateHostCanOwnAnAlreadyVisitedChild() {
+        val host = Platform.node(null)
+        checkNotNull(Platform.nodes[host]).apply {
+            advertised = true; lazyTag = "element:lockscreen"
+            children.add(Platform.node("element:LargeClock"))
+        }
+        Platform.activeRoot = host
+        Platform.inventory = listOf(Platform.window(10, 1, true, host))
+        KeyguardR44Trial.set(true, true)
+        try {
+            val read = reader.read(KeyguardWindowSnapshotReader.Request(null, 5, r44Enabled = true), { true })
+            assertEquals(KeyguardSurface.MAIN_KEYGUARD, KeyguardR44SurfaceClassifier.classify(
+                read.snapshots, read.rootUnavailable, read.walkTruncated, false, true).surface)
+        } finally { KeyguardR44Trial.set(false, false) }
     }
 
     @Test fun r44EagerAndLazyTagsTraverseTheActualReader() {

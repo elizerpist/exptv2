@@ -268,6 +268,16 @@ void main() {
     expect(calls, contains('startR442SampleCapture'));
     expect(calls, isNot(contains('setR44SyntheticTrial')));
     expect(find.text('Mintaorb-próba aktív'), findsOneWidget);
+    expect(tester.widget<FilledButton>(start).onPressed, isNull);
+    expect(
+      tester
+          .widget<OutlinedButton>(
+            find.byKey(const ValueKey('debug-console-keyguard-start')),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(find.text('Próba leállítása és riport megtartása'), findsOneWidget);
   });
 
   testWidgets('a rejected start reports its reason and never claims active', (

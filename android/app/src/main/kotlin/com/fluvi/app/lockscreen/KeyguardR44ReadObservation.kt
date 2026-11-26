@@ -2,6 +2,16 @@ package com.fluvi.app.lockscreen
 
 /** Immutable, capture-owned scalars from the same physical inspection used
  * for authorization. No tree, arbitrary tag, text or foreign name survives. */
+internal data class KeyguardR443CandidateObservation(
+    val window: Int, val ordinal: Int, val branch: String, val rank: Int,
+    val status: String, val role: String, val costMs: Long, val remaining: Int,
+    val remainingMs: Long, val parentChecks: Int, val parentMs: Long,
+)
+internal data class KeyguardR443WindowObservation(
+    val window: Int, val advertised: Int, val fetched: Int, val overflow: Int,
+    val complete: Boolean,
+)
+
 internal data class KeyguardR44ReadObservation(
     val context: KeyguardDiagnosticContext,
     val request: Long,
@@ -46,6 +56,8 @@ internal data class KeyguardR44ReadObservation(
     val firstCarrier: KeyguardR44Markers.Carrier? = null,
     val cover: String = "UNOBSERVED",
     val receipt: String = "UNOBSERVED",
+    val r443Windows: List<KeyguardR443WindowObservation> = emptyList(),
+    val r443Candidates: List<KeyguardR443CandidateObservation> = emptyList(),
 )
 
 internal data class KeyguardR442HandoffObservation(
@@ -58,4 +70,12 @@ internal data class KeyguardR442HandoffObservation(
     val boundaryAt: Long,
     val oldReturn: Long,
     val boundary: String,
+)
+
+/** Capture-only explanation of the first observed post-screen boundary. */
+internal data class KeyguardR443BoundaryObservation(
+    val context: KeyguardDiagnosticContext, val oldRequest: Long, val pendingRequest: Long?,
+    val screenAt: Long, val offerAt: Long?, val oldStart: Long, val boundaryAt: Long,
+    val oldEnd: Long, val reason: String, val ingressKind: String?,
+    val ingressStart: Long?, val ingressEnd: Long?,
 )

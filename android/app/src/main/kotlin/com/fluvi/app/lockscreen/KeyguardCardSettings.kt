@@ -794,6 +794,7 @@ internal object KeyguardCardDiagnostics {
         var r44FirstRestriction: KeyguardR44ReadObservation? = null,
         var r44ReadsOmitted: Int = 0,
         var r442Handoff: KeyguardR442HandoffObservation? = null,
+        var r443Boundary: KeyguardR443BoundaryObservation? = null,
         var firstExclusionSignalAtUptimeMs: Long? = null,
         var firstExclusionSignalSource: String? = null,
         var firstInspectionRequestId: Long? = null,
@@ -1720,6 +1721,23 @@ internal object KeyguardCardDiagnostics {
                 if (attempt != null && attempt.serviceSession == owner.serviceSession &&
                     attempt.wakeEpoch == owner.originWakeEpoch && attempt.r442Handoff == null)
                     attempt.r442Handoff = observation
+            }
+        }
+        if (!accepted) token.r44Dropped.incrementAndGet()
+    }
+
+    internal fun recordR443Boundary(observation: KeyguardR443BoundaryObservation) {
+        val token = ingress ?: return
+        val owner = observation.context
+        if (owner.captureId != token.id || owner.attemptId == null) return
+        val accepted = reduction.offer {
+            synchronized(captureLock) {
+                val active = capture?.takeIf { it.id == token.id && it.state == "REC" } ?: return@synchronized
+                val attempt = active.attempts.lastOrNull { it.id == owner.attemptId }
+                    ?: active.firstAttempt?.takeIf { it.id == owner.attemptId }
+                if (attempt != null && attempt.serviceSession == owner.serviceSession &&
+                    attempt.wakeEpoch == owner.originWakeEpoch && attempt.r443Boundary == null)
+                    attempt.r443Boundary = observation
             }
         }
         if (!accepted) token.r44Dropped.incrementAndGet()
@@ -3560,17 +3578,40 @@ internal object KeyguardCardDiagnostics {
             appendLine("R44_2_HU FIGYELEM: a mintaorb-próba visszaigazolása vagy üzemmódja elveszett.")
         val domain = when { post == null -> "UNOBSERVED"; post.synthetic -> "fixedSample"; else -> "normal" }
         appendLine("R44_2_TRIAL requested=$trialRequested receipt=${post?.receipt ?: "UNOBSERVED"} domain=$domain")
+        val reasonHu = when {
+            post == null -> "első_olvasás_nem_figyelhető_meg"
+            !trialRequested || !post.synthetic || post.receipt != "armed" -> "mintaadat_nem_visszaigazolt"
+            post.cover == "VETO_UNKNOWN_OR_COVER" -> "másik_ablak_tilt"
+            post.budgetHit -> "olvasási_keret_elfogyott"
+            !post.coverageComplete -> "ellenőrzés_hiányos"
+            post.rejectedAncestry > 0 || post.rejectedUnverified > 0 -> "jel_kapcsolata_nem_igazolt"
+            post.host != null && post.content == null -> "teljes_keresés_de_nincs_óratanú"
+            post.verdict == KeyguardSurface.MAIN_KEYGUARD && show == null -> "engedély_utáni_megjelenítés_nem_igazolt"
+            else -> post.reason.name
+        }
+        appendLine("R44_3_HU próba=${attempt.id} ok=$reasonHu takarás=${post?.cover ?: "UNOBSERVED"}")
         val handoff = attempt.r442Handoff
         val successorRead = handoff?.let { h ->
             listOfNotNull(post, attempt.r44FirstGrant, attempt.r44FirstRestriction, last)
                 .firstOrNull { it.request == h.nextRequest } ?: reads.firstOrNull { it.request == h.nextRequest }
         }
         appendLine("R44_2_HANDOFF old=${handoff?.oldRequest ?: "UNOBSERVED"} next=${handoff?.nextRequest ?: "UNOBSERVED"} screen=${handoff?.screenAt ?: "UNOBSERVED"} offer=${handoff?.offerAt ?: "UNOBSERVED"} oldStart=${handoff?.oldStart ?: "UNOBSERVED"} boundary=${handoff?.boundaryAt ?: "UNOBSERVED"} oldReturn=${handoff?.oldReturn ?: "UNOBSERVED"} where=${handoff?.boundary ?: "UNOBSERVED"} newStart=${successorRead?.start ?: "UNOBSERVED"} newEnd=${successorRead?.end ?: "UNOBSERVED"}")
+        val boundary = attempt.r443Boundary
+        appendLine("R44_3_BOUNDARY old=${boundary?.oldRequest ?: "UNOBSERVED"} pending=${boundary?.pendingRequest ?: "UNOBSERVED"} screen=${boundary?.screenAt ?: "UNOBSERVED"} offer=${boundary?.offerAt ?: "UNOBSERVED"} oldStart=${boundary?.oldStart ?: "UNOBSERVED"} at=${boundary?.boundaryAt ?: "UNOBSERVED"} oldEnd=${boundary?.oldEnd ?: "UNOBSERVED"} reason=${boundary?.reason ?: "UNOBSERVED"} ingress=${boundary?.ingressKind ?: "UNOBSERVED"}/${boundary?.ingressStart ?: "UNOBSERVED"}/${boundary?.ingressEnd ?: "UNOBSERVED"}")
         appendLine("R44_WAKE capture=$captureId session=${attempt.serviceSession} wake=${attempt.wakeEpoch} screenOn=${screen ?: "UNOBSERVED"} firstPostRead=${post?.request ?: "missing"} omitted=${attempt.r44ReadsOmitted} showRequest=${show?.requestId ?: "none"}")
         fun line(kind: String, read: KeyguardR44ReadObservation) {
             val host = read.host
             val content = read.content
             appendLine("R44_READ kind=$kind wake=${attempt.wakeEpoch} req=${read.request} epoch=${read.epoch} scene=${read.scene ?: "UNOBSERVED"} start=${read.start} end=${read.end} owner=${if (read.hostVerified) "verified" else "rejected"} hostWin=${read.hostWindow ?: "UNOBSERVED"} hostLayer=${read.hostLayer ?: "UNOBSERVED"} complete=${read.coverageComplete} legacy=${read.legacy} host=${host?.marker ?: "none"}/${host?.carrier ?: "none"} content=${content?.marker ?: "none"}/${content?.carrier ?: "none"} relation=${if (read.relation) "descendant" else "unknown"} extra=${read.advertised}/${read.fetched}/${read.failed} unsupported=${read.unsupported} budgetHit=${read.budgetHit} extraMs=${read.extraMs} stale=${read.stale} unavailable=${read.unavailable} truncated=${read.truncated}")
+            if (kind == "firstPost" && read.r443Windows.isNotEmpty()) {
+                val windowSummary = read.r443Windows.joinToString(";") { w ->
+                    "${w.window}:${w.advertised}/${w.fetched}/${w.overflow}:${if (w.complete) "complete" else "incomplete"}"
+                }
+                appendLine("R44_3_ABLAK req=${read.request} window:advertised/fetched/overflow:state=$windowSummary")
+                read.r443Candidates.forEach { c ->
+                    appendLine("R44_3_JEL req=${read.request} window=${c.window} ordinal=${c.ordinal} branch=${c.branch} rank=${c.rank} status=${c.status} role=${c.role} costMs=${c.costMs} remaining=${c.remaining} remainingMs=${c.remainingMs} parentChecks=${c.parentChecks} parentMs=${c.parentMs}")
+                }
+            }
             appendLine("R44_DECISION wake=${attempt.wakeEpoch} req=${read.request} mode=${if (read.synthetic) "syntheticTrial" else "normal"} testProbeInjected=${read.testProbeInjected} verdict=${read.verdict} reason=${read.reason}")
             appendLine("R44_2_EVIDENCE req=${read.request} lookup=${read.lookupStatus} lookupIdentity=${read.lookupIdentity ?: "UNOBSERVED"} rawHost=${read.rawHost} rawEntry=${read.rawEntry} rawClock=${read.rawClock} candidate=${read.firstCandidate ?: "none"}/${read.firstCarrier ?: "none"} rejectUnverified=${read.rejectedUnverified} rejectAncestry=${read.rejectedAncestry} rejectExcluded=${read.rejectedExcluded} rejectForeign=${read.rejectedForeign} rejectHidden=${read.rejectedHidden} cover=${read.cover} shadow=${read.shadowVerdict ?: "UNOBSERVED"}/${read.shadowReason ?: "UNOBSERVED"}")
         }

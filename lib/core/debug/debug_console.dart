@@ -312,7 +312,10 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
       final receipt = await bridge.r442SampleStatus();
       if (mounted) {
         setState(() {
-          _r442Active = _validR442Receipt(receipt, snapshot.captureId);
+          _r442Active =
+              snapshot.recording &&
+              _r44TrialEnabled &&
+              _validR442Receipt(receipt, snapshot.captureId);
           _r442Reason = receipt['reason']?.toString();
         });
       }
@@ -1098,6 +1101,14 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                   ),
                 ),
                 if (_r44TrialAvailable)
+                  FilledButton(
+                    key: const ValueKey('debug-console-r442-start'),
+                    onPressed: _loadingKeyguard || unavailable || _r442Active
+                        ? null
+                        : _startR442SampleCapture,
+                    child: const Text('Mintaorb kipróbálása és rögzítés'),
+                  ),
+                if (_r44TrialAvailable)
                   SwitchListTile(
                     key: const ValueKey('debug-console-r44-synthetic'),
                     title: const Text('Android 17 demópróba · csak mintaadat'),
@@ -1105,7 +1116,9 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                       'Újraindításkor kikapcsol; a szokásos adatvédelmi ellenőrzés érvényben marad.',
                     ),
                     value: _r44TrialEnabled,
-                    onChanged: _loadingKeyguard ? null : _setR44Trial,
+                    onChanged: _loadingKeyguard || _r442Active
+                        ? null
+                        : _setR44Trial,
                   ),
                 if (_r442Active)
                   const Text(
@@ -1184,25 +1197,17 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                       ),
                       OutlinedButton.icon(
                         key: const ValueKey('debug-console-keyguard-start'),
-                        onPressed: _loadingKeyguard || unavailable
+                        onPressed:
+                            _loadingKeyguard || unavailable || _r442Active
                             ? null
                             : () => _startKeyguardCapture(),
                         icon: const Icon(Icons.fiber_manual_record, size: 15),
                         label: const Text('Rögzítés indítása'),
                       ),
                       OutlinedButton(
-                        key: const ValueKey('debug-console-r442-start'),
-                        onPressed:
-                            _loadingKeyguard ||
-                                unavailable ||
-                                !_r44TrialAvailable
-                            ? null
-                            : _startR442SampleCapture,
-                        child: const Text('Mintaorb kipróbálása és rögzítés'),
-                      ),
-                      OutlinedButton(
                         key: const ValueKey('debug-console-r43-start'),
-                        onPressed: _loadingKeyguard || unavailable
+                        onPressed:
+                            _loadingKeyguard || unavailable || _r442Active
                             ? null
                             : () => _startKeyguardCapture(r43Evidence: true),
                         child: const Text(
@@ -1216,7 +1221,11 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
                             ? null
                             : _freezeKeyguardCapture,
                         icon: const Icon(Icons.stop_circle_outlined, size: 15),
-                        label: const Text('Leállítás'),
+                        label: Text(
+                          _r442Active
+                              ? 'Próba leállítása és riport megtartása'
+                              : 'Leállítás',
+                        ),
                       ),
                       OutlinedButton.icon(
                         key: const ValueKey('debug-console-keyguard-copy'),

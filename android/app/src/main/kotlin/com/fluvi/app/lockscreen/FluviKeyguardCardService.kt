@@ -4416,7 +4416,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         val r44Mode = Build.VERSION.SDK_INT == 37 && settings.presentationMode == KeyguardCardPresentationMode.ORB
         val syntheticAtRead = r44Mode && KeyguardR44Trial.active
         val lookupAtRead = r442Lookup
-        val read = readSystemWindows(request, startedAt, r38MilestoneOrdered, r40Read, lookupAtRead) { sceneAtRead = it }
+        val read = readSystemWindows(request, startedAt, r38MilestoneOrdered, r40Read, lookupAtRead,
+            syntheticAtRead) { sceneAtRead = it }
         if (read.yieldedTo != null) return InspectionOutcome.Yielded(read.yieldedTo, read,
             requireNotNull(sceneAtRead), requireNotNull(read.yieldReason))
         if (read.abortedStale || !authorityIsCurrent(request)) {
@@ -4496,6 +4497,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         val cover = when {
             stale || read.rootUnavailable || read.walkTruncated -> "UNOBSERVED"
             hostEvidence?.host == null -> "HOST_ABSENT"
+            windows.any { it !== host && !it.ownOverlay && it.displayId == 0 &&
+                host != null && it.layer >= host.layer && it.r44?.verifiedPassive != true } -> "VETO_UNKNOWN_OR_COVER"
             shadow?.reason == KeyguardSurfaceReason.FOREIGN_ABOVE -> "VETO_UNKNOWN_OR_COVER"
             shadow?.surface == KeyguardSurface.MAIN_KEYGUARD -> "CHECKED_CLEAR"
             else -> "NOT_REACHED"
@@ -4517,6 +4520,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             evidence.sumOf { it.rejectedExcluded }, evidence.sumOf { it.rejectedForeign },
             evidence.sumOf { it.rejectedHidden }, evidence.firstNotNullOfOrNull { it.firstCandidate },
             evidence.firstNotNullOfOrNull { it.firstCarrier }, cover, receipt,
+            windows.mapNotNull { w -> w.r44?.let { e -> KeyguardR443WindowObservation(
+                w.windowId, e.advertised, e.fetched, e.r443Overflow, e.complete) } }
+                .sortedByDescending { it.advertised }.take(8),
+            evidence.flatMap { it.r443Candidates }.take(7),
         ))
     }
 
@@ -4542,7 +4549,7 @@ class FluviKeyguardCardService : AccessibilityService() {
     }
 
     private fun readSystemWindows(request: KeyguardCardInspectionRequest, startedAt: Long, r38MilestoneOrdered: Boolean,
-                                  r40Read: R40Read?, lookup: R442Lookup,
+                                  r40Read: R40Read?, lookup: R442Lookup, syntheticAtRead: Boolean,
                                   onInventoryScene: (Long) -> Unit): SystemWindowsRead {
         // Resolve the outstanding requirement at acquisition, not when an
         // event happened to replace a timer/pending request. A successful
@@ -4594,6 +4601,10 @@ class FluviKeyguardCardService : AccessibilityService() {
         var r37Boundary: String? = null
         var r37ClaimAt: Long? = null
         var r442ClaimScreenAt: Long? = null
+        var r443ScreenAt: Long? = null
+        var r443Pending: KeyguardCardInspectionRequest? = null
+        var r443BoundaryAt: Long? = null
+        var r443BoundaryReason: String? = null
         var r34ReadOwner: R32DirectSnapshot? = null
         var r34ReadScene: Long? = null
         var r34InventoryAt: Long? = null
@@ -4612,6 +4623,29 @@ class FluviKeyguardCardService : AccessibilityService() {
                 r44Enabled = Build.VERSION.SDK_INT == 37 &&
                     lastSettings?.presentationMode == KeyguardCardPresentationMode.ORB,
                 r44DeviceEntryResourceVerified = lookup.verified,
+                r443Sample = syntheticAtRead,
+                // Unknown attachment state takes the immediate, conservative route.
+                r443Live = r40Read != null || readAheadSnapshot?.detached != true,
+                r443Diagnostics = captureOpening,
+                r443Boundary = if (captureOpening && r442Enabled) { structuralReason ->
+                    val at = SystemClock.uptimeMillis()
+                    synchronized(queueLock) {
+                        val screen = r442ScreenOn
+                        if (screen != null && screen.session == request.session && startedAt < screen.uptime) {
+                            val pending = inspectionQueue.pendingRequest()
+                            val reason = when {
+                                structuralReason != "ELIGIBLE" -> structuralReason
+                                pending == null -> "NO_PENDING"
+                                r442PendingLocked(screen) == null -> "OWNER_MISMATCH"
+                                else -> "ELIGIBLE_PENDING"
+                            }
+                            if (r443BoundaryAt == null || (r443Pending == null && pending != null)) {
+                                r443ScreenAt = screen.uptime; r443Pending = pending
+                                r443BoundaryAt = at; r443BoundaryReason = reason
+                            }
+                        }
+                    }
+                } else null,
                 freshness = freshness?.reason ?: KeyguardWindowFreshness.FRAMEWORK_EVENT,
                 activeRootStrategyAtCall = selectRootStrategy,
                 knownOwnAtInventory = { knownOwnOverlayIdentity },
@@ -4694,7 +4728,9 @@ class FluviKeyguardCardService : AccessibilityService() {
                                 scene, SystemClock.uptimeMillis())
                     }
                 },
-                openingFirstIngressUptime = ingressReader,
+                openingFirstIngressUptime = if (captureOpening && r442Enabled) {
+                    { ingressReader?.invoke()?.takeIf { it > 0L } ?: r442ScreenOn?.uptime ?: -1L }
+                } else ingressReader,
                 openingChildBefore = if (((yieldHandle != null || followHandle != null || r34Eligible) && inspectionProbeForTest != null) ||
                     (captureOpening && followHandle != null)) {
                     { window, index ->
@@ -4827,6 +4863,16 @@ class FluviKeyguardCardService : AccessibilityService() {
             authorityIsCurrent = { freshness != null && authorityIsCurrent(request) },
             onFreshnessEstablished = { freshness?.let(inspectionFreshness::boundaryEstablished) },
         )
+        if (captureOpening && r443ScreenAt != null && r443BoundaryAt != null) {
+            val owner = request.diagnosticContext
+            if (owner != null) KeyguardCardDiagnostics.recordR443Boundary(KeyguardR443BoundaryObservation(
+                owner, request.id, r443Pending?.id, requireNotNull(r443ScreenAt),
+                r443Pending?.queuedAtUptimeMs, startedAt, requireNotNull(r443BoundaryAt),
+                SystemClock.uptimeMillis(), if (result.yieldedTo != null) "TAKEN" else
+                    if (r443BoundaryReason == "ELIGIBLE_PENDING") "NOT_CLAIMED" else requireNotNull(r443BoundaryReason),
+                result.timing.ingressCallKind, result.timing.ingressCallBegin, result.timing.ingressCallEnd,
+            ))
+        }
         if (KeyguardR15AcquisitionTestHooks.ENABLED) KeyguardR15AcquisitionTestHooks.finish(result)
         if (result.abortedStale) inspectionsAbortedDuringWalk.incrementAndGet()
         if (result.nodeReadsAfterInvalidation > 0) {

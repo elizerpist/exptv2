@@ -15,6 +15,19 @@ class KeyguardR441ExtraBudgetTest {
         assertTrue(budget.budgetHit)
     }
 
+    @Test fun sampleExtensionStillHonorsGlobalSevenAndElapsedCap() {
+        val budget = KeyguardR44ExtraBudget()
+        repeat(4) { assertTrue(budget.reserve()) }
+        repeat(3) { assertTrue(budget.reserve(extended = true)) }
+        assertFalse(budget.reserve(extended = true))
+        assertEquals(7, budget.fetched)
+        val slow = KeyguardR44ExtraBudget()
+        repeat(4) { assertTrue(slow.reserve()) }
+        slow.elapsedMs = 51
+        assertFalse(slow.reserve(extended = true))
+        assertEquals(4, slow.fetched)
+    }
+
     @Test fun slowReturnedCallStopsFurtherOptionalCalls() {
         val budget = KeyguardR44ExtraBudget()
         assertTrue(budget.reserve())

@@ -53,9 +53,17 @@ class KeyguardR44LazyProviderInstrumentationTest {
             try {
                 assertEquals(instrumentation.targetContext.packageName, node.packageName.toString())
                 assertNull(node.extras.getCharSequence(KeyguardR44Markers.EXTRA))
+                val beforeParent = checkNotNull(node.parent) { "NOT REACHED: provider parent" }
+                val beforeIdentity = try { KeyguardR443ParentIdentity.of(beforeParent) }
+                    finally { beforeParent.recycle() }
+                assertNotNull("real parent must have a recheckable bounded identity", beforeIdentity)
                 assertTrue(node.refreshWithExtraData(KeyguardR44Markers.EXTRA, Bundle()))
                 assertEquals("element:lockscreen", node.extras.getCharSequence(KeyguardR44Markers.EXTRA).toString())
                 assertEquals(1, calls.get())
+                val afterParent = checkNotNull(node.parent) { "NOT REACHED: provider parent after IPC" }
+                val afterIdentity = try { KeyguardR443ParentIdentity.of(afterParent) }
+                    finally { afterParent.recycle() }
+                assertEquals("parent identity changed across real lazy IPC", beforeIdentity, afterIdentity)
             } finally { node.recycle() }
         } finally {
             instrumentation.runOnMainSync { activity.finish() }

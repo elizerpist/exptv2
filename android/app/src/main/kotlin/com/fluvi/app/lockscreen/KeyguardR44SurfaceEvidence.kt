@@ -67,6 +67,8 @@ internal data class KeyguardR44WindowEvidence(
     val rejectedHidden: Int = 0,
     val firstCandidate: KeyguardR44Markers.Marker? = null,
     val firstCarrier: KeyguardR44Markers.Carrier? = null,
+    val r443Overflow: Int = 0,
+    val r443Candidates: List<KeyguardR443CandidateObservation> = emptyList(),
 )
 
 internal object KeyguardR44SurfaceClassifier {

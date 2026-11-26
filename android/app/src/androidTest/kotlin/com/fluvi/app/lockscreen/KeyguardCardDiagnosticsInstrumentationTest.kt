@@ -77,10 +77,17 @@ class KeyguardCardDiagnosticsInstrumentationTest {
                     rawHost = 1, rawEntry = 2, rawClock = 1, rejectedUnverified = 1,
                     rejectedAncestry = 1, rejectedExcluded = 1, rejectedForeign = 1, rejectedHidden = 1,
                     firstCandidate = KeyguardR44Markers.Marker.DEVICE_ENTRY,
-                    firstCarrier = KeyguardR44Markers.Carrier.VIEW_ID, cover = "VETO_UNKNOWN_OR_COVER", receipt = "armed"))
+                    firstCarrier = KeyguardR44Markers.Carrier.VIEW_ID, cover = "VETO_UNKNOWN_OR_COVER", receipt = "armed",
+                    r443Windows = listOf(KeyguardR443WindowObservation(10, 7, 7, 0, true)),
+                    r443Candidates = (1..7).map { n -> KeyguardR443CandidateObservation(
+                        10, n, "HOST", n, "READ", if (n == 7) "LARGE_CLOCK" else "UNRELATED",
+                        n.toLong(), 7 - n, 50L - n, 3, n.toLong()) }))
             KeyguardCardDiagnostics.recordR442Handoff(KeyguardR442HandoffObservation(
                 owner, base + 1, base + 2, base + 20, base + 22, base + 10,
                 base + 23, base + 24, "R442_AFTER_NODE:3/1/2"))
+            KeyguardCardDiagnostics.recordR443Boundary(KeyguardR443BoundaryObservation(
+                owner, base + 1, base + 2, base + 20, base + 22, base + 10,
+                base + 23, base + 24, "UNRESOLVED_RESTRICTION", "optional", base + 18, base + 22))
             // Exhaust the verbose ring before the first post-screen read.
             repeat(14) { n -> record(base + 500 + n, base + 1 + n, KeyguardSurface.UNKNOWN) }
             record(base + 1, base + 10, KeyguardSurface.UNKNOWN)
@@ -103,6 +110,8 @@ class KeyguardCardDiagnosticsInstrumentationTest {
             assertTrue(row, row.contains("firstPostRead=${wake * 1000 + 2}"))
             assertTrue(report, report.contains("R44_2_HANDOFF old=${wake * 1000 + 1} next=${wake * 1000 + 2} "))
             assertTrue(report, report.contains("R44_2_EVIDENCE req=${wake * 1000 + 2} lookup=VERIFIED"))
+            assertTrue(report, report.contains("R44_3_JEL req=${wake * 1000 + 2} window=10 ordinal=7"))
+            assertTrue(report, report.contains("R44_3_BOUNDARY old=${wake * 1000 + 1}"))
             assertTrue(report, report.contains("kind=firstRestrictionClassification wake=$wake req=${wake * 1000 + 400} "))
         }
         assertEquals(6, report.lineSequence().count { it.startsWith("R44_HU ") })
