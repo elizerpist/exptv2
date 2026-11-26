@@ -86,6 +86,9 @@ class KeyguardR447ParentRedInstrumentationTest {
    waitFor("service connected") { FluviKeyguardCardServiceRegistry.connected }
    service=checkNotNull(FluviKeyguardCardServiceRegistry.serviceForInstrumentation()); val owner=checkNotNull(service)
    assertEquals("NOT REACHED: armed input-ready presenter",true,start(owner)["printArmed"])
+   val parentSeq=checkNotNull(field(owner,"firstAuthorizedOrb")) as KeyguardFirstAuthorizedOrb
+   val parentLock=checkNotNull(field(owner,"queueLock"))
+   val parentQueue=checkNotNull(field(owner,"inspectionQueue")) as KeyguardCardInspectionQueue
    owner.inspectionProbeForTest=object: KeyguardInspectionProbeForTest {
     override fun snapshots(request: KeyguardCardInspectionRequest, actual: List<KeyguardWindowSnapshot>): List<KeyguardWindowSnapshot> {
      val selected=actual.filter { it.packageName=="com.android.systemui" && it.type==AccessibilityWindowInfo.TYPE_SYSTEM &&
@@ -99,7 +102,10 @@ class KeyguardR447ParentRedInstrumentationTest {
       reason: KeyguardSurfaceReason, rootUnavailable: Boolean, walkTruncated: Boolean,
       abortedStale: Boolean, startedAt: Long, finishedAt: Long) {
      synchronized(note) { note.append("read=${request.id} decision=$decision reason=$reason unavailable=$rootUnavailable truncated=$walkTruncated stale=$abortedStale\n") }
-     if (hosts.containsKey(request.id) && !rootUnavailable && !walkTruncated && !abortedStale && first.compareAndSet(0,request.id)) {
+     val isLatest=synchronized(parentLock) {
+      field(parentSeq,"newestRead")==request.id && field(parentSeq,"newestRequiredRead")==request.id && parentQueue.pendingRequest()==null
+     }
+     if (hosts.containsKey(request.id) && !rootUnavailable && !walkTruncated && !abortedStale && isLatest && first.compareAndSet(0,request.id)) {
       acquired.countDown(); check(release.await(20,TimeUnit.SECONDS)) { "NOT REACHED: release held completed read" }
      }
     }
@@ -120,10 +126,8 @@ class KeyguardR447ParentRedInstrumentationTest {
    assertTrue("NOT REACHED: complete physical reader/Main boundary",acquired.await(20,TimeUnit.SECONDS))
    val sampler=checkNotNull(field(owner,"systemSampler"))
    waitFor("sampler idle") { main { field(sampler,"active")==null && field(sampler,"pending")==null && field(sampler,"delivering")==false } }
-   val seq=checkNotNull(field(owner,"firstAuthorizedOrb")) as KeyguardFirstAuthorizedOrb
-   val lock=checkNotNull(field(owner,"queueLock"))
-   fun order(): Triple<Long,Long,Long> = synchronized(lock) {
-    Triple(field(seq,"newestRead") as Long, field(seq,"newestRequiredRead") as Long, seq.sceneSerial())
+   fun order(): Triple<Long,Long,Long> = synchronized(parentLock) {
+    Triple(field(parentSeq,"newestRead") as Long, field(parentSeq,"newestRequiredRead") as Long, parentSeq.sceneSerial())
    }
    val before=main { Pair(owner.inspectionStateForTest(),order()) }
    assertEquals("NOT REACHED: first read completed",first.get(),before.second.first)
