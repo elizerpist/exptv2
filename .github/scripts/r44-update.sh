@@ -365,7 +365,9 @@ PY
       # Read the frozen route report from the signed app's own capture store.
       # UiAutomation is only reattached after the observed wake has ended.
       adb shell am start -n com.fluvi.app/.MainActivity > "$out/r449-reopen.txt" 2>&1
-      tap_label 'Debug log' entry
+      adb shell uiautomator dump /sdcard/r449-reopen.xml > /dev/null 2>&1 || true
+      adb exec-out cat /sdcard/r449-reopen.xml > "$out/ui-r449-reopen.xml" 2>/dev/null || true
+      if ! grep -Fq 'ZÁRKÉPERNYŐ' "$out/ui-r449-reopen.xml"; then tap_label 'Debug log' entry; fi
       tap_label 'ZÁRKÉPERNYŐ' tab
       tap_label 'Próba leállítása és riport megtartása' r449-freeze
       sleep 2
