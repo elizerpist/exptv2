@@ -126,6 +126,12 @@ case "${1:-}" in
     sha256sum "$fixture" > "$out/fixture-r446-stock.sha256"
     git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR446StockServiceInstrumentationTest.kt > "$out/fixture-r446-stock.patch"
   fi
+  if [[ "$TEST_SCOPE" == r446_parent_mutation ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR446ParentMutationInstrumentationTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR446ParentMutationInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r446-parent-mutation.sha256"
+  fi
   if [[ "$TEST_SCOPE" == r43_busy_red ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR43DiagnosticsInstrumentationTest.kt"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR43DiagnosticsInstrumentationTest.kt
@@ -201,6 +207,10 @@ case "${1:-}" in
     r446_lifecycle_capture)
       class=com.fluvi.app.lockscreen.KeyguardR446WindowLifecycleInstrumentationTest
       methods=(sameHostTransitionWithCaptureRevokesActualPresenter)
+      ;;
+    r446_parent_mutation)
+      class=com.fluvi.app.lockscreen.KeyguardR446ParentMutationInstrumentationTest
+      methods=(actualParentMoveResizeRemoveAndReplacementRevokes)
       ;;
     r445_provider)
       class=com.fluvi.app.lockscreen.KeyguardR44LazyProviderInstrumentationTest
