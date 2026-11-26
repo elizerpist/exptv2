@@ -97,7 +97,22 @@ class KeyguardR448FrameInstrumentationTest {
                 KeyguardUsableBounds(0, 0, metrics.widthPixels, metrics.heightPixels),
                 KeyguardCardCardPosition(.5f), KeyguardCardOrbPosition(.5f, .5f))
             val artifact = AndroidKeyguardShaderArtifactReader.load(context, profile.effectId, profile.usesPortal)
-            val underlay = reference.captureCrop("r448-controlled-underlay", bounds)
+            var underlay: android.graphics.Bitmap? = null
+            var underlayIndex = 0
+            waitFor("stable visible green foreground before frame add") {
+                val sample = reference.captureCrop("r448-controlled-underlay-${underlayIndex++}", bounds)
+                val points = listOf(1 to 1, size - 2 to 1, 1 to size - 2,
+                    size - 2 to size - 2, size / 2 to size / 2)
+                val green = points.all { (x, y) ->
+                    val p = sample.getPixel(x, y)
+                    kotlin.math.abs(Color.red(p) - 11) <= 5 &&
+                        kotlin.math.abs(Color.green(p) - 177) <= 5 &&
+                        kotlin.math.abs(Color.blue(p) - 67) <= 5
+                }
+                if (green) underlay = sample
+                green
+            }
+            val stableUnderlay = checkNotNull(underlay)
             main {
                 frame = KeyguardR448WidgetsAnywhereFrame(service, KeyguardMaterialTimeSource { _, _ -> phase.get() })
                 assertTrue(checkNotNull(frame).prepare(cancelledOwner, profile, false, artifact) { synchronized(events) { events.add(it) } })
@@ -118,14 +133,14 @@ class KeyguardR448FrameInstrumentationTest {
             assertEquals("actual view bounds match the independent crop", bounds, main { checkNotNull(frame).measuredBoundsForInstrumentation() })
             assertEquals("one actual add", 1, observed.count { it.stage == "ADD_BEGIN" })
             assertTrue("duplicate did not reset timer", observed.any { it.stage == "COALESCED" })
-            reference.awaitServiceMatch("r448-controlled-A", bounds, reference.a, underlay)
+            reference.awaitServiceMatch("r448-controlled-A", bounds, reference.a, stableUnderlay)
             phase.set(KeyguardR22VisualCalibration.timeB)
-            reference.awaitServiceMatch("r448-controlled-B", bounds, reference.b, underlay)
+            reference.awaitServiceMatch("r448-controlled-B", bounds, reference.b, stableUnderlay)
             shell("input tap ${bounds.centerX()} ${bounds.centerY()}")
             waitFor("input reaches foreground beneath non-touchable overlay") { touches.get() > 0 }
             main { assertTrue(checkNotNull(frame).retire(owner, "CONTROL_REMOVE")) }
             val after = reference.captureCrop("r448-controlled-after", bounds)
-            assertTrue("removed crop returns to underlay", KeyguardR22VisualCalibration.compare(underlay, after).nearlyEqual())
+            assertTrue("removed crop returns to underlay", KeyguardR22VisualCalibration.compare(stableUnderlay, after).nearlyEqual())
         } finally {
             main { frame?.retire(owner, "CLEANUP"); activity?.finish() }
             calibration?.close()
