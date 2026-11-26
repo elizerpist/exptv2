@@ -65,6 +65,7 @@ jobs:
       HARNESS_SHA: ${{ inputs.harness_sha }}
       BASELINE: ${{ inputs.baseline }}
       TEST_SCOPE: ${{ inputs.test_scope }}
+      FLUVI_R448_SAFE_SAMPLE_ONLY: ${{ inputs.test_scope == 'r448_safe_only' && 'true' || 'false' }}
     steps:
       - uses: actions/checkout@v5
         with:

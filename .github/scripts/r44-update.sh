@@ -3,6 +3,10 @@ set -euo pipefail
 out="$RUNNER_TEMP/r44-update"
 mkdir -p "$out"
 case "${R44_BASELINE:-r44_2_owner}" in
+  r44_7)
+    base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/32f179cc771e430487a045b7b7d034dd6a297d13/fluvi_R44_7_HUMAN_ee8528501758.apk'
+    base_size=121301776
+    base_sha=776c6297f34a2bd1d0c74f2a04ff431c0f883a33bb7b6fd7fbda6700e5c099d8;;
   r44_6)
     base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/7833606f902c43131f90f1948fd56e2620af13ec/fluvi_R44_6_HUMAN_398a53891f3a.apk'
     base_size=121285392

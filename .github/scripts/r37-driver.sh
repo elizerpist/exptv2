@@ -250,6 +250,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR448DisplayRouteInstrumentationTest
       methods=(selectionPersistsWithoutChangingExistingRenderMode)
       ;;
+    r448_safe_only)
+      class=com.fluvi.app.lockscreen.KeyguardR448SampleOnlyInstrumentationTest
+      methods=(normalPresentationIsClosedAndFixedSampleCanArm)
+      ;;
     r448_wa_service)
       class=com.fluvi.app.lockscreen.KeyguardR447HandoffServiceInstrumentationTest
       methods=(selectedWidgetsAnywhereUsesIndependentSampleFrame)
