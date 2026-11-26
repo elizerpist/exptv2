@@ -100,6 +100,12 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR444ExpandedServiceInstrumentationTest.kt
     sha256sum "$fixture" > "$out/fixture-r444-expanded.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r444_actual_extended ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR444SystemUiExtendedObservationTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR444SystemUiExtendedObservationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r444-actual.sha256"
+  fi
   if [[ "$TEST_SCOPE" == r43_busy_red ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR43DiagnosticsInstrumentationTest.kt"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR43DiagnosticsInstrumentationTest.kt
@@ -175,6 +181,10 @@ case "${1:-}" in
     r444_expanded_stale)
       class=com.fluvi.app.lockscreen.KeyguardR444ExpandedServiceInstrumentationTest
       methods=(supersededSyntheticReadCannotGrantAfterRestriction)
+      ;;
+    r444_actual_extended)
+      class=com.fluvi.app.lockscreen.KeyguardR444SystemUiExtendedObservationTest
+      methods=(actualSystemUiIncludingCameraAndUnlock)
       ;;
     r44_2_yield)
       class=com.fluvi.app.lockscreen.KeyguardR442ServiceYieldInstrumentationTest
@@ -449,7 +459,7 @@ case "${1:-}" in
     if (( rc != 0 )) || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then
       printf '%s FAIL exit=%s\n' "$method" "$rc" >> "$out/results.txt"; failed=1
     else printf '%s PASS\n' "$method" >> "$out/results.txt"; fi
-    if [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui || "$TEST_SCOPE" == r44_1_* || "$TEST_SCOPE" == r444_expanded_* || "$TEST_SCOPE" == r44_2_actual || "$TEST_SCOPE" == r44_2_yield ]]; then
+    if [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui || "$TEST_SCOPE" == r44_1_* || "$TEST_SCOPE" == r444_expanded_* || "$TEST_SCOPE" == r444_actual_extended || "$TEST_SCOPE" == r44_2_actual || "$TEST_SCOPE" == r44_2_yield ]]; then
       # A native process crash bypasses the fixture's finally block. This is
       # the disposable fixture PIN only; clear it so the following declared
       # method can independently establish its own secure-lock precondition.
