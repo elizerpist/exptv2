@@ -1189,6 +1189,14 @@ class KeyguardR22ReaderHandoffTest {
                 checkNotNull(Platform.nodes[second]).queryParent = host
                 Platform.indexResults[id] = listOf(clock, second)
             }
+            if (kind == "mixed") {
+                val foreign = Platform.node(id, pkg = "foreign.app")
+                checkNotNull(Platform.nodes[foreign]).queryParent = host
+                Platform.indexResults[id] = listOf(clock, foreign)
+            }
+            if (kind == "overflow") Platform.indexResults[id] = (1..9).map {
+                Platform.node(id).also { node -> checkNotNull(Platform.nodes[node]).queryParent = host }
+            }
             Platform.activeRoot = root
             Platform.inventory = listOf(Platform.window(10, 1, true, root))
             var current = true
@@ -1205,20 +1213,23 @@ class KeyguardR22ReaderHandoffTest {
         assertEquals("FOUND", positive.first.snapshots.single().r44?.r445IndexStatus)
         assertEquals(1, positive.first.snapshots.single().r44?.r445IndexCalls?.single()?.rawHits)
         assertEquals(KeyguardR44Markers.Marker.SMALL_CLOCK, positive.first.snapshots.single().r44?.content?.marker)
-        for (kind in listOf("empty", "hidden", "sibling", "foreign", "duplicate", "property_error")) {
+        for (kind in listOf("empty", "hidden", "sibling", "foreign", "duplicate", "mixed", "overflow", "property_error")) {
             val result = sample(kind)
             assertEquals("$kind must reach the query", 1, result.second)
             assertNull("$kind must not grant content", result.first.snapshots.single().r44?.content)
             val call = checkNotNull(result.first.snapshots.single().r44).r445IndexCalls.single()
-            assertEquals(if (kind == "empty") 0 else if (kind == "duplicate") 2 else 1, call.rawHits)
+            assertEquals(if (kind == "empty") 0 else if (kind == "duplicate" || kind == "mixed") 2 else if (kind == "overflow") 9 else 1, call.rawHits)
             assertEquals(when (kind) {
-                "empty" -> "EMPTY"; "duplicate" -> "DUPLICATE"; "property_error" -> "ERROR"
+                "empty" -> "EMPTY"; "duplicate" -> "DUPLICATE"; "mixed" -> "AMBIGUOUS"; "overflow" -> "OVERFLOW"; "property_error" -> "ERROR"
                 else -> "INELIGIBLE"
             }, call.outcome)
+            if (kind in setOf("duplicate", "mixed", "overflow", "property_error"))
+                assertFalse("$kind must fail closed", checkNotNull(result.first.snapshots.single().r44).complete)
             when (kind) {
                 "hidden" -> assertEquals("HIDDEN_ANCESTOR", call.firstRejection)
                 "sibling" -> assertEquals("NO_ANCESTRY", call.firstRejection)
                 "foreign" -> assertEquals("WRONG_OWNER", call.firstRejection)
+                "mixed" -> assertEquals("WRONG_OWNER", call.firstRejection)
                 "property_error" -> assertEquals("PROPERTY_ERROR", call.firstRejection)
             }
         }

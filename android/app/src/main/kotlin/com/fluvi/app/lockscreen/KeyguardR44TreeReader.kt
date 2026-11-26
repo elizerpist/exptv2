@@ -425,7 +425,9 @@ internal class KeyguardR44TreeReader(
                 (start - screenAt).coerceAtLeast(0),
                 (SystemClock.uptimeMillis() - batchStart - KeyguardR44ExtraBudget.MAX_ELAPSED_MS).coerceAtLeast(0),
                 nodes.size.coerceAtMost(9), firstRejection)
-            if (outcome == "ERROR" || outcome == "NULL_RESULT") {
+            // Unexamined or mutually inconsistent results cannot become
+            // evidence that a later ordinary or sample scene is complete.
+            if (outcome in setOf("ERROR", "NULL_RESULT", "OVERFLOW", "DUPLICATE", "AMBIGUOUS")) {
                 complete = false
                 budget.hardFailure = true
             }
