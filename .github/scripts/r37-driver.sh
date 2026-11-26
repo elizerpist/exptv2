@@ -196,6 +196,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
       methods=(r446ProtectedSampleEndpointsSurviveLightPressure r446ProtectedSampleEndpointsSurviveFullPressure)
       ;;
+    r447_pressure)
+      class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
+      methods=(r447LatestPreIssueDecisionSurvivesLightPressure r447LatestPreIssueDecisionSurvivesFullPressure)
+      ;;
     r446_stock|r446_stock_observed)
       class=com.fluvi.app.lockscreen.KeyguardR446StockServiceInstrumentationTest
       methods=(actualStockWakeUsesOwnerPrintAndStops)
