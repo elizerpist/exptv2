@@ -207,8 +207,8 @@ PY
     adb shell wm dismiss-keyguard || true
     adb shell am start -n com.fluvi.app/.MainActivity > "$out/launch.txt" 2>&1
     scroll_controls() {
-      local xml=$1 direction=$2 points
-      points=$(python3 - "$xml" "$direction" <<'PY'
+      local xml=$1 direction=$2 points precision=${3:-normal}
+      points=$(python3 - "$xml" "$direction" "$precision" <<'PY'
 import re,sys,xml.etree.ElementTree as ET
 try:
     for n in ET.parse(sys.argv[1]).getroot().iter():
@@ -217,7 +217,9 @@ try:
         if not m: continue
         a,b,c,d=map(int,m.groups())
         if d-b < 100: continue
-        x=(a+c)//2; hi=b+(d-b)//5; lo=d-(d-b)//5
+        x=(a+c)//2
+        hi=b+(d-b)*(2 if sys.argv[3]=='fine' else 1)//5
+        lo=b+(d-b)*(3 if sys.argv[3]=='fine' else 4)//5
         print(x,lo if sys.argv[2]=='down' else hi,x,hi if sys.argv[2]=='down' else lo)
         break
 except (ET.ParseError,OSError): pass
@@ -261,6 +263,15 @@ PY
           if [[ "$name" == entry ]]; then adb shell am start -n com.fluvi.app/.MainActivity >> "$out/launch.txt" 2>&1 || true; fi
           continue
         fi
+        if [[ "$name" == entry && "${R448_RESTART_PROBE:-false}" == true ]] &&
+            grep -Fq 'package="com.android.launcher3"' "$out/ui-$name.xml"; then
+          # The first start can be delivered to a dying top activity while
+          # Android is replacing its process. Retry only after the hierarchy
+          # positively shows the launcher, not after an app assertion.
+          adb shell am start -n com.fluvi.app/.MainActivity >> "$out/restart-r448.txt" 2>&1 || true
+          sleep 2
+          continue
+        fi
         coords=$(python3 - "$out/ui-$name.xml" "$label" "$name" <<'PY'
 import re,sys,xml.etree.ElementTree as ET
 try:
@@ -293,6 +304,9 @@ PY
             # The signed selector sits below both sample buttons. After the
             # route/reopen probe, scroll back toward the buttons first.
             scroll_controls "$out/ui-$name.xml" up
+          elif [[ "$name" == r448-select-* ]]; then
+            if (( attempt > 10 )); then scroll_controls "$out/ui-$name.xml" up fine
+            else scroll_controls "$out/ui-$name.xml" down fine; fi
           else
             scroll_controls "$out/ui-$name.xml" down
           fi
