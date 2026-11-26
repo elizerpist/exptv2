@@ -113,6 +113,12 @@ case "${1:-}" in
     sha256sum "$fixture" > "$out/fixture-r445-composition.sha256"
     git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR445WindowCompositionTest.kt > "$out/fixture-r445-composition.patch"
   fi
+  if [[ "$TEST_SCOPE" == r446_lifecycle* ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR446WindowLifecycleInstrumentationTest.kt"
+    test -f "$fixture"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR446WindowLifecycleInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r446-lifecycle.sha256"
+  fi
   if [[ "$TEST_SCOPE" == r43_busy_red ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR43DiagnosticsInstrumentationTest.kt"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR43DiagnosticsInstrumentationTest.kt
@@ -180,6 +186,14 @@ case "${1:-}" in
     r446_stock)
       class=com.fluvi.app.lockscreen.KeyguardR446StockServiceInstrumentationTest
       methods=(actualStockWakeUsesOwnerPrintAndStops)
+      ;;
+    r446_lifecycle)
+      class=com.fluvi.app.lockscreen.KeyguardR446WindowLifecycleInstrumentationTest
+      methods=(sameHostTransitionRevokesActualPresenter)
+      ;;
+    r446_lifecycle_capture)
+      class=com.fluvi.app.lockscreen.KeyguardR446WindowLifecycleInstrumentationTest
+      methods=(sameHostTransitionWithCaptureRevokesActualPresenter)
       ;;
     r445_provider)
       class=com.fluvi.app.lockscreen.KeyguardR44LazyProviderInstrumentationTest
