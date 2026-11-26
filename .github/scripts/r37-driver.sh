@@ -238,6 +238,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR448BoundaryParentInstrumentationTest
       methods=(preScreenReadMustNotConsumeArmedPostScreenObligation)
       ;;
+    r448_controlled_frame)
+      class=com.fluvi.app.lockscreen.KeyguardR448FrameInstrumentationTest
+      methods=(independentAccessibilityFrameDrawsAndRevocationCancelsPendingAdd)
+      ;;
     r446_stock|r446_stock_observed|r447_stock_observed)
       class=com.fluvi.app.lockscreen.KeyguardR446StockServiceInstrumentationTest
       methods=(actualStockWakeUsesOwnerPrintAndStops)
