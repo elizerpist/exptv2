@@ -37,6 +37,11 @@ case "${1:-}" in
       test -f "$fixture"
       cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR442SystemUiObservationTest.kt
       sha256sum "$fixture" > "$out/fixture.sha256"
+    elif [[ "$TEST_SCOPE" == r44_2_yield ]]; then
+      fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR442ServiceYieldInstrumentationTest.kt"
+      test -f "$fixture"
+      cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR442ServiceYieldInstrumentationTest.kt
+      sha256sum "$fixture" > "$out/fixture.sha256"
     elif [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui ]]; then
       fixture="$GITHUB_WORKSPACE/harness/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR44ServiceInstrumentationTest.kt"
       test -f "$fixture"
@@ -141,6 +146,10 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r44_2_yield)
+      class=com.fluvi.app.lockscreen.KeyguardR442ServiceYieldInstrumentationTest
+      methods=(heldPreScreenReaderHandsOffToLatestPendingRequest)
+      ;;
     r44_2_actual)
       class=com.fluvi.app.lockscreen.KeyguardR442SystemUiObservationTest
       methods=(actualSystemUiSampleClockAndRestrictionObservations)
@@ -410,7 +419,7 @@ case "${1:-}" in
     if (( rc != 0 )) || grep -Eq 'FAILURES!!!|INSTRUMENTATION_FAILED|Process crashed|shortMsg=' "$out/$method.txt" || ! grep -Eq '^OK \(1 test\)' "$out/$method.txt"; then
       printf '%s FAIL exit=%s\n' "$method" "$rc" >> "$out/results.txt"; failed=1
     else printf '%s PASS\n' "$method" >> "$out/results.txt"; fi
-    if [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui || "$TEST_SCOPE" == r44_1_* ]]; then
+    if [[ "$TEST_SCOPE" == r44_service || "$TEST_SCOPE" == r44_systemui || "$TEST_SCOPE" == r44_1_* || "$TEST_SCOPE" == r44_2_actual || "$TEST_SCOPE" == r44_2_yield ]]; then
       # A native process crash bypasses the fixture's finally block. This is
       # the disposable fixture PIN only; clear it so the following declared
       # method can independently establish its own secure-lock precondition.
