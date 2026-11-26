@@ -573,8 +573,6 @@ class FluviKeyguardCardService : AccessibilityService() {
         check(Looper.myLooper() == Looper.getMainLooper())
         val at = SystemClock.uptimeMillis()
         val cancelledArm = r446Owner.arm
-        if (cancelledArm != null)
-            KeyguardCardDiagnostics.recordR447ArmTerminal(cancelledArm.capture, cancelledArm.generation, at, reason)
         r446ReadArm = null
         r446RestrictionSeen = true
         r446TicketActive = false
@@ -582,6 +580,11 @@ class FluviKeyguardCardService : AccessibilityService() {
         val presenter = r446Presenter
         r446Presenter = null
         val retired = presenter?.dispose()
+        // Observation must never precede or suppress authority revocation and
+        // the real child hide, even if a diagnostic producer fails.
+        if (cancelledArm != null) runCatching {
+            KeyguardCardDiagnostics.recordR447ArmTerminal(cancelledArm.capture, cancelledArm.generation, at, reason)
+        }
         // A later freeze, unlock or duplicate cleanup must not relabel or
         // erase the original withdrawal and its actual return timestamps.
         r446Observation?.let { previous ->
