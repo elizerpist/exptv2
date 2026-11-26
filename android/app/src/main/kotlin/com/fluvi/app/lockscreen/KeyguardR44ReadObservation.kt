@@ -15,6 +15,7 @@ internal data class KeyguardR446Observation(
     val host: Int?, val scene: Long?, val issuedAt: Long?, val attachBegin: Long?,
     val attachEnd: Long?, val submittedAt: Long?, val frameAt: Long?,
     val withdrawAt: Long?, val withdrawReason: String,
+    val hideReturn: Long? = null, val releaseReturn: Long? = null, val retireError: String? = null,
 )
 
 /** Immutable, capture-owned scalars from the same physical inspection used

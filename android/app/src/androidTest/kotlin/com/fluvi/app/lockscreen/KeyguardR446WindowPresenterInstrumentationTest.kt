@@ -201,8 +201,16 @@ class KeyguardR446WindowPresenterInstrumentationTest {
                 val actual = service.r446PreparePresenterForInstrumentation(KeyguardMaterialTimeSource { _, _ -> phase.get() })
                 presenter = actual
                 check(actual.prepare(checkNotNull(windowActivity.display), profile, artifact))
+            }
+            waitFor("embedded input region was prepared") { main { checkNotNull(presenter).inputReadyForInstrumentation() } }
+            main {
+                val actual = checkNotNull(presenter)
                 assertEquals("actual production presenter attached and submitted", "SUBMITTED", actual.show(testToken, target, geometry,
                     valid = { true }, stillOwned = { true }, onFirstDraw = { draws.incrementAndGet() }).status)
+            }
+            waitFor("lower host retains window focus") {
+                val windows = service.windows
+                try { windows.any { it.id == hostId && it.isFocused } } finally { windows.forEach { it.recycle() } }
             }
             waitFor("actual production presenter shader draw") { draws.get() > 0 }
             fun matches(expected: Bitmap, label: String): Boolean {

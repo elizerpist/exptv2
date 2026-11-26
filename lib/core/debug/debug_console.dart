@@ -378,6 +378,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog>
     'trialAlreadyActive' => 'A mintaorb-próba már aktív; előbb állítsd le.',
     'profileRestoreFailed' => 'A próbaprofil visszaállítása nem igazolt.',
     'samplePreparationFailed' => 'A mintaorb előkészítése sikertelen.',
+    'inputPreparationFailed' => 'A mintaorb érintési védelme nem állt készen.',
     'captureFailed' => 'A natív rögzítés indítása sikertelen.',
     'startCancelled' => 'A mintaorb-próba indítása megszakadt.',
     'serviceRebound' =>

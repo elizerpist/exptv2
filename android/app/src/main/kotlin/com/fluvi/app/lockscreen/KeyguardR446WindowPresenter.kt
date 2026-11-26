@@ -2,6 +2,7 @@ package com.fluvi.app.lockscreen
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
+import android.graphics.Region
 import android.os.Binder
 import android.os.Looper
 import android.os.SystemClock
@@ -17,6 +18,8 @@ import com.fluvi.app.lockscreen.material.KeyguardMaterialScene
 import com.fluvi.app.lockscreen.material.KeyguardMaterialTimeSource
 import com.fluvi.app.lockscreen.material.SystemKeyguardMaterialTimeSource
 import com.fluvi.app.lockscreen.material.KeyguardShaderArtifact
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Main-owned, host-window-bound surface for the explicitly armed public
  * sample. No private profile, financial resolver or display overlay is used. */
@@ -24,17 +27,22 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
     private val timeSource: KeyguardMaterialTimeSource = SystemKeyguardMaterialTimeSource) {
     data class Receipt(val status: String, val attachedAt: Long? = null, val submittedAt: Long? = null,
                        val errorClass: String? = null)
+    data class Retirement(val hideReturn: Long?, val releaseReturn: Long?, val errorClass: String?)
     private var host: SurfaceControlViewHost? = null
     private var surface: SurfaceControlViewHost.SurfacePackage? = null
     private var view: KeyguardHeaderMaterialView? = null
     private var owner: Any? = null
     private var frameCallback: Choreographer.FrameCallback? = null
     private var firstDraw: Long? = null
+    private var inputReady = false
+    private var inputReadySignal = CompletableDeferred<Boolean>()
 
     /** Invoked unlocked, after private state has been retired. */
     fun prepare(display: Display, profile: KeyguardMaterialProfile, artifact: KeyguardShaderArtifact): Boolean {
         check(Looper.myLooper() == Looper.getMainLooper())
         dispose()
+        inputReadySignal = CompletableDeferred()
+        val signal = inputReadySignal
         return runCatching {
             val size = service.resources.getDimensionPixelSize(R.dimen.fluvi_keyguard_orb_size)
             require(size > 0)
@@ -52,10 +60,36 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
             }
             val embedded = SurfaceControlViewHost(service, display, Binder())
             host = embedded
-            // The public SDK only exposes the size overload. Touch-through is
-            // a separately required platform control, not inferred from View.
-            embedded.setView(material, size, size)
             view = material
+            material.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
+                    val root = v.rootSurfaceControl
+                    if (root == null) { signal.complete(false); return }
+                    try {
+                        // Public AttachedSurfaceControl API. Null would mean
+                        // the entire layer; an empty Region means no input.
+                        root.setTouchableRegion(Region())
+                        val tree = v.viewTreeObserver
+                        tree.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+                            override fun onDraw() {
+                                v.post {
+                                    if (tree.isAlive) tree.removeOnDrawListener(this)
+                                    val ready = inputReadySignal === signal && view === v &&
+                                        v.isAttachedToWindow && v.rootSurfaceControl === root
+                                    if (inputReadySignal === signal) inputReady = ready
+                                    signal.complete(ready)
+                                }
+                            }
+                        })
+                    } catch (_: Exception) { signal.complete(false) }
+                }
+                override fun onViewDetachedFromWindow(v: View) {
+                    v.removeOnAttachStateChangeListener(this)
+                    if (inputReadySignal === signal) inputReady = false
+                    signal.complete(false)
+                }
+            })
+            embedded.setView(material, size, size)
             val childPackage = requireNotNull(embedded.surfacePackage)
             surface = childPackage
             SurfaceControl.Transaction().use { it.setVisibility(childPackage.surfaceControl, false).apply() }
@@ -63,13 +97,20 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         }.getOrElse { dispose(); false }
     }
 
+    /** Waits unlocked, never on a wake callback. The draw traversal follows
+     * the framework's touch-region update before the receipt is issued. */
+    suspend fun awaitInputReady(): Boolean = withTimeoutOrNull(5_000) { inputReadySignal.await() } == true
+    internal fun inputReadyForInstrumentation(): Boolean = inputReady
+
     /** Checks are repeated around the platform attach; a failed check never
      * reveals the child. The caller owns the ticket and deadline. */
     fun show(token: Any, target: KeyguardR446Target, geometry: KeyguardOverlayGeometry,
-             valid: () -> Boolean, stillOwned: () -> Boolean, onFirstDraw: (Long) -> Unit = {}): Receipt {
+             valid: () -> Boolean, stillOwned: () -> Boolean, onInvalidated: () -> Unit = { dispose() },
+             onFirstDraw: (Long) -> Unit = {}): Receipt {
         check(Looper.myLooper() == Looper.getMainLooper())
         val child = surface?.surfaceControl ?: return Receipt("NOT_PREPARED")
         val material = view ?: return Receipt("NOT_PREPARED")
+        if (!inputReady || !material.isAttachedToWindow) return Receipt("INPUT_UNQUALIFIED")
         if (owner != null || !valid()) return Receipt("PREATTACH_REVOKED")
         val localX = geometry.left - target.bounds.left
         val localY = geometry.top - target.bounds.top
@@ -99,7 +140,8 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
             if (!valid()) { dispose(); return Receipt("POSTSUBMIT_REVOKED", attached, submitted) }
             val callback = object : Choreographer.FrameCallback {
                 override fun doFrame(frameTimeNanos: Long) {
-                    if (owner !== token || !stillOwned()) { dispose(); return }
+                    if (owner !== token) return
+                    if (!stillOwned()) { onInvalidated(); return }
                     material.frame(frameTimeNanos)
                     Choreographer.getInstance().postFrameCallback(this)
                 }
@@ -119,24 +161,34 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
     internal fun frameForInstrumentation() { view?.frame(System.nanoTime()) }
 
     /** Hide/detach this exact child before releasing its host. */
-    fun dispose() {
+    fun dispose(): Retirement {
         check(Looper.myLooper() == Looper.getMainLooper())
         owner = null
+        inputReady = false
+        inputReadySignal.complete(false)
         frameCallback?.let { Choreographer.getInstance().removeFrameCallback(it) }
         frameCallback = null
         val oldSurface = surface
         surface = null
+        var hideReturn: Long? = null
+        var errorClass: String? = null
         if (oldSurface != null) runCatching {
             SurfaceControl.Transaction().use {
                 it.setVisibility(oldSurface.surfaceControl, false).reparent(oldSurface.surfaceControl, null).apply()
             }
-        }
+        }.onSuccess { hideReturn = SystemClock.uptimeMillis() }
+            .onFailure { errorClass = it.javaClass.simpleName.take(48) }
         view?.onFirstShaderDraw = null
         view?.onNextShaderDrawForDiagnostic = null
         view = null
-        runCatching { oldSurface?.release() }
-        runCatching { host?.release() }
+        runCatching { oldSurface?.release() }.onFailure { if (errorClass == null) errorClass = it.javaClass.simpleName.take(48) }
+        val oldHost = host
         host = null
+        var releaseReturn: Long? = null
+        if (oldHost != null) runCatching { oldHost.release() }
+            .onSuccess { releaseReturn = SystemClock.uptimeMillis() }
+            .onFailure { if (errorClass == null) errorClass = it.javaClass.simpleName.take(48) }
         firstDraw = null
+        return Retirement(hideReturn, releaseReturn, errorClass)
     }
 }

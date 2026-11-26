@@ -529,6 +529,11 @@ class FluviKeyguardCardService : AccessibilityService() {
                 stopR444Trial("samplePreparationFailed")
                 return mapOf("active" to false, "reason" to "samplePreparationFailed")
             }
+            if (!presenter.awaitInputReady()) {
+                presenter.dispose()
+                stopR444Trial("inputPreparationFailed")
+                return mapOf("active" to false, "reason" to "inputPreparationFailed")
+            }
             if (r442Receipt?.capture != capture || KeyguardCardDiagnostics.activeCaptureId() != capture ||
                 !KeyguardR44Trial.active || getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != false) {
                 presenter.dispose()
@@ -550,17 +555,20 @@ class FluviKeyguardCardService : AccessibilityService() {
 
     private fun r446Cancel(reason: String) {
         check(Looper.myLooper() == Looper.getMainLooper())
+        val at = SystemClock.uptimeMillis()
         r446ReadArm = null
         r446RestrictionSeen = true
         r446TicketActive = false
         r446Owner.revoke() // invalidate before hiding or releasing the child
+        val presenter = r446Presenter
+        r446Presenter = null
+        val retired = presenter?.dispose()
         r446Observation?.let { previous ->
-            val next = previous.copy(withdrawAt = SystemClock.uptimeMillis(), withdrawReason = reason)
+            val next = previous.copy(withdrawAt = at, withdrawReason = reason,
+                hideReturn = retired?.hideReturn, releaseReturn = retired?.releaseReturn, retireError = retired?.errorClass)
             r446Observation = next
             KeyguardCardDiagnostics.recordR446(next)
         }
-        r446Presenter?.dispose()
-        r446Presenter = null
     }
 
     private fun r446Apply(inspection: Inspection, request: KeyguardCardInspectionRequest): Boolean {
@@ -600,7 +608,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         observation = observation.copy(issuedAt = now, attachBegin = SystemClock.uptimeMillis(), backend = "ATTEMPTED")
         r446Observation = observation
         KeyguardCardDiagnostics.recordR446(observation)
-        val receipt = presenter.show(ticket, target, geometry, ::valid, ::stillOwned) { at ->
+        val receipt = presenter.show(ticket, target, geometry, ::valid, ::stillOwned,
+            onInvalidated = { if (r446Owner.ticket === ticket) r446Cancel("ownerExpiredOrChanged") }) { at ->
             val previous = r446Observation
             if (previous != null && previous.request == request.id && stillOwned()) {
                 val next = previous.copy(frameAt = at)

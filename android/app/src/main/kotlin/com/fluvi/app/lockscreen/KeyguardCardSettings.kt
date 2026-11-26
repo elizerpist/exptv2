@@ -3217,7 +3217,7 @@ internal object KeyguardCardDiagnostics {
                 o.backend.contains("FAILED") -> "Csatolás vagy beküldés sikertelen."
                 else -> "Nincs rajzkérés."
             }
-            select("a${attempt.id}:r446:$index", "R44_6_HU $status\nR44_6_SAMPLE wake=${o.wake} arm=${o.armAt} req=${o.request} normal=${o.normal} eligible=${o.eligibility} backend=${o.backend} host=${o.host ?: "UNOBSERVED"} scene=${o.scene ?: "UNOBSERVED"} issue=${o.issuedAt ?: "UNOBSERVED"} attachBegin=${o.attachBegin ?: "UNOBSERVED"} attachEnd=${o.attachEnd ?: "UNOBSERVED"} submit=${o.submittedAt ?: "UNOBSERVED"} frame=${o.frameAt ?: "UNOBSERVED"} withdraw=${o.withdrawAt ?: "UNOBSERVED"}/${o.withdrawReason} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
+            select("a${attempt.id}:r446:$index", "R44_6_HU $status\nR44_6_SAMPLE wake=${o.wake} arm=${o.armAt} req=${o.request} normal=${o.normal} eligible=${o.eligibility} backend=${o.backend} host=${o.host ?: "UNOBSERVED"} scene=${o.scene ?: "UNOBSERVED"} issue=${o.issuedAt ?: "UNOBSERVED"} attachBegin=${o.attachBegin ?: "UNOBSERVED"} attachEnd=${o.attachEnd ?: "UNOBSERVED"} submit=${o.submittedAt ?: "UNOBSERVED"} frame=${o.frameAt ?: "UNOBSERVED"} withdraw=${o.withdrawAt ?: "UNOBSERVED"}/${o.withdrawReason} hideReturn=${o.hideReturn ?: "UNOBSERVED"} releaseReturn=${o.releaseReturn ?: "UNOBSERVED"} retireError=${o.retireError ?: "none"} physical=UNOBSERVED clock=uptimeMs\n", attempt.id)
         } }
         r44Attempts.filter { it.r44Reads.isNotEmpty() ||
             (Build.VERSION.SDK_INT == 37 && it.presentationMode == "ORB") }.forEach { attempt ->
