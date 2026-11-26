@@ -4,6 +4,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class KeyguardR444ProfileOwnerTest {
+    @Test fun bitMergeKeepsChangesMadeAfterTheInitialRead() {
+        assertEquals(0x72, r444MergeOwnedFlag(0x70, 0x12, 0x02))
+        assertEquals(0x70, r444MergeOwnedFlag(0x72, 0x10, 0x02))
+    }
+
     private class Fixture(initial: Int = 0x10) {
         var flags: Int? = initial
         var pending: Boolean? = false

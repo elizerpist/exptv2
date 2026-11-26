@@ -1,5 +1,9 @@
 package com.fluvi.app.lockscreen
 
+/** Merge against the last platform read, not the earlier profile snapshot. */
+internal fun r444MergeOwnedFlag(current: Int, desired: Int, bit: Int): Int =
+    (current and bit.inv()) or (desired and bit)
+
 /** Main-thread owner of one accessibility flag bit. The persisted marker is
  * solely a crash-recovery obligation; it never enables a profile or grants
  * display authority. Other service flags are merged from the latest read. */
@@ -27,7 +31,7 @@ internal class KeyguardR444ProfileOwner(
             return false
         }
         if (pending && !restoreOwnedBit()) {
-            snapshot = Snapshot(revision, Kind.ERROR, null, readFlags(), true, false)
+            snapshot = Snapshot(revision, Kind.ERROR, null, runCatching { readFlags() }.getOrNull(), true, false)
             return false
         }
         val current = runCatching { readFlags() }.getOrNull()

@@ -64,7 +64,10 @@ class FluviKeyguardCardService : AccessibilityService() {
             readFlags = { runCatching { serviceInfo?.flags }.getOrNull() },
             writeFlags = { flags -> runCatching {
                 val current = requireNotNull(serviceInfo)
-                current.flags = flags
+                val ownedBit = AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
+                // Another service setting may have changed since the first
+                // read: update only the bit that this trial owns.
+                current.flags = r444MergeOwnedFlag(current.flags, flags, ownedBit)
                 serviceInfo = current
                 true
             }.getOrDefault(false) },
