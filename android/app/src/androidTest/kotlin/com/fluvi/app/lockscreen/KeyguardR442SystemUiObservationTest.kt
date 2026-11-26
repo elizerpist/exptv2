@@ -112,7 +112,7 @@ class KeyguardR442SystemUiObservationTest {
             val readReached = waitFor(10_000) { synchronized(entries) { entries.isNotEmpty() } }
             screenshot("clock")
             val clockState = main { service.inspectionStateForTest() }
-            val posts = service.surfaceMetricsForInstrumentation()?.submissions
+            val posts = main { service.surfaceMetricsForInstrumentation()?.submissions }
             out.resolve("clock-state.txt").writeText("realSystemUi=true injected=false readReached=$readReached attached=${clockState.attached} posts=${posts ?: "UNOBSERVED"} optical=UNOBSERVED\n")
 
             // Retain the real scene commands and evidence even when the clock
