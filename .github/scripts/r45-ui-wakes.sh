@@ -20,7 +20,25 @@ else
   tap_label "Egyszeri mintaorb és rögzítés – $route_label" r45-action
   wakes=1
 fi
-sleep 6
+# Do not turn the screen off on a fixed timer while native sample preparation
+# may still be running. This label appears after the service acknowledges the
+# actual Flutter action and shape.
+shape_label='Natív minta: animált orb'
+if [[ "$R45_UI_SHAPE" == CIRCLE ]]; then shape_label='Natív minta: tömör kör'; fi
+ack=false
+for attempt in $(seq 1 25); do
+  adb shell uiautomator dump /sdcard/r45-ack.xml > /dev/null 2>&1 || true
+  adb exec-out cat /sdcard/r45-ack.xml > "$out/ui-r45-ack-$attempt.xml" 2>/dev/null || true
+  if grep -Fq "$shape_label" "$out/ui-r45-ack-$attempt.xml"; then ack=true; break; fi
+  if (( attempt <= 12 )); then scroll_controls "$out/ui-r45-ack-$attempt.xml" down fine
+  else scroll_controls "$out/ui-r45-ack-$attempt.xml" up fine; fi
+  sleep 1
+done
+if [[ "$ack" != true ]]; then
+  printf 'NOT REACHED: native shape acknowledgement for %s\n' "$shape_label" > "$out/r45-result.txt"
+  exit 1
+fi
+observe after-native-ack
 adb exec-out screencap -p > "$out/r45-$route_name-prewake.png" || true
 adb shell locksettings set-disabled false > "$out/r45-locksettings.txt" 2>&1
 mkdir -p "$out/r45frames"
