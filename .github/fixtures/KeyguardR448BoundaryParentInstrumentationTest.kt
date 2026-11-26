@@ -53,7 +53,7 @@ class KeyguardR448BoundaryParentInstrumentationTest {
   val component=ComponentName(context,FluviKeyguardCardService::class.java)
   val early=CountDownLatch(1); val release=CountDownLatch(1); val post=CountDownLatch(1)
   val earlyId=AtomicLong(0); val postId=AtomicLong(0); val screenAt=AtomicLong(0); val unrelated=AtomicInteger(0)
-  val note=StringBuilder("parent=ee852850 actualService=true actualPlatformWake=true syntheticClassification=false\n")
+  val note=StringBuilder("parent=ee852850 actualService=true actualPlatformWake=true syntheticClassification=false controlledEventSubscription=true\n")
   var service:FluviKeyguardCardService?=null
   try {
    shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard"); waitFor("unlocked setup") { !keyguard.isKeyguardLocked }
@@ -70,6 +70,18 @@ class KeyguardR448BoundaryParentInstrumentationTest {
      synchronized(note) { note.append("start=${request.id} trigger=${request.trigger} queued=${request.queuedAtUptimeMs} callback=$now boundary=$boundary\n") }
      val actualScreen=field(owner,"r442ScreenOn")
      if(actualScreen==null && earlyId.compareAndSet(0,request.id)) {
+      // Controlled queue-only run: remove incidental accessibility event
+      // subscriptions before SCREEN_ON. A different source can still open
+      // the pre-screen walk; no classifier or system state is fabricated.
+      ins.runOnMainSync {
+       check(field(owner,"r442ScreenOn")==null) { "NOT REACHED: screen arrived before event suppression" }
+       val info=owner.serviceInfo
+       val oldTypes=info.eventTypes
+       info.eventTypes=0
+       owner.serviceInfo=info
+       check(owner.serviceInfo.eventTypes==0) { "NOT REACHED: event suppression not accepted" }
+       synchronized(note) { note.append("eventSubscriptionBefore=$oldTypes after=${owner.serviceInfo.eventTypes}\n") }
+      }
       early.countDown(); check(release.await(20,TimeUnit.SECONDS)) { "NOT REACHED: release early read" }
      } else if(boundary>0 && request.queuedAtUptimeMs>=boundary && postId.compareAndSet(0,request.id)) post.countDown()
     }
