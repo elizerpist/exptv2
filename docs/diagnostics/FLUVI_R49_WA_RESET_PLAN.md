@@ -1,5 +1,7 @@
 # R49 · A zárképernyős ORB teljes cseréje a kiadott Widgets Anywhere hostjára
 
+> **Történeti R49 dokumentum.** A reset utáni zárképernyős megjelenést a tulajdonos megerősítette. Az általános WA alkalmazás és widgetválasztó beemelésére vonatkozó döntést felülírja az [R50 terv](FLUVI_R50_BALANCE_ORB_PLAN.md). A következő implementációhoz az [R50 prompt](FLUVI_R50_BALANCE_ORB_HANDOFF.md) az irányadó.
+
 **D49 — IMPLEMENTATION, 2026-11-27.** A Nothing Phone (2a) tulajdonosa az önálló WA repóból telepített alkalmazást Android 17-en működőnek találta. A kért termék egyetlen, tisztán telepíthető Fluvi APK. A zárképernyőt benne a WA eredeti hostja kezeli. A Fluvi egy szabványos Android-widgetként adja neki az aktuális headerből képzett mozgó ORB-ot. A kezdőképernyős widget önállóan használható tovább. Az R48-D1 régi MAIN/PIN vizsgálata történeti anyag. Az új APK elkészítésének nincs hozzá kötött előfeltétele.
 
 ## Mit bizonyít a telefon és mit bizonyít a forrás?

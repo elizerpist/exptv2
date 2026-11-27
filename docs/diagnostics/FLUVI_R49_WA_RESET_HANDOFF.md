@@ -1,5 +1,7 @@
 # R49 · Replace both Fluvi lockscreen pipelines with the released Widgets Anywhere host
 
+> **Historical R49 handoff.** The owner confirmed the reset restored lockscreen output. The [R50 plan](FLUVI_R50_BALANCE_ORB_PLAN.md) supersedes the full-app and picker requirements below. Execute the [R50 implementation handoff](FLUVI_R50_BALANCE_ORB_HANDOFF.md) for the current task.
+
 ## 1. Title / task intent
 
 Execute reviewer decision D49, **IMPLEMENTATION**, in `elizerpist/exptv2`. Delete the two existing lockscreen widget runtimes and build one signed Fluvi APK containing the actual upstream WA lockscreen host and a real animated current-header ORB AppWidget. Take this task through implementation, tests, build, verified direct download and a Hungarian phone procedure. The review, plan, red tests, source import, local commit, green focused test and CI submission are intermediate checkpoints. Continue independent authorized work in the same run through recoverable failures. Only the owner performs final phone acceptance.
