@@ -24,17 +24,18 @@ for row in rows:
     stage = re.search(r'stage=([A-Z_]+)', row)
     route_value = re.search(r'route=([A-Z_]+)', row)
     if wake and stage and route_value:
-        if route_value.group(1) != route and stage.group(1) in ('ADD_BEGIN', 'REVEAL', 'FIRST_SHADER_DRAW'):
+        if route_value.group(1) != route and stage.group(1) in ('ADD_BEGIN', 'REVEAL', 'FIRST_SHADER_DRAW', 'FIRST_FRAME_DRAW'):
             raise AssertionError('unselected renderer produced output')
         events.setdefault(wake.group(1), set()).add(stage.group(1))
-qualified = [wake for wake, stages in events.items() if {'REVEAL', 'FIRST_SHADER_DRAW'} <= stages]
+qualified = [wake for wake, stages in events.items()
+             if 'REVEAL' in stages and bool({'FIRST_SHADER_DRAW', 'FIRST_FRAME_DRAW'} & stages)]
 print(f'route={route} expectedWakes={expected} observedWakeIds={sorted(events)} softwareDrawWakes={qualified}')
 for wake, stages in sorted(events.items()): print(f'wake={wake} stages={sorted(stages)}')
-assert len(qualified) >= expected, 'NOT REACHED: fewer same-wake software reveal/shader receipts than requested'
+assert len(qualified) >= expected, 'NOT REACHED: fewer same-wake software reveal/content-draw receipts than requested'
 assert 'spoolDropped=0' in text and 'spoolFailure=none' in text, 'spool incomplete'
 if os.environ.get('R47_REQUIRE_ACTIVE_HEADER') == 'true':
-    source = set(re.findall(r'R47_MATERIAL origin=active_header_semantic token=([a-f0-9-]+)', text))
-    draws = set(re.findall(r'origin=active_header_semantic token=([a-f0-9-]+)', '\n'.join(
+    source = set(re.findall(r'R47_MATERIAL origin=(active_header_semantic|active_header_frame_package) token=([a-f0-9-]+)', text))
+    draws = set(re.findall(r'origin=(active_header_semantic|active_header_frame_package) token=([a-f0-9-]+)', '\n'.join(
         line for line in text.splitlines() if 'MOTION' in line)))
     assert source and source.intersection(draws), 'NOT REACHED: no matching current-header source and draw token'
     assert 'palette=compiled_public_v1' not in text, 'FAIL: public fixture was used by the owner recording'
