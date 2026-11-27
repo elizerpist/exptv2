@@ -38,6 +38,7 @@ flutter {
 
 dependencies {
     implementation(project(":fluvi-core"))
+    implementation(project(":wa-lockscreen"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
@@ -54,7 +55,7 @@ tasks.configureEach {
     if (name in setOf("packageProfile", "packageRelease", "bundleRelease")) {
         doFirst {
             check(System.getenv("FLUVI_R49_AUTOMATED_HARNESS") == "true") {
-                "Use scripts/build-r49-android.sh for a Fluvi product APK."
+                "Use scripts/build-r50-android.sh for a Fluvi product APK."
             }
         }
     }

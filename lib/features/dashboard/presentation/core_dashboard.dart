@@ -48,7 +48,6 @@ import 'core_modes/balance_presentation_settings.dart';
 import 'core_modes/balance_header_glass_configuration.dart';
 import 'core_modes/dashboard_header_balance_color_scale.dart';
 import 'core_modes/dashboard_header_visual_engine.dart';
-import '../../../app/platform/dashboard_header_widget_publisher.dart';
 import '../../../app/platform/dashboard_orb_material_export_bridge.dart';
 import 'core_modes/dashboard_header_tap_wave.dart';
 import 'core_modes/dashboard_header_visual_tuner.dart';
@@ -114,7 +113,8 @@ class CoreDashboard extends StatefulWidget {
     this.pulseDeliveryCoordinator,
     this.onOpenPulse,
     this.onHeaderInteractionChanged,
-    this.isDashboardVisible = true,
+    this.balanceHeaderColorPolicy,
+    this.onHeaderGeometry,
   });
 
   final DashboardCoreController controller;
@@ -150,7 +150,8 @@ class CoreDashboard extends StatefulWidget {
   final PulseDeliveryCoordinator? pulseDeliveryCoordinator;
   final VoidCallback? onOpenPulse;
   final ValueChanged<bool>? onHeaderInteractionChanged;
-  final bool isDashboardVisible;
+  final DashboardBalanceHeaderColorPolicy? balanceHeaderColorPolicy;
+  final void Function(Size size, double pixelRatio)? onHeaderGeometry;
 
   @override
   State<CoreDashboard> createState() => _CoreDashboardState();
@@ -197,7 +198,6 @@ class _CoreDashboardState extends State<CoreDashboard>
   late final DashboardMindHeaderColorPolicy _mindHeaderColorPolicy;
   late final DashboardHeaderOrbMaterialExportCoordinator
   _headerOrbMaterialExporter;
-  late final DashboardHeaderWidgetPublisher _headerWidgetPublisher;
   late final DashboardSummaryAutoResetController _summaryAutoResetController;
   late final DashboardSummaryAutoResetMotionRegistry _summaryAutoResetMotions;
   late final DashboardUpperVerticalGestureCoordinator _upperVerticalGestures;
@@ -327,9 +327,11 @@ class _CoreDashboardState extends State<CoreDashboard>
       unawaited(_dashboardPresentationPreferences.restore());
     }
     _applyDashboardPresentationPreferences();
-    _balanceHeaderColorPolicy = DashboardBalanceHeaderColorPolicy(
-      tuning: _headerVisualController.tuning,
-    );
+    _balanceHeaderColorPolicy =
+        widget.balanceHeaderColorPolicy ??
+        DashboardBalanceHeaderColorPolicy(
+          tuning: _headerVisualController.tuning,
+        );
     _budgetHeaderColorPolicy = DashboardBudgetHeaderColorPolicy(
       tuning: _headerVisualController.tuning,
       budgetPresentation: _budgetPresentation,
@@ -343,20 +345,6 @@ class _CoreDashboardState extends State<CoreDashboard>
       balanceFrame: _balanceHeaderColorPolicy,
       budgetFrame: _budgetHeaderColorPolicy,
       mindFrame: _mindHeaderColorPolicy,
-    );
-    _headerWidgetPublisher = DashboardHeaderWidgetPublisher(
-      controller: _headerVisualController,
-      balanceFrame: _balanceHeaderColorPolicy,
-      budgetFrame: _budgetHeaderColorPolicy,
-      mindFrame: _mindHeaderColorPolicy,
-      activeMode: modeController,
-      isVisible: () =>
-          mounted &&
-          widget.isDashboardVisible &&
-          (ModalRoute.of(context)?.isCurrent ?? true) &&
-          (WidgetsBinding.instance.lifecycleState == null ||
-              WidgetsBinding.instance.lifecycleState ==
-                  AppLifecycleState.resumed),
     );
     FluviDiagnosticLogger.log(
       const FluviDiagnosticEvent(
@@ -515,14 +503,6 @@ class _CoreDashboardState extends State<CoreDashboard>
     // already selected (for example after shell-state restoration), so its
     // body and Header do not wait for an unrelated user interaction.
     _onCoreModeChanged(entrySource: 'dashboardInitialMount');
-  }
-
-  @override
-  void didUpdateWidget(covariant CoreDashboard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!oldWidget.isDashboardVisible && widget.isDashboardVisible) {
-      _headerWidgetPublisher.refresh();
-    }
   }
 
   @override
@@ -1106,11 +1086,11 @@ class _CoreDashboardState extends State<CoreDashboard>
     _budgetDistributionPageController.dispose();
     _budgetAvatarRailController.dispose();
     _budgetRhythm.dispose();
-    _balanceHeaderColorPolicy.dispose();
+    if (widget.balanceHeaderColorPolicy == null)
+      _balanceHeaderColorPolicy.dispose();
     _budgetHeaderColorPolicy.dispose();
     _mindHeaderColorPolicy.dispose();
     _headerOrbMaterialExporter.dispose();
-    _headerWidgetPublisher.dispose();
     _headerVisualController.tuning.removeListener(_onGlobalAppearanceChanged);
     if (_ownsHeaderVisualController) {
       _headerVisualController.dispose();
@@ -1229,9 +1209,9 @@ class _CoreDashboardState extends State<CoreDashboard>
           size: Size(geometry.headerBounds.width, geometry.headerBounds.height),
           devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
         );
-        _headerWidgetPublisher.updateHeaderGeometry(
+        widget.onHeaderGeometry?.call(
           Size(geometry.headerBounds.width, geometry.headerBounds.height),
-          devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+          MediaQuery.devicePixelRatioOf(context),
         );
         final collapseTravel = controller.metrics.collapseTravel;
         final normalizedCollapseProgress = collapseTravel == 0

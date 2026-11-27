@@ -17,7 +17,7 @@ on:
         required: false
         default: false
         type: boolean
-      r49_build_only:
+      r50_build_only:
         description: Build the new Human APK while independent qualification is pending.
         required: false
         default: false
@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   dashboard-paths:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r50_build_only) }}
     runs-on: ubuntu-latest
     outputs:
       profile: ${{ steps.changes.outputs.profile || steps.non_pr.outputs.profile }}
@@ -59,7 +59,7 @@ jobs:
         run: echo 'profile=true' >> "$GITHUB_OUTPUT"
 
   test-core:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r50_build_only) }}
     runs-on: ubuntu-latest
     # A clean Android/Room build needs ~17 minutes on a cold GitHub runner
     # before Robolectric starts; 20 minutes cancelled healthy test execution
@@ -92,7 +92,7 @@ jobs:
 
       - name: Run native dashboard bridge tests
         working-directory: android
-        run: ./gradlew :app:testDebugUnitTest --no-daemon
+        run: ./gradlew :app:testDebugUnitTest :wa-lockscreen:testDebugUnitTest --no-daemon
 
       - name: Upload native SQL and stress evidence
         if: always()
@@ -107,7 +107,7 @@ jobs:
           if-no-files-found: warn
 
   test-flutter:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r50_build_only) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -132,7 +132,7 @@ jobs:
           retention-days: 3
 
   test-flutter-full:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r50_build_only) }}
     runs-on: ubuntu-latest
     timeout-minutes: 28
     steps:
@@ -143,12 +143,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: r49-full-flutter-goldens-${{ github.sha }}
+          name: r50-full-flutter-goldens-${{ github.sha }}
           path: test/**/failures/**
           if-no-files-found: ignore
 
   test-flutter-nightly:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_nightly)) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r50_build_only) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_nightly)) }}
     needs: test-flutter
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -187,51 +187,36 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Prepare isolated WA SDK
+      - name: Prepare stock API 37 SDK
         shell: bash
         run: |
           echo "FLUVI_JDK21=$JAVA_HOME" >> "$GITHUB_ENV"
-          sdkmanager --install 'platforms;android-37.0' 'ndk;29.0.14206865' 'cmake;3.22.1'
-          wa_sdk="$RUNNER_TEMP/fluvi-wa-sdk"
-          mkdir -p "$wa_sdk/platforms"
-          for entry in "$ANDROID_HOME"/*; do
-            case "${entry##*/}" in platforms) continue ;; esac
-            ln -s "$entry" "$wa_sdk/${entry##*/}"
-          done
-          cp -a "$ANDROID_HOME/platforms/android-37.0" "$wa_sdk/platforms/"
-          sdk_jar="$wa_sdk/platforms/android-37.0/android.jar"
-          curl --fail --silent --show-error --location --retry 2 \
-            'https://raw.githubusercontent.com/Reginer/aosp-android-jar/262f6ae931160011572a5adfe4ec6302585e8f60/android-37/android-jdk21.jar' \
-            --output "$sdk_jar"
-          test "$(wc -c < "$sdk_jar")" -eq 57746914
-          printf '%s  %s\n' 694b291a046b4ba1738e9df61577ec8cfddf250a7bbe9867a72ff19e161ea692 "$sdk_jar" | sha256sum --check
-          echo "FLUVI_WA_ANDROID_SDK=$wa_sdk" >> "$GITHUB_ENV"
-      - name: Build single-app WA Human profile
+          sdkmanager --install 'platforms;android-37.0'
+      - name: Build Fluvi Human profile
         env:
           FLUVI_BUILD_COMMIT: ${{ github.sha }}
-          FLUVI_R49_INCLUDE_FIXTURE: "true"
         shell: bash
         run: |
-          mkdir -p r49-build-evidence
+          mkdir -p r50-build-evidence
           git rev-parse HEAD
           java -version
           flutter --version
-          bash scripts/build-human-diagnostic-apk.sh 2>&1 | tee r49-build-evidence/build.log
+          bash scripts/build-human-diagnostic-apk.sh 2>&1 | tee r50-build-evidence/build.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r49-human-builder-${{ github.sha }}
+          name: r50-human-builder-${{ github.sha }}
           path: |
             build/app/outputs/flutter-apk/app-profile.apk
-            build/app/outputs/flutter-apk/r49-control.apk
-            build/app/outputs/flutter-apk/r49-control-test.apk
-            build/wa-profile-*/host/app/build/outputs/logs/
-            r49-build-evidence/
+            build/r50-profile-*/manifest-*.xml
+            build/r50-profile-*/runtime-dependencies.txt
+            build/r50-profile-*/host/app/build/outputs/logs/
+            r50-build-evidence/
           if-no-files-found: warn
 
   test-wa-host:
     needs: build-wa-profile
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r50_build_only) }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
@@ -249,17 +234,17 @@ jobs:
           packages: platform-tools build-tools;36.0.0 platforms;android-35
       - uses: actions/download-artifact@v4
         with:
-          name: r49-human-builder-${{ github.sha }}
+          name: r50-human-builder-${{ github.sha }}
       - name: Prepare a disposable install of the same compiled product
         run: |
-          mkdir -p r49-device-evidence
+          mkdir -p r50-device-evidence
           keytool -genkeypair -keystore "$RUNNER_TEMP/r49-test.jks" -storepass android -keypass android \
             -alias fixture -keyalg RSA -keysize 2048 -validity 1 -dname 'CN=R49 Disposable Test'
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$RUNNER_TEMP/r49-test.jks" \
             --ks-pass pass:android --key-pass pass:android --out "$RUNNER_TEMP/r49-fixture.apk" \
             build/app/outputs/flutter-apk/app-profile.apk
           sha256sum build/app/outputs/flutter-apk/app-profile.apk "$RUNNER_TEMP/r49-fixture.apk" \
-            | tee r49-device-evidence/apks.sha256
+            | tee r50-device-evidence/apks.sha256
           echo "FLUVI_R49_FIXTURE_APK=$RUNNER_TEMP/r49-fixture.apk" >> "$GITHUB_ENV"
       - name: Build the fixture-only hierarchy observer and match fixture signatures
         run: |
@@ -267,8 +252,8 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$RUNNER_TEMP/r49-test.jks" \
             --ks-pass pass:android --key-pass pass:android --out "$RUNNER_TEMP/r49-observer.apk" \
             "$RUNNER_TEMP/observer/observer-unsigned.apk"
-          sha256sum "$RUNNER_TEMP/r49-observer.apk" build/app/outputs/flutter-apk/r49-control{,-test}.apk \
-            >> r49-device-evidence/apks.sha256
+          sha256sum "$RUNNER_TEMP/r49-observer.apk" \
+            >> r50-device-evidence/apks.sha256
       - name: Enable KVM
         run: |
           test -e /dev/kvm
@@ -292,21 +277,19 @@ jobs:
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
           pre-emulator-launch-script: >-
-            test -s "$FLUVI_R49_FIXTURE_APK" && test -s build/app/outputs/flutter-apk/r49-control.apk
+            test -s "$FLUVI_R49_FIXTURE_APK"
           script: >-
-            python3 scripts/test-r49-host-device.py "$FLUVI_R49_FIXTURE_APK" "${{ matrix.system }}" r49-device-evidence
-            --control-apk build/app/outputs/flutter-apk/r49-control.apk
-            --control-test build/app/outputs/flutter-apk/r49-control-test.apk
+            python3 scripts/test-r50-host-device.py "$FLUVI_R49_FIXTURE_APK" "${{ matrix.system }}" r50-device-evidence
             --observer "$RUNNER_TEMP/r49-observer.apk"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r49-host-${{ matrix.system }}-${{ github.sha }}
-          path: r49-device-evidence/
+          name: r50-host-${{ matrix.system }}-${{ github.sha }}
+          path: r50-device-evidence/
           if-no-files-found: warn
 
   test-native-nightly:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_nightly)) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r50_build_only) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_nightly)) }}
     needs: test-core
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -329,16 +312,16 @@ jobs:
 
   build-human-diagnostic-apk:
     needs: [test-core, test-flutter, test-wa-host]
-    if: ${{ !cancelled() && !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && needs.test-core.result == 'success' && needs.test-flutter.result == 'success' && needs.test-wa-host.result == 'success' }}
+    if: ${{ !cancelled() && !(github.event_name == 'workflow_dispatch' && inputs.r50_build_only) && needs.test-core.result == 'success' && needs.test-flutter.result == 'success' && needs.test-wa-host.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Record the reviewed artifact
         run: |
-          echo "Qualified builder artifact r49-human-builder-$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Qualified builder artifact r50-human-builder-$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "Delivery uses the established update signer and independent APK verification." >> "$GITHUB_STEP_SUMMARY"
 
   run-dashboard-profile:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true') }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r50_build_only) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true') }}
     needs: [test-core, test-flutter, dashboard-paths]
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -440,7 +423,7 @@ jobs:
           if-no-files-found: warn
 
   run-dashboard-profile-baseline:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r50_build_only) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)) }}
     needs: [test-core, test-flutter]
     runs-on: ubuntu-latest
     timeout-minutes: 60

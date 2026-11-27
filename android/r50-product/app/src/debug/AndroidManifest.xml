@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required by the Flutter tool to connect to the development VM service. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>

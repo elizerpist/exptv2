@@ -3,7 +3,7 @@ import com.android.build.api.dsl.LibraryExtension
 plugins { id("com.android.library") apply false }
 
 // Publish the existing Kotlin/KSP artifacts with their transitive dependency
-// metadata. The WA application builds with a separate Gradle/JDK instance.
+// metadata. The Fluvi product builds with a separate Gradle/JDK instance.
 subprojects {
     group = "com.fluvi.native"
     version = "1.0"

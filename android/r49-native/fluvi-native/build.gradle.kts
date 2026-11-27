@@ -29,6 +29,7 @@ val mode = requireNotNull(System.getenv("FLUVI_ANDROID_MODE"))
 
 dependencies {
     implementation(project(":fluvi-core"))
+    implementation(project(":wa-lockscreen"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("com.fluvi.payload:flutter_${mode}:1.0")
 }

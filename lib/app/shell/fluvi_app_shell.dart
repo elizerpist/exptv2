@@ -6,6 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../debug/demo_seed_coordinator.dart';
+import '../platform/dashboard_header_widget_publisher.dart';
+import '../platform/header_orb_settings_channel.dart';
+import '../../core/design/dashboard_geometry_resolver.dart';
+import '../../core/design/dashboard_layout_metrics.dart';
 import '../../core/assets/prepared_vector_asset_atlas.dart';
 import '../../core/categories/application/category_collection_controller.dart';
 import '../../core/categories/data/empty_category_repository.dart';
@@ -260,6 +264,9 @@ class _FluviAppShellState extends State<FluviAppShell>
   late final DashboardShellPresentationController _shellPresentation;
   late final bool _ownsShellPresentation;
   late final DashboardHeaderVisualController _headerVisualController;
+  late final DashboardBalanceHeaderColorPolicy _balanceHeaderColorPolicy;
+  late final DashboardHeaderWidgetPublisher _headerWidgetPublisher;
+  StreamSubscription<Map<String, Object?>>? _headerOrbStates;
   late final ManualTransactionRepository _manualTransactionRepository;
   late final AutomationRepository _automationRepository;
   late final AutomationPermissionRepository _automationPermissionRepository;
@@ -294,6 +301,13 @@ class _FluviAppShellState extends State<FluviAppShell>
   void initState() {
     super.initState();
     _headerVisualController = DashboardHeaderVisualController(vsync: this);
+    _balanceHeaderColorPolicy = DashboardBalanceHeaderColorPolicy(
+      tuning: _headerVisualController.tuning,
+    );
+    _headerWidgetPublisher = DashboardHeaderWidgetPublisher(
+      controller: _headerVisualController,
+      balanceFrame: _balanceHeaderColorPolicy,
+    );
     _dashboardPresentationPreferences =
         DashboardPresentationPreferencesController(
           store: MethodChannelDashboardPresentationPreferencesStore(),
@@ -310,9 +324,8 @@ class _FluviAppShellState extends State<FluviAppShell>
           scope: 'source=bootstrap',
         ),
       );
-    } else {
-      unawaited(_dashboardPresentationPreferences.restore());
     }
+    unawaited(_restoreHeaderOrb());
     _seedDemo = !kIsWeb && const bool.fromEnvironment('FLUVI_SEED_DEMO');
     final repository = kIsWeb
         ? const EmptyDashboardDataRuntimeRepository()
@@ -668,6 +681,19 @@ class _FluviAppShellState extends State<FluviAppShell>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final header = DashboardGeometryResolver.resolve(
+      metrics: DashboardLayoutMetrics.reference.fitToViewport(
+        MediaQuery.sizeOf(context),
+      ),
+      mode: DashboardModeSpec.balance,
+      collapseProgress: 0,
+      isRailExpanded: true,
+    ).headerBounds;
+    _headerWidgetPublisher.updateHeaderGeometry(
+      Size(header.width, header.height),
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+      measured: false,
+    );
     final ratio = View.of(context).devicePixelRatio;
     final previous = _devicePixelRatio;
     _devicePixelRatio = ratio;
@@ -980,6 +1006,43 @@ class _FluviAppShellState extends State<FluviAppShell>
     'last error': _readiness.error?.toString() ?? 'none',
   };
 
+  Future<void> _restoreHeaderOrb() async {
+    await _dashboardPresentationPreferences.restore();
+    if (!mounted || kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    final preferences = _dashboardPresentationPreferences.value;
+    _headerVisualController.restoreBalanceHeaderColor(
+      DashboardBalanceHeaderColorState(
+        palette: preferences.balanceHeaderPalette,
+        variant: preferences.balanceHeaderPaletteVariant,
+        positionPercent: preferences.balanceHeaderPalettePositionPercent,
+        windowWidthPercent: preferences.balanceHeaderPaletteWindowWidthPercent,
+      ),
+    );
+    try {
+      final status = await HeaderOrbSettingsChannel.methods
+          .invokeMapMethod<String, Object?>('status');
+      if (!mounted || status == null) return;
+      _headerWidgetPublisher.updateBinding(status);
+      _headerOrbStates = HeaderOrbSettingsChannel.changes.listen(
+        _headerWidgetPublisher.updateBinding,
+        onError: (Object _) {},
+      );
+    } on MissingPluginException {
+      // Other Flutter hosts have no native lockscreen binding.
+    } on PlatformException {
+      // Widget availability is independent of dashboard admission.
+    }
+  }
+
+  void _measureHeaderOrb(Size size, double pixelRatio) {
+    _headerWidgetPublisher.updateHeaderGeometry(
+      size,
+      devicePixelRatio: pixelRatio,
+    );
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -996,6 +1059,9 @@ class _FluviAppShellState extends State<FluviAppShell>
     if (_ownsShellPresentation) {
       _shellPresentation.dispose();
     }
+    _headerOrbStates?.cancel();
+    _headerWidgetPublisher.dispose();
+    _balanceHeaderColorPolicy.dispose();
     _dashboardPresentationPreferences.dispose();
     _headerVisualController.dispose();
     _pulseDelivery.dispose();
@@ -1007,6 +1073,7 @@ class _FluviAppShellState extends State<FluviAppShell>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appActive = state == AppLifecycleState.resumed;
+    if (_appActive) _headerWidgetPublisher.refresh();
     _pulseDelivery.appLifecycleChanged(state);
     _syncPulseDeliverySurface();
   }
@@ -1275,13 +1342,9 @@ class _FluviAppShellState extends State<FluviAppShell>
                                             key: const ValueKey(
                                               'ready-core-dashboard',
                                             ),
-                                            isDashboardVisible:
-                                                switch (_selectedNavigationItem) {
-                                                  Bnb03Item.search ||
-                                                  Bnb03Item.cart ||
-                                                  Bnb03Item.profile => false,
-                                                  _ => true,
-                                                },
+                                            balanceHeaderColorPolicy:
+                                                _balanceHeaderColorPolicy,
+                                            onHeaderGeometry: _measureHeaderOrb,
                                             controller: _controller,
                                             modeController: _modeController,
                                             categoryCollection:

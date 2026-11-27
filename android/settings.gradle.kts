@@ -37,3 +37,5 @@ plugins {
 
 rootProject.name = "fluvi"
 include(":app", ":fluvi-core")
+
+include(":wa-lockscreen")

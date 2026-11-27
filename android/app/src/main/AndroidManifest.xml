@@ -42,6 +42,17 @@
             </intent-filter>
         </activity>
         <service
+            android:name="tk.zwander.lockscreenwidgets.services.Accessibility"
+            android:exported="true"
+            android:label="Fluvi zárképernyős ORB"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice"
+                android:resource="@xml/fluvi_balance_orb_accessibility" />
+        </service>
+        <service
             android:name=".FluviPushNotificationListenerService"
             android:exported="true"
             android:label="Fluvi értesítésfigyelő"
@@ -77,7 +88,7 @@
         <receiver
             android:name=".widget.orb.FluviHeaderOrbWidgetProvider"
             android:exported="false"
-            android:label="Fluvi · Aktuális header ORB">
+            android:label="Fluvi · Balance ORB">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

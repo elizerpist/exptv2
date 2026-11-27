@@ -4,21 +4,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
-import '../../features/dashboard/application/dashboard_core_mode_controller.dart';
-import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import 'dashboard_active_header_frame_preparer.dart';
 
-/// Converts the committed foreground header to one complete AppWidget package.
+/// Prepares one Balance material package for the lockscreen AppWidget.
 final class DashboardHeaderWidgetPublisher {
   DashboardHeaderWidgetPublisher({
     required this.controller,
-    required this.activeMode,
     required this.balanceFrame,
-    required this.budgetFrame,
-    required this.mindFrame,
-    required this.isVisible,
     MethodChannel channel = const MethodChannel('fluvi/header_orb_widget'),
     ActiveHeaderFramesRenderer render = renderActiveHeaderFrames,
   }) : _channel = channel,
@@ -29,21 +23,17 @@ final class DashboardHeaderWidgetPublisher {
     controller.orbExportCommitGeneration.addListener(schedule);
     controller.addListener(_updateMotion);
     balanceFrame.addListener(schedule);
-    budgetFrame.addListener(schedule);
-    mindFrame.addListener(schedule);
-    activeMode.addListener(schedule);
   }
 
   final DashboardHeaderVisualController controller;
-  final DashboardCoreModeController activeMode;
   final ValueListenable<DashboardHeaderVisualFrame> balanceFrame;
-  final ValueListenable<DashboardHeaderVisualFrame> budgetFrame;
-  final ValueListenable<DashboardHeaderVisualFrame> mindFrame;
-  final bool Function() isVisible;
   final MethodChannel _channel;
   final ActiveHeaderFramesRenderer _render;
   Size? _geometry;
   double _pixelRatio = 1;
+  String _epoch = '';
+  int? _connection;
+  bool _measuredGeometry = false;
   bool _motionEnabled;
   bool _disposed = false;
   bool _scheduled = false;
@@ -58,14 +48,20 @@ final class DashboardHeaderWidgetPublisher {
     schedule();
   }
 
-  void updateHeaderGeometry(Size geometry, {required double devicePixelRatio}) {
-    if (geometry.isEmpty || !geometry.isFinite) return;
+  void updateHeaderGeometry(
+    Size geometry, {
+    required double devicePixelRatio,
+    bool measured = true,
+  }) {
+    if (!measured && _measuredGeometry) return;
+    if (geometry.isEmpty || !geometry.isFinite || devicePixelRatio <= 0) return;
+    _measuredGeometry |= measured;
     // Only a real change in the displayed physical size invalidates the source.
     final physicalSize = Size(
       (geometry.width * devicePixelRatio).roundToDouble(),
       (geometry.height * devicePixelRatio).roundToDouble(),
     );
-    if (_geometry == physicalSize) return;
+    if (_geometry == physicalSize && _pixelRatio == devicePixelRatio) return;
     _geometry = physicalSize;
     _pixelRatio = devicePixelRatio;
     schedule();
@@ -75,6 +71,7 @@ final class DashboardHeaderWidgetPublisher {
     if (_disposed ||
         _scheduled ||
         _geometry == null ||
+        _epoch.isEmpty ||
         kIsWeb ||
         defaultTargetPlatform != TargetPlatform.android) {
       return;
@@ -82,20 +79,14 @@ final class DashboardHeaderWidgetPublisher {
     _scheduled = true;
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _scheduled = false;
-      if (_disposed || !isVisible()) return;
-      final mode = activeMode.committedMode.mode;
-      final frame = switch (mode) {
-        DashboardMode.mind => mindFrame.value,
-        DashboardMode.balance => balanceFrame.value,
-        DashboardMode.budget => budgetFrame.value,
-      };
+      if (_disposed || _epoch.isEmpty) return;
       final snapshot = DashboardHeaderMaterialSnapshot.capture(
         controller: controller,
-        frame: frame,
+        frame: balanceFrame.value,
       );
       final geometry = _geometry!;
       final signature =
-          '${mode.name}|${activeMode.committedModeEpoch}|$geometry|'
+          'balance|$geometry|$_pixelRatio|'
           '$_motionEnabled|${snapshot.orbVisualCacheKey}';
       if (signature == _requestedVisual) return;
       _requestedVisual = signature;
@@ -103,7 +94,6 @@ final class DashboardHeaderWidgetPublisher {
         _claim(
           _HeaderRequest(
             generation: ++_generation,
-            mode: mode.name,
             signature: signature,
             snapshot: snapshot,
             geometry: geometry / _pixelRatio,
@@ -117,17 +107,26 @@ final class DashboardHeaderWidgetPublisher {
     SchedulerBinding.instance.scheduleFrame();
   }
 
-  /// A visit after toggling consent may have the same visual signature.
-  void refresh() {
+  /// Binding generations invalidate queued preparation, including across OS revocation.
+  void updateBinding(Map<String, Object?> status) {
+    final epoch = status['epoch'] as String? ?? '';
+    final connection = status['connection'] as int?;
+    if (_epoch == epoch && _connection == connection) return;
+    _epoch = epoch;
+    _connection = connection;
+    _generation++;
+    _pending = null;
     _requestedVisual = null;
     schedule();
   }
+
+  void refresh() => schedule();
 
   Future<void> _claim(_HeaderRequest request) async {
     try {
       final receipt = await _channel.invokeMapMethod<String, Object?>(
         'prepare',
-        {'mode': request.mode, 'signature': request.signature},
+        {'signature': request.signature},
       );
       if (!_current(request)) return;
       final token = receipt?['token'];
@@ -201,16 +200,12 @@ final class DashboardHeaderWidgetPublisher {
     controller.orbExportCommitGeneration.removeListener(schedule);
     controller.removeListener(_updateMotion);
     balanceFrame.removeListener(schedule);
-    budgetFrame.removeListener(schedule);
-    mindFrame.removeListener(schedule);
-    activeMode.removeListener(schedule);
   }
 }
 
 final class _HeaderRequest {
   const _HeaderRequest({
     required this.generation,
-    required this.mode,
     required this.signature,
     required this.snapshot,
     required this.geometry,
@@ -221,7 +216,6 @@ final class _HeaderRequest {
   });
 
   final int generation;
-  final String mode;
   final String signature;
   final DashboardHeaderMaterialSnapshot snapshot;
   final Size geometry;
@@ -232,7 +226,6 @@ final class _HeaderRequest {
 
   _HeaderRequest withToken(String token) => _HeaderRequest(
     generation: generation,
-    mode: mode,
     signature: signature,
     snapshot: snapshot,
     geometry: geometry,

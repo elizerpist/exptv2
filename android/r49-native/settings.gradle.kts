@@ -25,3 +25,6 @@ plugins {
 rootProject.name = "Fluvi native libraries"
 include(":fluvi-core", ":fluvi-native")
 project(":fluvi-core").projectDir = file("../fluvi-core")
+
+include(":wa-lockscreen")
+project(":wa-lockscreen").projectDir = file("../wa-lockscreen")

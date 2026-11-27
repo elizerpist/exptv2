@@ -14,7 +14,7 @@ import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_heade
 
 void main() {
   testWidgets(
-    'current header follows committed modes and suppresses stale work',
+    'Balance only follows semantic changes without a dashboard visit',
     (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
       const channel = MethodChannel('fluvi/header_orb_widget');
@@ -34,7 +34,6 @@ void main() {
       final mind = ValueNotifier(
         DashboardHeaderVisualFrame.staticTone(const Color(0xff33cc55)),
       );
-      var visible = true;
       var serial = 0;
       final claims = <String>[];
       final published = <String>[];
@@ -43,8 +42,8 @@ void main() {
       messenger.setMockMethodCallHandler(channel, (call) async {
         final values = call.arguments as Map;
         if (call.method == 'prepare') {
-          claims.add(values['mode'] as String);
-          return {'token': '${values['mode']}-${++serial}'};
+          claims.add(values['signature'] as String);
+          return {'token': 'balance-${++serial}'};
         }
         if (call.method == 'publish') {
           published.add(values['token'] as String);
@@ -55,11 +54,7 @@ void main() {
       });
       final publisher = DashboardHeaderWidgetPublisher(
         controller: visual,
-        activeMode: mode,
         balanceFrame: balance,
-        budgetFrame: budget,
-        mindFrame: mind,
-        isVisible: () => visible,
         channel: channel,
         render:
             ({
@@ -94,6 +89,7 @@ void main() {
             },
       );
       try {
+        publisher.updateBinding({'epoch': 'active', 'connection': 1});
         publisher.updateHeaderGeometry(
           const Size(400, 200),
           devicePixelRatio: 2,
@@ -101,27 +97,33 @@ void main() {
         await tester.pump();
         await tester.pump();
         mode.setProgrammaticMode(DashboardModeSpec.budget);
+        budget.value = DashboardHeaderVisualFrame.staticTone(Colors.cyan);
         await tester.pump();
         mode.setProgrammaticMode(DashboardModeSpec.mind);
+        mind.value = DashboardHeaderVisualFrame.staticTone(Colors.orange);
+        await tester.pump();
+        expect(claims, hasLength(1));
+
+        balance.value = DashboardHeaderVisualFrame.staticTone(Colors.purple);
+        await tester.pump();
+        balance.value = DashboardHeaderVisualFrame.staticTone(Colors.amber);
         await tester.pump();
         first.complete();
         await tester.pump();
-        expect(claims, ['balance', 'budget', 'mind']);
-        expect(published, ['mind-3']);
-        expect(colors, [balance.value.colors.first, mind.value.colors.first]);
+        expect(claims, hasLength(3));
+        expect(claims.every((claim) => claim.startsWith('balance|')), isTrue);
+        expect(published, ['balance-3']);
+        expect(colors, [const Color(0xffc84444), Colors.amber]);
 
-        visible = false;
-        mind.value = DashboardHeaderVisualFrame.staticTone(
-          const Color(0xff101010),
-        );
+        publisher.updateBinding({'epoch': '', 'connection': 1});
+        balance.value = DashboardHeaderVisualFrame.staticTone(Colors.pink);
         await tester.pump();
         expect(claims, hasLength(3));
-        visible = true;
-        mode.setProgrammaticMode(DashboardModeSpec.budget);
+        publisher.updateBinding({'epoch': 'new', 'connection': 2});
         await tester.pump();
         await tester.pump();
-        expect(published, ['mind-3', 'budget-4']);
-        expect(colors.last, budget.value.colors.first);
+        expect(published, ['balance-3', 'balance-4']);
+        expect(colors.last, Colors.pink);
       } finally {
         publisher.dispose();
         mode.dispose();

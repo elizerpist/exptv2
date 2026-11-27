@@ -69,6 +69,7 @@ import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
 import com.fluvi.app.widget.orb.OrbMaterialFrameStore
 import com.fluvi.app.widget.orb.FluviOrbWidgetProvider
 import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
+import com.fluvi.app.widget.orb.HeaderOrbBinding
 import com.fluvi.app.widget.orb.HeaderOrbWidgetContent
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.BinaryMessenger
@@ -113,6 +114,9 @@ class MainActivity : FlutterActivity() {
     private var dashboardPresentationChannel: MethodChannel? = null
     private var orbMaterialChannel: MethodChannel? = null
     private var headerOrbChannel: MethodChannel? = null
+    private var headerOrbStates: EventChannel? = null
+    private var stopHeaderOrbState: (() -> Unit)? = null
+    private var activityResumed = false
     private var coreRevisionEventChannel: EventChannel? = null
     private var coreRevisionObservation: Job? = null
     private var diagnosticEventChannel: EventChannel? = null
@@ -1099,41 +1103,59 @@ class MainActivity : FlutterActivity() {
         headerOrbChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "fluvi/header_orb_widget")
             .also { channel ->
                 channel.setMethodCallHandler { call, result ->
-                    if (call.method == "openSetup") {
-                        runCatching { startActivity(HeaderOrbWidgetContent.setupIntent(this)) }
-                            .onSuccess { result.success(null) }
-                            .onFailure { result.error("header_orb_setup", "Host unavailable", null) }
-                        return@setMethodCallHandler
-                    }
                     val application = applicationContext
-                    HeaderOrbWidgetContent.execute {
-                        runCatching {
-                            when (call.method) {
-                                "status" -> HeaderOrbWidgetContent.status(application)
-                                "setSharing" -> {
-                                    HeaderOrbWidgetContent.setSharing(application, call.arguments as Boolean)
-                                    null
+                    val binding = HeaderOrbBinding.get(application)
+                    when (call.method) {
+                        "status", "openAccessibility", "settingsResumed", "selectSize" -> {
+                            runCatching {
+                                when (call.method) {
+                                    "openAccessibility" -> binding.openAccessibility(this)
+                                    "settingsResumed" -> binding.settingsResumed(this, activityResumed)
+                                    "selectSize" -> binding.selectSize(this, activityResumed, requireNotNull(call.argument("dp")))
+                                    else -> binding.syncService()
                                 }
-                                "prepare" -> HeaderOrbWidgetContent.prepare(
-                                    application, requireNotNull(call.argument("mode")),
-                                    requireNotNull(call.argument("signature")),
-                                )
-                                "unavailable" -> {
-                                    HeaderOrbWidgetContent.unavailable(call.argument("token"))
-                                    null
+                                binding.status()
+                            }.onSuccess(result::success)
+                                .onFailure { result.error("balance_orb_settings", it.javaClass.simpleName, null) }
+                        }
+                        "prepare", "unavailable", "publish" -> HeaderOrbWidgetContent.execute {
+                            runCatching {
+                                when (call.method) {
+                                    "prepare" -> HeaderOrbWidgetContent.prepare(
+                                        application, binding, requireNotNull(call.argument("signature")),
+                                    )
+                                    "unavailable" -> {
+                                        HeaderOrbWidgetContent.unavailable(call.argument("token"))
+                                        null
+                                    }
+                                    else -> HeaderOrbWidgetContent.publish(
+                                        application, binding,
+                                        call.argument("token"), call.argument("size"),
+                                        call.argument("intervalMs"), call.argument<Number>("phaseOriginUtcMs")?.toLong(),
+                                        call.argument("motion"), call.argument("frames"),
+                                    )
                                 }
-                                "publish" -> HeaderOrbWidgetContent.publish(
-                                    application,
-                                    call.argument("token"), call.argument("size"),
-                                    call.argument("intervalMs"), call.argument<Number>("phaseOriginUtcMs")?.toLong(),
-                                    call.argument("motion"), call.argument("frames"),
-                                )
-                                else -> return@execute result.notImplemented()
-                            }
-                        }.onSuccess(result::success)
-                            .onFailure { result.error("header_orb_widget", it.javaClass.simpleName, null) }
+                            }.onSuccess(result::success)
+                                .onFailure { result.error("balance_orb_material", it.javaClass.simpleName, null) }
+                        }
+                        else -> result.notImplemented()
                     }
                 }
+            }
+        headerOrbStates = EventChannel(flutterEngine.dartExecutor.binaryMessenger, "fluvi/header_orb_state")
+            .also { channel ->
+                channel.setStreamHandler(object : EventChannel.StreamHandler {
+                    override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+                        stopHeaderOrbState?.invoke()
+                        val binding = HeaderOrbBinding.get(applicationContext)
+                        stopHeaderOrbState = binding.observe { events.success(binding.status()) }
+                    }
+
+                    override fun onCancel(arguments: Any?) {
+                        stopHeaderOrbState?.invoke()
+                        stopHeaderOrbState = null
+                    }
+                })
             }
         coreRevisionEventChannel = EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -1171,6 +1193,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        activityResumed = true
         FluviRuntimeCoordinator.reconcileHistoricalUserStop(applicationContext)
         FluviRuntimeCoordinator.onAppSurfaceVisibilityChanged(applicationContext, true)
         FluviRuntimeCoordinator.applyRecentsVisibility(this)
@@ -1180,6 +1203,19 @@ class MainActivity : FlutterActivity() {
             scope.launch(Dispatchers.IO) {
                 runCatching { fluviCore.pulsePriority.reevaluateCurrent() }
             }
+        }
+    }
+
+    override fun onPause() {
+        activityResumed = false
+        super.onPause()
+    }
+
+    @Deprecated("AppWidget binding uses the platform activity result")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode in 23000..23999) {
+            HeaderOrbBinding.get(applicationContext).bindResult(requestCode, resultCode, data)
         }
     }
 
@@ -1255,6 +1291,10 @@ class MainActivity : FlutterActivity() {
         orbMaterialChannel = null
         headerOrbChannel?.setMethodCallHandler(null)
         headerOrbChannel = null
+        stopHeaderOrbState?.invoke()
+        stopHeaderOrbState = null
+        headerOrbStates?.setStreamHandler(null)
+        headerOrbStates = null
         coreRevisionObservation?.cancel()
         coreRevisionObservation = null
         coreRevisionEventChannel?.setStreamHandler(null)

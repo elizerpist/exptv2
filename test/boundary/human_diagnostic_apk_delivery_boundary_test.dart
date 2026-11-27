@@ -27,9 +27,9 @@ void main() {
     expect(humanJob, contains("needs.test-core.result == 'success'"));
     expect(humanJob, contains("needs.test-flutter.result == 'success'"));
     expect(humanJob, contains("needs.test-wa-host.result == 'success'"));
-    expect(humanJob, contains('inputs.r49_build_only'));
-    expect(workflow, contains('r49-human-builder-'));
-    expect(humanBuildScript, contains('build-r49-android.sh" profile'));
+    expect(humanJob, contains('inputs.r50_build_only'));
+    expect(workflow, contains('r50-human-builder-'));
+    expect(humanBuildScript, contains('build-r50-android.sh" profile'));
     expect(
       _job(workflow, 'build-wa-profile'),
       contains('scripts/build-human-diagnostic-apk.sh'),
@@ -63,7 +63,7 @@ void main() {
       final missingDiagnosticGuard = workflow.replaceFirst(
         humanJob,
         humanJob.replaceFirst(
-          '!(github.event_name == \'workflow_dispatch\' && inputs.r49_build_only)',
+          '!(github.event_name == \'workflow_dispatch\' && inputs.r50_build_only)',
           'true',
         ),
       );
@@ -94,7 +94,7 @@ bool _hasHumanDeliveryContract(String workflow) {
       job.contains("needs.test-flutter.result == 'success'") &&
       job.contains("needs.test-wa-host.result == 'success'") &&
       job.contains(
-        "!(github.event_name == 'workflow_dispatch' && inputs.r49_build_only)",
+        "!(github.event_name == 'workflow_dispatch' && inputs.r50_build_only)",
       ) &&
       job.contains('runs-on: ubuntu-latest');
 }
