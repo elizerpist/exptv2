@@ -46,8 +46,23 @@ def labels(device):
 
 
 def panel(device):
-    r51.panel(device)
-    if "Felvétel indítása" not in labels(device) and "Leállítás" not in labels(device):
+    assert "Status: ok" in device.shell("am", "start", "-W", "-n", r51.ACTIVITY)
+    for attempt in range(2):
+        if "Debug Console" in labels(device):
+            break
+        device.click("Debug log", package=PKG, limit=10)
+        deadline = time.monotonic() + 4
+        while time.monotonic() < deadline:
+            witnessed = device.screen()
+            device.save("debug-panel-open.xml", witnessed)
+            if "Debug Console" in r51.stock.visible_labels(witnessed, PKG):
+                break
+            time.sleep(.15)
+        else:
+            continue
+        break
+    assert "Debug Console" in labels(device), "Real debug console did not open after the measured label tap"
+    if not {"Felvétel indítása", "Leállítás"}.intersection(labels(device)):
         device.click(r51.PANEL, package=PKG)
 
 
