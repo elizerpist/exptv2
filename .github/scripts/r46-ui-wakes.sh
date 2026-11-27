@@ -81,6 +81,12 @@ for wakes in "${trials[@]}"; do
   for cycle in $(seq 1 "$wakes"); do
     adb shell input keyevent KEYCODE_SLEEP
     sleep 1
+    if [[ "${R48_SIGNED_FIELD:-false}" == true ]]; then
+      adb shell input keyevent KEYCODE_WAKEUP
+      sleep 7
+      adb shell wm dismiss-keyguard
+      continue
+    fi
     # Retain each frame and the surrounding logcat timestamps. These slow
     # screenshots are evidence, not a fabricated 200/500/1000ms pass.
     adb shell "mkdir -p /data/local/tmp/r46frames/$wakes-$cycle; for n in \$(seq 1 24); do log -t R46Optical 'before $wakes $cycle ' \"\$n\"; screencap -p /data/local/tmp/r46frames/$wakes-$cycle/\$n.png; log -t R46Optical 'after $wakes $cycle ' \"\$n\"; sleep 0.01; done" > "$out/r46-stream-$wakes-$cycle.txt" 2>&1 &
@@ -102,11 +108,13 @@ for wakes in "${trials[@]}"; do
     if [[ "${R46_LONG:-false}" == true && "$cycle" -eq 1 ]]; then sleep 125; fi
     if [[ "${R46_LONG:-false}" == true && "$cycle" -eq 2 ]]; then sleep 185; fi
   done
-  adb pull /data/local/tmp/r46frames/. "$out/r46frames" > "$out/r46-pull-$wakes.txt" 2>&1 || true
-  adb logcat -b all -d -v monotonic -s R46Optical:I > "$out/r46-frame-times-$wakes.txt" 2>&1 || true
-  python3 "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r46-frame-witness.py" \
-    "$out/r46frames" "$out/r46-frame-times-$wakes.txt" "$wakes" "$out/r46-optical-$route-$wakes.json" \
-    > "$out/r46-optical-$route-$wakes.txt" 2>&1 || true
+  if [[ "${R48_SIGNED_FIELD:-false}" != true ]]; then
+    adb pull /data/local/tmp/r46frames/. "$out/r46frames" > "$out/r46-pull-$wakes.txt" 2>&1 || true
+    adb logcat -b all -d -v monotonic -s R46Optical:I > "$out/r46-frame-times-$wakes.txt" 2>&1 || true
+    python3 "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r46-frame-witness.py" \
+      "$out/r46frames" "$out/r46-frame-times-$wakes.txt" "$wakes" "$out/r46-optical-$route-$wakes.json" \
+      > "$out/r46-optical-$route-$wakes.txt" 2>&1 || true
+  fi
   adb shell am start -n com.fluvi.app/.MainActivity > "$out/r46-reopen-$wakes.txt" 2>&1
   sleep 2
   r46_dump "$out/ui-r46-$route-$wakes-reopen.xml" || true
@@ -158,8 +166,14 @@ PY
     printf 'NOT REACHED: independent receiver did not persist pasted text\n' > "$out/r46-$route-$wakes-result.txt"
     exit 1
   fi
-  python3 "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r46-check-paste.py" \
-    "$out/r46-$route-$wakes-pasted.txt" "$R46_UI_ROUTE" "$wakes" > "$out/r46-$route-$wakes-result.txt" 2>&1 || result=1
+  if [[ "${R48_SIGNED_FIELD:-false}" == true ]]; then
+    python3 "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r46-check-paste.py" \
+      "$out/r46-$route-$wakes-pasted.txt" "$R46_UI_ROUTE" "$wakes" "$APP_SHA" "$capture" \
+      > "$out/r46-$route-$wakes-result.txt" 2>&1 || result=1
+  else
+    python3 "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r46-check-paste.py" \
+      "$out/r46-$route-$wakes-pasted.txt" "$R46_UI_ROUTE" "$wakes" > "$out/r46-$route-$wakes-result.txt" 2>&1 || result=1
+  fi
   if ! cmp "$out/r46-$route-$wakes-sealed.txt" "$out/r46-$route-$wakes-pasted.txt"; then
     printf 'independentReceiverPaste=FAIL\n' >> "$out/r46-$route-$wakes-result.txt"
     result=1
@@ -167,7 +181,11 @@ PY
     printf 'independentReceiverPaste=PASS\n' >> "$out/r46-$route-$wakes-result.txt"
   fi
   sha256sum "$out/r46-$route-$wakes-sealed.txt" "$out/r46-$route-$wakes-pasted.txt" >> "$out/r46-$route-$wakes-result.txt"
-  printf 'opticalMotion=NOT_QUALIFIED (slow bracketed screenshots retained)\n' >> "$out/r46-$route-$wakes-result.txt"
+  if [[ "${R48_SIGNED_FIELD:-false}" == true ]]; then
+    printf 'opticalMotion=NOT_RUN (signed export check)\n' >> "$out/r46-$route-$wakes-result.txt"
+  else
+    printf 'opticalMotion=NOT_QUALIFIED (slow bracketed screenshots retained)\n' >> "$out/r46-$route-$wakes-result.txt"
+  fi
   adb shell am start -n com.fluvi.app/.MainActivity >/dev/null 2>&1
   sleep 2
   if [[ "$wakes" -eq 1 ]]; then

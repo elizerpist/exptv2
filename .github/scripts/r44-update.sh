@@ -3,6 +3,10 @@ set -euo pipefail
 out="$RUNNER_TEMP/r44-update"
 mkdir -p "$out"
 case "${R44_BASELINE:-r44_2_owner}" in
+  r47)
+    base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/d6f121d2ed2e0830597c5bbac26b3cc10a87a870/Fluvi_R47_HUMAN_af20365a5ec9.apk'
+    base_size=121600977
+    base_sha=74c39c4930261363721ed875f0c3889b2cc6f69f7a2fcb2086728e2464d597ea;;
   r46)
     base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/87149a537c3cb4ccfa730d8838a36b4242595e7a/fluvi_R46_SAMPLE_ONLY_HUMAN_fd74df605779.apk'
     base_size=121486289
@@ -219,7 +223,8 @@ PY
     printf 'bound_before=%s bound_after=%s\n' "$bound_before" "$bound_after" >> "$out/service-gate.txt"
     if [[ "${R47_ROUTE_UPDATE_CHECK:-false}" == true ]]; then
       [[ "$bound_before" == true && "$bound_after" == true ]]
-      exit 0
+      if [[ "${R48_SIGNED_FIELD:-false}" != true ]]; then exit 0; fi
+      printf '%s\n' 'PASS: pre-update and post-update bound service and non-default route retained.' >> "$out/result.txt"
     fi
     if [[ "${R44_REOPEN_ONLY:-false}" == true ]]; then
       # Independent activity reopen control: no UiAutomator connection and no

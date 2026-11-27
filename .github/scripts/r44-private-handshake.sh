@@ -46,7 +46,10 @@ openssl pkeyutl -decrypt -inkey "$out/private.pem" -in "$out/key.enc" -out "$out
   -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256
 chmod 600 "$out/key.txt"
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass "file:$out/key.txt" -in "$out/stage.enc" -out "$out/r44.zstpatch"
-if [[ "${R44_BASELINE:-}" == r46 ]]; then
+if [[ "${R44_BASELINE:-}" == r47 ]]; then
+  base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/d6f121d2ed2e0830597c5bbac26b3cc10a87a870/Fluvi_R47_HUMAN_af20365a5ec9.apk'
+  base_sha=74c39c4930261363721ed875f0c3889b2cc6f69f7a2fcb2086728e2464d597ea
+elif [[ "${R44_BASELINE:-}" == r46 ]]; then
   base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/87149a537c3cb4ccfa730d8838a36b4242595e7a/fluvi_R46_SAMPLE_ONLY_HUMAN_fd74df605779.apk'
   base_sha=6a4fecb359ce8de81035366a12e93dafe027689d2226a84d0091ee14d6cdca1f
 else
