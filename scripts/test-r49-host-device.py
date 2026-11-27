@@ -230,7 +230,13 @@ def exercise(device, apk, system, control_apk, control_test, observer, external_
     for app_label, query, evidence in (("R49 Test Marker", "R49", "marker"), ("Fluvi", "Aktu", "orb")):
         device.click("Add Widget", package=device.host_package)
         device.choose_widget(app_label, query, evidence)
-        device.click("Create", "Allow", optional=True, limit=5)
+        if evidence == "marker":
+            device.click(f"Always allow {device.host_label} to create widgets and access their data",
+                         package="com.android.settings")
+            device.click("Create", package="com.android.settings")
+        else:
+            device.click("Create", "Allow", optional=True, limit=5, package="com.android.settings")
+        device.save(evidence + "-after-consent-widgets.txt", device.adb("shell", "dumpsys", "appwidget"))
     device.crop("bound")
     bindings = (device.output / "bound-widgets.txt").read_text()
     assert re.search(r"hostId[=:]\s*1003\b", bindings), "Real WA host ID absent"
