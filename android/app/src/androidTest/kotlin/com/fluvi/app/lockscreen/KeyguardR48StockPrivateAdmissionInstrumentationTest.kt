@@ -1,15 +1,22 @@
 package com.fluvi.app.lockscreen
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.Activity
 import android.app.KeyguardManager
 import android.app.UiAutomation
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.hardware.display.DisplayManager
 import android.os.Build
+import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.Display
+import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -167,10 +174,28 @@ class KeyguardR48StockPrivateAdmissionInstrumentationTest {
         val savedLock = shell("locksettings get-disabled").trim()
         val savedTimeout = shell("settings get system screen_off_timeout").trim()
         val savedStay = shell("settings get global stay_on_while_plugged_in").trim()
+        val observer = checkNotNull(ui.serviceInfo)
+        val observerFlags = observer.flags
+        val display = checkNotNull(app.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
+        val width = display.mode.physicalWidth
+        val height = display.mode.physicalHeight
+        var coverStarted = false
+        fun closeCover() {
+            if (coverStarted) {
+                shell("am start -W -n $cover --ez finish true")
+                coverStarted = false
+            }
+        }
         try {
             check(!keyguard.isDeviceSecure) { "NOT REACHED: disposable stock device" }
             shell("settings put system screen_off_timeout 90000")
-            shell("settings put global stay_on_while_plugged_in 0")
+            // A stock lockscreen window supplies its own 10 s timeout.
+            // Keep this plugged-in fixture on, except for the explicit OFF interval.
+            shell("svc power stayon true")
+            observer.flags = observerFlags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+            ui.serviceInfo = observer
+            ledger.appendText("observerFlags=\${ui.serviceInfo.flags} injectedWindowInfo=false display=\${width}x$height\n")
             shell("input keyevent KEYCODE_WAKEUP")
             shell("wm dismiss-keyguard")
             check(waitForState { power.isInteractive && !keyguard.isKeyguardLocked })
@@ -212,10 +237,12 @@ class KeyguardR48StockPrivateAdmissionInstrumentationTest {
             shell("cmd statusbar expand-notifications")
             hold("SHADE")
             shell("cmd statusbar collapse")
+            coverStarted = true
             shell("am start -W -n $cover")
             hold("FOREIGN")
-            shell("input keyevent KEYCODE_BACK")
-            shell("wm dismiss-keyguard")
+            closeCover()
+            if (!waitForState { scene() != "FOREIGN" }) missing += "FOREIGN_CLEANUP"
+            shell("input swipe \${width / 2} \${height * 9 / 10} \${width / 2} \${height / 5} 350")
             hold("PIN")
             shell("input text 2468")
             shell("input keyevent KEYCODE_ENTER")
@@ -236,7 +263,10 @@ class KeyguardR48StockPrivateAdmissionInstrumentationTest {
                 main { FluviKeyguardMaterialBridgeRegistry.disconnect(channel) }
                 secure(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, savedServices)
                 secure(Settings.Secure.ACCESSIBILITY_ENABLED, savedEnabled)
+                closeCover()
                 shell("cmd statusbar collapse")
+                observer.flags = observerFlags
+                ui.serviceInfo = observer
                 if (installedPin) shell("locksettings clear --old 2468")
                 shell("input keyevent KEYCODE_WAKEUP")
                 shell("wm dismiss-keyguard")
@@ -259,5 +289,25 @@ class KeyguardR48StockPrivateAdmissionInstrumentationTest {
             }
         }
         assertTrue("Stock witness preconditions incomplete $missing", missing.isEmpty())
+    }
+}
+
+/** Separate fixture-package window with explicit, test-only task teardown. */
+class KeyguardR48StockCoverActivity : Activity() {
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state)
+        setShowWhenLocked(true)
+        setContentView(View(this).apply {
+            setBackgroundColor(0xff124d31.toInt())
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            isFocusable = true
+            contentDescription = "R48 test cover"
+        })
+        if (intent.getBooleanExtra("finish", false)) finishAndRemoveTask()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra("finish", false)) finishAndRemoveTask()
     }
 }
