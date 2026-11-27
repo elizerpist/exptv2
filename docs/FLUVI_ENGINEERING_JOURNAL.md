@@ -24730,3 +24730,251 @@ analyzer and 16 tests passed. The new Kotlin authority and capture code
 have direct source navigation. [Graph manifest](https://github.com/elizerpist/exptv2/blob/9ab9ccb99d6ff0c8a553d71fc738cc52e8a0dd03/docs/codegraph/manifest.json) · [Native and Dart inventory](https://github.com/elizerpist/exptv2/blob/9ab9ccb99d6ff0c8a553d71fc738cc52e8a0dd03/docs/codegraph-r51-orb-transitions.md)
 
 **PHYSICAL VALIDATION — PENDING, USER ONLY**
+
+### R51 exact signed qualification · separate unlock and locked sleep
+
+The application remained `e7542639d22d78d10e7b123e836ee9bc9758c91a` for
+every candidate receipt. R50 `c1e674b2bcf31feab2ce5f5143b5032a109215ba`
+was the signed comparison. Reported screenshots are ordered recordings
+of the requested compositor samples. The paired WindowManager dump is
+a subsequent observation and must not be used to label pixels as absent.
+No phone capture or common-clock physical button/scanout measurement was
+available.
+
+| Exact signed control | R50 API 37 | R51 API 37 | R50 / R51 API 35 |
+| --- | --- | --- | --- |
+| R2. Locked-sleep public state | 3 trials reached default-display OFF, locked=true and remained without a visible WM ORB in the sampled five-second interval. | 3 reached the same verified state and sampled absence. Two trials had saturated ORB pixels in the last accepted pre-action crop. Trial 2 had only pale clock pixels in that crop, then the ORB in the early sleep screenshot. The visible-start criterion is inconclusive for that trial. | One visible-start OFF/locked trial passed on each build. |
+| R3. Direct unlock without PIN | Three swipe requests from actual painted ORBs reached public unlocked state. Settled screenshots independently show the launcher and no ORB. The original launcher-focus parser failed and remains failed. | Three swipe requests reached public unlocked state and the settled launcher screenshots have no ORB. Warm 1's first requested sample still shows the clock and ORB. Warm 2 and 3 show the ORB during the outward transition without the main clock. The pre-gesture crop for warm 2 lacks confirmation of painted ORB. The original focus assertion also failed. | R50's swipe did not dismiss the keyguard. On R51 a framework dismiss from swipe-only keyguard with a painted ORB reached public unlocked state and a clean settled launcher. Its first requested screenshot still shows the lock clock and ORB. |
+| First forbidden physical frame / final ORB pixel | UNOBSERVED | UNOBSERVED. The early visible ORB samples remain evidence. | UNOBSERVED |
+
+R50 slept and then showed a fresh widget 4 after wake each time. R51
+used successive windows 1–6 with the same widget 4 under host 1003 in
+session `98679482633`. It recorded `NONINTERACTIVE` on all three sleep
+withdrawals and `UNLOCKED` on the three actual direct swipes. No retained
+attach followed those negatives during the sampled OFF/unlocked windows.
+The first requested sleep images showed an ORB in all 3 R50 trials and 2
+of 3 R51 trials on API 37. They are requests around the transition, with
+the OFF checks performed separately. The R51 first sleep input arrived
+11,748 ms after the attach log in the same logcat clock and exceeded the
+10-second setup bound. The second lacked the pre-action painted reference.
+The third was confirmed at 7,344 ms. The independent native-capture
+retry reached both preconditions and its sleep input followed attach
+logging by 2,452 ms. All trials remain recorded. The unlocked settled images and
+window inventories establish sampled withdrawal after the real transition.
+They cannot prove the first forbidden frame was clean.
+[R50 API 37](https://github.com/elizerpist/exptv2/actions/runs/46077139402/artifacts/15236086445) · [R51 API 37](https://github.com/elizerpist/exptv2/actions/runs/46077230417/artifacts/15235678135) · [R50 API 35](https://github.com/elizerpist/exptv2/actions/runs/46077139402/artifacts/15235737107) · [R51 API 35](https://github.com/elizerpist/exptv2/actions/runs/46077801909/artifacts/15235603473)
+
+| Preserved locked-sleep trial | Device logcat wall interval from PowerManagerService sleep request to Fluvi hide log (ms) | In-app uptime interval from local alpha/visibility change to post-cleanup log (ms) |
+| --- | --- | --- |
+| R50 API 37, attempts 1/2/3 | 3,762 / 3,366 / 3,493 | 18 / 20 / 161 |
+| R51 API 37, attempts 1/2/3 | 1,042 / 1,401 / 908 | 735 / 840 / 728 |
+| R50 API 35 | 2,033 | 8 |
+| R51 API 35 | 553 | 406 |
+
+The R51 hide log is emitted after the fallible removal and host stop,
+with an uptime stamp saved at local revoke. The wall intervals in the
+table are to the *emitted log*, with different write points in R50 and
+R51. They are not comparable pin-to-pin local durations and are never
+added to, or subtracted from, a different clock. The R51 software reason
+shows that the new public interactivity gate triggered the withdrawal
+with the display still ON when observed in the separate native capture. It does not identify when
+the physical screen went dark. The R51 cleanup is longer in these sampled
+runner conditions. The native capture further splits it into local
+visibility, remove, detach and host stop. For direct unlock on API 37,
+the local-to-post-cleanup intervals were R50 754/390/921 ms and R51
+1,017/694/935 ms. Gesture-to-local on an independently aligned clock was
+not observed in both builds.
+
+| Preserved transition raw artifact | ZIP SHA-256 | Full log bytes / SHA-256 |
+| --- | --- | --- |
+| 15236086445 | `3e9e73a30d996e8d766fbb0edceed77dfba1acc2450918717395ca960dd164c5` | 6,751,634 / `9edce02d582319a8d40384659cf325aa010d78883cf75f63d3df163b772165de` |
+| 15235737107 | `f6607f5e1a36143b079ab0d21cb3798fd8bbfc34f38bac431e4f6988c0cb7741` | 4,389,708 / `1fa2a0f4e9a98c81caacd9f11bdcbb38f80dd578a1d75fa8ae78dd875fb1c9d2` |
+| 15235678135 | `e40ce57652e0291e5de2944ff1cdb7482a12ac7794831175e808532ec96037c5` | 7,618,783 / `89089e644cc06e91720d218e65b220977361df918749d6c617abc62938a84a5c` |
+| 15235603473 | `d450cfdb80a32e14d154a0daac0885dee664c8d1522a848828e829bd0a3090ce` | 4,552,555 / `8b76c6edd7db316d24ac9751a11743e2518c904ba6e876d15bd6cbd8640d5885` |
+
+R5 signed upgrade **PASS** for `adb install -r`, the real R50 single-use
+grant and widget 4 under host 1003, the enabled accessibility component,
+2×2 size, centered 294px rect, and retained synthetic ledger data with
+foreign keys intact. The R50 gesture did not move the starting rect. This
+run therefore confirms preservation of the existing centered placement.
+It does not establish preservation of a displaced position. The normal
+API 35 CI host successfully moved 56dp through its five destinations and
+relocked at the last root before failing the unverified shade command.
+[Exact signed upgrade artifact](https://github.com/elizerpist/exptv2/actions/runs/46077230417/artifacts/15236046266)
+
+R4 before the updated observer. The baseline API 35 runner initially
+returned the service list instead of the detail row. The changed API 37
+power dump did not provide the field used by the first harness. The
+independent public API observer reached the actual state in both. The
+first R51 API 35 signed run stopped at a foreign Quickstep ANR before
+Fluvi settings. Its focused retry reached both requested transitions.
+The earlier paste assertion exited on `ls: files: No such file or directory`
+before the independent target had produced its private file. Actual
+Flutter copying returned its visible confirmation. The initial camera
+tests also retained R50's `UNASSIGNED_LAYER_STACK` while starting off and
+R51's missing ffmpeg tool. Test-only recovery corrected the witness and
+camera setup. The corresponding application bytes never changed.
+[Signed qualification](https://github.com/elizerpist/exptv2/actions/runs/46077230417) · [API 35 retry](https://github.com/elizerpist/exptv2/actions/runs/46077801909)
+
+The two intentional native mutants failed their expected controls.
+Dropping the interactive predicate failed
+`requiresLiveDisplayInteractiveAndLocked`. Dropping the closed-sleep
+barrier failed `explicitSleepClosesEvenWithStaleOnState`. The exact
+source passes those checks. The unit suite covers the stale episode
+authority and frozen bounded-text hash. It cannot verify compositor
+absence or replace the real view animator test.
+
+### R51 normal CI and remaining test boundaries
+
+Normal exact-source run `46076303939`. The stock product build,
+boundaries, Room 150 and app 32 tests, and the Flutter analyzer and
+curated 1,038 + 3 + 4 suites passed. Kotlin focused suite includes the
+additional nine WA tests. Analyzer emitted 14 information-level findings.
+The two new infos concern a brace in the capture panel and a redundant
+test import. Full Flutter failed with 2,770 passed, 3 skipped and 115
+failures. Both stock host jobs failed in previously open scenarios. API 35
+failed the settled-shade assertion after five 56dp drags, and API 37
+failed the second 56dp drag after reaching the left edge. The shade
+command alone cannot confirm the source scene. The historical R50 shade
+overlap remains preserved. Nightly and historical profile runs were
+skipped by dispatch inputs. The formal qualified Human marker was skipped
+because the stock host gates failed. The separate successful builder
+supplied the already verified diagnostic delivery.
+[Normal workflow](https://github.com/elizerpist/exptv2/actions/runs/46076303939) · [Native XML](https://github.com/elizerpist/exptv2/actions/runs/46076303939/artifacts/15236035327) · [API 35](https://github.com/elizerpist/exptv2/actions/runs/46076303939/artifacts/15235862131) · [API 37](https://github.com/elizerpist/exptv2/actions/runs/46076303939/artifacts/15235442497) · [Flutter goldens](https://github.com/elizerpist/exptv2/actions/runs/46076303939/artifacts/15235776479)
+
+The separate dashboard A–K job failed. It raised
+`Prepared vector asset atlas is not ready` four times, then the
+`Mind heatmap must publish while the pointer is still down` assertion.
+The export lacked `B_year_month_rail_populated`. The earlier emulator
+installation attempts also logged ADB exit 1 before integration started.
+The terminal R51 failure differs from the historical year-range error
+and is left for the dashboard reviewer. The 115 full Flutter failing
+test identities exactly match the signed R50 source run's failure list.
+[Dashboard failure](https://github.com/elizerpist/exptv2/actions/runs/46076303939/artifacts/15235778873) · [A–K log](https://github.com/elizerpist/exptv2/actions/runs/46076303939/job/140766840419)
+
+### R51 installed capture, endpoint timing and retained first differences
+
+E51.8 · **R4 PASS for real running-copy and re-copy.** On exact signed
+API 37 the Flutter debug console started a native session, went to
+background through the two independent transitions, acknowledged copy,
+and the foreground witness pasted the exact file twice. Both 81,826-byte
+UTF-8 exports matched each other and the embedded body digest
+`c15522152b1ea06e7aba2b05c97f538d372a7a6cf8d7d1dd53cc1196829201d9`.
+Capture `c567e6ff-5f83-4bca-8320-75b42bdead13`, process
+`2237-52674007137`, service `52673911143`, declared
+`FLUVI_WA_LOCKSCREEN_CAPTURE_V1`, `state=FROZEN stop=COPY`,
+`route=WA_BALANCE sizeDp=56` and the exact candidate SHA. The clock pair
+was `startUp=77052 startEl=77052546234 endUp=112353 endEl=112353800929`.
+Observed 734, coalesced 184, retained 471, ring drops 79, text drops 0.
+The passive probe recorded 157 observations, 842 skips and one busy
+read. The three primary stock trials used capture through the first pair
+only. The native freeze happened before later stock trials. The added
+probe changes runner load, and these samples do not isolate its CPU cost. No physical endpoint is recorded. The two actions and error
+retry were additionally exercised in the focused Flutter tests.
+[Real panel and preserved synthetic UTF-8 copy](https://github.com/elizerpist/exptv2/actions/runs/46078181594/artifacts/15234919562)
+
+| Distinct R51 endpoint in that native capture | Locked sleep · w=1 e=1 id=4 hide=1 | Direct swipe unlock · w=2 e=2 id=4 hide=2 |
+| --- | --- | --- |
+| First retained trustworthy independent probe · elapsed ns | 86,037,331,827 complete. Display ON, interactive=false, locked=true. | 98,680,411,546 complete. Display ON, interactive=true, locked=false. |
+| Accessibility event time → callback · uptime ms | 85,996 → 86,108 · 112 ms | 98,560 → 98,725 · 165 ms |
+| Callback → local alpha/visibility · uptime ms | 86,108 → 86,109 · 1 ms | 98,725 → 98,726 · 1 ms |
+| Earliest retained completed negative probe → local revoke · elapsed ns | 86,037,331,827 → 86,109,681,847 · 72.350 ms | 98,680,411,546 → 98,726,139,988 · 45.728 ms |
+| Local revoke → detach / remove return / host stop end · uptime ms | 86,109 → 86,113 / 86,281 / 86,284 · 4 / 172 / 175 ms | 98,726 → 98,726 / 99,102 / 99,102 · <1 / 376 / 376 ms |
+| Last ORB pixel followed by continuous physical absence | UNOBSERVED | UNOBSERVED |
+
+E51.9 · Both positives were verified with thresholded ORB color on the
+same root before the action in this independent retry. The five-second
+public-state and WM sampling on each passed. The probe was read-only.
+It measured a definite negative earlier than the production callback
+in these captures. The event age is from the window-content event's
+reported uptime, not the button or physical gesture time. The scan and
+episode IDs cover the separate stages. The samples assign the queue
+before local revoke and the window cleanup to separate intervals. They
+do not establish a handset advantage or a revised authority policy.
+
+| Output | R51 verification and remaining boundary |
+| --- | --- |
+| W-SHOW and WA entrance, R1 | The active capture confirms one entrance per live episode, measured separately from the first root draw. w1 attach/entrance begin/root draw/first nonzero/end in uptime ms was 83,536 / 83,556 / 83,647 / 83,715 / 84,030. w2 was 95,171 / 95,216 / 95,416 / 95,498 / 95,782. These property receipts are independent of physical scanout. The original static green fixture reached the real RemoteViews output on both binaries. A full optical ramp and animator-off qualification were NOT RUN to a valid terminal measurement. R50's recovery failed before binding at the Fluvi settings precondition. R51's recovery failed at the recorder-file existence check before its sleep/wake action. The first camera setup and retry failures are retained. |
+| W-HIDE, locked sleep | The tested first public negative led to immediate local revoke; after actual OFF the app window did not return in the sampled five seconds. The matched baseline comparison and first requested transition images above are retained. AOD/doze, folding and a physical button/scanout comparison remain open. |
+| W-HIDE, direct unlock | The distinct swipe-only sequence reached actual launcher and had no ORB on the settled launcher or in the sampled five-second WM interval. The first requested API 37 transition still contained ORB pixels in two primary cases while the main clock was no longer pictured. Because sampling and state acquisition are separate, first-forbidden-frame acceptance remains open. |
+| W-LOCK-ANIM | The actual stock host displayed the default Balance packet and retained host/widget identity. Native and Flutter source regressions passed for prepare/readiness and retained generation. The full optical fade and systematic same-window palette/effect measurement remain open. The full-stock test cannot establish strict animation quality because some first samples show clock/background before the ORB. |
+| W-HOME-ANIM | The normal home production provider and playback contract are preserved. Deterministic Flutter material controls exercise actual frame preparation, shared settings and playback correspondence. Motion of a placed ORB on the launcher remains a distinct measurement. |
+
+[Baseline camera recovery](https://github.com/elizerpist/exptv2/actions/runs/46078178970/artifacts/15235618843) · [R51 independent timing, static reference and clipboard](https://github.com/elizerpist/exptv2/actions/runs/46078181594/artifacts/15234919562)
+
+H51.1/H51.2 now have per-transition evidence of a public negative preceding
+the production callback in one exact candidate capture. The cause and
+duration on the Nothing handset remain open. H51.3 has a source guard,
+a discriminating unit regression and no observed reattach during the
+verified stock closed intervals. H51.4 remains a separate question because
+the first requested compositor image can still show the ORB while later
+WM samples are empty. H51.5 has native first-nonzero and end receipts with
+the installed WA host. The camera setup prevented full optical evaluation.
+The evidence returns the residual timing and first-frame questions to the
+reviewer under the original routes and the same delivered app SHA.
+
+**Additional lifecycle controls.** Run `46078848699`, harness
+`d4de440000e1dafc510afe48669f779f2b6d3336`, installed and hashed the
+same signed APK. The secure test started from a painted 147px ORB.
+Its first requested image/inventory still showed the root. The separate
+confirmed credential scene was locked and interactive and had no ORB
+root. The bouncer result is independent of the direct unlock results.
+
+The real panel stop/restart control passed. It froze capture
+`45baac9f-79e6-4456-b434-d06aa8fb094c` with `stop=STOP`, 1,069
+bytes and body SHA-256
+`33f5a3143a55b75fffa3fa55efa5dd49b9d4e04bc1c129c04acffb7e42640e77`.
+After starting another capture, forcing the application process to
+stop and verifying the process ID changed, the panel reported the
+interruption. Re-copy preserved every byte of the previous finished
+capture. That stopped capture had no visible subject during its two
+seconds and performed zero public-state reads. Concurrent stop/copy,
+overflow and copy failure were checked in the focused controls.
+The initial home-picker attempt failed to find Fluvi from the launcher
+Featured view. Its raw UI exposed a separate Browse page and search.
+[PIN and process restart raw evidence](https://github.com/elizerpist/exptv2/actions/runs/46078848699/artifacts/15236615356)
+
+The exact-source focused material regression passed 46 cases across
+`dashboard_orb_material_playback_profile_test.dart`,
+`r47_active_header_frame_preparer_test.dart`,
+`dashboard_header_material_transport_distribution_test.dart`, and
+`dashboard_header_orb_material_test.dart` under Flutter 3.41.4.
+This covers the real material renderer, distinct modes/effects, static
+PNG correspondence, stale packet rejection and playback preparation.
+It is separate from any installed launcher motion observation.
+
+The focused home retry `46079549298`, test commit
+`ee434b444f02da179aeb018f1805dbe9b0ec30b6`, reached the physical
+launcher Browse/search sheet and the exact `Fluvi · Élő orb` 1×1 preview.
+The hierarchy also retained the independent financial snapshot widget.
+The tap and drag left the launcher in the picker. The native Balance
+configuration assertion failed before placement. Real launcher playback
+and per-palette same-window output therefore remain INCONCLUSIVE. The
+discovered listing and compiled provider are positive separate receipts.
+[Home retry and observed picker](https://github.com/elizerpist/exptv2/actions/runs/46079549298/artifacts/15236880530)
+
+All test-only follow-ups kept the exact application binary. The public
+file and exact graph use the application SHA, independent of the
+coordinating and fixture commits. Unobserved runtime cases include removal
+error forced in a live WindowManager, early/mid/late in-flight optical
+fade cancellation sequences, supported doze/AOD and fingerprint, and a
+strict controlled ON/OFF diagnostic overhead comparison. No substitute
+optical or performance PASS is assigned to these scenarios.
+
+**Implementation** — complete on `implement/r51-orb-transitions`,
+`e7542639d22d78d10e7b123e836ee9bc9758c91a`.
+[Commit](https://github.com/elizerpist/exptv2/commit/e7542639d22d78d10e7b123e836ee9bc9758c91a) · [Code graph](https://github.com/elizerpist/exptv2/blob/9ab9ccb99d6ff0c8a553d71fc738cc52e8a0dd03/docs/codegraph/manifest.json)
+
+**Automated qualification** — FAIL overall. Timed app-local withdrawal,
+sampled locked OFF and settled direct unlock/PIN, exact in-place data
+update, both real panel actions, frozen re-copy and real process restart
+were verified. The documented CI failures, optical transition bounds
+and unmet controls remain open.
+
+**APK delivery** — PASS. The 113,982,051-byte R51 0.1.3 Human APK was
+downloaded anonymously in full and verified with the original signature
+and SHA-256
+`5b2cb2acd1debeec113df939ce093479854a35f044a18f59c0985cf03a9e498e`.
+[Direct APK](https://media.githubusercontent.com/media/elizerpist/exptv2/6962d94f0c78b14ded193c3543340507fc4c0006/Fluvi_R51_HUMAN_e7542639d22d.apk)
+
+**PHYSICAL VALIDATION — PENDING, USER ONLY**
