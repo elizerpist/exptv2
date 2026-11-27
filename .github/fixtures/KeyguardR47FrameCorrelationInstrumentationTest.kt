@@ -26,6 +26,7 @@ import com.fluvi.app.lockscreen.material.AndroidKeyguardShaderArtifactReader
 import com.fluvi.app.lockscreen.material.FluviActiveHeaderMaterialStore
 import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry
 import com.fluvi.app.lockscreen.material.KeyguardMaterialTestActivity
+import com.fluvi.app.lockscreen.material.KeyguardHeaderMaterialView
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -34,6 +35,8 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 import org.json.JSONArray
 import org.json.JSONObject
@@ -434,15 +437,7 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
                 log.append("observedMovement=$movement\n")
                 if (movement.second < 64 || movement.first < 1.0) failures += "compositor image did not move"
             }
-            main {
-                if (scenario == "pending") {
-                    val obj: Any = if (direct) checkNotNull(presenter) else checkNotNull(frame)
-                    val field = obj.javaClass.getDeclaredField("view").apply { isAccessible = true }
-                    val actual = field.get(obj) as View
-                    actual.invalidate()
-                    log.append("PENDING viewIdentity=${System.identityHashCode(actual)} dirty=${actual.isDirty} " +
-                        "elapsedNs=${SystemClock.elapsedRealtimeNanos()} evidence=INVALIDATE_ONLY\n")
-                }
+            fun restrictAndConceal() {
                 log.append("RESTRICTION elapsedNs=${SystemClock.elapsedRealtimeNanos()} uptimeMs=${SystemClock.uptimeMillis()} " +
                     "targetWindow=$hostId token=${System.identityHashCode(token)} attachment=1 orbGeneration=1 " +
                     "generationScope=syntheticHarness\n")
@@ -456,6 +451,26 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
                 Trace.endSection()
                 assertTrue(hidden)
             }
+            if (scenario == "pending") {
+                val reached = CountDownLatch(1)
+                val callbackFailure = AtomicReference<Throwable?>()
+                main {
+                    val obj: Any = if (direct) checkNotNull(presenter) else checkNotNull(frame)
+                    val field = obj.javaClass.getDeclaredField("view").apply { isAccessible = true }
+                    val actual = field.get(obj) as KeyguardHeaderMaterialView
+                    actual.onNextPreparedFrameDrawForDiagnostic = { drawAt ->
+                        log.append("PENDING_PREPARED_DRAW callbackUptimeMs=$drawAt " +
+                            "viewIdentity=${System.identityHashCode(actual)} elapsedNs=${SystemClock.elapsedRealtimeNanos()} " +
+                            "evidence=BITMAP_CANVAS_CALL_BEFORE_ONDRAW_RETURN\n")
+                        try { restrictAndConceal() } catch (failure: Throwable) { callbackFailure.set(failure) }
+                        finally { reached.countDown() }
+                    }
+                    actual.invalidate()
+                    log.append("PENDING_ARMED elapsedNs=${SystemClock.elapsedRealtimeNanos()} dirty=${actual.isDirty}\n")
+                }
+                check(reached.await(12, TimeUnit.SECONDS)) { "NOT REACHED: prepared bitmap draw callback" }
+                callbackFailure.get()?.let { throw it }
+            } else main { restrictAndConceal() }
             val first = crop("after-hide-first", bounds); val delta = difference(checkNotNull(underlay), first)
             log.append("firstAfterHide=$delta\n")
             if (delta.first > 2.0) failures += "first sample after hide differs from underlay: $delta"
