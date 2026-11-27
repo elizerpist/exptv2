@@ -1,23 +1,178 @@
 {
   "schema_version": 1,
-  "source_head": "a614bf74f7a0b17d3ebc822daf167fba331ee6af",
-  "base_head": "7ca3cd8af14c6519439bf895f2475f5fa3e28bea",
+  "source_head": "52650ff698ea8973fa4b47da5a02d0e52c5257ec",
+  "base_head": "a1aff02423c61479caf10d3d7949a4890ff24cbe",
   "changed_files": [
-    ".github/workflows/fluvi-core.yml",
-    "android/app/src/main/kotlin/com/fluvi/app/runtime/RetiredLockscreenState.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/widget/orb/FluviHeaderOrbWidgetProvider.kt",
-    "android/wa-integration/FluviHostDefaults.kt",
-    "android/wa-integration/README.md",
-    "android/wa-integration/check-payload-lock.py",
-    "scripts/build-r49-android.sh",
-    "scripts/verify-r49-host.py",
-    "test/boundary/dashboard_interaction_performance_boundary_test.dart"
+    "lib/app/shell/fluvi_app_shell.dart"
   ],
   "candidate_changed_symbols": [
-    "scip-dart pub fluvi 0.1.0+1 test/boundary/`dashboard_interaction_performance_boundary_test.dart`/main()."
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#automationPermissionRepository.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#automationRepository.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#categoryRepository.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#createState().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#dashboardRepository.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#financialLimitRepository.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialCategoryIds.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialDashboardPresentationPreferences.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialDate.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialDirection.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialPlane.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialRailOpen.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#manualTransactionRepository.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#mode.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#notificationAppearanceRepository.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#pulseRepository.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#queryRepository.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#shellPresentation.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_BottomNavigationSafeArea#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_BottomNavigationSafeArea#build().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_BottomNavigationSafeArea#child.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_BottomNavigationSafeArea#fill.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviAppShellState#build().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviAppShellState#didChangeAppLifecycleState().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviAppShellState#didChangeDependencies().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviAppShellState#didUpdateWidget().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviAppShellState#dispose().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviAppShellState#initState().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#appearance.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#build().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#failed.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#onRetry.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#failed.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#interactive.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#loading.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#revealing."
   ],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
-  "direct_reference_consumers": [],
-  "affected_test_locations": [],
-  "affected_production_locations": []
+  "direct_reference_consumers": [
+    {
+      "file": "lib/app/fluvi_app.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 53,
+      "first_column": 12,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "lib/app/shell/fluvi_app_shell.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#automationPermissionRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#automationRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#categoryRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#dashboardRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#financialLimitRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialCategoryIds.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialDashboardPresentationPreferences.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialDate.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialDirection.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialPlane.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialRailOpen.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#manualTransactionRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#mode.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#notificationAppearanceRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#pulseRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#queryRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#shellPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_BottomNavigationSafeArea#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_BottomNavigationSafeArea#child.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_BottomNavigationSafeArea#fill.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#appearance.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#failed.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#onRetry.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#failed.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#interactive.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#loading.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#revealing."
+      ],
+      "reference_count": 76,
+      "first_line": 86,
+      "first_column": 49,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/app/fluvi_app_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#`<constructor>`()."
+      ],
+      "reference_count": 6,
+      "first_line": 104,
+      "first_column": 16,
+      "basis": "scip_reference"
+    }
+  ],
+  "affected_test_locations": [
+    {
+      "file": "test/app/fluvi_app_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#`<constructor>`()."
+      ],
+      "reference_count": 6,
+      "first_line": 104,
+      "first_column": 16,
+      "basis": "scip_reference"
+    }
+  ],
+  "affected_production_locations": [
+    {
+      "file": "lib/app/fluvi_app.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 53,
+      "first_column": 12,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "lib/app/shell/fluvi_app_shell.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#automationPermissionRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#automationRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#categoryRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#dashboardRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#financialLimitRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialCategoryIds.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialDashboardPresentationPreferences.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialDate.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialDirection.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialPlane.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#initialRailOpen.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#manualTransactionRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#mode.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#notificationAppearanceRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#pulseRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#queryRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/FluviAppShell#shellPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_BottomNavigationSafeArea#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_BottomNavigationSafeArea#child.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_BottomNavigationSafeArea#fill.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#appearance.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#failed.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_FluviStartupSplash#onRetry.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#failed.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#interactive.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#loading.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/shell/`fluvi_app_shell.dart`/_StartupSurfacePhase#revealing."
+      ],
+      "reference_count": 76,
+      "first_line": 86,
+      "first_column": 49,
+      "basis": "scip_reference"
+    }
+  ]
 }
