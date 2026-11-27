@@ -144,6 +144,11 @@ class Device:
         while time.monotonic() < until:
             image, bounds = self.capture(f"{name}-{sample:02d}")
             if bounds:
+                settled, observed = self.capture(name + "-after-attach")
+                if bounds != observed:
+                    sample += 1
+                    continue
+                image = settled
                 self.save(name + "-view.xml", self.screen(interactive_windows=True))
                 image.crop(bounds).save(self.output / (name + "-crop.png"))
                 return image, bounds
@@ -179,7 +184,7 @@ def window_bounds(windows):
     return None
 
 
-def pixel_change(a, b, bounds):
+def pixel_change(a, b, bounds, threshold=8):
     from PIL import ImageChops
 
     left, top, right, bottom = bounds
@@ -187,7 +192,7 @@ def pixel_change(a, b, bounds):
     cx, cy = (right - left) / 2, (bottom - top) / 2
     inside = outside = 0
     for index, rgb in enumerate(region.getdata()):
-        if max(rgb) < 8:
+        if max(rgb) < threshold:
             continue
         x, y = index % region.width + .5 - cx, index // region.width + .5 - cy
         distance = (x / cx) ** 2 + (y / cy) ** 2
@@ -268,32 +273,64 @@ def hide_sample(device, name):
     device.note(f"{name}: first overlay bounds={bounds}; settled overlay absent")
 
 
-def check_motion_and_drag(device, size):
-    first, start = device.observe_orb(f"{size}-main")
+def check_motion(device, size):
+    previous, start = device.observe_orb(f"{size}-main")
     width, height = start[2] - start[0], start[3] - start[1]
     assert width == height and width > 20, start
-    changed = []
+    strict = []
+    fine = []
     for index in range(1, 7):
+        time.sleep(.017 + index * .017)
         sample, bounds = device.capture(f"{size}-motion-{index:02d}")
         assert bounds == start, f"ORB moved between stationary frame samples: {start}, {bounds}"
-        changed.append(pixel_change(first, sample, bounds))
-    assert sum(inside > max(40, width * width / 100) and outside < inside / 5
-               for inside, outside in changed) >= 2, f"Changing circle pixels with stable corners not established: {changed}"
-    device.note(f"{size} moving interior with outside control {changed}")
-    for number, destination in enumerate(((1, first.height // 2), (first.width - 2, first.height // 2),
-            (first.width // 2, first.height // 4), (first.width // 2, first.height - 2),
-            (first.width - 2, first.height - 2)), start=1):
-        x, y = (start[0] + start[2]) // 2, (start[1] + start[3]) // 2
-        device.shell("input", "draganddrop", x, y, *destination, 900)
+        strict.append(pixel_change(previous, sample, bounds))
+        fine.append(pixel_change(previous, sample, bounds, threshold=3))
+        previous = sample
+    device.note(f"{size} consecutive samples delta>=8 {strict}. Additional delta>=3 {fine}")
+    passed = sum(inside > max(40, width * width / 100) and outside < inside / 5
+                 for inside, outside in strict) >= 2
+    return width, passed
+
+
+def check_drag(device, size):
+    image, start = device.observe_orb(f"{size}-drag-start")
+    radius = (start[2] - start[0]) // 2
+    # The endpoint reaches the WindowManager clamp while keeping the injected
+    # pointer away from the Android edge navigation activation strip.
+    side = max(20, radius // 3)
+    destinations = ((side, image.height // 2), (image.width - side, image.height // 2),
+                    (image.width // 2, side), (image.width // 2, image.height - side),
+                    (image.width - side, image.height - side))
+    faults = []
+    for number, (x, y) in enumerate(destinations, start=1):
+        cx, cy = (start[0] + start[2]) // 2, (start[1] + start[3]) // 2
+        witness = device.shell("am", "instrument", "-w", "-e", "action", "drag",
+                               "-e", "x", cx, "-e", "y", cy,
+                               "-e", "targetX", x, "-e", "targetY", y,
+                               "com.fluvi.r49.fixture/.ReadVisibleHierarchy", timeout=12)
+        device.save(f"{size}-injection-{number}.txt", witness.encode())
+        assert "gesture=PASS" in witness, witness
         _, after = device.observe_orb(f"{size}-drag-{number}")
-        assert after != start, f"Root never moved during drag {number}: {start}"
-        assert (after[2] - after[0], after[3] - after[1]) == (width, height)
-        assert 0 <= after[0] <= after[2] <= first.width and 0 <= after[1] <= after[3] <= first.height
+        assert (after[2] - after[0], after[3] - after[1]) == (start[2] - start[0], start[3] - start[1])
+        assert 0 <= after[0] <= after[2] <= image.width and 0 <= after[1] <= after[3] <= image.height
+        device.note(f"{size} drag {number} root {start} -> {after}")
+        if after == start:
+            faults.append(number)
         start = after
     device.wake_lock_screen()
     _, restored = device.observe_orb(f"{size}-relock")
+    device.note(f"{size} relock applied root {restored}; last drop root {start}")
     assert restored == start, f"Root did not restore dropped position: {start} -> {restored}"
-    return width
+    assert not faults, f"Missing committed movement for {size} drags {faults}"
+
+
+def run_check(device, failures, label, check):
+    try:
+        check()
+        device.note(f"PASS {label}")
+    except (AssertionError, OSError, subprocess.SubprocessError) as error:
+        device.note(f"FAIL {label}: {error}")
+        failures.append(label)
 
 
 def exercise(device, apk, system, observer):
@@ -316,28 +353,47 @@ def exercise(device, apk, system, observer):
     # Background the app before waking. The binding and frames must survive.
     device.shell("input", "keyevent", "KEYCODE_HOME")
     device.wake_lock_screen()
-    small = check_motion_and_drag(device, "56dp")
+    failures = []
+    small, moved = check_motion(device, "56dp")
+    if not moved:
+        failures.append("56dp motion threshold")
+    run_check(device, failures, "56dp drag and retained drop", lambda: check_drag(device, "56dp"))
     device.shell("cmd", "statusbar", "expand-notifications")
-    hide_sample(device, "shade")
+    panel = device.screen(interactive_windows=True)
+    device.save("shade.xml", panel)
+    shade_labels = visible_labels(panel, "com.android.systemui")
+    device.note(f"Shade SystemUI labels {shade_labels}")
+    run_check(device, failures, "shade withdrawal", lambda: hide_sample(device, "shade"))
     device.shell("cmd", "statusbar", "collapse")
-    device.observe_orb("after-shade")
+    run_check(device, failures, "readmission after shade", lambda: device.observe_orb("after-shade"))
     device.shell("input", "keyevent", "KEYCODE_MENU")
-    device.save("pin.xml", device.screen(interactive_windows=True))
-    hide_sample(device, "pin")
+    bouncer = device.screen(interactive_windows=True)
+    device.save("pin.xml", bouncer)
+    nodes = [n for n in ET.fromstring(bouncer).iter("node") if n.get("visible") == "true"]
+    has_pin = any("keyguard_pin" in n.get("id", "") or n.get("id", "").endswith("/pinEntry") for n in nodes)
+    device.note(f"PIN scene marker observed={has_pin}")
+    run_check(device, failures, "PIN withdrawal", lambda: hide_sample(device, "pin"))
     device.shell("input", "text", "4827")
     device.shell("input", "keyevent", "KEYCODE_ENTER")
-    hide_sample(device, "unlocked")
+    run_check(device, failures, "unlocked withdrawal", lambda: hide_sample(device, "unlocked"))
     device.shell("am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
     if SETTINGS_ROWS[0] not in visible_labels(device.screen(), PACKAGE):
         enter_settings(device)
     device.click("2×2 ORB", package=PACKAGE)
     device.shell("input", "keyevent", "KEYCODE_HOME")
     device.wake_lock_screen()
-    large = check_motion_and_drag(device, "112dp")
+    large, moved = check_motion(device, "112dp")
+    if not moved:
+        failures.append("112dp motion threshold")
     assert abs(large - 2 * small) <= 1, (small, large)
+    device.note(f"PASS fixed root diameters {small}px and {large}px")
+    run_check(device, failures, "112dp drag and retained drop", lambda: check_drag(device, "112dp"))
+    device.shell("input", "keyevent", "KEYCODE_SLEEP")
+    run_check(device, failures, "display off withdrawal", lambda: hide_sample(device, "display-off"))
     logs = device.adb("logcat", "-d", "-s", "FluviBalanceOrb")
     assert set(re.findall(rb"bound host=1003 id=(\d+)", logs)) == {own_id}
-    device.note("PASS integrated fixed host, visible motion, both sizes, root drag, relock and settled withdrawal")
+    device.note("PASS same widget ID across both fixed sizes")
+    assert not failures, ", ".join(failures)
 
 
 def main():

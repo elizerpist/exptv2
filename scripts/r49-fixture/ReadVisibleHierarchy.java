@@ -4,6 +4,8 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Activity;
 import android.app.Instrumentation;
 import android.app.UiAutomation;
+import android.view.InputDevice;
+import android.view.MotionEvent;
 import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.SystemClock;
@@ -21,9 +23,11 @@ import java.nio.charset.StandardCharsets;
 /** Observe the disposable device without suspending the host's accessibility service. */
 public final class ReadVisibleHierarchy extends Instrumentation {
     private boolean interactiveWindows;
+    private Bundle parameters;
     @Override
     public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        parameters = arguments;
         interactiveWindows = "true".equals(arguments.getString("interactiveWindows"));
         start();
     }
@@ -33,6 +37,13 @@ public final class ReadVisibleHierarchy extends Instrumentation {
         Bundle result = new Bundle();
         try {
             UiAutomation automation = getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
+            if ("drag".equals(parameters.getString("action"))) {
+                drag(automation);
+                result.putString("gesture", "PASS");
+                finish(Activity.RESULT_OK, result);
+                return;
+            }
+
             AccessibilityServiceInfo info = automation.getServiceInfo();
             info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
             if (interactiveWindows) info.flags |= AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
@@ -66,6 +77,39 @@ public final class ReadVisibleHierarchy extends Instrumentation {
         } catch (Exception failure) {
             result.putString("error", failure.toString());
             finish(Activity.RESULT_CANCELED, result);
+        }
+    }
+
+    private void drag(UiAutomation automation) {
+        float startX = Float.parseFloat(parameters.getString("x"));
+        float startY = Float.parseFloat(parameters.getString("y"));
+        float endX = Float.parseFloat(parameters.getString("targetX"));
+        float endY = Float.parseFloat(parameters.getString("targetY"));
+        long down = SystemClock.uptimeMillis();
+        inject(automation, down, MotionEvent.ACTION_DOWN, startX, startY);
+        try {
+            SystemClock.sleep(800);
+            for (int i = 1; i <= 24; i++) {
+                SystemClock.sleep(28);
+                float progress = i / 24f;
+                inject(automation, down, MotionEvent.ACTION_MOVE,
+                        startX + (endX - startX) * progress, startY + (endY - startY) * progress);
+            }
+            SystemClock.sleep(200);
+        } finally {
+            inject(automation, down, MotionEvent.ACTION_UP, endX, endY);
+        }
+    }
+
+    private static void inject(UiAutomation automation, long down, int action, float x, float y) {
+        MotionEvent event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x, y, 0);
+        try {
+            event.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+            if (!automation.injectInputEvent(event, true)) {
+                throw new IllegalStateException("Input injection failed for action " + action);
+            }
+        } finally {
+            event.recycle();
         }
     }
 
