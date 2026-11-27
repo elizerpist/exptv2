@@ -144,6 +144,10 @@ def normalize(tag, payload, output=False):
     read = f"req:{request}" if request else ""
     if tag == "R446_OUTPUT" and number(row.get("armGeneration")):
         row["arm"] = row["armGeneration"]
+    if tag == "R44_6_SAMPLE":
+        # The summary's arm is the occurrence TIME. The spool's
+        # armGeneration is an owner. Joining those numbers invents two reads.
+        row["armAt"] = row.pop("arm", UNKNOWN)
     values = known(row, OWNER)
     if tag == "R44_WAKE":
         return wake, session, "", "WAKE", known(row, ("screenOn", "showRequest", "firstPostRead", "omitted"))
@@ -192,7 +196,8 @@ def normalize(tag, payload, output=False):
                 row["authority"] = "CURRENT_AT_PRE_ISSUE_CHECK"
             row["readEnd"] = row.get("readFinishedAt", row.get("readEnd", UNKNOWN))
             row["decisionAt"] = row.get("decisionAt", row.get("decide", UNKNOWN))
-            return wake, session, read, f"DECISION:{ordinal}", values | known(row, ADMISSION + ("decisionAt", "scene"))
+            return wake, session, read, f"DECISION:{ordinal}", values | known(
+                row, ADMISSION + ("armAt", "decisionAt", "scene"))
         if not output:
             return None
         if tag == "R446_OUTPUT":
@@ -449,7 +454,7 @@ def analyze(path, bookmarks=()):
         for (read, owner), stages in sorted(subsets.items()):
             decision = phase_value({k: v for k, v in stages.items()
                                    if k == "ADMISSION" or k.startswith("DECISION:")}, "decision")
-            if decision != UNKNOWN:
+            if decision != UNKNOWN and session is not None:
                 completed += 1
             item = {
                 "id": read, "owner": dict(zip(OWNER, owner)),
@@ -463,7 +468,9 @@ def analyze(path, bookmarks=()):
                 "lastProvenStage": last_read_stage(stages),
                 "backend": stages.get("OUTPUT", {}).get("backend", UNKNOWN), "stages": stages,
             }
-            scene_values = [value for key, value in stages.items() if key.startswith("SCENE:")]
+            read_scene = stages.get("READ", {}).get("scene", UNKNOWN)
+            scene_values = [value for key, value in stages.items()
+                            if key.startswith("SCENE:") and read_scene != UNKNOWN and value.get("scene") == read_scene]
             counts = [value.get("markers", UNKNOWN) for value in scene_values]
             sample = unique(counts)
             if isinstance(sample, str) and (match := re.match(r"main:(\d+),", sample)):

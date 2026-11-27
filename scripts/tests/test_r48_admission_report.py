@@ -93,7 +93,7 @@ class AdmissionReportTest(unittest.TestCase):
             if episode.get("distinctSuccessor"):
                 summary.append(no_marker(wake, episode["distinctSuccessor"]))
         # Two representations of the same completed private request, not a twelfth denial.
-        summary.append("R44_6_SAMPLE wake=5 req=100 ordinal=5 normal=UNKNOWN/NO_MAIN_MARKER "
+        summary.append("R44_6_SAMPLE wake=5 req=100 arm=5000 ordinal=5 normal=UNKNOWN/NO_MAIN_MARKER "
                        "eligible=ELIGIBLE_SAMPLE handoff=PRIVATE_NOT_AUTHORIZED backend=NOT_ATTEMPTED")
         report = self.report(DIRECT, summary, spool)
         by_wake = {w["wake"]: w for w in report["wakes"]}
@@ -143,6 +143,7 @@ class AdmissionReportTest(unittest.TestCase):
         self.assertEqual(["UNOBSERVED", 1, 2], [w["session"] for w in wakes])
         self.assertTrue(all(r["decision"] == "MATERIAL_UNAUTHORIZED" for w in wakes[1:] for r in w["reads"]))
         self.assertEqual(1, reports["excludedForeignRecords"])
+        self.assertEqual("INCONCLUSIVE", wakes[0]["decisionCoverage"])
 
     def test_same_stage_contradiction_is_retained_and_not_a_grant(self):
         reports = self.report(WA, [f"R44_WAKE capture={CAPTURE} session=1 wake=11",
