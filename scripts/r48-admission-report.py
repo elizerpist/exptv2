@@ -11,6 +11,8 @@ import sys
 
 UNKNOWN = "UNOBSERVED"
 SOURCE = "af20365a5ec96ff92b35321a03c0a2679ee7d2fd"
+HUMAN_SOURCE = "0df0941edad11582e7c3a9e6c094ff85a3d3cbea"
+REVIEWED_SOURCES = (SOURCE, HUMAN_SOURCE)
 ROUTES = {"FLUVI_STREAM", "WIDGETS_ANYWHERE"}
 SCENES = {"MAIN", "PIN", "SHADE", "FOREIGN", "UNLOCKED", "OFF"}
 FOOTER = re.compile(rb"(?m)^bodyBytes=([0-9]+) bodySha256=([0-9a-f]{64})\nEND_FLUVI_R46_RECORDING_V1\n\Z")
@@ -67,7 +69,7 @@ def section(lines, begin, end):
     return a, b
 
 
-def envelope(path):
+def envelope(path, expected_app_sha=None):
     with Path(path).open("rb") as file:
         raw = file.read(32 * 1024 * 1024 + 1)
     if len(raw) > 32 * 1024 * 1024:
@@ -90,10 +92,17 @@ def envelope(path):
     spool = section(lines, "DETAILED_RECORDS_BEGIN", "DETAILED_RECORDS_END")
     if summary[1] >= spool[0]:
         raise ValueError("summary and spool overlap")
-    native = fields(" ".join(lines[summary[0] + 1:summary[1]]))
+    summary_lines = lines[summary[0] + 1:summary[1]]
+    native = fields(" ".join(summary_lines))
     if native.get("captureId", capture) != capture:
         raise ValueError("capture identity differs between envelope and summary")
-    if native.get("build") not in (SOURCE, None):
+    if expected_app_sha is not None:
+        if expected_app_sha not in REVIEWED_SOURCES:
+            raise ValueError("expected application source has not been reviewed")
+        build_rows = [line for line in summary_lines if line.startswith("build=")]
+        if build_rows != [f"build={expected_app_sha}"] or native.get("build") != expected_app_sha:
+            raise ValueError(f"capture requires one summary build matching {expected_app_sha}")
+    elif native.get("build") not in (SOURCE, None):
         raise ValueError("capture build is not the R47 application under study")
     loss = fields(" ".join(lines[spool[1] + 1:]))
     loss.update(known(native, ("eventsRecorded", "eventsRetained", "eventsEvicted", "eventsCoalesced",
@@ -370,8 +379,8 @@ def last_read_stage(stages):
     return UNKNOWN
 
 
-def analyze(path, bookmarks=()):
-    header, native, loss, lines, summary, spool, size, digest, full = envelope(path)
+def analyze(path, bookmarks=(), expected_app_sha=None):
+    header, native, loss, lines, summary, spool, size, digest, full = envelope(path, expected_app_sha)
     capture, route = header["captureId"], header["route"]
     observed, sessions, foreign = [], defaultdict(set), 0
     material = []
@@ -567,6 +576,8 @@ def candidate_matrix(reports):
 def main():
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("recordings", type=Path, nargs="+")
+    cli.add_argument("--expected-app-sha", choices=REVIEWED_SOURCES,
+                     help="require this exact reviewed application source in every recording")
     cli.add_argument("--bookmarks", type=Path, help="independently documented stable interval JSON")
     cli.add_argument("--stock-bookmarks", type=Path, action="append", default=[], help="synthetic API37 fixture ledger")
     args = cli.parse_args()
@@ -574,7 +585,7 @@ def main():
         labels = verify_bookmarks(json.loads(args.bookmarks.read_text(encoding="utf-8"))) if args.bookmarks else []
         for stock in args.stock_bookmarks:
             labels += stock_bookmarks(stock)
-        reports = [analyze(path, labels) for path in args.recordings]
+        reports = [analyze(path, labels, args.expected_app_sha) for path in args.recordings]
         json.dump({"recordings": reports, "candidateMatrix": candidate_matrix(reports)}, sys.stdout, indent=2)
         print()
     except (ValueError, TypeError, OSError) as error:

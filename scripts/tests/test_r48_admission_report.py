@@ -3,6 +3,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -19,11 +20,12 @@ DIRECT = "FLUVI_STREAM"
 WA = "WIDGETS_ANYWHERE"
 
 
-def envelope(route, summary, spool, capture=CAPTURE):
+def envelope(route, summary, spool, capture=CAPTURE, build=R48.SOURCE):
+    build_header = [f"build={build}"] if build is not None else []
     body = ("\n".join(["FLUVI_R46_RECORDING_V1", "Árvíztűrő próba",
                       f"captureId={capture} route={route} end=USER_STOP",
                       "clock=uptimeMs source=app_private_spool", "SUMMARY_BEGIN",
-                      f"build={R48.SOURCE}", "eventsEvicted=2",
+                      *build_header, "eventsEvicted=2",
                       "R41_ACCOUNTING sampleEvicted=3", *summary, "SUMMARY_END",
                       "DETAILED_RECORDS_BEGIN", *spool, "DETAILED_RECORDS_END",
                       f"spoolAccepted={len(spool)} spoolWritten={len(spool)} spoolDropped=0", ""])
@@ -81,6 +83,44 @@ class AdmissionReportTest(unittest.TestCase):
             self.path.write_bytes(invalid)
             with self.subTest(invalid=hashlib.sha256(invalid).hexdigest()), self.assertRaises(ValueError):
                 R48.analyze(self.path)
+
+    def test_explicit_build_requires_unique_exact_reviewed_source(self):
+        for expected in R48.REVIEWED_SOURCES:
+            self.path.write_bytes(envelope(DIRECT, [], [], build=expected))
+            self.assertEqual(expected, R48.analyze(self.path, expected_app_sha=expected)["app"])
+        for build, extra in ((None, []), ("0" * 40, []), (R48.SOURCE, []),
+                             (None, [f"EVENT build={R48.HUMAN_SOURCE}"]),
+                             (R48.HUMAN_SOURCE, [f"build={R48.SOURCE}"])):
+            self.path.write_bytes(envelope(DIRECT, extra, [], build=build))
+            with self.subTest(build=build, extra=extra), self.assertRaisesRegex(ValueError, "one summary build"):
+                R48.analyze(self.path, expected_app_sha=R48.HUMAN_SOURCE)
+        self.path.write_bytes(envelope(DIRECT, [], [], build="0" * 40))
+        with self.assertRaisesRegex(ValueError, "not been reviewed"):
+            R48.analyze(self.path, expected_app_sha="0" * 40)
+        self.path.write_bytes(envelope(DIRECT, [], [], build=None))
+        self.assertEqual(R48.UNKNOWN, R48.analyze(self.path)["app"])
+
+    def test_candidate_cli_validates_whole_pair_before_output(self):
+        other = self.path.with_name("second.txt")
+        wake = [f"R44_WAKE capture={CAPTURE} session=1 wake=3", no_marker(3, 37)]
+        self.path.write_bytes(envelope(DIRECT, wake, [], build=R48.HUMAN_SOURCE))
+        second_wake = [f"R44_WAKE capture={OTHER} session=1 wake=5", no_marker(5, 38)]
+        good = envelope(DIRECT, second_wake, [], capture=OTHER, build=R48.HUMAN_SOURCE)
+        other.write_bytes(good)
+        command = [sys.executable, str(SCRIPTS / "r48-admission-report.py"),
+                   "--expected-app-sha", R48.HUMAN_SOURCE, str(self.path), str(other)]
+        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        output = json.loads(result.stdout)
+        self.assertEqual([], output["candidateMatrix"])
+        self.assertEqual(["UNLABELLED", "UNLABELLED"],
+                         [report["wakes"][0]["reads"][0]["label"] for report in output["recordings"]])
+        for invalid, error in ((envelope(DIRECT, [], [], capture=OTHER), "one summary build"),
+                               (good.replace(b"spoolWritten=0", b"spoolWritten=1"), "SHA-256 mismatch")):
+            other.write_bytes(invalid)
+            result = subprocess.run(command, capture_output=True, text=True)
+            self.assertEqual(2, result.returncode)
+            self.assertEqual("", result.stdout)
+            self.assertIn(error, result.stderr)
 
     def test_replay_known_direct_denials_keeps_successors_distinct(self):
         summary, spool = [], []
