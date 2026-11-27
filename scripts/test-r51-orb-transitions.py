@@ -205,19 +205,23 @@ def locked_sleep(device, name):
     return before_sleep
 
 
-def direct_unlock(device, name, previous):
+def direct_unlock(device, name, previous, framework):
     device.shell("input", "keyevent", "KEYCODE_SLEEP")
     poll_state(device, name + "-pre-unlock", "OFF", True)
     image, before_unlock = wake(device, name + "-unlock-start")
     assert previous is None or before_unlock == previous, (previous, before_unlock)
     # Ordinary swipe-only keyguard. Move outside the ORB's touch region.
     x = image.width // 5
-    device.note(f"{name} genuine swipe unlock directly from painted root {before_unlock}")
-    device.shell("input", "swipe", x, int(image.height * .91), x, int(image.height * .34), 290)
+    if framework:
+        device.note(f"{name} framework dismiss of swipe-only keyguard from painted root {before_unlock}")
+        device.shell("wm", "dismiss-keyguard")
+    else:
+        device.note(f"{name} genuine swipe unlock directly from painted root {before_unlock}")
+        device.shell("input", "swipe", x, int(image.height * .91), x, int(image.height * .34), 290)
     unlocked_first = held_absence(device, name + "-unlock", "ON", False)
-    focused = device.adb("shell", "dumpsys window windows")
+    focused = device.adb("shell", "dumpsys window; dumpsys activity activities")
     device.save(name + "-launcher.txt", focused)
-    assert re.search(rb"mCurrentFocus=.*(?:launcher|com\.fluvi\.app)", focused, re.I), (
+    assert re.search(rb"(mCurrentFocus|topResumedActivity|mResumedActivity)=.*(?:launcher|com\.fluvi\.app)", focused, re.I), (
         "Dismissed keyguard had no witnessed launcher or Fluvi focus"
     )
     device.note(f"PASS {name} direct unlock, first requested root {unlocked_first}")
@@ -236,6 +240,11 @@ def exercise(device, args):
     device.shell("locksettings", "set-disabled", "false")
     device.shell("settings", "put", "secure", "lock_screen_lock_after_timeout", "0")
     assert "Status: ok" in device.shell("am", "start", "-W", "-n", ACTIVITY)
+    baseline_labels = stock.visible_labels(device.screen())
+    if "Quickstep isn't responding" in baseline_labels:
+        device.note("Disposable launcher ANR witnessed before the Fluvi settings entrance")
+        device.click("Close app", limit=6)
+        device.shell("am", "start", "-W", "-n", ACTIVITY)
     stock.enter_settings(device)
     widget = stock.prepare_binding(device)
     panel(device)
@@ -258,7 +267,7 @@ def exercise(device, args):
             device.note(f"FAIL {name} sleep: {error}")
             failures.append(name + "-sleep")
         try:
-            direct_unlock(device, name, previous)
+            direct_unlock(device, name, previous, args.framework_dismiss)
         except (AssertionError, subprocess.SubprocessError, OSError) as error:
             device.note(f"FAIL {name} unlock: {error}")
             failures.append(name + "-unlock")
@@ -304,6 +313,7 @@ def main():
     parser.add_argument("--app-sha", required=True)
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--effects", action="store_true")
+    parser.add_argument("--framework-dismiss", action="store_true")
     parser.add_argument("--repetitions", type=int, choices=(1, 3), required=True)
     args = parser.parse_args()
     device = Device(args.output)
