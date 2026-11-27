@@ -50,10 +50,10 @@ with sqlite3.connect(sys.argv[1]) as db:
     db.execute("PRAGMA journal_mode=DELETE")
     c = db.execute("SELECT id FROM fluvi_categories WHERE is_system_uncategorized=1").fetchone()
     assert c, "R49 initial category unavailable"
-    db.execute("INSERT INTO fluvi_partners VALUES(?, ?, NULL, ?, NULL, 1000, 1000)", ("r50-synthetic-partner", "Synthetic fixture", c[0]))
+    db.execute("INSERT INTO fluvi_partners VALUES(?, ?, NULL, ?, NULL, 1000, 1000)", ("01KASP8G240000000000000002", "Synthetic fixture", c[0]))
     db.execute("INSERT INTO fluvi_ledger_entries VALUES(?, ?, ?, 'partnerDefault', ?, 'expense', 12345, 20784, 600, 1795600800000, 'manual', NULL, NULL, 1000, 1000, 1)",
-               ("r50-synthetic-entry", "r50-synthetic-partner", c[0], "R49→R50 continuity fixture"))
-    db.execute("INSERT INTO fluvi_notification_inbox (id, raw_notification_text, received_at_utc_ms, parse_status, processing_status, training_status, review_status, created_at_utc_ms, updated_at_utc_ms) VALUES('r50-synthetic-notification','Synthetic update fixture',1000,'unclassified','unprocessed','unused','none',1000,1000)")
+               ("01KASP8G240000000000000001", "01KASP8G240000000000000002", c[0], "R49→R50 continuity fixture"))
+    db.execute("INSERT INTO fluvi_notification_inbox (id, raw_notification_text, received_at_utc_ms, parse_status, processing_status, training_status, review_status, created_at_utc_ms, updated_at_utc_ms) VALUES('01KASP8G240000000000000003','Synthetic update fixture',1000,'unclassified','unprocessed','unused','none',1000,1000)")
 PY
 adb push "$state/seed.db" /data/local/tmp/r50-seed.db >/dev/null
 adb shell "cat /data/local/tmp/r50-seed.db > '$db'; rm -f '$db-wal' '$db-shm' /data/local/tmp/r50-seed.db"
@@ -87,8 +87,8 @@ if adb shell test -f "$db-wal"; then adb pull "$db-wal" "$state/after.db-wal" >/
 python3 - "$state/after.db" <<'PY'
 import sqlite3, sys
 with sqlite3.connect(sys.argv[1]) as db:
-    assert db.execute("SELECT note,amount_scaled_100 FROM fluvi_ledger_entries WHERE id='r50-synthetic-entry'").fetchone() == ("R49→R50 continuity fixture",12345)
-    assert db.execute("SELECT raw_notification_text FROM fluvi_notification_inbox WHERE id='r50-synthetic-notification'").fetchone() == ("Synthetic update fixture",)
+    assert db.execute("SELECT note,amount_scaled_100 FROM fluvi_ledger_entries WHERE id='01KASP8G240000000000000001'").fetchone() == ("R49→R50 continuity fixture",12345)
+    assert db.execute("SELECT raw_notification_text FROM fluvi_notification_inbox WHERE id='01KASP8G240000000000000003'").fetchone() == ("Synthetic update fixture",)
     assert not db.execute("PRAGMA foreign_key_check").fetchall()
     print("PASS unchanged ledger and notification test records")
 PY
