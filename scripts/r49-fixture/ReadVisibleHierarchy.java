@@ -3,6 +3,11 @@ package com.fluvi.r49.fixture;
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Activity;
 import android.app.Instrumentation;
+import android.app.KeyguardManager;
+import android.content.Context;
+import android.hardware.display.DisplayManager;
+import android.os.PowerManager;
+import android.view.Display;
 import android.app.UiAutomation;
 import android.graphics.Rect;
 import android.os.Bundle;
@@ -21,9 +26,11 @@ import java.nio.charset.StandardCharsets;
 /** Observe the disposable device without suspending the host's accessibility service. */
 public final class ReadVisibleHierarchy extends Instrumentation {
     private boolean interactiveWindows;
+    private boolean stateWitness;
     @Override
     public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        stateWitness = "true".equals(arguments.getString("stateWitness"));
         interactiveWindows = "true".equals(arguments.getString("interactiveWindows"));
         start();
     }
@@ -32,6 +39,20 @@ public final class ReadVisibleHierarchy extends Instrumentation {
     public void onStart() {
         Bundle result = new Bundle();
         try {
+            if (stateWitness) {
+                Context context = getTargetContext();
+                long startElapsed = SystemClock.elapsedRealtimeNanos();
+                long startUp = SystemClock.uptimeMillis();
+                Display display = context.getSystemService(DisplayManager.class).getDisplay(Display.DEFAULT_DISPLAY);
+                int state = display == null ? -1 : display.getState();
+                boolean interactive = context.getSystemService(PowerManager.class).isInteractive();
+                boolean locked = context.getSystemService(KeyguardManager.class).isKeyguardLocked();
+                result.putString("platform", "display=" + state + " interactive=" + interactive
+                        + " locked=" + locked + " startUp=" + startUp + " endUp=" + SystemClock.uptimeMillis()
+                        + " startEl=" + startElapsed + " endEl=" + SystemClock.elapsedRealtimeNanos());
+                finish(Activity.RESULT_OK, result);
+                return;
+            }
             UiAutomation automation = getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
             AccessibilityServiceInfo info = automation.getServiceInfo();
             info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;

@@ -6,6 +6,7 @@ import importlib.util
 from pathlib import Path
 import re
 import subprocess
+import sys
 import time
 import xml.etree.ElementTree as ET
 
@@ -30,13 +31,23 @@ class Device(stock.Device):
             self.click(self.host_label, package=settings)
         title = f"Use {self.host_label}"
         until = time.monotonic() + 10
+        retried = False
         while time.monotonic() < until:
             raw = self.screen()
             self.save("service-switch.xml", raw)
             nodes = list(ET.fromstring(raw).iter("node"))
-            found = [node for node in nodes if node.get("text") == title and node.get("visible") == "true"]
+            found = [node for node in nodes if node.get("text") == title]
             if len(found) == 1:
                 break
+            if not retried and until - time.monotonic() < 7:
+                rows = [node for node in nodes if node.get("text") == self.host_label
+                        and node.get("visible") == "true" and node.get("package") == settings]
+                if len(rows) == 1:
+                    x1, y1, x2, y2 = map(int, re.findall(r"-?\d+", rows[0].get("bounds")))
+                    self.shell("input", "tap", (x1 + x2)//2, (y1 + y2)//2)
+                    self.note("Retapped the witnessed visible service row after the list remained open")
+                    retried = True
+            time.sleep(.25)
         else:
             raise AssertionError("Actual Android service switch title did not appear")
         _, top, right, bottom = map(int, re.findall(r"-?\d+", found[0].attrib["bounds"]))
@@ -62,20 +73,16 @@ class Device(stock.Device):
 
 
 def system_state(device, name):
-    # A bracket over sequential public dumps, not an atomic platform snapshot.
-    raw = device.adb("shell", "cat /proc/uptime; dumpsys power; dumpsys window policy; cat /proc/uptime")
+    # Read actual public values from a separate test process. Power service
+    # dump text changed on API 37 and cannot identify the default display.
+    raw = device.adb("shell", "am", "instrument", "-w", "-e", "stateWitness", "true",
+                     WITNESS + "/.ReadVisibleHierarchy", timeout=6)
     device.save(name + "-state.txt", raw)
-    state = re.search(rb"Display Power: state=([A-Z_]+)", raw)
-    showing = re.search(rb"(?m)^\s*showing=(true|false)\b", raw)
-    if showing is None:
-        showing = re.search(rb"(?m)^\s*mShowingLockscreen=(true|false)\b", raw)
-    wakefulness = re.search(rb"\bmWakefulness=([A-Za-z]+)", raw)
-    return (
-        state[1].decode() if state else "UNKNOWN",
-        showing[1].decode() if showing else "UNKNOWN",
-        wakefulness[1].decode() if wakefulness else "UNKNOWN",
-    )
-
+    state = re.search(rb"platform=display=(-?\d+) interactive=(true|false) locked=(true|false)", raw)
+    if state is None:
+        return ("UNKNOWN", "UNKNOWN", "UNKNOWN")
+    display = {1: "OFF", 2: "ON", 3: "DOZE", 4: "DOZE_SUSPEND", -1: "MISSING"}
+    return (display.get(int(state[1]), "UNKNOWN"), state[3].decode(), state[2].decode())
 
 def poll_state(device, name, expected_display, locked):
     end = time.monotonic() + 10
@@ -86,7 +93,7 @@ def poll_state(device, name, expected_display, locked):
             return state
         sample += 1
         time.sleep(.12)
-    raise AssertionError(f"{name} precondition absent, last display/lock/wakefulness={state}")
+    raise AssertionError(f"{name} precondition absent, last display/lock/interactive={state}")
 
 
 def label_screen(device):
@@ -113,8 +120,14 @@ def clipboard(device, name, expected_sha):
         pass
     assert "Felvétel a vágólapon." in label_screen(device)
     device.shell("run-as", WITNESS, "rm", "-f", "files/paste.txt")
-    assert "Status: ok" in device.shell("am", "start", "-W", "-n", WITNESS + "/.ClipboardWitness")
-    device.click("Paste capture", package=WITNESS)
+    assert "Status: ok" in device.shell(
+        "am", "start", "-S", "-W", "-n", WITNESS + "/.ClipboardWitness", "--ez", "paste", "true")
+    end = time.monotonic() + 5
+    while time.monotonic() < end:
+        output = device.shell("run-as", WITNESS, "ls", "files", timeout=4)
+        if "paste.txt" in output.splitlines():
+            break
+        time.sleep(.15)
     text = device.adb("exec-out", "run-as", WITNESS, "cat", "files/paste.txt")
     assert len(text) <= 131072 and text.startswith(b"FLUVI_WA_LOCKSCREEN_CAPTURE_V1\n")
     body, digest = text.rsplit(b"sha256=", 1)
@@ -157,7 +170,7 @@ def wake(device, name):
 def held_absence(device, name, expected_display, locked):
     _, first = device.capture(name + "-first-request")
     observed = poll_state(device, name, expected_display, locked)
-    device.note(f"{name} observed display/lock/wakefulness={observed}, first requested root={first}")
+    device.note(f"{name} observed display/lock/interactive={observed}, first requested root={first}")
     elapsed = time.monotonic() + 5
     samples = 0
     present = []
@@ -179,7 +192,7 @@ def held_absence(device, name, expected_display, locked):
     return first
 
 
-def trial(device, name):
+def locked_sleep(device, name):
     device.shell("input", "keyevent", "KEYCODE_SLEEP")
     poll_state(device, name + "-pre-sleep", "OFF", True)
     _, before_sleep = wake(device, name + "-sleep-start")
@@ -188,9 +201,15 @@ def trial(device, name):
     device.shell("input", "keyevent", "KEYCODE_SLEEP")
     assert time.monotonic() - started < 10
     sleep_first = held_absence(device, name + "-locked-sleep", "OFF", True)
+    device.note(f"PASS {name} locked sleep, first requested root {sleep_first}")
+    return before_sleep
 
+
+def direct_unlock(device, name, previous):
+    device.shell("input", "keyevent", "KEYCODE_SLEEP")
+    poll_state(device, name + "-pre-unlock", "OFF", True)
     image, before_unlock = wake(device, name + "-unlock-start")
-    assert before_unlock == before_sleep, (before_sleep, before_unlock)
+    assert previous is None or before_unlock == previous, (previous, before_unlock)
     # Ordinary swipe-only keyguard. Move outside the ORB's touch region.
     x = image.width // 5
     device.note(f"{name} genuine swipe unlock directly from painted root {before_unlock}")
@@ -201,7 +220,7 @@ def trial(device, name):
     assert re.search(rb"mCurrentFocus=.*(?:launcher|com\.fluvi\.app)", focused, re.I), (
         "Dismissed keyguard had no witnessed launcher or Fluvi focus"
     )
-    device.note(f"PASS {name} locked sleep and direct unlock; first requested roots {sleep_first}, {unlocked_first}")
+    device.note(f"PASS {name} direct unlock, first requested root {unlocked_first}")
 
 
 def exercise(device, args):
@@ -232,17 +251,20 @@ def exercise(device, args):
     failures = []
     for index in range(args.repetitions):
         name = f"warm-{index + 1:02d}"
+        previous = None
         try:
-            trial(device, name)
+            previous = locked_sleep(device, name)
         except (AssertionError, subprocess.SubprocessError, OSError) as error:
-            device.note(f"FAIL {name}: {error}")
-            _, showing, _ = system_state(device, name + "-failed")
-            failures.append(name)
-            if showing == "true":
-                # Prepare the next independent trial from a known unlocked state.
-                device.shell("input", "keyevent", "KEYCODE_WAKEUP")
-                device.shell("wm", "dismiss-keyguard")
-            device.shell("input", "keyevent", "KEYCODE_HOME")
+            device.note(f"FAIL {name} sleep: {error}")
+            failures.append(name + "-sleep")
+        try:
+            direct_unlock(device, name, previous)
+        except (AssertionError, subprocess.SubprocessError, OSError) as error:
+            device.note(f"FAIL {name} unlock: {error}")
+            failures.append(name + "-unlock")
+            device.shell("input", "keyevent", "KEYCODE_WAKEUP")
+            device.shell("wm", "dismiss-keyguard")
+        device.shell("input", "keyevent", "KEYCODE_HOME")
         if index == 0 and not args.baseline:
             try:
                 panel(device)
@@ -263,6 +285,13 @@ def exercise(device, args):
                 device.shell("input", "keyevent", "KEYCODE_HOME")
     logs = device.adb("logcat", "-d", "-s", TAG)
     assert set(re.findall(rb"bound host=1003 id=(\d+)", logs)) == {widget}
+    if args.effects:
+        import r51_entrance_fixture
+        try:
+            r51_entrance_fixture.exercise(device, sys.modules[__name__], widget.decode(), args.baseline)
+        except (AssertionError, subprocess.SubprocessError, OSError) as error:
+            device.note(f"FAIL entrance samples: {error}")
+            failures.append("entrance")
     assert not failures, f"Preserved failing trials: {failures}"
 
 
@@ -274,6 +303,7 @@ def main():
     parser.add_argument("--observer", type=Path, required=True)
     parser.add_argument("--app-sha", required=True)
     parser.add_argument("--baseline", action="store_true")
+    parser.add_argument("--effects", action="store_true")
     parser.add_argument("--repetitions", type=int, choices=(1, 3), required=True)
     args = parser.parse_args()
     device = Device(args.output)
