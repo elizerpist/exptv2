@@ -13,13 +13,15 @@ from PIL import Image
 
 PACKAGE = "com.fluvi.app"
 WA = "tk.zwander.lockscreenwidgets"
-SERVICE = f"{PACKAGE}/{WA}.services.Accessibility"
 ORB = "Fluvi · Aktuális header ORB"
 
 
 class Device:
-    def __init__(self, output):
+    def __init__(self, output, standalone=False):
         self.output = output
+        self.host_package = WA if standalone else PACKAGE
+        self.host_label = "Widgets Anywhere" if standalone else "Fluvi"
+        self.service = f"{self.host_package}/{WA}.services.Accessibility"
         output.mkdir(parents=True, exist_ok=True)
         self.steps = []
 
@@ -78,9 +80,16 @@ class Device:
         while time.monotonic() < end:
             state = self.adb("shell", "dumpsys", "accessibility")
             self.save("accessibility.txt", state)
-            lines = [line for line in state.decode().splitlines() if "boundServices" in line]
-            if any(WA + ".services.Accessibility" in line for line in lines):
-                return True
+            lines = state.decode().splitlines()
+            bound = [line for line in lines if re.search(r"bound\s*services", line, re.IGNORECASE)]
+            enabled = [line for line in lines if re.search(r"enabled\s*services", line, re.IGNORECASE)]
+            if any(self.service in line for line in enabled) and any(
+                self.service in line or f"label={self.host_label}," in line for line in bound
+            ):
+                records = self.adb("shell", "dumpsys", "activity", "services", self.service)
+                self.save("accessibility-binding.txt", records)
+                if self.service.encode() in records:
+                    return True
             time.sleep(1)
         return False
 
@@ -88,17 +97,20 @@ class Device:
         self.click("More Info")
         self.click("Grant")
         settings_package = "com.android.settings"
-        if not self.click("Fluvi", package=settings_package, optional=True, limit=4):
+        if not self.click(self.host_label, package=settings_package, optional=True, limit=4):
             self.click("Downloaded apps", "Installed apps", package=settings_package)
-            self.click("Fluvi", package=settings_package)
-        self.click("Use Fluvi", "Use Widgets Anywhere", package=settings_package)
+            self.click(self.host_label, package=settings_package)
+        self.click(f"Use {self.host_label}", package=settings_package)
         self.click("Allow", "OK")
         enabled = self.shell("settings", "get", "secure", "enabled_accessibility_services")
-        assert SERVICE in enabled.split(":"), "The exact component was not consented"
+        assert self.service in enabled.split(":"), "The exact component was not consented"
         assert self.service_connected(), "Service connection was not observed"
         self.note("Normal accessibility consent and bound service observed")
-        self.shell("input", "keyevent", "KEYCODE_BACK")
-        self.shell("input", "keyevent", "KEYCODE_BACK")
+        for _ in range(2):
+            root = ET.fromstring(self.screen())
+            if not any(n.get("package") == settings_package for n in root.iter("node")):
+                break
+            self.shell("input", "keyevent", "KEYCODE_BACK")
 
     def crop(self, name):
         begin = self.shell("cat", "/proc/uptime").split()[0]
@@ -134,7 +146,7 @@ class Device:
             self.note(f"Tutorial gesture with {fingers} fingers")
 
 
-def exercise(device, apk, system, control_apk, control_test, observer):
+def exercise(device, apk, system, control_apk, control_test, observer, external_wa):
     expected_api = system.split(".")[0]
     actual = device.shell("getprop", "ro.build.version.sdk")
     assert actual == expected_api, (actual, expected_api)
@@ -146,22 +158,29 @@ def exercise(device, apk, system, control_apk, control_test, observer):
     device.note(device.adb("install", control_apk, timeout=30).decode().strip())
     device.note(device.adb("install", control_test, timeout=30).decode().strip())
     device.note(device.adb("install", observer, timeout=30).decode().strip())
+    if external_wa:
+        device.note(device.adb("install", external_wa, timeout=35).decode().strip())
     device.shell("wm", "dismiss-keyguard")
     launch = device.shell("am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
     device.save("fluvi-launch.txt", launch.encode())
     assert "Status: ok" in launch, launch
     assert device.shell("pidof", PACKAGE), "Fluvi exited during launch"
-    device.note("Fluvi launcher started without standalone WA")
+    device.note(f"Fluvi launcher started. Host under test: {device.host_package}")
     device.click("Beállítások", "Settings")
     device.click("Zárképernyő")
     device.click("Aktuális fejléc megosztása")
     device.click("Engedélyezem")
-    device.click("Zárképernyős widget elhelyezése")
+    if external_wa:
+        host_launch = device.shell("am", "start", "-W", "-n", f"{WA}/.MainActivity")
+        device.save("wa-launch.txt", host_launch.encode())
+        assert "Status: ok" in host_launch, host_launch
+    else:
+        device.click("Zárképernyős widget elhelyezése")
     # Upstream first-run pager. Never grant optional privileges to advance it.
     for step in range(10):
         raw = device.screen()
         device.save(f"onboarding-{step:02d}.xml", raw)
-        if b'text="Accessibility"' in raw and SERVICE not in device.shell(
+        if b'text="Accessibility"' in raw and device.service not in device.shell(
             "settings", "get", "secure", "enabled_accessibility_services",
         ).split(":"):
             device.settings_consent()
@@ -170,14 +189,17 @@ def exercise(device, apk, system, control_apk, control_test, observer):
         if not device.click("Next", optional=True, limit=3):
             break
     enabled = device.shell("settings", "get", "secure", "enabled_accessibility_services")
-    assert SERVICE in enabled.split(":"), "Ordinary accessibility onboarding did not finish"
+    assert device.service in enabled.split(":"), "Ordinary accessibility onboarding did not finish"
     assert device.service_connected()
     # WA renders the first feature card's enabled state as a clickable label.
     device.click("Disabled", "Frame Enabled", "Enable Frame")
-    for label in ("R49 Test Marker", ORB):
-        device.click("Add Widget")
-        device.click(label)
-        device.click("Create", "Allow", "Add widget")
+    for label, search in (("R49 Test Marker", "R49"), (ORB, "ORB")):
+        device.click("Add Widget", package=device.host_package)
+        if not device.click(label, optional=True, limit=3, package=device.host_package):
+            device.click("Search", package=device.host_package)
+            device.shell("input", "text", search)
+            device.click(label, package=device.host_package)
+        device.click("Create", "Allow", optional=True, limit=5)
     device.crop("bound")
     bindings = (device.output / "bound-widgets.txt").read_text()
     assert re.search(r"hostId[=:]\s*1003\b", bindings), "Real WA host ID absent"
@@ -216,10 +238,11 @@ def main():
     parser.add_argument("--control-apk", type=Path, required=True)
     parser.add_argument("--control-test", type=Path, required=True)
     parser.add_argument("--observer", type=Path, required=True)
+    parser.add_argument("--external-wa", type=Path)
     args = parser.parse_args()
-    device = Device(args.output)
+    device = Device(args.output, args.external_wa is not None)
     try:
-        exercise(device, args.apk, args.system, args.control_apk, args.control_test, args.observer)
+        exercise(device, args.apk, args.system, args.control_apk, args.control_test, args.observer, args.external_wa)
     except (AssertionError, subprocess.SubprocessError, OSError, ET.ParseError) as error:
         device.note(f"FAILED: {error}")
         device.save("first-divergence.png", device.adb("exec-out", "screencap", "-p"))

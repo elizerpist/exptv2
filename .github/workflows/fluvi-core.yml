@@ -11,7 +11,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        system: ['37.0', '35']
+        include:
+          - system: '35'
+            host: embedded
+          - system: '37.0'
+            host: embedded
+          - system: '37.0'
+            host: release
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -40,15 +46,20 @@ jobs:
       - name: Build the fixture-only hierarchy observer and match fixture signatures
         run: |
           bash scripts/r49-fixture/build-observer.sh "$RUNNER_TEMP/observer"
-          for package in r49-control r49-control-test; do
-            "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$RUNNER_TEMP/r49-test.jks" \
-              --ks-pass pass:android --key-pass pass:android --out "$RUNNER_TEMP/$package.apk" \
-              "build/app/outputs/flutter-apk/$package.apk"
-          done
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$RUNNER_TEMP/r49-test.jks" \
             --ks-pass pass:android --key-pass pass:android --out "$RUNNER_TEMP/r49-observer.apk" \
             "$RUNNER_TEMP/observer/observer-unsigned.apk"
-          sha256sum "$RUNNER_TEMP"/r49-{control,control-test,observer}.apk >> r49-device-evidence/apks.sha256
+          sha256sum "$RUNNER_TEMP/r49-observer.apk" build/app/outputs/flutter-apk/r49-control{,-test}.apk \
+            >> r49-device-evidence/apks.sha256
+      - name: Verify the unmodified WA release for the independent control
+        if: matrix.host == 'release'
+        run: |
+          curl --disable --fail --silent --show-error --location --retry 2 \
+            https://github.com/zacharee/LockscreenWidgets/releases/download/4.7.5/WidgetsAnywhere_4.7.5-release.apk \
+            --output "$RUNNER_TEMP/wa-release.apk"
+          printf '%s  %s\n' 7cccb3e34a2b80107c8c41cbe76548023a821580456f442674b68d1281df4429 \
+            "$RUNNER_TEMP/wa-release.apk" | sha256sum --check
+          echo "FLUVI_R49_EXTERNAL_WA=$RUNNER_TEMP/wa-release.apk" >> "$GITHUB_ENV"
       - name: Enable KVM
         run: |
           test -e /dev/kvm
@@ -73,10 +84,15 @@ jobs:
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
           pre-emulator-launch-script: >-
             test -s "$FLUVI_R49_FIXTURE_APK" && test -s build/app/outputs/flutter-apk/r49-control.apk
-          script: python3 scripts/test-r49-host-device.py "$FLUVI_R49_FIXTURE_APK" "${{ matrix.system }}" r49-device-evidence --control-apk "$RUNNER_TEMP/r49-control.apk" --control-test "$RUNNER_TEMP/r49-control-test.apk" --observer "$RUNNER_TEMP/r49-observer.apk"
+          script: >-
+            python3 scripts/test-r49-host-device.py "$FLUVI_R49_FIXTURE_APK" "${{ matrix.system }}" r49-device-evidence
+            --control-apk build/app/outputs/flutter-apk/r49-control.apk
+            --control-test build/app/outputs/flutter-apk/r49-control-test.apk
+            --observer "$RUNNER_TEMP/r49-observer.apk"
+            ${FLUVI_R49_EXTERNAL_WA:+--external-wa "$FLUVI_R49_EXTERNAL_WA"}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r49-host-observed-${{ matrix.system }}-a614bf74f7a0
+          name: r49-host-${{ matrix.host }}-${{ matrix.system }}-a614bf74f7a0
           path: r49-device-evidence/
           if-no-files-found: warn
