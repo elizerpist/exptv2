@@ -24346,3 +24346,146 @@ Complementary CI job envelopes were 6m53s for core and native, 3m23s for curated
 **D50 — IMPLEMENTATION.** Preserve the proven normal WA lockscreen visibility/window/host path, build a narrow Fluvi-owned host and remove the generic WA application from the product. Restore the Android accessibility settings entry above fixed 1×1 and 2×2 choices. Render only the current manual Balance palette and animation, independent of dashboard mode and scope. A one-finger long press moves the entire compact transparent window. Preserve lockscreen print, launcher ORB behavior, Fluvi data and owned upgrade state. Begin from application branch base `a5d40dd512ed1b802b5ad028b3e9ef2440ad98ec`. The [21-part handoff](diagnostics/FLUVI_R50_BALANCE_ORB_HANDOFF.md) assigns the targeted tests, new signed APK and direct-download verification. The next owner action is visual acceptance of the named R50 build after delivery.
 
 **Round status.** Reviewer decision and implementation handoff recorded. R50 application implementation, automation and signed phone artifact belong to the next execution. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+## R50 Balance ORB implementation and initial delivery · 2026-11-27
+
+Application source `7f83664c1ad4d48b33f35fe05de2e2f593545f92` on
+`implement/r50-balance-orb`, based on `a5d40dd512ed1b802b5ad028b3e9ef2440ad98ec`.
+The reviewer handoff and plan were read at `5ae52e13d88fa6b45b479935f531f39135164db8`.
+The phone observation of the R49 lockscreen print remains E50.1. The original
+R49 distribution was fetched anonymously in full and matched its 136,077,230
+bytes, SHA-256 `a70263a536f54d7d9d5d00d5052bfdbd75775c924d0fa0b27d8db59e9cff264e`,
+and the established signer. The KWA trace was 3,317 bytes and contained two
+attach/draw/remove cycles. The accepted KWA source supplied the long-press
+and root movement pattern. [Application diff](https://github.com/elizerpist/exptv2/compare/a5d40dd512ed1b802b5ad028b3e9ef2440ad98ec...7f83664c1ad4d48b33f35fe05de2e2f593545f92)
+
+- **E50.7, red controls.** The base failed the accessibility settings entry,
+  generic WA application packaging and Balance-only structural checks.
+  The pre-change publisher emitted `[balance, budget, mind]` against the
+  Balance-only expectation. The bounded visual oracle accepted its positive
+  and rejected child-only movement, undersized host, clipping, wrong palette,
+  and repeated static frames.
+- **D50.1, product.** The Fluvi-owned API 37 product consumes the existing
+  Fluvi AARs and the focused WA 4.7.5 library. The three merged manifests have
+  two activities each, the dedicated stable accessibility component, and the
+  two existing launcher providers plus the fixed Balance provider. The old
+  WA application activities, DEX definitions, wallpaper/interconnect, Tasker,
+  Bugsnag dependency and production inputs were removed. The two upstream
+  license files individually match the original checkout. The notification
+  source selector still owns `QUERY_ALL_PACKAGES`.
+  [Three manifests, runtime dependencies, and build log](https://github.com/elizerpist/exptv2/actions/runs/46055524093/artifacts/15226842299)
+- **D50.2, owners.** Fluvi settings own display size and open Android
+  accessibility settings. A persisted fixed AppWidget identity authorizes
+  host 1003 and the native Balance packet epoch. The shell and home Balance
+  branch share a color policy. The Flutter publisher retains measured header
+  geometry, follows semantic changes offstage, and sends bounded image
+  packets. The native provider retains the last valid packet while the
+  replacement prepares. The retained WA service reads the main display,
+  rechecks after the existing 50 ms fresh-add delay, then mounts a compact
+  single widget at the saved center. A held one-finger gesture moves the
+  window layout. [Dart and Kotlin source navigation](https://github.com/elizerpist/exptv2/blob/31c7656b88ce5d944e51dc43951cb6b32dcc74c5/docs/codegraph-r50-balance-orb.md)
+- **D50.3, download.** `com.fluvi.app`, version `0.1.1`, code `3`,
+  profile `HUMAN_DIAGNOSTIC`, 113,932,899 bytes. An anonymous full HTTP GET
+  returned 200 and SHA-256
+  `a3210d3ddd9c69098b2bd60258375a67ad770ef54ba2db1089fdef128c4ae2b0`.
+  APK signature v2 and v3, 16 KiB ZIP alignment, ZIP integrity, the original
+  certificate `faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`,
+  and the full source SHA and purpose in each AOT library passed. APK content
+  entries match the runner binary except for signing records. The original
+  signer signed the exact builder output from job `140696954468`, artifact
+  `15226842299`. [Direct APK](https://media.githubusercontent.com/media/elizerpist/exptv2/76f40ac6c73909632c723592932acec56ad310bb/Fluvi_R50_HUMAN_7f83664c1ad4.apk)
+- **D50.4, graph.** Source `7f83664c1ad4d48b33f35fe05de2e2f593545f92`,
+  graph commit `31c7656b88ce5d944e51dc43951cb6b32dcc74c5`.
+  SCIP Dart 1.6.2 produced 810 documents, 20,125 repository symbols,
+  135,861 references and 41,982 edges. Index SHA-256
+  `3892d70b10ef31cf4979d6adc663179ab55c03ce49c4d92a9f43402ee2807ca5`.
+  All 100 shard hashes matched. The tooling package passed 16 tests and its
+  analyzer. Kotlin coverage is the separately checked source inventory.
+  [Manifest](https://github.com/elizerpist/exptv2/blob/31c7656b88ce5d944e51dc43951cb6b32dcc74c5/docs/codegraph/manifest.json)
+
+### Qualification and preserved evidence
+
+| Gate | Outcome and evidence |
+| --- | --- |
+| R1 · Product and settings | **PASS** for all three merged manifests, profile APK DEX/resource inventory, dependency report, original license bytes, and the three ordered installed settings rows on API 35 and 37. |
+| R2 · Signed data update | **PASS** on API 37 with the genuine signed R49 and published R50 APKs. `adb install -r` succeeded. The synthetic ledger entry and notification, home and snapshot preferences, FG/BG state, and the OS accessibility component survived. The disabled R49 frame remained dormant and the old packet was removed. [Run](https://github.com/elizerpist/exptv2/actions/runs/46057458666) · [Evidence](https://github.com/elizerpist/exptv2/actions/runs/46057458666/artifacts/15227057585) |
+| R2 · Previous host IDs | **BLOCKED during setup.** The independent API 37 fixture reached a real R49 host-1003 allocation (widget ID 3), then R49's bind returned false before the upgrade. The data-update pass above covers a dormant frame. Retaining an existing bound ID, deleting only the obsolete owned ID and preserving the other host's ID still need the multi-ID witness. [First grant failure](https://github.com/elizerpist/exptv2/actions/runs/46057036264/artifacts/15226208593) |
+| R3 · Balance data | **PASS** for atomic packet shape/identity and ordered frames (3 native tests), stale Dart work, Balance-only mode independence and epoch revocation. The focused test changed Balance with Mind/Budget active. Actual integrated pixels, palette parity against the home fixture, and static-motion control are reported in the stock result below. |
+| R4 · Geometry | **PASS** for both fixed sizes in the independently exercised bounds calculations (2 JUnit tests) and the negative oracle. Root/child compositor motion and contour evidence are reported with the stock result below. |
+| R6 · Native and scoped Flutter | **PASS**. Room 150, app 32 including 3 packet tests, 2 WA library geometry tests. Boundaries and edited focused Dart gates passed (9 tests). CI analyzer completed with 12 information-level findings. The curated Flutter runs passed 1,037 + 3 + 4 tests. [Native reports](https://github.com/elizerpist/exptv2/actions/runs/46055524093/artifacts/15227440020) · [Flutter job](https://github.com/elizerpist/exptv2/actions/runs/46055524093/job/140696954736) |
+| R6 · Full Flutter | **FAIL**, 2,767 pass / 3 skipped / 115 fail. The set of 115 failing test identities is contained in the preserved R49 comparison. The R49 comparison table contains 116 unique failure identities. [Full Flutter](https://github.com/elizerpist/exptv2/actions/runs/46055524093/job/140696954763) · [Goldens](https://github.com/elizerpist/exptv2/actions/runs/46055524093/artifacts/15227525345) |
+| R6 · Qualified Human job and scheduled lanes | **SKIPPED** by workflow conditions. The main stock-job gate blocked the qualified Human marker. The independent profile builder produced the exact signed diagnostic APK. Nightly and historical dashboard-profile inputs used the regular dispatch defaults. |
+
+The initial `a1aff024` build exposed the missing shell palette import.
+`52650ff6` corrected it and exposed the remaining cold startup provider caller
+and stale test workflow names. Both corrections are in the delivered source.
+The first local Gradle attempt filled its cache disk before compilation. The
+API 35 SDK, JDK 17 and Flutter environment are present locally, and the installed
+emulator trials ran in the KVM Actions lanes. [Initial run](https://github.com/elizerpist/exptv2/actions/runs/46054400752) · [Second run](https://github.com/elizerpist/exptv2/actions/runs/46054782743)
+
+The signed-upgrade first attempt stopped at missing `rg`. A later attempt
+authenticated both APKs and booted stock API 37, then the existing ledger
+trigger rejected the synthetic non-ULID ID. Those preconditions were corrected
+in the separate fixtures. [Missing tool](https://github.com/elizerpist/exptv2/actions/runs/46056555544) · [Ledger guard](https://github.com/elizerpist/exptv2/actions/runs/46056676109)
+
+The first stock trials observed the three labels in `content-desc`, while
+the original assertion read `text`. The next trial reached each Android
+service page. The captured hierarchy and screenshot showed the actual toggle
+to the right of the tapped title, still off. The last fixture uses that
+measured control and the published signed APK.
+[Original API 35](https://github.com/elizerpist/exptv2/actions/runs/46055524093/job/140700160011) · [Original API 37](https://github.com/elizerpist/exptv2/actions/runs/46055524093/job/140700159998) · [Settings and toggle observations](https://github.com/elizerpist/exptv2/actions/runs/46057106044)
+
+On the initial 0.1.1 APK, the last stock trial passed normal single-use
+binding on both API 35 and 37. Each profile first cancelled widget ID 3,
+then allocated widget ID 4. Android bound ID 4 to
+`com.fluvi.app.widget.orb.FluviHeaderOrbWidgetProvider`. Host 1003
+retained ID 4. The first Balance packet remained pending for the 30-second
+observation. The tests therefore stopped before an eligible wake, compositor
+comparison, drag, or any hide scene. [API 35 raw record](https://github.com/elizerpist/exptv2/actions/runs/46057671780/artifacts/15226963211) · [API 37 raw record](https://github.com/elizerpist/exptv2/actions/runs/46057671780/artifacts/15227980360)
+
+The first A–K dashboard job failed the year range `2027..2051` with scenario
+year `2026`, matching the prior R49 observation. Its installation, diagnostic
+APK and probe data are separate. [Dashboard job](https://github.com/elizerpist/exptv2/actions/runs/46055524093/job/140699399563) · [Dashboard evidence](https://github.com/elizerpist/exptv2/actions/runs/46055524093/artifacts/15228176355)
+
+### R50 0.1.2 verified Balance material repair
+
+The exact renderer control reproduced `unverifiedLoop` using default Dual
+Tide and the enabled Portal inputs, with real sampled 991 × 331 header
+geometry and an 85 ms sample interval. The nominal first window failed its
+existing seam and motion limits. Testing real suffixes found viable samples
+starting at 3,060 ms and elsewhere on the same source timeline. The new
+selection retains the original candidate and then tries bounded contiguous
+segments with the same verifier, material, sample interval, and package
+limits. A nonstationary segment is required. Its first sample supplies the
+corresponding UTC phase origin. Default RED became green with 12 frames at
+85 ms and a 3,060 ms offset. Ten focused tests passed.
+
+Independent direct-source PNG checks matched the selected first frame
+for Dual Tide (12 frames), Braided Current (42 frames), and reduced-motion
+Static (one frame). These checks verify the sampled source and moving packet
+selection. Integrated Android pixels remain a separate gate. The publisher
+now logs preparation, bounded failure reason, or material ready under the fixed
+ID. [Runtime and fixture change](https://github.com/elizerpist/exptv2/commit/c1e674b2bcf31feab2ce5f5143b5032a109215ba)
+
+**Latest APK** is version `0.1.2`, versionCode `4`, `com.fluvi.app`,
+profile `HUMAN_DIAGNOSTIC`, from
+`c1e674b2bcf31feab2ce5f5143b5032a109215ba`. The exact anonymous GET returned
+HTTP 200 and 113,932,899 bytes with SHA-256
+`c63ff3ae0c73afc0a77a5d5131b567b8080fbd38429ed1ec32a5471488021703`.
+The established certificate is
+`faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`.
+APK signature v2 and v3, 16 KiB alignment, three ABI identities and the source
+and purpose in each AOT library passed. [Direct APK](https://media.githubusercontent.com/media/elizerpist/exptv2/4fdd6c43d55d1aa00c95307ed4d5eaf7a232e287/Fluvi_R50_HUMAN_c1e674b2bcf3.apk) · [Exact builder artifact](https://github.com/elizerpist/exptv2/actions/runs/46059162982/artifacts/15228271885)
+
+The new exact-source graph is commit
+`2e6bbbfc35d3f0c435449f12e7cf1ff94545aa89` with 811 documents, 20,127 repository
+symbols, 135,892 references and 42,000 edges. SCIP Dart 1.6.2 index SHA-256 is
+`0ce2129dedf39bb24eee2c3808379f4964533b59dca2c2da97222337de5f5593`.
+The manifest, source and all shard checks passed. [Exact graph](https://github.com/elizerpist/exptv2/blob/2e6bbbfc35d3f0c435449f12e7cf1ff94545aa89/docs/codegraph/manifest.json)
+
+The 0.1.2 builder, native suite, Flutter analysis and curated 1,038 + 3 + 4
+Flutter cases passed at delivery. The exact-signed update and the normal
+workflow's stock/visual, complete Flutter and A–K dashboard lanes were
+running at this checkpoint. [Normal workflow](https://github.com/elizerpist/exptv2/actions/runs/46059162982) · [Exact signed upgrade](https://github.com/elizerpist/exptv2/actions/runs/46060044408)
+
+**PHYSICAL VALIDATION — PENDING, USER ONLY**
