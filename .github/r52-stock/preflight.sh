@@ -12,14 +12,14 @@ adb shell wm density >> "$out/display.txt"
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard
 adb shell am start -W -a android.settings.SETTINGS
-adb shell 'cat /proc/uptime; dumpsys power | grep -E "mWakefulness=|Display Power: state="; dumpsys display | grep -m 2 "state ON"' > "$out/power-on.txt"
+adb shell 'cat /proc/uptime; dumpsys power; dumpsys display' > "$out/power-on.txt"
 adb shell screenrecord --bit-rate 3000000 --time-limit 8 --size 540x1200 /data/local/tmp/r52-cal.mp4 > "$out/record.log" 2>&1 &
 record=$!
 sleep 2
 adb shell 'cat /proc/uptime; input keyevent KEYCODE_HOME; cat /proc/uptime' > "$out/action.txt"
 sleep 2
 adb shell input keyevent KEYCODE_SLEEP
-adb shell 'cat /proc/uptime; dumpsys power | grep -E "mWakefulness=|Display Power: state="; dumpsys display | grep -m 2 "state OFF"' > "$out/power-off.txt"
+adb shell 'cat /proc/uptime; dumpsys power; dumpsys display' > "$out/power-off.txt"
 wait "$record"
 adb pull /data/local/tmp/r52-cal.mp4 "$out/calibration.mp4"
 bash .github/r52-stock/decode.sh "$out"

@@ -2,6 +2,13 @@
     <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="35" />
     <application android:label="Fluvi fixture observer" android:hasCode="true" android:debuggable="true">
         <activity android:name=".ClipboardWitness" android:exported="true" />
+        <activity android:name=".R52ReferenceActivity" android:exported="true" android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
     </application>
     <instrumentation android:name=".ReadVisibleHierarchy"
         android:targetPackage="com.fluvi.r49.fixture" />
