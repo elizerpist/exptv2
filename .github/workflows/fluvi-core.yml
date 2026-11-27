@@ -58,7 +58,7 @@ permissions:
   contents: read
 jobs:
   service:
-    if: ${{ !startsWith(inputs.test_scope, 'r47_ui_') && !startsWith(inputs.test_scope, 'r46_ui_') && !startsWith(inputs.test_scope, 'r45_ui_') && inputs.test_scope != 'r47_update_route' && inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' && inputs.test_scope != 'r44_update' && inputs.test_scope != 'r448_update_routes' && inputs.test_scope != 'r448_update_restart' && inputs.test_scope != 'r449_ui_fluvi' && inputs.test_scope != 'r449_ui_wa' && inputs.test_scope != 'r446_update_once' && inputs.test_scope != 'r446_update_arm' && inputs.test_scope != 'r44_update_reopen' && inputs.test_scope != 'r44_update_private' && inputs.test_scope != 'r43_flutter' && inputs.test_scope != 'r47_animated_flutter' && inputs.test_scope != 'r47_paired_ci' }}
+    if: ${{ !startsWith(inputs.test_scope, 'r47_ui_') && !startsWith(inputs.test_scope, 'r46_ui_') && !startsWith(inputs.test_scope, 'r45_ui_') && inputs.test_scope != 'r47_update_route' && inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' && inputs.test_scope != 'r44_update' && inputs.test_scope != 'r448_update_routes' && inputs.test_scope != 'r448_update_restart' && inputs.test_scope != 'r449_ui_fluvi' && inputs.test_scope != 'r449_ui_wa' && inputs.test_scope != 'r446_update_once' && inputs.test_scope != 'r446_update_arm' && inputs.test_scope != 'r44_update_reopen' && inputs.test_scope != 'r44_update_private' && inputs.test_scope != 'r43_flutter' && inputs.test_scope != 'r47_animated_flutter' && inputs.test_scope != 'r47_paired_ci' && inputs.test_scope != 'r47_evidence_archive' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -388,6 +388,55 @@ jobs:
             ${{ runner.temp }}/r44-update/r46frames/**/*.png
           if-no-files-found: warn
           retention-days: 14
+
+  r47-evidence-archive:
+    if: ${{ inputs.test_scope == 'r47_evidence_archive' }}
+    name: Preserve synthetic R47 trial ${{ matrix.run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        run: ['45948179372', '45949821696', '45951672202']
+    steps:
+      - name: Retrieve original trial evidence
+        uses: actions/download-artifact@v4
+        with:
+          repository: elizerpist/exptv2
+          run-id: ${{ matrix.run }}
+          name: r40-service-${{ matrix.run }}
+          path: ${{ runner.temp }}/r47-retained
+          github-token: ${{ github.token }}
+      - name: Verify evidence contains no APK and record file hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/r47-retained"
+          if find "$root" -type f \( -iname '*.apk' -o -iname '*.aab' \) -print -quit | grep -q .; then
+            echo 'APK in source evidence; refusing to archive' >&2
+            exit 1
+          fi
+          while IFS= read -r -d '' tarfile; do
+            if ! tar -tf "$tarfile" > "$RUNNER_TEMP/r47-tar-list.txt" 2>/dev/null; then
+              echo 'Uninspectable archive; refusing to archive' >&2
+              exit 1
+            fi
+            if grep -Ei '\.(apk|aab)$' "$RUNNER_TEMP/r47-tar-list.txt"; then
+              echo 'APK nested in source evidence; refusing to archive' >&2
+              exit 1
+            fi
+          done < <(find "$root" -type f -name '*.tar' -print0)
+          (cd "$root" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$RUNNER_TEMP/r47-retained-hashes.txt"
+          cp "$RUNNER_TEMP/r47-retained-hashes.txt" "$root/retained-hashes.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r47-synthetic-evidence-retained-${{ matrix.run }}
+          path: ${{ runner.temp }}/r47-retained/**
+          if-no-files-found: error
+          retention-days: 90
 
   r47-paired-ci:
     if: ${{ inputs.test_scope == 'r47_paired_ci' }}
