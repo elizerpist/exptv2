@@ -1,5 +1,10 @@
 package com.fluvi.wa
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
@@ -10,11 +15,13 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -34,19 +41,38 @@ class WaOrbWindow(
     private var placement = OrbPlacement.CENTER
     private var id = AppWidgetManager.INVALID_APPWIDGET_ID
     private var sizeDp = 0
-    private var session = 0L
     private var window = 0L
+    private var hideId = 0L
     private var drag: Drag? = null
     private var dropPending = false
-    private var drawLogged = false
     private val handler = Handler(Looper.getMainLooper())
     private val slop = ViewConfiguration.get(context).scaledTouchSlop
     private val beginDrag = Runnable {
-        drag?.held = true
-        record("drag-start")
+        val current = drag
+        val frame = root
+        if (current != null && frame != null && live(frame)) {
+            current.held = true
+            log(frame, "drag-start")
+        }
     }
 
-    val attached: Boolean get() = root?.let { it.isAttachedToWindow && it.visibility == View.VISIBLE } == true
+    private val attached get() = root?.let(::live) == true
+    val owner: WaAttachment? get() = root?.takeIf(::live)?.owner
+
+    private fun live(frame: OrbRoot): Boolean =
+        root === frame && !frame.revoked && frame.isAttachedToWindow && frame.visibility == View.VISIBLE
+
+    @Suppress("DEPRECATION")
+    fun ownsEvent(windowId: Int): Boolean {
+        val frame = root?.takeIf(::live) ?: return false
+        if (windowId < 0) return false
+        if (frame.nodeWindowId < 0) {
+            val node = frame.createAccessibilityNodeInfo()
+            frame.nodeWindowId = node.windowId
+            node.recycle()
+        }
+        return windowId == frame.nodeWindowId
+    }
 
     private data class Geometry(val display: Rect, val usable: OrbFrameBounds)
 
@@ -55,26 +81,28 @@ class WaOrbWindow(
     }
 
     fun show(
-        session: Long, widgetId: Int, info: AppWidgetProviderInfo, dp: Int, center: OrbPlacement,
-    ) {
-        this.session = session
-        if (attached && id == widgetId) {
+        session: Long, episode: Long, widgetId: Int, info: AppWidgetProviderInfo, dp: Int,
+        center: OrbPlacement, animate: Boolean, canEnter: () -> Boolean,
+    ): Boolean {
+        if (attached && owner?.service == session && owner?.episode == episode && id == widgetId) {
             if (sizeDp != dp || geometry != measure(dp)) resize(dp)
-            return
+            return attached
         }
-        hide("replace")
-        if (root != null) return
+        hide(WaHideReason.REPLACE)
+        if (root != null) return false
         val dimensions = measure(dp)
-        if (!dimensions.usable.fits) {
-            record("no-fit")
-            return
-        }
+        if (!dimensions.usable.fits) return false
         id = widgetId
         sizeDp = dp
         geometry = dimensions
         placement = center
-        window++
-        val frame = OrbRoot(context)
+        val shouldAnimate = animate && animatorsEnabled()
+        val frame = OrbRoot(context, WaAttachment(session, episode, ++window, widgetId, dp))
+        if (shouldAnimate) {
+            frame.visual.alpha = 0f
+            frame.visual.scaleX = 0.95f
+            frame.visual.scaleY = 0.95f
+        }
         val diameter = dimensions.usable.diameter
         val params = WindowManager.LayoutParams(
             diameter, diameter, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -97,15 +125,73 @@ class WaOrbWindow(
         try {
             manager.updateAppWidgetOptions(widgetId, WaOrbHost.options(dp))
             val content = host.createView(context, widgetId, info)
-            frame.addView(content, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
-            drawLogged = false
+            frame.visual.addView(content, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+            if (!canEnter() || root !== frame || frame.revoked) {
+                if (root === frame) hide(WaHideReason.UNKNOWN)
+                return false
+            }
+            frame.mark(WaStage.MATERIAL_READY)
             wm.addView(frame, params)
+            frame.mark(WaStage.ATTACH)
+            frame.listening = true
             host.startListening()
-            record("attach", "dp=$dp diameter=$diameter x=${params.x} y=${params.y}")
+            if (shouldAnimate) waitForDraw(frame, canEnter)
+            else frame.mark(if (animate) WaStage.ENTRANCE_DISABLED else WaStage.ENTRANCE_REUSED)
+            log(frame, "attach", "dp=$dp diameter=$diameter x=${params.x} y=${params.y}")
+            return true
         } catch (error: RuntimeException) {
+            hide(WaHideReason.ATTACH_FAILED)
             Log.w(TAG, "attach failed: ${error.javaClass.simpleName}")
-            hide("attachFailure")
+            return false
         }
+    }
+
+    private fun animatorsEnabled(): Boolean =
+        if (Build.VERSION.SDK_INT >= 26) ValueAnimator.areAnimatorsEnabled()
+        else Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+
+    private fun waitForDraw(frame: OrbRoot, allowed: () -> Boolean) {
+        val observer = frame.viewTreeObserver
+        val start = Runnable {
+            val clear = frame.clearDrawWait ?: return@Runnable
+            clear()
+            if (live(frame) && allowed() && live(frame)) startEntrance(frame)
+        }
+        val listener = ViewTreeObserver.OnPreDrawListener {
+            start.run()
+            true
+        }
+        frame.clearDrawWait = {
+            frame.clearDrawWait = null
+            if (observer.isAlive) observer.removeOnPreDrawListener(listener)
+            else frame.viewTreeObserver.removeOnPreDrawListener(listener)
+            handler.removeCallbacks(start)
+        }
+        observer.addOnPreDrawListener(listener)
+        handler.postDelayed(start, 50)
+    }
+
+    private fun startEntrance(frame: OrbRoot) {
+        val visual = frame.visual
+        val motion = AnimatorSet().apply {
+            playTogether(
+                ObjectAnimator.ofFloat(visual, View.SCALE_X, 1f),
+                ObjectAnimator.ofFloat(visual, View.SCALE_Y, 1f),
+                ObjectAnimator.ofFloat(visual, View.ALPHA, 1f),
+            )
+            duration = 300
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    if (live(frame) && frame.entrance === animation) {
+                        frame.entrance = null
+                        frame.mark(WaStage.ENTRANCE_END)
+                    }
+                }
+            })
+        }
+        frame.entrance = motion
+        frame.mark(WaStage.ENTRANCE_BEGIN)
+        motion.start()
     }
 
     fun resize(dp: Int = sizeDp) {
@@ -114,7 +200,7 @@ class WaOrbWindow(
         if (sizeDp == dp && geometry == dimensions) return
         cancelDrag(restore = false)
         if (!dimensions.usable.fits) {
-            hide("no-fit")
+            hide(WaHideReason.NO_FIT)
             return
         }
         geometry = dimensions
@@ -125,36 +211,75 @@ class WaOrbWindow(
             try {
                 manager.updateAppWidgetOptions(id, WaOrbHost.options(dp))
             } catch (error: RuntimeException) {
-                hide("resizeOptionsFailure")
+                hide(WaHideReason.RESIZE_OPTIONS_FAILED)
                 return
             }
             sizeDp = dp
         }
-        if (!safeUpdate(dimensions.usable.position(placement), dimensions)) hide("resizeFailure")
+        if (!safeUpdate(dimensions.usable.position(placement), dimensions)) hide(WaHideReason.RESIZE_FAILED)
+        else root?.mark(WaStage.RESIZE, detail = dp.toLong())
     }
 
-    fun hide(reason: String) {
-        val frame = root ?: return
-        cancelDrag(restore = false)
+    fun hide(reason: WaHideReason): Long {
+        val frame = root ?: return 0
+        if (frame.revoked) return 0
+        frame.revoked = true
+        frame.hide = ++hideId
+        frame.hideReason = reason
+        val motion = frame.entrance
+        frame.entrance = null
+        motion?.removeAllListeners()
+        frame.visual.alpha = 0f
+        frame.alpha = 0f
         frame.visibility = View.INVISIBLE
-        record("hide", "reason=$reason")
+        frame.localHideAt = SystemClock.uptimeMillis()
+        WaLockscreenCapture.hidden(frame.owner)
+        frame.mark(WaStage.LOCAL_HIDE)
+        cancelDrag(restore = false)
+        frame.clearDrawWait?.invoke()
+        if (motion != null) {
+            motion.cancel()
+            frame.mark(WaStage.ENTRANCE_CANCEL)
+        }
+        remove(frame, retry = false)
+        return frame.hide
+    }
+
+    private fun remove(frame: OrbRoot, retry: Boolean) {
+        if (root !== frame) return
+        frame.mark(WaStage.REMOVE_BEGIN, detail = if (retry) 1 else 0)
+        var removeError: RuntimeException? = null
         try {
             if (frame.parent != null) wm.removeViewImmediate(frame)
         } catch (error: RuntimeException) {
-            Log.w(TAG, "remove failed: ${error.javaClass.simpleName}")
-        } finally {
+            removeError = error
+        }
+        val removed = frame.parent == null && !frame.isAttachedToWindow
+        frame.mark(
+            if (removeError == null) WaStage.REMOVE_RETURN else WaStage.REMOVE_ERROR,
+            detail = if (removed) 1 else 0,
+        )
+        if (frame.listening) {
+            frame.listening = false
+            frame.mark(WaStage.HOST_STOP_BEGIN)
             try {
                 host.stopOrbListening()
+                frame.mark(WaStage.HOST_STOP_END)
             } catch (error: RuntimeException) {
+                frame.mark(WaStage.HOST_STOP_ERROR)
                 Log.w(TAG, "stop listening failed: ${error.javaClass.simpleName}")
             }
-            if (frame.parent == null) {
-                root = null
-                layout = null
-                geometry = null
-            }
-            record("remove", "reason=$reason removed=${frame.parent == null}")
         }
+        if (removed) {
+            root = null
+            layout = null
+            geometry = null
+        } else if (!retry) {
+            handler.post { remove(frame, retry = true) }
+        }
+        log(frame, "hide", "reason=${frame.hideReason}", frame.localHideAt)
+        log(frame, "remove", "reason=${frame.hideReason} removed=$removed")
+        if (removeError != null) Log.w(TAG, "remove failed: ${removeError.javaClass.simpleName}")
     }
 
     @Suppress("DEPRECATION")
@@ -211,7 +336,7 @@ class WaOrbWindow(
         drag = null
         dropPending = false
         if (restore && restoreNeeded) {
-            geometry?.let { if (!safeUpdate(it.usable.position(placement), it)) hide("dragRestoreFailure") }
+            geometry?.let { if (!safeUpdate(it.usable.position(placement), it)) hide(WaHideReason.DRAG_RESTORE_FAILED) }
         }
     }
 
@@ -230,22 +355,60 @@ class WaOrbWindow(
                     dropPending = false
                     placement = dimensions.usable.center(location[0], location[1])
                     savePlacement(placement)
-                    record("drag-drop", "left=${location[0]} top=${location[1]}")
+                    log(frame, "drag-drop", "left=${location[0]} top=${location[1]}")
                 } else cancelDrag(restore = true)
             }
         }
     }
 
-    private inner class OrbRoot(context: Context) : FrameLayout(context) {
+    private inner class OrbRoot(context: Context, val owner: WaAttachment) : FrameLayout(context) {
+        var revoked = false
+        var hide = 0L
+        var hideReason = WaHideReason.NONE
+        var localHideAt = 0L
+        var listening = false
+        var nodeWindowId = -1
+        var entrance: AnimatorSet? = null
+        var clearDrawWait: (() -> Unit)? = null
+        private var drawLogged = false
+        private var nonzero = false
+        val visual = object : FrameLayout(context) {
+            override fun setAlpha(alpha: Float) {
+                if (revoked && alpha > 0f) return
+                super.setAlpha(alpha)
+                if (alpha > 0f) publishNonzero()
+            }
+        }
+
+        init {
+            addView(visual, LayoutParams(-1, -1, Gravity.CENTER))
+        }
+
+        private fun publishNonzero() {
+            if (!nonzero && live(this)) {
+                nonzero = true
+                WaLockscreenCapture.visible(owner)
+                mark(WaStage.FIRST_NONZERO)
+            }
+        }
+
+        fun mark(stage: WaStage, detail: Long = 0) = WaLockscreenCapture.record(
+            stage, WaSource.WINDOW, owner.service, owner.episode, owner,
+            reason = hideReason, hide = hide, detail = detail,
+        )
+
         override fun dispatchDraw(canvas: android.graphics.Canvas) {
             super.dispatchDraw(canvas)
-            if (!drawLogged) {
+            if (live(this) && !drawLogged) {
                 drawLogged = true
-                record("root-draw", "width=$width height=$height")
+                mark(WaStage.ROOT_DRAW)
+                if (visual.alpha > 0f) publishNonzero()
+                log(this, "root-draw", "width=$width height=$height")
             }
         }
 
         override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+            if (!live(this)) return false
             val dimensions = geometry ?: return false
             if (event.actionMasked == MotionEvent.ACTION_DOWN) {
                 cancelDrag(restore = true)
@@ -283,13 +446,19 @@ class WaOrbWindow(
         }
 
         override fun onDetachedFromWindow() {
-            cancelDrag(restore = false)
+            WaLockscreenCapture.hidden(owner)
+            mark(WaStage.DETACHED)
+            clearDrawWait?.invoke()
+            if (root === this && !revoked) {
+                handler.post { if (root === this) hide(WaHideReason.DISPLAY) }
+            }
             super.onDetachedFromWindow()
         }
     }
 
-    private fun record(stage: String, detail: String = "") {
-        Log.i(TAG, "stage=$stage up=${SystemClock.uptimeMillis()} session=$session window=$window id=$id $detail")
+    private fun log(frame: OrbRoot, stage: String, detail: String = "", at: Long = SystemClock.uptimeMillis()) {
+        val owner = frame.owner
+        Log.i(TAG, "stage=$stage up=$at session=${owner.service} window=${owner.window} id=${owner.widget} $detail")
     }
 
     private companion object {

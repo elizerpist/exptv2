@@ -70,6 +70,7 @@ import com.fluvi.app.widget.orb.OrbMaterialFrameStore
 import com.fluvi.app.widget.orb.FluviOrbWidgetProvider
 import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
 import com.fluvi.app.widget.orb.HeaderOrbBinding
+import com.fluvi.wa.WaLockscreenCapture
 import com.fluvi.app.widget.orb.HeaderOrbWidgetContent
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.BinaryMessenger
@@ -114,6 +115,7 @@ class MainActivity : FlutterActivity() {
     private var dashboardPresentationChannel: MethodChannel? = null
     private var orbMaterialChannel: MethodChannel? = null
     private var headerOrbChannel: MethodChannel? = null
+    private var waCaptureChannel: MethodChannel? = null
     private var headerOrbStates: EventChannel? = null
     private var stopHeaderOrbState: (() -> Unit)? = null
     private var activityResumed = false
@@ -137,6 +139,18 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        waCaptureChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "fluvi/wa_lockscreen_capture")
+        waCaptureChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start", "status", "stop", "getFrozen" -> WaLockscreenCapture.request(
+                    applicationContext, call.method, call.argument<String>("source"), call.argument<String>("purpose"),
+                    sizeDp = { HeaderOrbBinding.get(applicationContext).sizeDp() },
+                    reply = { result.success(it) },
+                    error = { result.error("WA_CAPTURE", "The lockscreen capture operation failed", null) },
+                )
+                else -> result.notImplemented()
+            }
+        }
         val fluviCore = FluviCoreFactory.create(applicationContext)
         core = fluviCore
         // Reconcile a delayed one-shot alarm whenever the app becomes usable.
@@ -1267,6 +1281,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        waCaptureChannel?.setMethodCallHandler(null)
+        waCaptureChannel = null
         categoryChannel?.setMethodCallHandler(null)
         manualTransactionChannel?.setMethodCallHandler(null)
         automationChannel?.setMethodCallHandler(null)

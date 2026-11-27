@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../diagnostics/fluvi_diagnostic_event.dart';
 import '../diagnostics/fluvi_diagnostic_logger.dart';
+import '../diagnostics/fluvi_onscreen_diagnostics.dart';
+import 'debug_lockscreen_capture.dart';
 import '../../features/automation/domain/automation_models.dart';
 import '../../features/automation/domain/automation_repository.dart';
 
@@ -26,7 +29,7 @@ class DebugConsoleDialog extends StatefulWidget {
   State<DebugConsoleDialog> createState() => _DebugConsoleDialogState();
 }
 
-enum _DebugConsoleSection { logs, report, push }
+enum _DebugConsoleSection { logs, report, push, lockscreen }
 
 /// A view-only projection over the one bounded diagnostic ring.  It owns no
 /// second history, export path, or diagnostic retention policy.
@@ -265,6 +268,7 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
     final balanceWaveStatus = _logFilter == _DebugConsoleLogFilter.balanceWave
         ? FluviDiagnosticLogger.userMarkerContextForOwnerPrefix('balanceWave.')
         : const <String, Object?>{};
+    final lockscreen = _section == _DebugConsoleSection.lockscreen;
     return Dialog(
       key: const ValueKey('debug-console-dialog'),
       backgroundColor: const Color(0xFF1E1E2E),
@@ -298,139 +302,141 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                       ),
                     ),
                   ),
-                  PopupMenuButton<String>(
-                    key: const ValueKey('debug-console-mark-bug'),
-                    tooltip: 'MARK BUG NOW',
-                    onSelected: _markBug,
-                    itemBuilder: (_) => const <PopupMenuEntry<String>>[
-                      PopupMenuItem(
-                        value: 'gray_rectangle',
-                        child: Text(
-                          'Gray rectangle',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                  if (!lockscreen) ...[
+                    PopupMenuButton<String>(
+                      key: const ValueKey('debug-console-mark-bug'),
+                      tooltip: 'MARK BUG NOW',
+                      onSelected: _markBug,
+                      itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                        PopupMenuItem(
+                          value: 'gray_rectangle',
+                          child: Text(
+                            'Gray rectangle',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'mind_slider',
-                        child: Text(
-                          'Mind slider',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                        PopupMenuItem(
+                          value: 'mind_slider',
+                          child: Text(
+                            'Mind slider',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'mind_slider_no_live_list',
-                        child: Text(
-                          'Mind slider: no live list',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                        PopupMenuItem(
+                          value: 'mind_slider_no_live_list',
+                          child: Text(
+                            'Mind slider: no live list',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'mind_heatmap',
-                        child: Text(
-                          'Mind Heatmap',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                        PopupMenuItem(
+                          value: 'mind_heatmap',
+                          child: Text(
+                            'Mind Heatmap',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'balance_wave',
-                        child: Text(
-                          'Balance wave',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                        PopupMenuItem(
+                          value: 'balance_wave',
+                          child: Text(
+                            'Balance wave',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'ghost_transactions',
-                        child: Text(
-                          'Ghost tranzakciók',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                        PopupMenuItem(
+                          value: 'ghost_transactions',
+                          child: Text(
+                            'Ghost tranzakciók',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'avatar_fling',
-                        child: Text(
-                          'Avatar fling',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                        PopupMenuItem(
+                          value: 'avatar_fling',
+                          child: Text(
+                            'Avatar fling',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'avatar_filter_stuck',
-                        child: Text(
-                          'Avatar filter stuck',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                        PopupMenuItem(
+                          value: 'avatar_filter_stuck',
+                          child: Text(
+                            'Avatar filter stuck',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'time_fling',
-                        child: Text(
-                          'Time fling',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                        PopupMenuItem(
+                          value: 'time_fling',
+                          child: Text(
+                            'Time fling',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'time_target_jump',
-                        child: Text(
-                          'Time target jump',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                        PopupMenuItem(
+                          value: 'time_target_jump',
+                          child: Text(
+                            'Time target jump',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'budget_limit',
-                        child: Text(
-                          'Budget / limit',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                        PopupMenuItem(
+                          value: 'budget_limit',
+                          child: Text(
+                            'Budget / limit',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'other',
-                        child: Text(
-                          'Other',
-                          style: TextStyle(color: Color(0xFF1F2937)),
+                        PopupMenuItem(
+                          value: 'other',
+                          child: Text(
+                            'Other',
+                            style: TextStyle(color: Color(0xFF1F2937)),
+                          ),
                         ),
-                      ),
-                    ],
-                    icon: const Icon(Icons.flag_outlined, size: 16),
-                    color: const Color(0xFFF8FAFC),
-                    iconColor: const Color(0xFFF9E2AF),
-                  ),
-                  IconButton(
-                    key: const ValueKey('debug-console-copy'),
-                    onPressed: count == 0 ? null : _copyAll,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 34,
-                      height: 34,
+                      ],
+                      icon: const Icon(Icons.flag_outlined, size: 16),
+                      color: const Color(0xFFF8FAFC),
+                      iconColor: const Color(0xFFF9E2AF),
                     ),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    splashRadius: 17,
-                    icon: Icon(
-                      _copied ? Icons.check : Icons.copy_outlined,
-                      size: 16,
+                    IconButton(
+                      key: const ValueKey('debug-console-copy'),
+                      onPressed: count == 0 ? null : _copyAll,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 34,
+                        height: 34,
+                      ),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      splashRadius: 17,
+                      icon: Icon(
+                        _copied ? Icons.check : Icons.copy_outlined,
+                        size: 16,
+                      ),
+                      color: _copied
+                          ? const Color(0xFF22C55E)
+                          : const Color(0xFF89B4FA),
                     ),
-                    color: _copied
-                        ? const Color(0xFF22C55E)
-                        : const Color(0xFF89B4FA),
-                  ),
-                  IconButton(
-                    key: const ValueKey('debug-console-clear'),
-                    onPressed: count == 0
-                        ? null
-                        : () {
-                            FluviDiagnosticLogger.clearLive();
-                            setState(() {
-                              _unseenCount = 0;
-                              _following = true;
-                            });
-                          },
-                    constraints: const BoxConstraints.tightFor(
-                      width: 34,
-                      height: 34,
+                    IconButton(
+                      key: const ValueKey('debug-console-clear'),
+                      onPressed: count == 0
+                          ? null
+                          : () {
+                              FluviDiagnosticLogger.clearLive();
+                              setState(() {
+                                _unseenCount = 0;
+                                _following = true;
+                              });
+                            },
+                      constraints: const BoxConstraints.tightFor(
+                        width: 34,
+                        height: 34,
+                      ),
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      splashRadius: 17,
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      color: const Color(0xFFEF4444),
                     ),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    splashRadius: 17,
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                    color: const Color(0xFFEF4444),
-                  ),
+                  ],
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
                     constraints: const BoxConstraints.tightFor(
@@ -446,162 +452,164 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${_following ? 'LIVE' : 'REVIEWING'} · $count retained · '
-                      '${FluviDiagnosticLogger.sessionEventCount} session events',
-                      key: const ValueKey('debug-console-tail-status'),
-                      style: const TextStyle(
-                        color: Color(0xFF6C7086),
-                        fontSize: 9.5,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  DropdownButtonHideUnderline(
-                    child: DropdownButton<_DebugConsoleLogFilter>(
-                      key: const ValueKey('debug-console-log-filter'),
-                      value: _logFilter,
-                      isDense: true,
-                      dropdownColor: const Color(0xFF313244),
-                      style: const TextStyle(
-                        color: Color(0xFFCDD6F4),
-                        fontSize: 10.5,
-                      ),
-                      onChanged: (value) {
-                        if (value == null || value == _logFilter) return;
-                        setState(() => _logFilter = value);
-                        _scheduleJumpToLive();
-                      },
-                      items: const <DropdownMenuItem<_DebugConsoleLogFilter>>[
-                        DropdownMenuItem(
-                          value: _DebugConsoleLogFilter.all,
-                          child: Text('All'),
-                        ),
-                        DropdownMenuItem(
-                          value: _DebugConsoleLogFilter.mindHeatmap,
-                          child: Text('Mind Heatmap'),
-                        ),
-                        DropdownMenuItem(
-                          value: _DebugConsoleLogFilter.balanceWave,
-                          child: Text('Balance Wave'),
-                        ),
-                        DropdownMenuItem(
-                          value: _DebugConsoleLogFilter.ghost,
-                          child: Text('Ghost tranzakciók'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (status.isNotEmpty)
+            if (!lockscreen) ...[
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: SelectableText(
-                  _statusText(status),
-                  key: const ValueKey('debug-console-live-status'),
-                  maxLines: 10,
-                  style: const TextStyle(
-                    color: Color(0xFFBAC2DE),
-                    fontSize: 10.5,
-                    height: 1.35,
-                  ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${_following ? 'LIVE' : 'REVIEWING'} · $count retained · '
+                        '${FluviDiagnosticLogger.sessionEventCount} session events',
+                        key: const ValueKey('debug-console-tail-status'),
+                        style: const TextStyle(
+                          color: Color(0xFF6C7086),
+                          fontSize: 9.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<_DebugConsoleLogFilter>(
+                        key: const ValueKey('debug-console-log-filter'),
+                        value: _logFilter,
+                        isDense: true,
+                        dropdownColor: const Color(0xFF313244),
+                        style: const TextStyle(
+                          color: Color(0xFFCDD6F4),
+                          fontSize: 10.5,
+                        ),
+                        onChanged: (value) {
+                          if (value == null || value == _logFilter) return;
+                          setState(() => _logFilter = value);
+                          _scheduleJumpToLive();
+                        },
+                        items: const <DropdownMenuItem<_DebugConsoleLogFilter>>[
+                          DropdownMenuItem(
+                            value: _DebugConsoleLogFilter.all,
+                            child: Text('All'),
+                          ),
+                          DropdownMenuItem(
+                            value: _DebugConsoleLogFilter.mindHeatmap,
+                            child: Text('Mind Heatmap'),
+                          ),
+                          DropdownMenuItem(
+                            value: _DebugConsoleLogFilter.balanceWave,
+                            child: Text('Balance Wave'),
+                          ),
+                          DropdownMenuItem(
+                            value: _DebugConsoleLogFilter.ghost,
+                            child: Text('Ghost tranzakciók'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            if (balanceWaveStatus.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: SelectableText(
-                  'BALANCE WAVE STATUS\n${_statusText(balanceWaveStatus)}',
-                  key: const ValueKey('debug-console-balance-wave-status'),
-                  maxLines: 10,
-                  style: const TextStyle(
-                    color: Color(0xFFC4B5FD),
-                    fontSize: 10.5,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: Row(
-                children: [
-                  if (!FluviDiagnosticLogger.captureActive)
-                    OutlinedButton.icon(
-                      key: const ValueKey('debug-console-start-capture'),
-                      onPressed: () {
-                        FluviDiagnosticLogger.startCapture(
-                          domain: _logFilter == _DebugConsoleLogFilter.ghost
-                              ? FluviDiagnosticDomain.ghost
-                              : FluviDiagnosticDomain.all,
-                        );
-                        FluviDiagnosticLogger.recordCaptureStateSnapshot(
-                          'start',
-                          status,
-                        );
-                        setState(() {});
-                      },
-                      icon: const Icon(Icons.fiber_manual_record, size: 15),
-                      label: const Text('START CAPTURE'),
-                    )
-                  else
-                    OutlinedButton.icon(
-                      key: const ValueKey('debug-console-stop-capture'),
-                      onPressed: () {
-                        FluviDiagnosticLogger.recordCaptureStateSnapshot(
-                          'stop',
-                          status,
-                        );
-                        FluviDiagnosticLogger.stopCapture();
-                        setState(() {});
-                      },
-                      icon: const Icon(Icons.stop_circle_outlined, size: 15),
-                      label: const Text('STOP CAPTURE'),
-                    ),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    key: const ValueKey('debug-console-clear-capture'),
-                    onPressed: () {
-                      FluviDiagnosticLogger.clearCapture();
-                      setState(() {});
-                    },
-                    icon: const Icon(Icons.delete_sweep_outlined, size: 15),
-                    label: const Text('CLEAR CAPTURE'),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    key: const ValueKey('debug-console-copy-capture'),
-                    tooltip: 'COPY FROZEN CAPTURE',
-                    onPressed: FluviDiagnosticLogger.captureEntries.isEmpty
-                        ? null
-                        : _copyCapture,
-                    icon: Icon(
-                      _captureCopied ? Icons.check : Icons.copy_outlined,
-                      size: 16,
-                    ),
-                    color: _captureCopied
-                        ? const Color(0xFF22C55E)
-                        : const Color(0xFF89B4FA),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'C${FluviDiagnosticLogger.captureId} '
-                    '${FluviDiagnosticLogger.captureActive ? 'REC' : (FluviDiagnosticLogger.captureFrozen ? 'FROZEN' : 'IDLE')}',
-                    key: const ValueKey('debug-console-capture-status'),
+              if (status.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: SelectableText(
+                    _statusText(status),
+                    key: const ValueKey('debug-console-live-status'),
+                    maxLines: 10,
                     style: const TextStyle(
-                      color: Color(0xFF94A3B8),
-                      fontSize: 10,
+                      color: Color(0xFFBAC2DE),
+                      fontSize: 10.5,
+                      height: 1.35,
                     ),
                   ),
-                ],
+                ),
+              if (balanceWaveStatus.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: SelectableText(
+                    'BALANCE WAVE STATUS\n${_statusText(balanceWaveStatus)}',
+                    key: const ValueKey('debug-console-balance-wave-status'),
+                    maxLines: 10,
+                    style: const TextStyle(
+                      color: Color(0xFFC4B5FD),
+                      fontSize: 10.5,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Row(
+                  children: [
+                    if (!FluviDiagnosticLogger.captureActive)
+                      OutlinedButton.icon(
+                        key: const ValueKey('debug-console-start-capture'),
+                        onPressed: () {
+                          FluviDiagnosticLogger.startCapture(
+                            domain: _logFilter == _DebugConsoleLogFilter.ghost
+                                ? FluviDiagnosticDomain.ghost
+                                : FluviDiagnosticDomain.all,
+                          );
+                          FluviDiagnosticLogger.recordCaptureStateSnapshot(
+                            'start',
+                            status,
+                          );
+                          setState(() {});
+                        },
+                        icon: const Icon(Icons.fiber_manual_record, size: 15),
+                        label: const Text('START CAPTURE'),
+                      )
+                    else
+                      OutlinedButton.icon(
+                        key: const ValueKey('debug-console-stop-capture'),
+                        onPressed: () {
+                          FluviDiagnosticLogger.recordCaptureStateSnapshot(
+                            'stop',
+                            status,
+                          );
+                          FluviDiagnosticLogger.stopCapture();
+                          setState(() {});
+                        },
+                        icon: const Icon(Icons.stop_circle_outlined, size: 15),
+                        label: const Text('STOP CAPTURE'),
+                      ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      key: const ValueKey('debug-console-clear-capture'),
+                      onPressed: () {
+                        FluviDiagnosticLogger.clearCapture();
+                        setState(() {});
+                      },
+                      icon: const Icon(Icons.delete_sweep_outlined, size: 15),
+                      label: const Text('CLEAR CAPTURE'),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      key: const ValueKey('debug-console-copy-capture'),
+                      tooltip: 'COPY FROZEN CAPTURE',
+                      onPressed: FluviDiagnosticLogger.captureEntries.isEmpty
+                          ? null
+                          : _copyCapture,
+                      icon: Icon(
+                        _captureCopied ? Icons.check : Icons.copy_outlined,
+                        size: 16,
+                      ),
+                      color: _captureCopied
+                          ? const Color(0xFF22C55E)
+                          : const Color(0xFF89B4FA),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'C${FluviDiagnosticLogger.captureId} '
+                      '${FluviDiagnosticLogger.captureActive ? 'REC' : (FluviDiagnosticLogger.captureFrozen ? 'FROZEN' : 'IDLE')}',
+                      key: const ValueKey('debug-console-capture-status'),
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
             const Divider(height: 1, color: Color(0xFF313244)),
             Row(
               children: [
@@ -628,6 +636,17 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
                       setState(() => _section = _DebugConsoleSection.push);
                       _refreshPush();
                     },
+                  ),
+                if (kFluviOnscreenDiagnosticsEnabled &&
+                    !kIsWeb &&
+                    defaultTargetPlatform == TargetPlatform.android)
+                  _sectionButton(
+                    key: const ValueKey('debug-console-lockscreen-tab'),
+                    label: 'Zárképernyő',
+                    selected: lockscreen,
+                    onPressed: () => setState(
+                      () => _section = _DebugConsoleSection.lockscreen,
+                    ),
                   ),
               ],
             ),
@@ -661,6 +680,9 @@ class _DebugConsoleDialogState extends State<DebugConsoleDialog> {
   );
 
   Widget _sectionBody(int count) {
+    if (_section == _DebugConsoleSection.lockscreen) {
+      return const DebugLockscreenCapture();
+    }
     if (_section == _DebugConsoleSection.logs) {
       final entries = _filteredEntries();
       return entries.isEmpty

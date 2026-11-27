@@ -9,8 +9,8 @@ android {
         applicationId = "com.fluvi.app"
         minSdk = 24
         targetSdk = 37
-        versionCode = 4
-        versionName = "0.1.2"
+        versionCode = 5
+        versionName = "0.1.3"
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64") }
     }
     buildTypes {

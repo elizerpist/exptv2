@@ -2,6 +2,7 @@ package tk.zwander.lockscreenwidgets.services
 
 import android.content.Intent
 import com.fluvi.app.widget.orb.HeaderOrbBinding
+import com.fluvi.wa.WaHideReason
 import com.fluvi.wa.WaLockscreenService
 import com.fluvi.wa.WaOrbWindow
 
@@ -18,26 +19,27 @@ class Accessibility : WaLockscreenService() {
         stopObserving?.invoke()
         stopObserving = binding.observe {
             val id = binding.readyId()
-            if (id != observedId) {
-                observedId = id
-                refreshScene("content")
-            } else if (id != null) {
-                orb.resize(binding.sizeDp())
-            }
+            val changed = id != observedId
+            observedId = id
+            if (changed || id != null) orbContentChanged(changed)
         }
     }
 
     override fun contentAvailable() = binding.readyId() != null
 
-    override fun hasOrb() = orb.attached
+    override fun orbOwner() = orb.owner
 
-    override fun showOrb() {
-        val id = binding.readyId() ?: return
-        val info = binding.binding(id) ?: return
-        orb.show(session, id, info, binding.sizeDp(), binding.placement())
+    override fun ownsOrbEvent(windowId: Int) = orb.ownsEvent(windowId)
+
+    override fun showOrb(episode: Long, animate: Boolean): Boolean {
+        val id = binding.readyId() ?: return false
+        val info = binding.binding(id) ?: return false
+        return orb.show(session, episode, id, info, binding.sizeDp(), binding.placement(), animate) {
+            entranceAllowed(episode)
+        }
     }
 
-    override fun hideOrb(reason: String) = orb.hide(reason)
+    override fun hideOrb(reason: WaHideReason) = orb.hide(reason)
 
     override fun geometryChanged() = orb.resize(binding.sizeDp())
 
@@ -45,8 +47,9 @@ class Accessibility : WaLockscreenService() {
         stopObserving?.invoke()
         stopObserving = null
         observedId = null
+        val result = super.onUnbind(intent)
         binding.syncService()
-        return super.onUnbind(intent)
+        return result
     }
 
     override fun onDestroy() {
