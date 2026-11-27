@@ -1,27 +1,8 @@
-name: R47 current-header Human phone candidate builder (orchestration only)
+name: R48 exact-source Human profile candidate (orchestration only)
 on:
-  workflow_dispatch:
-    inputs:
-      app_sha:
-        description: Exact immutable R18 application source SHA.
-        type: string
-        required: true
-      native_diagnostic:
-        description: Compatibility with the registered workflow dispatcher.
-        type: boolean
-        default: false
-      native_scope:
-        description: Compatibility with the registered workflow dispatcher.
-        type: string
-        default: full
-      run_nightly:
-        description: Compatibility with the registered workflow dispatcher.
-        type: boolean
-        default: false
-      run_baseline_profile:
-        description: Compatibility with the registered workflow dispatcher.
-        type: boolean
-        default: false
+  push:
+    branches:
+      - orchestration/r48-human-build
 permissions:
   contents: read
 jobs:
@@ -29,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      FLUVI_R18_APP_SHA: ${{ inputs.app_sha }}
+      FLUVI_R18_APP_SHA: '0df0941edad11582e7c3a9e6c094ff85a3d3cbea'
       FLUVI_R448_SAFE_SAMPLE_ONLY: 'false'
     steps:
       - name: Require a full immutable source SHA
