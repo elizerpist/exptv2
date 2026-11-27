@@ -207,7 +207,8 @@ class KeyguardR47PreparedFrameInstrumentationTest {
             if (direct) {
                 main { presenter = KeyguardR446WindowPresenter(service)
                     assertTrue(checkNotNull(presenter).prepareActiveHeader(checkNotNull(host.display), snapshot, artifact))
-                    assertTrue("package route selected", checkNotNull(presenter).usesPreparedFrames()) }
+                    assertTrue("package route selected", checkNotNull(presenter).usesPreparedFrames())
+                    assertTrue(checkNotNull(presenter).activeHeaderTelemetry()?.contains("origin=active_header_frame_package") == true) }
                 waitFor("direct input region") { main { checkNotNull(presenter).inputReadyForInstrumentation() } }
                 val target = KeyguardR446Target(hostId, 0,
                     KeyguardR446Bounds(hostBounds.left, hostBounds.top, hostBounds.right, hostBounds.bottom))
@@ -222,6 +223,7 @@ class KeyguardR47PreparedFrameInstrumentationTest {
                         if (it.stage == "FIRST_FRAME_DRAW") frameDraws.incrementAndGet()
                         if (it.stage == "FIRST_SHADER_DRAW") failures += "package mislabeled as shader"
                     })
+                    assertTrue(checkNotNull(frame).activeHeaderTelemetry()?.contains("origin=active_header_frame_package") == true)
                     assertTrue(checkNotNull(frame).requestShow(owner, geometry) { allowed.get() }) }
             }
             waitFor("current prepared frame draw") { draws.get() > 0 && frameDraws.get() > 0 }

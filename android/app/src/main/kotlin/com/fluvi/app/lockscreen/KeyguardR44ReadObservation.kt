@@ -7,6 +7,7 @@ internal data class KeyguardR449AdmissionObservation(
     val screenAt: Long, val readStart: Long, val readEnd: Long, val system: KeyguardSystemState,
     val exclusions: KeyguardR448Admission.Exclusions, val reason: String,
     val decision: KeyguardR448Admission.Decision, val issueAt: Long?,
+    val domain: KeyguardR448Admission.Domain = KeyguardR448Admission.Domain.PUBLIC_SAMPLE,
 )
 
 /** A bounded scheduling observation for the targeted Fluvi presenter. It is
@@ -28,7 +29,7 @@ internal data class KeyguardR448FrameTrace(
     var firstAllowed: Long? = null, var scheduled: Long? = null, var fired: Long? = null,
     var canceled: Long? = null,
     var secondAllowed: Long? = null, var addBegin: Long? = null, var addReturn: Long? = null,
-    var attached: Long? = null, var firstShader: Long? = null, var hide: Long? = null,
+    var attached: Long? = null, var firstShader: Long? = null, var firstPreparedFrame: Long? = null, var hide: Long? = null,
     var removeReturn: Long? = null, var detached: Long? = null, var coalesced: Int = 0,
     var geometry: String? = null,
     var terminal: String? = null, var terminalAt: Long? = null,

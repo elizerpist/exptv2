@@ -194,6 +194,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
 
     fun firstDrawAt(): Long? = firstDraw
     internal fun usesPreparedFrames(): Boolean = r47FramePlayback
+    internal fun activeHeaderTelemetry(): String? = r47Telemetry
     internal fun shaderDrawCountForInstrumentation(): Int = view?.diagnostics()?.shaderDrawCount ?: 0
     internal fun frameForInstrumentation() { view?.frame(System.nanoTime()) }
 

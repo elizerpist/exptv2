@@ -846,7 +846,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 decision.name, revision, started, ended, evidence.reason)
         runCatching { KeyguardCardDiagnostics.recordR449Admission(KeyguardR449AdmissionObservation(
             wake.context, wake.arm.generation, wake.owner.route, wake.owner.material, revision, r449Action,
-            wake.screenAt, started, ended, system, evidence.exclusions, evidence.reason, decision, wake.issueAt)) }
+            wake.screenAt, started, ended, system, evidence.exclusions, evidence.reason, decision, wake.issueAt,
+            if (r47RecordingHeader) KeyguardR448Admission.Domain.PRIVATE else KeyguardR448Admission.Domain.PUBLIC_SAMPLE)) }
         if (decision != KeyguardR448Admission.Decision.ALLOW) {
             if (r47RecordingHeader) r45RecordStage(wake.context, "WIDGETS_ANYWHERE", "MATERIAL_DENIED",
                 SystemClock.uptimeMillis(), decision.name, revision, started, ended,
@@ -882,7 +883,8 @@ class FluviKeyguardCardService : AccessibilityService() {
         wake.expiresAt = if (r47RecordingHeader) Long.MAX_VALUE else issueAt + 2_000L
         runCatching { KeyguardCardDiagnostics.recordR449Admission(KeyguardR449AdmissionObservation(
             wake.context, wake.arm.generation, wake.owner.route, wake.owner.material, revision, r449Action,
-            wake.screenAt, started, ended, system, evidence.exclusions, evidence.reason, decision, issueAt)) }
+            wake.screenAt, started, ended, system, evidence.exclusions, evidence.reason, decision, issueAt,
+            if (r47RecordingHeader) KeyguardR448Admission.Domain.PRIVATE else KeyguardR448Admission.Domain.PUBLIC_SAMPLE)) }
         r446Observation = KeyguardR446Observation(wake.context, r446ArmAt, wake.owner.wake, 0,
             "NOT_REQUIRED", evidence.reason, "WA_WAITING", null, null, issueAt, null, null, null, null,
             null, "UNOBSERVED", armGeneration = wake.arm.generation, wakeArmState = "ARMED",
@@ -1027,9 +1029,6 @@ class FluviKeyguardCardService : AccessibilityService() {
             }
             r47RecordingHeader = useHeader
             r47Header = header
-            if (header != null) KeyguardR46RecordingStore.offer(capture,
-                "R47_MATERIAL origin=active_header_semantic token=${header.correlation} " +
-                    "sourceRevision=${header.profile.publisherRevision} animated=${header.motionEnabled && header.profile.animated} playback=shader")
             val sample = header?.profile ?: KeyguardR44Trial.profile(null)
             if (sample == null) { stopR444Trial("samplePreparationFailed"); return mapOf("active" to false, "reason" to "samplePreparationFailed") }
             val artifact = runCatching { withContext(Dispatchers.IO) {
@@ -1085,6 +1084,11 @@ class FluviKeyguardCardService : AccessibilityService() {
                 getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != false) {
                 stopR444Trial("serviceOrCaptureChanged")
                 return mapOf("active" to false, "reason" to "serviceOrCaptureChanged")
+            }
+            if (header != null) {
+                val telemetry = if (route == KeyguardR448DisplayRoute.WIDGETS_ANYWHERE)
+                    r448Frame?.activeHeaderTelemetry() else r446Presenter?.activeHeaderTelemetry()
+                if (telemetry != null) KeyguardR46RecordingStore.offer(capture, "R47_MATERIAL $telemetry")
             }
             r446Observation = null
             r447DecisionOrdinal = 0L
@@ -1251,6 +1255,11 @@ class FluviKeyguardCardService : AccessibilityService() {
                         if (r446Presenter === presenter) r446Cancel("sessionReplaced")
                         return@launch
                     }
+                }
+                if (header != null) {
+                    val telemetry = if (active.route == KeyguardR448DisplayRoute.WIDGETS_ANYWHERE)
+                        r448Frame?.activeHeaderTelemetry() else r446Presenter?.activeHeaderTelemetry()
+                    if (telemetry != null) KeyguardR46RecordingStore.offer(active.capture, "R47_MATERIAL $telemetry")
                 }
                 r448HideAt = null; r448RemoveAt = null; r448RetireError = null
                 r446Observation = null; r447DecisionOrdinal = 0L; r446RestrictionSeen = false

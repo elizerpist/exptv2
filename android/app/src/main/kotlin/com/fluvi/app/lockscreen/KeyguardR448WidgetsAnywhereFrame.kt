@@ -56,6 +56,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
     fun isAttached(): Boolean = attached && leaseLive && view?.isAttachedToWindow == true
     fun hasOwnedWindow(): Boolean = attached && leaseLive
     fun isRetired(): Boolean = view == null && !attached && !removalFailed
+    internal fun activeHeaderTelemetry(): String? = r47Telemetry
     internal fun shaderDrawCountForInstrumentation(): Int = view?.diagnostics()?.shaderDrawCount ?: 0
 
     /** The inventory may exempt only the exact current overlay, never every

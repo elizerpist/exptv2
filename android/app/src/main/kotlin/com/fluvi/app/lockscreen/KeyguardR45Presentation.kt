@@ -155,6 +155,7 @@ internal data class KeyguardR45Trace(
     var revealState: String? = null,
     var firstDraw: Long? = null,
     var firstShader: Long? = null,
+    var firstPreparedFrame: Long? = null,
     var conceal: Long? = null,
     var remove: Long? = null,
     var shape: String? = null,

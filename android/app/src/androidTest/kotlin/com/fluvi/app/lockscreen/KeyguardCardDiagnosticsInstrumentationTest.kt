@@ -128,13 +128,15 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         frame("ADD_RETURN", 7067)
         frame("ATTACHED", 7068)
         frame("FIRST_SHADER_DRAW", 7070)
+        frame("FIRST_FRAME_DRAW", 7071)
         frame("HIDE", 7080)
         frame("REMOVE_RETURN", 7082)
         val clear = KeyguardR448Admission.Presence.CLEAR
         val exclusions = KeyguardR448Admission.Exclusions(7028, clear, clear, clear, clear)
         val admission = KeyguardR449AdmissionObservation(owner, 5, 3, 8, 4, "ONE_WAKE", 7010,
             7011, 7028, KeyguardSystemState(7012, 7015, true, true, true, true, false, true, true),
-            exclusions, "CLEAR", KeyguardR448Admission.Decision.ALLOW, 7029)
+            exclusions, "CLEAR", KeyguardR448Admission.Decision.ALLOW, 7029,
+            KeyguardR448Admission.Domain.PRIVATE)
         KeyguardCardDiagnostics.recordR449Admission(admission)
         val waOutput = KeyguardR446Observation(owner, 6990, 7, 0, "NOT_REQUIRED", "CLEAR", "WA_SHADER_DRAW",
             null, null, 7029, 7066, 7068, null, 7070, null, "UNOBSERVED", armGeneration = 5)
@@ -146,7 +148,7 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         KeyguardCardDiagnostics.recordR45(KeyguardR45Observation(owner, "WIDGETS_ANYWHERE", "RECOVERY", 7075,
             decision = "ALLOW", revision = 2, readStart = 7072, readEnd = 7074, detail = "CLEAR"))
         listOf("ATTACHED" to 7068L, "POST_ADD_CHECK_BEGIN" to 7069L, "POST_ADD_CHECK_RESULT" to 7070L,
-            "REVEAL" to 7071L, "FIRST_DRAW" to 7072L, "FIRST_SHADER_DRAW" to 7073L,
+            "REVEAL" to 7071L, "FIRST_DRAW" to 7072L, "FIRST_SHADER_DRAW" to 7073L, "FIRST_FRAME_DRAW" to 7074L,
             "CONCEAL" to 7080L, "REMOVE_RETURN" to 7082L, "TERMINAL" to 7083L).forEach { (stage, at) ->
             KeyguardCardDiagnostics.recordR45(KeyguardR45Observation(owner, "WIDGETS_ANYWHERE", stage, at, detail = "test"))
         }
@@ -169,11 +171,12 @@ class KeyguardCardDiagnosticsInstrumentationTest {
         assertTrue(gate, gate.contains("interactive=false") && gate.contains("displayOff=true"))
         assertTrue(wa, wa.contains("routeGeneration=3 materialGeneration=8"))
         assertTrue(wa, wa.contains("debounceScheduled=7013 requestedDue=7063 debounceFired=7064 debounceCanceled=UNOBSERVED coalesced=1"))
-        assertTrue(wa, wa.contains("firstShader=7070 hide=7080 removeReturn=7082"))
-        assertTrue(admitted, admitted.contains("routeConfirmed=WIDGETS_ANYWHERE") && admitted.contains("decision=ALLOW"))
+        assertTrue(wa, wa.contains("firstShader=7070 firstPreparedFrame=7071 hide=7080 removeReturn=7082"))
+        assertTrue(admitted, admitted.contains("routeConfirmed=WIDGETS_ANYWHERE") && admitted.contains("decision=ALLOW") && admitted.contains("domain=PRIVATE"))
         assertTrue(sample, sample.contains("req=0") && sample.contains("issue=7029") && sample.contains("frame=7070"))
         assertTrue(life, life.contains("attachedHidden=7068") && life.contains("reveal=7071") &&
-            life.contains("firstDraw=7072") && life.contains("firstShader=7073") && life.contains("terminal=test"))
+            life.contains("firstDraw=7072") && life.contains("firstShader=7073") &&
+            life.contains("firstPreparedFrame=7074") && life.contains("terminal=test"))
         assertTrue(event, event.contains("seq=4") && event.contains("decision=REASSESS"))
         assertTrue(recovery, recovery.contains("read=7072/7074") && recovery.contains("result=ALLOW"))
         assertTrue(report.toByteArray(Charsets.UTF_8).size <= 32_768)
