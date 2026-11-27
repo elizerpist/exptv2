@@ -143,6 +143,15 @@ jobs:
       - name: Install synthetic-frame analysis dependency
         if: ${{ inputs.test_scope == 'r47_frame_correlation' }}
         run: python3 -m pip install 'Pillow==11.3.0'
+      - name: Ensure video decoder is available
+        if: ${{ inputs.test_scope == 'r47_frame_correlation' }}
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
       - name: Enable KVM
         if: ${{ inputs.test_scope != 'units' }}
         run: |

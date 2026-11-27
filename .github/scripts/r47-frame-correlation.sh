@@ -21,6 +21,12 @@ source_sha=af20365a5ec96ff92b35321a03c0a2679ee7d2fd
 } > "$out/correlation/identity.txt" 2>&1
 [[ $(adb shell getprop ro.build.version.sdk | tr -d '\r') == 37 ]] || exit 1
 [[ $(adb shell getprop ro.product.cpu.abi | tr -d '\r') == x86_64 ]] || exit 1
+for program in ffmpeg ffprobe; do
+ command -v "$program" >> "$out/correlation/identity.txt" || {
+   printf 'PREFLIGHT_FAILED: %s missing\n' "$program" > "$out/correlation/status.txt"
+   exit 1
+ }
+done
 adb shell input keyevent KEYCODE_WAKEUP || exit 1
 adb shell wm dismiss-keyguard || true
 adb install -r build/app/outputs/apk/debug/app-debug.apk > "$out/correlation/install-app.txt" 2>&1 || exit 1

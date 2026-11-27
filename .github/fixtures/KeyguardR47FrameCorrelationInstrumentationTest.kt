@@ -32,6 +32,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.UUID
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -193,7 +194,7 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
         val log = StringBuffer("route=${if (direct) "DIRECT" else "WA"} host=app-owned " +
             "source=synthetic_flutter preparedPackage=forced_player_control fixture=measured_bounds scenario=$scenario\n")
         val failures = mutableListOf<String>()
-        val held = mutableListOf<Bitmap>()
+        val held = Collections.synchronizedList(mutableListOf<Bitmap>())
         fun shell(cmd: String) = ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand(cmd)).bufferedReader().use { it.readText() }
         fun secure(key: String, v: String?) {
             ui.adoptShellPermissionIdentity(Manifest.permission.WRITE_SECURE_SETTINGS)
@@ -213,8 +214,9 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
             val data = bytes(name); val raw = checkNotNull(BitmapFactory.decodeByteArray(data, 0, data.size))
             return Bitmap.createScaledBitmap(raw, size, size, true).also { if (it !== raw) raw.recycle(); held.add(it) }
         }
-        fun crop(name: String, bounds: Rect): Bitmap {
+        fun crop(name: String, bounds: Rect, onCaptureStart: () -> Unit = {}): Bitmap {
             val before = SystemClock.uptimeMillis(); val beforeElapsed = SystemClock.elapsedRealtimeNanos()
+            onCaptureStart()
             val screen = checkNotNull(ui.takeScreenshot())
             val captureReturn = SystemClock.uptimeMillis()
             val captureReturnElapsed = SystemClock.elapsedRealtimeNanos()
@@ -266,6 +268,7 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
         var frame: KeyguardR448WidgetsAnywhereFrame? = null
         var frameOwner: KeyguardR448WidgetsAnywhereFrame.Owner? = null
         var marker: Marker? = null
+        var firstCaptureThread: Thread? = null
         try {
             shell("input keyevent KEYCODE_WAKEUP"); shell("wm dismiss-keyguard")
             val others = services.orEmpty().split(':').filter { it.isNotBlank() && ComponentName.unflattenFromString(it) != component }
@@ -378,8 +381,13 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
                 val material = materialField.get(actualPresenter) as View
                 val overlayId = if (direct) "UNOBSERVED_DIRECT_CHILD" else
                     checkNotNull(frame).ownIdentity(checkNotNull(frameOwner))?.windowId?.toString() ?: "UNOBSERVED"
+                val child = if (direct) {
+                    val surfaceField = actualPresenter.javaClass.getDeclaredField("surface").apply { isAccessible = true }
+                    (surfaceField.get(actualPresenter) as? android.view.SurfaceControlViewHost.SurfacePackage)?.surfaceControl
+                } else null
                 log.append("OWNER targetWindow=$hostId overlayWindow=$overlayId " +
                     "routeOwner=${if (direct) System.identityHashCode(token).toString() else checkNotNull(frameOwner).toString()} " +
+                    "directChild=${child?.let { System.identityHashCode(it) } ?: "UNOBSERVED"} childValid=${child?.isValid} " +
                     "materialView=${System.identityHashCode(material)} settingsGeneration=${snapshot.settingsGeneration} " +
                     "publisherRevision=${snapshot.profile.publisherRevision} " +
                     "elapsedNs=${SystemClock.elapsedRealtimeNanos()}\n")
@@ -474,9 +482,24 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
                 check(reached.await(12, TimeUnit.SECONDS)) { "NOT REACHED: prepared bitmap draw callback" }
                 callbackFailure.get()?.let { throw it }
             } else main { restrictAndConceal() }
-            val first = crop("after-hide-first", bounds); val delta = difference(checkNotNull(underlay), first)
-            log.append("firstAfterHide=$delta\n")
-            if (delta.first > 2.0) failures += "first sample after hide differs from underlay: $delta"
+            val firstFailure = AtomicReference<Throwable?>()
+            val firstDelta = AtomicReference<Pair<Double, Int>?>()
+            val firstStarted = CountDownLatch(1)
+            fun captureFirst() {
+                try {
+                    val first = crop("after-hide-first", bounds) { firstStarted.countDown() }
+                    val delta = difference(checkNotNull(underlay), first)
+                    firstDelta.set(delta)
+                    log.append("firstAfterHide=$delta\n")
+                } catch (failure: Throwable) {
+                    firstFailure.set(failure); firstStarted.countDown()
+                }
+            }
+            if (scenario == "relock") {
+                firstCaptureThread = Thread(::captureFirst, "r47-first-sample")
+                checkNotNull(firstCaptureThread).start()
+                check(firstStarted.await(5, TimeUnit.SECONDS)) { "NOT REACHED: first screenshot request" }
+            } else captureFirst()
             if (scenario == "relock") {
                 val newToken = Any()
                 val oldOwner = frameOwner
@@ -562,10 +585,16 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
                 val afterOld = crop("relock-after-old-callback", bounds)
                 log.append("RELOCK_AFTER_OLD new=${difference(nextReference, afterOld)} old=${difference(referenceA, afterOld)}\n")
             }
+            firstCaptureThread?.join(15_000)
+            check(firstCaptureThread?.isAlive != true) { "NOT REACHED: first screenshot completion" }
+            firstFailure.get()?.let { throw it }
+            val delta = checkNotNull(firstDelta.get()) { "NOT REACHED: first screenshot pixels" }
+            if (delta.first > 2.0) failures += "first sample after hide differs from underlay: $delta"
             repeat(2) { i -> SystemClock.sleep(50); val later = crop("after-hide-${i + 1}", bounds)
                 log.append("laterAfterHide=${i + 1} delta=${difference(checkNotNull(underlay), later)}\n") }
             assertTrue(failures.joinToString("\n"), failures.isEmpty())
         } finally {
+            firstCaptureThread?.join(15_000)
             main { marker?.stop(); presenter?.dispose(); frameOwner?.let { frame?.retire(it, "CLEANUP") }; activity?.finish() }
             FluviActiveHeaderMaterialStore.invalidate()
             FluviKeyguardMaterialBridgeRegistry.disconnect(channel)
