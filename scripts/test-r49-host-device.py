@@ -102,9 +102,13 @@ class Device:
             self.click(self.host_label, package=settings_package)
         self.click(f"Use {self.host_label}", package=settings_package)
         self.click("Allow", "OK")
+        # The Settings result can return before its binder updates the service registry.
+        # Observe the existing 30-second budget for the real acknowledgement.
+        connected = self.service_connected()
         enabled = self.shell("settings", "get", "secure", "enabled_accessibility_services")
+        self.save("accessibility-enabled.txt", enabled.encode())
         assert self.service in enabled.split(":"), "The exact component was not consented"
-        assert self.service_connected(), "Service connection was not observed"
+        assert connected, "Service connection was not observed"
         self.note("Normal accessibility consent and bound service observed")
         for _ in range(2):
             root = ET.fromstring(self.screen())
