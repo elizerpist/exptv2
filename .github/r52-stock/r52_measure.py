@@ -226,8 +226,10 @@ def trial(device, name, route):
         row["extent"] = image.size
         row["painted"] = True
         # A fresh state sample is separate from the independent composed crop.
+        painted_at = time.monotonic()
         row["state_before"] = r51.system_state(device, name + "-action-pre")
         assert row["state_before"] == ("ON", "true", "true")
+        assert time.monotonic() - painted_at < 10, "painted precondition expired"
         action = (unlock(device, image.width // 5, image.height) if route == "unlock"
                   else device.shell("cat /proc/uptime; input keyevent KEYCODE_SLEEP; cat /proc/uptime"))
         device.save(name + "-action.txt", action.encode())
@@ -335,11 +337,13 @@ def run_block(device, args, index, arm_ms, order):
         anchors["end"] = set_reference(device, 2, name + "-end")
         time.sleep(.25)
         set_reference(device, 0, name + "-end-neutral")
-    if arm_ms is not None:
-        software = copy(device, name, args.sha, 2, arm_ms, stop=index == 2)
-        if index == 1:
-            assert software == copy(device, name + "-recopy", args.sha, 2, arm_ms)
-    save_run(device, name, arm_ms, rows, anchors, software)
+    try:
+        if arm_ms is not None:
+            software = copy(device, name, args.sha, 2, arm_ms, stop=index == 2)
+            if index == 1:
+                assert software == copy(device, name + "-recopy", args.sha, 2, arm_ms)
+    finally:
+        save_run(device, name, arm_ms, rows, anchors, software)
     return any(row["fixture"] != "VALID_SOFTWARE" for row in rows)
 
 
@@ -408,6 +412,9 @@ def main():
                         device.click("Leállítás", package=PKG)
                 except EXPERIMENT_FAILURES as cleanup:
                     device.note(f"BLOCK {index} cleanup: {cleanup}")
+        if args.api == "37.0":
+            from auxiliary import restrictive_controls
+            failures.extend(restrictive_controls(device, args.sha))
         assert not failures, failures
     finally:
         device.save("logcat.txt", device.adb("logcat", "-d", "-v", "threadtime"))

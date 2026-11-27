@@ -1,6 +1,5 @@
 """Exact signed R51 to R52 update on a disposable stock AVD."""
 import argparse
-import importlib.util
 from pathlib import Path
 import re
 import sqlite3
@@ -69,7 +68,7 @@ def upgrade(device, args):
         device.click("2×2 ORB", package=PKG)
         device.shell("input", "keyevent", "KEYCODE_HOME")
         device.shell("input", "keyevent", "KEYCODE_SLEEP")
-        r51.poll_state(device, "r50-pre-lock", "OFF", True)
+        experiment.independent_state(device, "r51-pre-lock", experiment.sleeping)
         _, original = r51.wake(device, "r50-original")
         x, y = (original[0] + original[2]) // 2, (original[1] + original[3]) // 2
         device.shell("input", "draganddrop", x, y, 70, y, 1100)
@@ -102,7 +101,7 @@ def upgrade(device, args):
         assert matched and b"hostId:1003" in matched[1] and b"FluviHeaderOrbWidgetProvider" in matched[1]
         device.shell("input", "keyevent", "KEYCODE_HOME")
         device.shell("input", "keyevent", "KEYCODE_SLEEP")
-        r51.poll_state(device, "r51-pre-lock", "OFF", True)
+        experiment.independent_state(device, "r52-pre-lock", experiment.sleeping)
         _, restored = r51.wake(device, "r51-restored")
         assert restored == moved, (moved, restored)
         experiment.home(device)
@@ -124,6 +123,9 @@ def upgrade(device, args):
                               (ENTRY,)).fetchone() == ("R52 update fixture", 12345)
             assert db.execute("PRAGMA foreign_key_check").fetchall() == []
     device.note("PASS signed adb install -r over R51, synthetic ledger, existing host/widget, size and position")
+    device.shell("am", "start", "-W", "-n", r51.ACTIVITY)
+    from auxiliary import process_lifetime
+    process_lifetime(device, args.sha, first)
 
 
 def main():
