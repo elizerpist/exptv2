@@ -77,6 +77,8 @@ public final class ReadVisibleHierarchy extends Instrumentation {
         xml.attribute(null, "text", text);
         xml.attribute(null, "content-desc", description);
         xml.attribute(null, "package", string(node.getPackageName()));
+        xml.attribute(null, "class", string(node.getClassName()));
+        xml.attribute(null, "id", string(node.getViewIdResourceName()));
         xml.attribute(null, "clickable", Boolean.toString(node.isClickable()));
         xml.attribute(null, "visible", Boolean.toString(node.isVisibleToUser()));
         Rect rect = new Rect();
