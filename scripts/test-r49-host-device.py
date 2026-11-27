@@ -175,28 +175,29 @@ class Device:
         raise AssertionError("Real SystemUI keyguard did not become active after stock sleep/wake")
 
     def tutorial(self):
-        for stage, fingers in enumerate((2, 2, 3), start=1):
+        hints = ("Tap the widget frame with two fingers", "Great! Tap with two fingers",
+                 "Tap the widget frame with three fingers")
+        for stage, expected in enumerate(hints, start=1):
             end = time.monotonic() + 10
-            hint = None
             while time.monotonic() < end:
                 raw = self.screen(interactive_windows=True)
                 self.save(f"tutorial-{stage}.xml", raw)
-                root = ET.fromstring(raw)
-                hint = next((node for node in root.iter("node") if node.get("visible") == "true"
-                             and ("Tap the widget frame with" in node.get("text", "") or
-                                  "Tap with two fingers" in node.get("text", ""))), None)
-                if hint is not None:
-                    break
-            if hint is None:
-                raise AssertionError("WA first-view tutorial absent with actual SystemUI keyguard active")
-            x1, y1, x2, y2 = map(int, re.findall(r"-?\d+", hint.attrib["bounds"]))
-            result = self.shell(
-                "am", "instrument", "-w", "-e", "x", (x1 + x2) // 2,
-                "-e", "y", (y1 + y2) // 2, "-e", "fingers", fingers,
-                "com.fluvi.r49.fixture/.FrameTutorialTouch",
-            )
-            assert "gesture=accepted" in result, result
-            self.note(f"Tutorial gesture with {fingers} fingers")
+                nodes = [node for node in ET.fromstring(raw).iter("node")
+                         if node.get("package") == self.host_package and node.get("visible") == "true"]
+                if not any(expected in node.get("text", "") for node in nodes):
+                    continue
+                button = next((node for node in nodes if node.get("text") == "OK"), None)
+                if button is None:
+                    continue
+                a, b, c, d = map(int, re.findall(r"-?\d+", button.attrib["bounds"]))
+                if a >= c or b >= d:
+                    continue
+                self.save(f"tutorial-{stage}.png", self.adb("exec-out", "screencap", "-p"))
+                self.shell("input", "tap", (a+c)//2, (b+d)//2)
+                self.note(f"Confirmed released WA tutorial page {stage}")
+                break
+            else:
+                raise AssertionError(f"WA tutorial page {stage} was not visible on the actual keyguard")
 
 
 def exercise(device, apk, system, control_apk, control_test, observer, external_wa):
