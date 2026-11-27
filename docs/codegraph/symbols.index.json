@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "record_count": 20125,
+  "record_count": 20127,
   "shards": [
     {
       "path": "symbols/part-000.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 integration_test/`dashboard_interaction_profile_test.dart`/_ProfileScenario#`<get>initialDate`.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/automation/data/`method_channel_automation_repository.dart`/MethodChannelAutomationRepository#profile().",
-      "sha256": "3a265bde778d2a457b93fa255dbe5d7d1c9b75a7cecebc6b4552933aac83620b"
+      "sha256": "46941fc344940de52fa5ebb2d7414ef01baf81b2a60ca590c5f01089006d148f"
     },
     {
       "path": "symbols/part-001.jsonl",
@@ -28,7 +28,7 @@
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/mind/domain/`mind_behavioral_score_live_projection.dart`/MindBehavioralScorePublicationIdentity#`<constructor>`().",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`balance_alternative_day_cards.dart`/_ImpactScaleLabels#extent.",
-      "sha256": "df02a94721a0d232f5298b0a604b1e4bdd5e6a08ff2af13193eec4d064d30eb9"
+      "sha256": "e65f9b8d2b3eac57383776ba1c6b4e8a5fb76378e956103a1b7ebd837d149fe2"
     },
     {
       "path": "symbols/part-004.jsonl",
@@ -63,21 +63,21 @@
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/runtime/domain/`prepared_presentation_frame.dart`/DashboardHeaderViewModel#queryKey.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/pulse/presentation/widgets/`pulse_indicator_card.dart`/_IndicatorIcon#`<constructor>`().",
-      "sha256": "22814a52189dba9c971d8659b11af4bd466971d8590377945e0e8f1a9bba3f84"
+      "sha256": "f9a57d2d6ce25befe18c2065f67ee6cc5f0d73a26ccd55a77959f59fc6dccab7"
     },
     {
       "path": "symbols/part-009.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/pulse/presentation/widgets/`pulse_indicator_card.dart`/_IndicatorIcon#build().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/manual_transactions/`manual_transaction_editor_test.dart`/_FakeManualRepository#updatePartnerCalls.",
-      "sha256": "d1fff9a6d91c5f896a82156072b844cf59bd30ed75b50143cc021742f86583c5"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test/features/manual_transactions/`manual_transaction_editor_test.dart`/_FakeManualRepository#updatePartner().",
+      "sha256": "46f3547fe618ff885a78be82a930f70ae1ac5162d7aeb4be8304c2afb5a9ae64"
     },
     {
       "path": "symbols/part-010.jsonl",
-      "record_count": 125,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/manual_transactions/`manual_transaction_editor_test.dart`/_FakeManualRepository#updateTransaction().",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/support/`test_pump.dart`/pumpDashboardSurface().",
-      "sha256": "1d4fe213fafa3d5027167b0c7c438570884f140bbc22030bc25e2a6ce34c7ef3"
+      "record_count": 127,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 test/features/manual_transactions/`manual_transaction_editor_test.dart`/_FakeManualRepository#updatePartnerCalls.",
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test_driver/`dashboard_profile_driver.dart`/main().",
+      "sha256": "280510ca50a89ee81abc508351fdc1e0e1d314d4627d75bd177479ea1114c309"
     }
   ]
 }

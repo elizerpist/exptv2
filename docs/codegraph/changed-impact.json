@@ -1,23 +1,890 @@
 {
   "schema_version": 1,
-  "source_head": "a614bf74f7a0b17d3ebc822daf167fba331ee6af",
-  "base_head": "7ca3cd8af14c6519439bf895f2475f5fa3e28bea",
+  "source_head": "c1e674b2bcf31feab2ce5f5143b5032a109215ba",
+  "base_head": "7f83664c1ad4d48b33f35fe05de2e2f593545f92",
   "changed_files": [
-    ".github/workflows/fluvi-core.yml",
-    "android/app/src/main/kotlin/com/fluvi/app/runtime/RetiredLockscreenState.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/MainActivity.kt",
     "android/app/src/main/kotlin/com/fluvi/app/widget/orb/FluviHeaderOrbWidgetProvider.kt",
-    "android/wa-integration/FluviHostDefaults.kt",
-    "android/wa-integration/README.md",
-    "android/wa-integration/check-payload-lock.py",
-    "scripts/build-r49-android.sh",
-    "scripts/verify-r49-host.py",
-    "test/boundary/dashboard_interaction_performance_boundary_test.dart"
+    "android/r50-product/app/build.gradle.kts",
+    "lib/app/platform/dashboard_active_header_frame_preparer.dart",
+    "lib/app/platform/dashboard_header_widget_publisher.dart",
+    "lib/features/dashboard/presentation/core_dashboard.dart",
+    "scripts/r49-fixture/ReadVisibleHierarchy.java",
+    "scripts/test-fluvi-fast.sh",
+    "scripts/test-r50-host-device.py",
+    "test/app/platform/r50_balance_material_test.dart"
   ],
   "candidate_changed_symbols": [
-    "scip-dart pub fluvi 0.1.0+1 test/boundary/`dashboard_interaction_performance_boundary_test.dart`/main()."
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderFramesRenderer#",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#animatedButStationary.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#byteBudgetExceeded.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#invalidFrame.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#ready.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#rendererUnavailable.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#stale.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#unverifiedLoop.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#`<get>ready`.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#frames.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#phaseOffsetMs.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#playback.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#status.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#png.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#rgba.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/outcome().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/prepareActiveHeaderFrames().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/renderActiveHeaderFrames().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#balanceFrame.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#controller.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#dispose().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#refresh().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#schedule().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#updateBinding().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#updateHeaderGeometry().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#generation.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#geometry.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#motionEnabled.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#phaseOriginUtcMs.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#pixelRatio.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#signature.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#snapshot.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#token.",
+    "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#withToken().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#balanceHeaderColorPolicy.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#categoryCollection.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#categoryRepository.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#controller.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#createState().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#dashboardPresentationPreferences.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#financialLimitRepository.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#headerVisualController.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#initialLogBoxReadinessActive.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#mindQueryFacetLoader.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#modeController.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onBudgetCategoryInputUpdated.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onEditEntry.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onHeaderGeometry.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onHeaderInteractionChanged.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupError.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupSurfaceAttached.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupSurfaceLaidOut.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupTextLayoutsPrepared.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onOpenPulse.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onOpenQueryMenu.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#preparedLogBoxRasters.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#pulseDeliveryCoordinator.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#shellPresentation.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_CoreDashboardState#`<get>controller`.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_CoreDashboardState#`<get>modeController`.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_CoreDashboardState#build().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_CoreDashboardState#didChangeDependencies().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_CoreDashboardState#dispose().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_CoreDashboardState#initState().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#amountPalette.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#balancePresentationSettings.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#bodyOrder.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#border.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetContentCardStyle.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetHeaderPresentation.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetRingPresentation.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetSectionOrder.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#build().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#controller.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#cornerRoundness.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#dashboardPresentationPreferences.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#headerBounds.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#logBoxHeight.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#mindBehavioralScoreSettings.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#mindHeaderScoreChartPresentation.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#mindYearHeatmapPresentation.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#searchPillVisibility.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#shadowStyle.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#shellPresentation.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#summaryPresentation.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#autoResetController.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#autoResetMotions.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#bounds.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#build().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#controller.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#ghostMode.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#ghostPresentation.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onAmountMotionActiveChanged.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onBackgroundVerticalDragStart.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onGhostModeSelected.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onPointerHitClassified.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#summaryPresentation.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#temporalCarouselCoordinator.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#upperVerticalGestures.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#bounds.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#build().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#child.",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/bounds().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/profileRenderProbe().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/rect().",
+    "scip-dart pub fluvi 0.1.0+1 test/app/platform/`r50_balance_material_test.dart`/main()."
   ],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
-  "direct_reference_consumers": [],
-  "affected_test_locations": [],
-  "affected_production_locations": []
+  "direct_reference_consumers": [
+    {
+      "file": "integration_test/dashboard_interaction_profile_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#modeController."
+      ],
+      "reference_count": 7,
+      "first_line": 295,
+      "first_column": 14,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "lib/app/platform/dashboard_active_header_frame_preparer.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#animatedButStationary.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#byteBudgetExceeded.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#invalidFrame.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#ready.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#rendererUnavailable.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#stale.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#unverifiedLoop.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#frames.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#phaseOffsetMs.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#playback.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#status.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#png.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#rgba.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/outcome().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/prepareActiveHeaderFrames()."
+      ],
+      "reference_count": 65,
+      "first_line": 10,
+      "first_column": 49,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "lib/app/platform/dashboard_header_widget_publisher.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderFramesRenderer#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#`<get>ready`.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#frames.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#phaseOffsetMs.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#playback.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#status.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/renderActiveHeaderFrames().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#balanceFrame.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#schedule().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#generation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#geometry.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#motionEnabled.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#phaseOriginUtcMs.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#pixelRatio.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#signature.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#snapshot.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#token.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#withToken()."
+      ],
+      "reference_count": 65,
+      "first_line": 13,
+      "first_column": 18,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "lib/app/shell/fluvi_app_shell.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#dispose().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#refresh().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#updateBinding().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#updateHeaderGeometry().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 9,
+      "first_line": 268,
+      "first_column": 13,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "lib/features/dashboard/presentation/core_dashboard.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#balanceHeaderColorPolicy.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#categoryCollection.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#categoryRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#dashboardPresentationPreferences.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#financialLimitRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#headerVisualController.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#initialLogBoxReadinessActive.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#mindQueryFacetLoader.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#modeController.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onBudgetCategoryInputUpdated.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onEditEntry.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onHeaderGeometry.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onHeaderInteractionChanged.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupError.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupSurfaceAttached.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupSurfaceLaidOut.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupTextLayoutsPrepared.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onOpenPulse.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onOpenQueryMenu.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#preparedLogBoxRasters.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#pulseDeliveryCoordinator.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#shellPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_CoreDashboardState#`<get>controller`.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_CoreDashboardState#`<get>modeController`.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#amountPalette.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#balancePresentationSettings.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#bodyOrder.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#border.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetContentCardStyle.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetHeaderPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetRingPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetSectionOrder.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#cornerRoundness.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#dashboardPresentationPreferences.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#headerBounds.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#logBoxHeight.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#mindBehavioralScoreSettings.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#mindHeaderScoreChartPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#mindYearHeatmapPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#searchPillVisibility.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#shadowStyle.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#shellPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#summaryPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#autoResetController.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#autoResetMotions.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#bounds.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#ghostMode.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#ghostPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onAmountMotionActiveChanged.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onBackgroundVerticalDragStart.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onGhostModeSelected.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onPointerHitClassified.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#summaryPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#temporalCarouselCoordinator.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#upperVerticalGestures.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#bounds.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#child.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/bounds().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/profileRenderProbe().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/rect()."
+      ],
+      "reference_count": 377,
+      "first_line": 94,
+      "first_column": 18,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/app/fluvi_app_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#headerVisualController."
+      ],
+      "reference_count": 15,
+      "first_line": 185,
+      "first_column": 40,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/app/platform/header_widget_publisher_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/prepareActiveHeaderFrames().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#dispose().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#updateBinding().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#updateHeaderGeometry()."
+      ],
+      "reference_count": 8,
+      "first_line": 54,
+      "first_column": 24,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/app/platform/r47_active_header_frame_preparer_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#animatedButStationary.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#byteBudgetExceeded.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#ready.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#stale.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#unverifiedLoop.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#frames.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#playback.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#status.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#rgba.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/prepareActiveHeaderFrames().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/renderActiveHeaderFrames()."
+      ],
+      "reference_count": 49,
+      "first_line": 25,
+      "first_column": 2,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/app/platform/r50_balance_material_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#ready.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#frames.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#phaseOffsetMs.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#playback.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#status.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/renderActiveHeaderFrames()."
+      ],
+      "reference_count": 10,
+      "first_line": 18,
+      "first_column": 14,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/application/dashboard_core_ephemeral_focus_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 26,
+      "first_line": 523,
+      "first_column": 8,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/balance_day_momentum_rail_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 84,
+      "first_column": 6,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/balance_day_visual_motion_sync_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 93,
+      "first_column": 17,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/budget_unified_detachment_state_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 39,
+      "first_column": 10,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 102,
+      "first_column": 4,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_mode_navigation_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#modeController."
+      ],
+      "reference_count": 13,
+      "first_line": 40,
+      "first_column": 8,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 34,
+      "first_line": 197,
+      "first_column": 8,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 6,
+      "first_line": 63,
+      "first_column": 10,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_mother_card_real_content_evidence_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 42,
+      "first_column": 19,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_rail_density_trace_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 381,
+      "first_column": 17,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_rebuild_isolation_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 35,
+      "first_column": 16,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/regression/dashboard_scroll_milestone_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 177,
+      "first_column": 19,
+      "basis": "scip_reference"
+    }
+  ],
+  "affected_test_locations": [
+    {
+      "file": "integration_test/dashboard_interaction_profile_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#modeController."
+      ],
+      "reference_count": 7,
+      "first_line": 295,
+      "first_column": 14,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/app/fluvi_app_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#headerVisualController."
+      ],
+      "reference_count": 15,
+      "first_line": 185,
+      "first_column": 40,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/app/platform/header_widget_publisher_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/prepareActiveHeaderFrames().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#dispose().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#updateBinding().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#updateHeaderGeometry()."
+      ],
+      "reference_count": 8,
+      "first_line": 54,
+      "first_column": 24,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/app/platform/r47_active_header_frame_preparer_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#animatedButStationary.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#byteBudgetExceeded.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#ready.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#stale.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#unverifiedLoop.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#frames.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#playback.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#status.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#rgba.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/prepareActiveHeaderFrames().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/renderActiveHeaderFrames()."
+      ],
+      "reference_count": 49,
+      "first_line": 25,
+      "first_column": 2,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/app/platform/r50_balance_material_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#ready.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#frames.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#phaseOffsetMs.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#playback.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#status.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/renderActiveHeaderFrames()."
+      ],
+      "reference_count": 10,
+      "first_line": 18,
+      "first_column": 14,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/application/dashboard_core_ephemeral_focus_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 26,
+      "first_line": 523,
+      "first_column": 8,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/balance_day_momentum_rail_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 84,
+      "first_column": 6,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/balance_day_visual_motion_sync_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 93,
+      "first_column": 17,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/budget_unified_detachment_state_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 39,
+      "first_column": 10,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_geometry_golden_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 102,
+      "first_column": 4,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_mode_navigation_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#modeController."
+      ],
+      "reference_count": 13,
+      "first_line": 40,
+      "first_column": 8,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/core_dashboard_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 34,
+      "first_line": 197,
+      "first_column": 8,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_avatar_target_liveness_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 6,
+      "first_line": 63,
+      "first_column": 10,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_mother_card_real_content_evidence_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 42,
+      "first_column": 19,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_rail_density_trace_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 381,
+      "first_column": 17,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/features/dashboard/presentation/dashboard_rebuild_isolation_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 35,
+      "first_column": 16,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "test/regression/dashboard_scroll_milestone_test.dart",
+      "is_test": true,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 1,
+      "first_line": 177,
+      "first_column": 19,
+      "basis": "scip_reference"
+    }
+  ],
+  "affected_production_locations": [
+    {
+      "file": "lib/app/platform/dashboard_active_header_frame_preparer.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#animatedButStationary.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#byteBudgetExceeded.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#invalidFrame.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#ready.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#rendererUnavailable.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#stale.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparationStatus#unverifiedLoop.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#frames.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#phaseOffsetMs.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#playback.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#status.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#png.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderRenderedFrame#rgba.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/outcome().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/prepareActiveHeaderFrames()."
+      ],
+      "reference_count": 65,
+      "first_line": 10,
+      "first_column": 49,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "lib/app/platform/dashboard_header_widget_publisher.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderFramesRenderer#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#`<get>ready`.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#frames.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#phaseOffsetMs.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#playback.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#status.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/renderActiveHeaderFrames().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#balanceFrame.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#schedule().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#generation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#geometry.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#motionEnabled.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#phaseOriginUtcMs.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#pixelRatio.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#signature.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#snapshot.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#token.",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/_HeaderRequest#withToken()."
+      ],
+      "reference_count": 65,
+      "first_line": 13,
+      "first_column": 18,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "lib/app/shell/fluvi_app_shell.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#dispose().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#refresh().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#updateBinding().",
+        "scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#updateHeaderGeometry().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#`<constructor>`()."
+      ],
+      "reference_count": 9,
+      "first_line": 268,
+      "first_column": 13,
+      "basis": "scip_reference"
+    },
+    {
+      "file": "lib/features/dashboard/presentation/core_dashboard.dart",
+      "is_test": false,
+      "target_symbols": [
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#balanceHeaderColorPolicy.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#categoryCollection.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#categoryRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#dashboardPresentationPreferences.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#financialLimitRepository.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#headerVisualController.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#initialLogBoxReadinessActive.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#mindQueryFacetLoader.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#modeController.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onBudgetCategoryInputUpdated.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onEditEntry.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onHeaderGeometry.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onHeaderInteractionChanged.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupError.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupSurfaceAttached.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupSurfaceLaidOut.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onLogBoxWarmupTextLayoutsPrepared.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onOpenPulse.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#onOpenQueryMenu.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#preparedLogBoxRasters.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#pulseDeliveryCoordinator.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/CoreDashboard#shellPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_CoreDashboardState#`<get>controller`.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_CoreDashboardState#`<get>modeController`.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#amountPalette.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#balancePresentationSettings.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#bodyOrder.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#border.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetContentCardStyle.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetHeaderPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetRingPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#budgetSectionOrder.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#cornerRoundness.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#dashboardPresentationPreferences.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#headerBounds.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#logBoxHeight.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#mindBehavioralScoreSettings.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#mindHeaderScoreChartPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#mindYearHeatmapPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#searchPillVisibility.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#shadowStyle.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#shellPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardHeaderVisualTunerOverlay#summaryPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#autoResetController.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#autoResetMotions.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#bounds.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#controller.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#ghostMode.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#ghostPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onAmountMotionActiveChanged.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onBackgroundVerticalDragStart.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onGhostModeSelected.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#onPointerHitClassified.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#summaryPresentation.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#temporalCarouselCoordinator.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_DashboardSummaryRegion#upperVerticalGestures.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#bounds.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/_FramePosition#child.",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/bounds().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/profileRenderProbe().",
+        "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/`core_dashboard.dart`/rect()."
+      ],
+      "reference_count": 377,
+      "first_line": 94,
+      "first_column": 18,
+      "basis": "scip_reference"
+    }
+  ]
 }
