@@ -24662,3 +24662,71 @@ first forbidden handset frame.
 **Hypotheses and decision.** H51.5 is confirmed for the missing source entrance. H51.1 is strengthened by late eligibility in both sleep controls and the absent negative interactive check. H51.2 direct-unlock signal timing, H51.3 actual handset re-entry and H51.4 residual window/compositor persistence remain open. Attributing the observed stock sleep delay entirely to remove/cleanup is contradicted by the ordered markers. D51 selects a generation-owned, wake-only entrance, direct negative admission with a terminal episode barrier, and a bounded native recorder accessible from the debug panel. Record and test unlock and sleep independently. The coding agent builds a new signed R51 APK, and the owner assesses the two transitions on that named artifact. [Reviewer plan](diagnostics/FLUVI_R51_ORB_TRANSITIONS_PLAN.md)
 
 **Round status.** R50 core behavior is owner-confirmed within the stated scope. R51 specification and handoff are recorded. R51 implementation, automated verification and APK delivery are pending the coding round. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+## 2026-11-27 · R51 implementation and verified Human delivery
+
+D51 follows the pinned handoff and plan at
+`ac4322acad5ced79e1154b0ed599f193511e5a25`. The application base and parent
+are `c1e674b2bcf31feab2ce5f5143b5032a109215ba` and
+`7f83664c1ad4d48b33f35fe05de2e2f593545f92`. The R50 0.1.2 signed
+distribution is 113,932,899 bytes, SHA-256
+`c63ff3ae0c73afc0a77a5d5131b567b8080fbd38429ed1ec32a5471488021703`, and
+was verified as the stock comparison. The latest rule paths in the
+handoff hold the project debugging supplement 1.0, prompt rules 2.2,
+widget addendum 1.3 and senior workflow 1.0. The owner observations
+remain the evidence in E51.1. No new handset or Drive snapshot was needed.
+The R29.1/R41 opening and R22.4 unlock milestones retain their stated
+handset and optical limits. [Pinned handoff](https://github.com/elizerpist/exptv2/blob/ac4322acad5ced79e1154b0ed599f193511e5a25/docs/diagnostics/FLUVI_R51_ORB_TRANSITIONS_HANDOFF.md)
+
+E51.7 · The actual R50 predicate admitted controlled ON, locked and
+ready states with interactivity true, false or unknown. Its terminal
+invalidation only invalidated the current scan. The stock API 37 install
+also reached the real Human debug console and confirmed the absent
+lockscreen tab. R50's normal live Balance content was prepared for real
+host 1003, widget 4. That baseline run did not reach a measured transition:
+API 37 moved the human-readable power dump field and API 35 did not
+enter the discovered Android service row. The test retry reads actual
+public state through an independent process. [API 37 first baseline](https://github.com/elizerpist/exptv2/actions/runs/46076460344/artifacts/15235895917) · [API 35 first baseline](https://github.com/elizerpist/exptv2/actions/runs/46076460344/artifacts/15235940735)
+
+D51.1–3 · Exact app `e7542639d22d78d10e7b123e836ee9bc9758c91a`, branch
+`implement/r51-orb-transitions`. A centered visual wrapper starts at
+alpha 0/scale .95 and uses the original WA 300 ms property animation
+after a valid draw opportunity, once per admitted lock/wake episode.
+The display, interactive and keyguard checks guard still-pending positive
+authority. Explicit negative broadcasts close that episode before local
+invisibility, removal and host cleanup. Callback identities preserve the
+new wake and exact old window boundaries. The native capture owns a
+bounded ring and a passive, off-main public-state probe. The Android
+lockscreen section starts/stops and freezes/copies through the existing
+Flutter engine. The capture has no display authority. Protected Balance
+producer and launcher provider sources are unchanged. [Exact app diff](https://github.com/elizerpist/exptv2/compare/c1e674b2bcf31feab2ce5f5143b5032a109215ba...e7542639d22d78d10e7b123e836ee9bc9758c91a)
+
+Local checks passed `git diff --check`, `bash scripts/verify-fluvi-boundaries.sh`,
+9 targeted Kotlin/JUnit cases and 21 Flutter tests for the actual console,
+frozen/failed copy, permissions, Balance packet and delivery. The first
+Flutter fixture failed its global platform-override invariant, and the
+Android test variant passed with the same assertions. Normal exact-source
+CI compiled the product and passed the native core, Flutter analysis
+and curated Flutter gates. Full Flutter and the device/dashboard results
+are tracked separately. [Exact-source CI](https://github.com/elizerpist/exptv2/actions/runs/46076303939)
+
+D51.4 · The published R51 is `com.fluvi.app`, 0.1.3 code 5,
+`HUMAN_DIAGNOSTIC` profile, 113,982,051 bytes, SHA-256
+`5b2cb2acd1debeec113df939ce093479854a35f044a18f59c0985cf03a9e498e`.
+Anonymous full HTTP GET returns 200. ZIP, 16 KiB alignment, v2/v3
+signature, the complete embedded source and purpose on all three ABIs,
+and the R51 DEX markers passed. The original signer
+`faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`
+signed the verified builder bytes. The actual signed in-place update
+and on-device debug/paste checks are tracked in the independent run.
+[Direct APK](https://media.githubusercontent.com/media/elizerpist/exptv2/6962d94f0c78b14ded193c3543340507fc4c0006/Fluvi_R51_HUMAN_e7542639d22d.apk) · [Builder](https://github.com/elizerpist/exptv2/actions/runs/46076303939/artifacts/15235531977) · [Exact signed trials](https://github.com/elizerpist/exptv2/actions/runs/46077230417)
+
+The exact app SCIP-Dart 1.6.2 graph is
+`9ab9ccb99d6ff0c8a553d71fc738cc52e8a0dd03`. Its index SHA-256
+`660d3ddcb34b7c859ec78c90193e2fca7c802d4cb866205dfaa87315efedf03f`,
+813 documents, 20,136 symbols, 135,904 references and 42,007 edges
+were verified against the manifest and 101 shard hashes. The tooling
+analyzer and 16 tests passed. The new Kotlin authority and capture code
+have direct source navigation. [Graph manifest](https://github.com/elizerpist/exptv2/blob/9ab9ccb99d6ff0c8a553d71fc738cc52e8a0dd03/docs/codegraph/manifest.json) · [Native and Dart inventory](https://github.com/elizerpist/exptv2/blob/9ab9ccb99d6ff0c8a553d71fc738cc52e8a0dd03/docs/codegraph-r51-orb-transitions.md)
+
+**PHYSICAL VALIDATION — PENDING, USER ONLY**
