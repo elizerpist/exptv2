@@ -23806,3 +23806,120 @@ Both repeat seals, actual body byte counts and spool row counts passed. Fluvi 43
 The observed blocker on the Nothing files is upstream private denial on 11 direct and 4 WA reads, with WA 17 INCONCLUSIVE. An observational stock root cannot be selected as an independent credential/shade discriminator. The synthetic shared-root counterexample remains a rejection. An exact handset MAIN/PIN pair on the installed R47 is the remaining decision input. The existing reader evidence may be evaluated first using that pair. No indispensable missing field for the initial pair has been established. There is no collector-only APK. No product changes, extra wake-path acquisition or live cost were introduced by this work. Isolated off/on replay verified scalar decisions and inventory call counts. Full live-service callback/cost parity was not measured.
 
 Outcome by dimension: R48 evidence implementation and offline/JVM validation PASS. Both independent stock MAIN gates FAIL with the partial results above. The owner-reported R47 presentation FAIL still applies on both routes. R47 first-sample conceal FAIL still applies, and the first physical forbidden frame is unmeasured. The prior synthetic color/motion check stays scoped to its reference material. Actual phone header color, natural motion, home-launcher comparison and physical wake-to-visible timing are NOT RUN in R48. The earlier full/paired CI failures remain as recorded and full release CI was outside this evidence scope. Use the exact verified existing Human APK and the two-recording plan above. PHYSICAL VALIDATION OF A FIX — PENDING, USER ONLY.
+
+## 2026-11-27 — R48 D3: restore the fresh Human APK and exact-build phone test
+
+Reviewer process finding. The owner requires hypothesis → fixed plan → fresh Human build → owner test. Earlier R48 §19 explicitly skipped rebuilding for offline work and §20 sent the owner back to R47. Those delivery decisions are withdrawn. E7 is confirmed by the handoff and final R48 report. There is no evidence of a failed R48 Human compiler invocation in the old round. The coding agent independently recorded that the current private project assets were inaccessible. The owner packet FLUVI_R48_HUMAN_BUILD_HANDOFF.md supplies the complete project instructions and the three current policy texts. Do not treat the older embedded or suffixed files as substitutes. Do not check private captures or full private policy texts into public Git.
+
+R47 lib and android/app/src/main trees match the new pinned source (8cf431eb40a5908e7ef9d6895335f4d8d876fb1a and 4bebafd4c7cb94076cf504c768a796241a5a1050). The R47 private-denial evidence remains route-specific. No new physical evidence promotes H1–H5. Existing stock MAIN and conceal gates are still open. The new profile build was started on the isolated orchestration branch at 92e272fec867d2a97677ccb4e7100e0cc4fc0eb8, [run 45980215990](https://github.com/elizerpist/exptv2/actions/runs/45980215990). The fixed target is 0df0941edad11582e7c3a9e6c094ff85a3d3cbea. Reuse this newly started run in §19. Start/finish, runner artifact, authorized update signature, verified owner download and user acceptance are separate states. The current reviewer instruction for the executing agent follows.
+
+# R48 Human APK — delivery correction and Nothing A142 field measurement
+
+## 1. Title and task intent
+
+EVIDENCE_COLLECTION. Execute reviewer decision D3 for the existing R48 field experiment. The owner explicitly requires a newly compiled, identifiable Human APK for this phone-test round. Build, verify and deliver it for the authorized diagnostic use. R48 sections 1, 14, 19–21 and the later journal instruction to reuse R47 are superseded on delivery. Preserve completed experiments. In every future Fluvi phone-debugging prompt include project and asset reading, hypotheses, a fixed plan, exact build delivery and the owner test. A genuine blocker keeps delivery open.
+
+## 2. Authoritative application state
+
+Repository elizerpist/exptv2. Tested R47 app af20365a5ec96ff92b35321a03c0a2679ee7d2fd, parent 84cf6443cc9a15cc1513759a4ed3c23e65719917. The reference file Fluvi_R47_HUMAN_af20365a5ec9.apk at artifact commit d6f121d2ed2e0830597c5bbac26b3cc10a87a870 has 121600977 bytes and SHA-256 74c39c4930261363721ed875f0c3889b2cc6f69f7a2fcb2086728e2464d597ea. Use it for the in-place upgrade control. Build the new profile from immutable diagnostics/r48-zero-visual commit 0df0941edad11582e7c3a9e6c094ff85a3d3cbea. Its six changed files relative to R47 consist of Android test harness/manifest, a JVM test and offline analysis, fixture and test. Production app trees are identical. The new embedded build identity and the prospective controlled phone pair are the differences this round. Journal baseline 303bf37bbe62e49638d3f57f175824b5c648083e belongs to the coordination branch.
+
+## 3. Hard preflight
+
+Before execution, read the **entire current Fluvi project instructions and all current policy assets**, the complete coordination docs/FLUVI_ENGINEERING_JOURNAL.md, docs/ORB következtetések.md, the relevant MILESTONE_COMMITS.md entries, the tested-source diff and experiment inputs. The owner attachment includes the project instructions and all three policy texts in full. The required versions are prompt-writer 2.2, widget 1.3, senior debugging 1.0. For each, record the access path, version and hash. Historical widget 1.0/1.2 files, a journal summary or a filename are insufficient. Recover missing access from the private attachment before the work governed by that asset. Preserve owner raw recordings privately. Reuse the frozen audit within the same round. Record exact refs, clean status, checkout and scope. The reviewer owns diagnosis and architecture. Execute this fixed plan and return a contradiction with exact evidence.
+
+> Before execution, read the complete current FLUVI_PROMPT_WRITER_RULES, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM.md, docs/FLUVI_ENGINEERING_JOURNAL.md, and relevant MILESTONE_COMMITS.md entries using the versions and access paths supplied in this handoff. Explicitly report missing material. The prompt writer owns diagnosis, causal interpretation, the repair concept and any refactor decision. Implement only the specified technical contract or execute only the specified evidence-collection experiment; do not select a new root cause or repair strategy. If source, logs or tests contradict the plan, preserve and report exact evidence and return the affected decision to the reviewer. Continue independent authorized work. Follow the supplied risk-to-test matrix and the verified focused-validation route. Record every relevant failure and every diagnostic repetition. Start full delivery only after the specified entry conditions; diagnostic selection does not satisfy full required gates. Do not repeat a rejected repair without new evidence and a reviewer decision. Resolve the exact physically tested application source separately from documentation-only HEAD commits. Preserve the dashboard contracts and verify the specified native lockscreen and launcher-widget boundaries.
+
+## 4. Physical user evidence
+
+On 27 November the owner observed zero visible ORB on both FLUVI_STREAM and WIDGETS_ANYWHERE. Nothing Phone (2a), A142, Android 17/API 37, CP2A.260605.016/2611121938. The captures identify profile R47, FULL, same service process 12257-c29f09e0, ORB/orbOnly, full privacy, foreground/background off. A previously working home widget is a historical reference. Physical latency, actual displayed hue, motion and first forbidden frame are unobserved in these recordings.
+
+## 5. Frozen log audit
+
+| Route | Capture ID and file SHA-256 | Body and loss |
+|---|---|---|
+| FLUVI_STREAM | 3f2e9189-612d-418a-a952-97edffb3190a · a529e2dae6e01563bd08596f1911ef00610aa209860489a04ed50fe1e5ef6c50 | 501162 body bytes · d4355fe46c5852725c35069a63a72d8e2855be1a65a623e39c7f1c81dd3e53cf · 836/836 spool · 396 event and 224 raw sample evictions |
+| WIDGETS_ANYWHERE | 32eb2e48-912f-4cd8-9276-e6580e6e0f6e · ae51739d19fa5a3c05c7f2e9a32a855a3b721751dbdd1bbeee0dc8b5f558db3e | 291043 body bytes · 937b3fcde98cf4459329a949d0984a88e215e107834a53d94faecd48d3d9c9bf · 515/515 spool · 0 event and 151 raw sample evictions |
+
+Both sealed originals reconcile; both summary exports are truncated. Keep the seven SCREEN_ON episodes and subsequent terminals separate. Fluvi 3/5/7 had current private denials (requests 36/38/39, 74–77/100, 142–144); there was also scene churn. WA 11/13/15 had clear exclusions and denied private material (revisions 6, 39, 97, 127). WA13 also had a truncated read. WA17 reached reassessment then STOP without a retained admission. UptimeMs is the clock for read/hold comparisons. The original pair is across routes, without independently timed MAIN/PIN holds. Its empty comparison matrix is expected.
+
+## 6. Commit and agent-evidence audit
+
+R47 changed material and admission-domain reporting. R48 added six test/offline files. On hosted API 37, run 45974149170 compiled the debug/app-instrumentation pair. Software output occurred on some reads. Both independently observed MAIN fixture preconditions failed, with SHADE instead of MAIN. Retain the contradiction and the earlier R47 conceal failure. The prior R48 instructions explicitly allowed no Human build, and the executor recorded that the private current rules were unavailable. No phone candidate was built. These are the two process errors corrected here.
+
+## 7. Graph provenance and impact
+
+R47 graph c3c0c9532d326654c0c43c7a164c550402367e1c, source af20365a, index SHA-256 407fa446a667914aceb6d34b419e80f494bc8db549ccdd1c9bf3d215bbf00e41. Its 816 Dart documents cover, among others, DashboardKeyguardMaterialBridge and the core_dashboard consumers. The Kotlin inventory is source search. Verify byte identity of affected production subtrees between R47 and the R48 target. Record the exact source of any regenerated index. Do not retag an old graph as newly generated.
+
+| Risk | Transition and required result | Check |
+|---|---|---|
+| R1 | Exact checkout → profile → recipient bytes. Embedded SHA equals the pinned app and all packaged AOT ABIs agree | Build manifest, ZIP integrity, three ABI checks, package, size, signer and independent retrieval |
+| R2 | Installed R47 → same-package signed update. Existing sentinel, preferences, route and service survive | API 37 in-place install against genuine old binary, no uninstall/data clear |
+| R3 | New sealed report → offline analysis. Enforce exact build, capture identity and seal on the new lane | Positive candidate, historical R47, wrong/missing identity, mixed pair, damaged bytes |
+| R4 | Ambiguous scene → individual read. Uncorrelated/transition samples stay unlabelled; negative collisions are retained | Same-route MAIN/PIN captures, independently observed intervals, synthetic ambiguity and collision controls |
+| R5 | Existing route, header, access and conceal behavior | Production diff empty; retain red privacy/stock controls and check the signed start/stop/export path. The diagnostic build does not qualify wider deployment |
+
+## 8. Current source facts
+
+FluviKeyguardCardService.kt performs the private check before r446Owner.issue on the direct route. WA schedules the inventory read, verifies wake/restriction revision on main and calls r449Apply before requestShowChecked. KeyguardR449RestrictionEvidence, KeyguardR44SurfaceEvidence and KeyguardR47PrivateAdmission determine the normal private decision. KeyguardR46RecordingStore owns the sealed reports. In scripts/r48-admission-report.py, envelope() currently checks a hard-coded af20365a SOURCE and accepts a missing build. analyze() calls envelope(), main() calls analyze() for each input. The unmodified reader rejects a correctly sealed explicit 0df0941e capture. That is a proven offline compatibility issue specific to the proposed new build.
+
+## 9. Evidence classification
+
+E1 physical FAIL on each R47 route per owner. E2 observed eleven current direct denials and four complete WA private denials, with no comparable WA17 decision. E3 private admission and public-sample eligibility are separate. E4 both captures report prepared semantic rev 2 with unverifiedLoop and no same-owner issue/reveal/material draw for these episodes. E5/E6 earlier scene-label and conceal limitations remain. E7 PROVEN delivery decision omitted the new APK. E8 PROVEN exact-source incompatibility in the existing reducer. MISSING independent handset MAIN/PIN intervals and a newly signed, upgrade-tested delivery. Remaining physical delay, color and motion have no measured contribution after a denied show.
+
+## 10. Hypotheses and decision
+
+| Hypothesis and support | Missing/opposing evidence | Prediction, smallest test and falsifier |
+|---|---|---|
+| H1. Ordinary reader misses a positive Nothing MAIN witness. Complete current UNKNOWN and denials support it | Actual scene lacked independent time labels | Confirm a MAIN hold on the new build and correlate a complete read. A matched ordinary MAIN and private grant falsify this explanation for that read |
+| H2. Available structure is shared by MAIN and restrictive scenes | No complete labelled handset pair | Compare the same feature on a complete MAIN/PIN pair. A negative collision rejects it. A reproducible distinct feature weakens equivalence only for compared samples |
+| H3. Churn, cancellation or STOP prevents completion on some wakes | Complete denials on other wakes rule out a universal explanation | Join the same request/revision through terminal. An earlier complete current decision falsifies cancellation as that read's first failure. Incomplete joins stay INCONCLUSIVE |
+| H4. An additional private predicate vetoes some requests | Prepared material and clear exclusions are independently observed; they do not establish co-temporality | Inspect same-read completeness/material/policy. All predicates true plus a denial contradicts the expected wiring |
+| H5. Downstream presentation, color or animation may also fail | The recorded denials precede presentation | Test downstream only if the same wake first receives a private grant and draw. Correct physical output is the opposing observation for that exact wake |
+
+D1 remains the two-scene measurement. D2 retains the separate conceal failure. D3 corrects delivery and binds the offline tool to the newly built candidate. No visibility-policy or renderer change is selected.
+
+## 11. Scope lock
+
+Application input is immutable 0df0941e. The only source edit planned is to the offline intake tool and its own tests on a separate tooling branch. Preserve dashboard, home widget, both presenters, private admission and conceal. Preserve R41 on API 35 as the owner's historical fastest opening and R29.1 as the earlier milestone. Cross-OS app bisect has no matched good/bad endpoints.
+
+## 12. Layers, bounds and ownership
+
+No new device permission, logger, polling, window, thread or data sample. A user label is external evidence and can never authorize display. Keep both capture/session/wake identities and each request/revision. Local software draw and the user's physical observation remain different endpoints.
+
+## 13. Red tests
+
+With the current offline tool show that a correctly sealed synthetic candidate report is rejected. Build synthetic fixtures by recomputing the real envelope length/hash. After the tool change, a correct candidate report passes, R47 remains analyzable by the previous default, a wrong or missing build in the explicit candidate lane fails, a mixed pair fails, a broken seal fails, and an unlabeled pair stays unlabelled. Do not edit a genuine capture to pass an identity check.
+
+## 14. Execution contract
+
+Add a narrowly scoped offline --expected-app-sha option accepting only the two reviewed full SHAs (R47 and R48). Thread the selected identity into analyze() and envelope(); with explicit selection require the field to be present and equal on every report. Preserve historical implicit-default behavior and bounded hashing/eviction accounting. Keep the actual packaged app at immutable 0df0941e. Record the separate tooling SHA and run the existing plus new reducer tests. A build produced from a different app source returns to the reviewer.
+
+## 15. Performance gate
+
+No production diff and no new on-device acquisition. Check equality of the runtime trees. Physical wake-to-first-correct-pixel ≤10 ms, absence on the first forbidden frame, actual current header color/motion and home-widget behavior remain open per route. No new time percentage is justified. Existing summary loss and FULL observer cost are measurement limitations.
+
+## 16. Execution order
+
+Current instructions and assets → pin refs/verify source equivalence and frozen evidence → prove the parser red → implement and validate the offline compatibility change → compile the fresh Human profile → verify the final signed update, export and recipient bytes → provide download and the two-action owner test. Independent build preparation can run while the offline tests execute. If an external signer cannot be reached, retain the fresh candidate and precise signing blocker. A missing new artifact leaves delivery open.
+
+## 17. Validation
+
+Use git diff --check, python3 -m unittest discover -s scripts/tests -p 'test_r48_admission_report.py' -v and the historical sealed uploads as baseline smoke tests. On API 37 install the known R47 into the disposable fixture, establish sentinel/prefs/route/bound service, update in place, verify the same state, then exercise real signed Flutter START/STOP and paste into a distinct receiver. Check body and downloaded bytes, source, session and provider. Keep the R47 first-sample conceal FAIL and both R48 stock MAIN failures explicit. No third copy of the failed stock MAIN experiment. Automated build correctness, diagnostic-export usability, release qualification and physical acceptance are separate outputs. Do not publish a private-header release under an experimental evidence label to bypass a failed applicable gate. Keep any candidate awaiting a required gate private and report its exact state.
+
+## 18. Commit discipline
+
+Isolate offline tool and tests from the pinned phone source and from orchestration. Append the journal on fix/orb-v4-latency-lockscreen with exact refs, commands, outcomes, failures and reviewer decisions. The historical no-rebuild entry remains part of the record. No raw phone reports, project-private asset contents, keystore material or private financial information in public Git.
+
+## 19. Push, build, graph and recipient delivery
+
+Use the existing project profile script scripts/build-human-diagnostic-apk.sh with FLUVI_BUILD_COMMIT=0df0941edad11582e7c3a9e6c094ff85a3d3cbea, HUMAN_DIAGNOSTIC, no demo seed, normal R47 sampleOnly=false. Established hosted builder: .github/workflows/fluvi-core.yml on orchestration/r47-builder at ae0915127d2d63c2bcb92aafbaa59d3ee316d32d, workflow_dispatch app_sha set to the full R48 target. Verify the builder ref and checkout before use. Run once and follow to completion, fixing only recoverable build errors within scope. The standard runner APK is intermediate. Use the authorized project signing environment, com.fluvi.app, expected signer SHA-256 faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb. Verify with apksigner verify --verbose --print-certs, package, ABI strings for source/purpose, signed upgrade and an independently retrieved complete APK. Give an owner-accessible direct download with final SHA-256, size and build run ID. An R47 URL, a CI page or an APK renamed after build does not satisfy D3.
+
+## 20. Completion report
+
+First line in Hungarian gives the actual new APK link when verified, or the precise unfinished delivery step and available build evidence. Include app/tool/orchestration/artifact identities, distinct PASS/FAIL/NOT RUN per risk, known failures, actual phone-test capability and raw synthetic proof. Preserve each hypothesis status. For the owner on the new APK: select the same Fluvi route and header for both captures. First START, lock, wake once and hold the main clock visually stable for 8–12 seconds, unlock, STOP and copy. Second START, lock/wake and open the PIN screen; hold without entering digits for 8–12 seconds, unlock, STOP and copy. If the display turns off or transitions, record it. Keep the two complete originals separate and indicate which scene really remained visible. Only independently aligned stable intervals label an individual read. WA is a separate follow-up if the first pair distinguishes anything.
+
+## 21. Definition of done
+
+New exact-source Human build, authorized signature, upgrade/export evidence, independently retrieved new binary, exact offline intake and bounded owner protocol are individually reported. Any missing or failed delivery step stays open. No request for another R47 phone test. The reviewer interprets the new evidence. Physical validation only comes from the owner's response for those exact APK bytes.
+
+PHYSICAL VALIDATION — PENDING, USER ONLY
