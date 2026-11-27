@@ -167,6 +167,15 @@ class AdmissionReportTest(unittest.TestCase):
         self.assertEqual("NOT_ATTEMPTED", reads["req:21"]["backend"])
         self.assertNotIn("issue", reads["req:21"]["stages"]["OUTPUT"])
 
+    def test_pinned_output_terminal_survives_later_stop_in_the_same_wake(self):
+        events = [f"R45_EVENT {context(3)} route={DIRECT} stage=TERMINAL at={at} detail={reason}"
+                  for at, reason in [(111, "direct:restriction"), (125, "inputPreparationFailed"), (180, "r46UserStop")]]
+        report = self.report(DIRECT, [terminal(3, DIRECT, "direct:restriction")], events)
+        wake = report["wakes"][0]
+        self.assertEqual(("direct:restriction", "111"), (wake["terminal"], wake["terminalAt"]))
+        self.assertEqual("r46UserStop", wake["stages"]["TERMINAL:180"]["reason"])
+        self.assertTrue(report["lossAndObserverCost"]["spoolRowCountMatches"])
+
     def test_label_overlapping_transition_is_refused_and_collisions_reject(self):
         def label(wake, scene, start, end):
             return dict(capture=CAPTURE, session=1, wake=wake, scene=scene, start=start, end=end,

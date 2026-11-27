@@ -103,9 +103,12 @@ def envelope(path):
                               "mailboxOfferWallTotalNs", "mailboxOfferWallMaxNs")))
     accounting = next((fields(line) for line in lines[summary[0] + 1:summary[1]]
                        if line.startswith("R41_ACCOUNTING ")), {})
-    loss["rawSampleEviction"] = ({"state": "EVICTED", "count": accounting["sampleEvicted"]}
-                                 if number(accounting.get("sampleEvicted")) else
-                                 {"state": UNKNOWN, "count": accounting.get("sampleEvicted", UNKNOWN)})
+    samples = number(accounting.get("sampleEvicted"))
+    loss["rawSampleEviction"] = {"state": UNKNOWN if samples is None else "EVICTED" if samples else "NONE",
+                                 "count": samples if samples is not None else UNKNOWN}
+    loss["spoolBodyRows"] = spool[1] - spool[0] - 1
+    claimed_rows = number(loss.get("spoolWritten"))
+    loss["spoolRowCountMatches"] = UNKNOWN if claimed_rows is None else claimed_rows == loss["spoolBodyRows"]
     return header, native, loss, lines, summary, spool, len(body), digest, hashlib.sha256(raw).hexdigest()
 
 
@@ -174,7 +177,8 @@ def normalize(tag, payload, output=False):
             # Keep the stage separate so a fragment cannot stand in for an admission.
             return wake, session, f"revision:{revision}", "MATERIAL_DENIED", known(row, ADMISSION)
         if stage == "TERMINAL":
-            return wake, session, "", "TERMINAL", {"reason": row.get("detail", UNKNOWN), "at": row.get("at", UNKNOWN)}
+            at = row.get("at", UNKNOWN)
+            return wake, session, "", f"TERMINAL:{at}", {"reason": row.get("detail", UNKNOWN), "at": at}
         if stage == "INTENT":
             return wake, session, "", "INTENT", known(row, ("at",))
         seq = number(row.get("sequence") or row.get("seq"))
@@ -483,10 +487,15 @@ def analyze(path, bookmarks=()):
             reads.append(item)
         screen = phase_value({k: v for k, v in wake_stages.items() if k == "WAKE"}, "screenOn")
         outcome = wake_stages.get("OUTCOME", {})
-        terminal = wake_stages.get("TERMINAL", {})
-        reason = unique([terminal.get("reason", UNKNOWN), outcome.get("terminal", UNKNOWN)])
-        if any(isinstance(value, dict) for value in (terminal.get("reason"), outcome.get("terminal"))):
-            reason = UNKNOWN
+        terminal = outcome.get("terminal", UNKNOWN)
+        # The reducer's pinned output terminal can coexist with a later prep
+        # failure or STOP on the same wake. Keep each occurrence, use the
+        # output terminal where explicitly given, and avoid a guessed latest.
+        terminals = {key: value for key, value in wake_stages.items() if key.startswith("TERMINAL:")}
+        if terminal == UNKNOWN:
+            terminal = phase_value(terminals, "reason")
+        reason = terminal if isinstance(terminal, str) else UNKNOWN
+        end_at = unique([row.get("at", UNKNOWN) for row in terminals.values() if row.get("reason") == reason])
         for item in reads:
             # The terminal belongs to the wake. It is not a completion receipt for this request.
             item["wakeTerminal"] = reason
@@ -497,7 +506,7 @@ def analyze(path, bookmarks=()):
             "kind": "WAKE" if number(screen) or any(k in wake_stages for k in ("WAKE_CYCLE_STARTED", "SCREEN_ON_RECEIVED"))
                     else "WAKE_ID_WITHOUT_OBSERVED_SCREEN_ON",
             "screenOn": screen, "clock": "uptimeMs",
-            "terminal": reason, "retainedDecisions": completed,
+            "terminal": reason, "terminalAt": end_at, "retainedDecisions": completed,
             "decisionCoverage": "RETAINED" if completed else "INCONCLUSIVE",
             "retainedIngress": len(ingress), "retainedReassessments": reassess,
             "physical": UNKNOWN, "stages": wake_stages, "reads": reads,
