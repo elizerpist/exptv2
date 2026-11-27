@@ -24489,3 +24489,164 @@ workflow's stock/visual, complete Flutter and A–K dashboard lanes were
 running at this checkpoint. [Normal workflow](https://github.com/elizerpist/exptv2/actions/runs/46059162982) · [Exact signed upgrade](https://github.com/elizerpist/exptv2/actions/runs/46060044408)
 
 **PHYSICAL VALIDATION — PENDING, USER ONLY**
+
+### R50 0.1.2 qualification closure
+
+Exact application `c1e674b2bcf31feab2ce5f5143b5032a109215ba`,
+versionCode 4, signed APK SHA-256
+`c63ff3ae0c73afc0a77a5d5131b567b8080fbd38429ed1ec32a5471488021703`.
+
+- **R1 PASS.** The slim build passed the debug, profile and release merged
+  manifest checks plus actual profile APK class and resource checks. Each
+  stock trial independently verified the three Fluvi rows and reached the
+  Android-owned service switch and fixed widget permission. [Exact builder and inventories](https://github.com/elizerpist/exptv2/actions/runs/46059162982/artifacts/15228271885)
+- **R2 PASS for clean binding and the signed data update.** In both normal
+  stock trials, cancellation released widget 3. Single-use approval bound
+  widget 4 to the fixed provider under host 1003. The genuine signed R49→0.1.2
+  install passed on API 37. Ledger and notification records, widget
+  preferences, FG/BG and the OS service setting survived. The disabled old
+  frame stayed dormant. The earlier existing-bound-ID migration fixture
+  remains blocked at the R49 grant. [Signed update](https://github.com/elizerpist/exptv2/actions/runs/46060044408/artifacts/15228177464)
+- **R3 material publication passes.** Stock API 35 reported 24 frames and API
+  37 reported 12 under widget 4. Both 147 × 147 crops contain the displayed
+  orb. The six settled API 35 crops contain five distinct outputs, API 37
+  has three. Ordered adjacent interior changes at RGB difference ≥3 were
+  `[30, 2057, 4368, 106, 2273]` and `[0, 3041, 0, 3041, 3041]`, respectively.
+  The sampled outer corners had zero changes at that threshold. At the
+  original ≥8 threshold the respective adjacent results were
+  `[0, 0, 646, 0, 0]` and `[0, 0, 0, 0, 0]`. The first API 35 capture
+  returned the keyguard background, so its comparison against all later
+  orbit samples cannot establish motion. The original API 37 motion assertion
+  failed and remains failed. Source-matched direct PNG checks for two moving
+  effects and one static control passed independently. Home-on-device parity
+  and the live motion acceptance gate stay separate.
+  [API 35](https://github.com/elizerpist/exptv2/actions/runs/46059162982/artifacts/15228860892) · [API 37](https://github.com/elizerpist/exptv2/actions/runs/46059162982/artifacts/15229115782)
+- **R4 first stock attempt.** API 35 committed the first long-press drag
+  from root `(467,1132)-(614,1279)` to `(0,1127)-(147,1274)`.
+  The second hold logged `drag-start` and returned the same root with
+  no `drag-drop` receipt. The main job failed. Its API 37 partner stopped
+  before the drag at the motion threshold. The exact signed follow-up keeps
+  both failures and measures the later scenes and sizes independently.
+- **R5 main lockscreen output.** Actual host 1003 and AppWidget 4 attached,
+  with first root draw on both stock systems. API 35 scan-end, attach-return
+  and root-draw marks were `78871 / 78960 / 79128` uptime ms in session
+  `56817215215`. API 37 marks were `121442 / 121519 / 121787` uptime ms
+  in session `85616020813`. These are software marks. The screenshot
+  request brackets use the separate device uptime readout saved with each
+  sample. Original qualification stopped before forbidden scenes, captured
+  separately below.
+- **R6 PASS for native and curated Flutter.** The Room and app suites
+  passed along with the 2 geometry tests, the 3 native packet tests and
+  the focused Balance controls. Flutter analysis completed with 12
+  information-level findings. Curated counts were 1,038 + 3 + 4. Full Flutter
+  **FAIL** with 2,768 pass, 3 skipped and 115 failures. Every failed test
+  identity appears in the preserved R49 comparison.
+  [Normal CI](https://github.com/elizerpist/exptv2/actions/runs/46059162982) · [Native XML](https://github.com/elizerpist/exptv2/actions/runs/46059162982/artifacts/15228246771) · [Golden failures](https://github.com/elizerpist/exptv2/actions/runs/46059162982/artifacts/15228332156)
+
+The independently instrumented exact signed APK ran on both stock systems
+without replacing the original qualification receipts. Host 1003 kept
+widget 4. Each size visited all four clamped edges and one corner, then
+restored the last root on relock. Both systems measured 147 and 294 px at
+56 and 112 dp. The 56 dp roots reached x=0 and x=933, with y=136 and y=2127.
+The 112 dp roots reached x=0 and x=786, with y=136 and y=1980. In the first
+trial the second short-settled gesture failed. The 800 ms hold, ordered
+single-pointer movement and 200 ms final settle committed all ten drop
+endpoints per API. Intermediate compositor alignment and all cancel,
+multi-touch and rotation variants remain open. [API 35 full crops, input and window samples](https://github.com/elizerpist/exptv2/actions/runs/46060782600/artifacts/15228677287) · [API 37 full crops, input and window samples](https://github.com/elizerpist/exptv2/actions/runs/46060782600/artifacts/15228507567)
+
+| Independent signed-APK result | API 35 | API 37 |
+| --- | --- | --- |
+| Main, first material, both sizes | PASS | PASS |
+| Dragged root endpoints and drop restoration | PASS | PASS |
+| Same widget ID after resize | PASS | PASS |
+| Original RGB ≥8 motion threshold, stable outside control | PASS at both sizes in this follow-up | FAIL at both sizes, with measured smaller interior changes |
+| PIN, unlock and display-off sampled withdrawal | PASS | PASS |
+| Statusbar-command shade | INCONCLUSIVE. Recorded failure, visible scene remained the main clock. | INCONCLUSIVE. Recorded failure, SystemUI still reported the main lock screen. |
+
+The PIN observer recorded a visible credential marker on both systems. Each
+first requested and settled PIN, unlocked and display-off screenshot
+had no visible overlay root in the paired WindowManager inventory. This
+observation bounds the software/compositor sample. The first physical
+forbidden frame still needs the user's handset test.
+
+On API 35 the two sizes had respectively four and two qualifying
+consecutive intervals at the original threshold. API 37 had one interval
+per size and additional measured interior variation at RGB ≥3. The
+56 dp trace also recorded one outside-region change. The independent test
+keeps the original threshold and the outside-region control, and reports
+the finer pixel deltas separately.
+
+Independent evidence remains separate from host output. The Flutter renderer
+compared the committed Dual Tide, Braided Current and reduced-motion frame
+packets directly to their corresponding sampled source PNGs. The old
+publisher's off-mode output and the static, wrong-palette and clipped
+geometry negative controls are preserved in the prior checkpoint. A matched
+installed home Balance run for multiple palettes, phase/speed and static
+parity remains NOT RUN. The source PNGs and local contract tests do not close
+that gate.
+
+The current independent signed-APK trials used test-only commit
+`ed7897779d569f12596565a5dce48a3bc4edd5a8`. The normal full workflow concluded
+FAIL. The A–K dashboard lane independently failed `RangeError (year)` for
+2026 outside the fixture range 2027–2051, also seen on R49. Scheduled tests
+and the baseline profile lane were skipped by dispatch settings. The stock
+result prevented the automatic Human qualification job from running.
+The verified public APK was delivered from the successful exact profile
+builder. [Normal workflow](https://github.com/elizerpist/exptv2/actions/runs/46059162982) · [A–K failure and probes](https://github.com/elizerpist/exptv2/actions/runs/46059162982/artifacts/15229128243) · [Signed update](https://github.com/elizerpist/exptv2/actions/runs/46060044408)
+
+### R50 independent shade gesture and first divergence
+
+E50.8 / H50.4. The separate real swipe fixture used the exact delivered APK,
+first from harness `4301bbb4fd7d67492dc34a411681248f16c1747c`. API 37 mounted
+host 1003, widget 4. Both swipe captures retained the ordinary clock and
+neither had SystemUI tiles, so shade withdrawal is INCONCLUSIVE on API 37.
+The same run's API 35 job failed to observe the service-detail title before
+the tap. The focused retry added the proper bounded title wait in tests only.
+[API 37 raw record](https://github.com/elizerpist/exptv2/actions/runs/46061680936/artifacts/15228603225) · [Initial API 35 setup failure](https://github.com/elizerpist/exptv2/actions/runs/46061680936/artifacts/15228393747)
+
+API 35 on harness `42d909daa399061271afdb63e3b9283f1569cf36` verified the
+downloaded signed bytes, installed and bound widget 4 under host 1003, and
+showed the main-lockscreen ORB. The second down swipe produced visible
+Internet and Bluetooth quick-settings tiles. **FAIL for shade ingress.**
+`panel-entry-2.png` shows the ORB and tiles together in the partly expanded
+panel. Its paired inventory shows the visible ORB window `6919e98` with
+bounds `(467,1132)-(614,1279)` and `NotificationShade`; the UI hierarchy
+confirms the quick-settings panel and tile labels. The screenshot request
+was bracketed by device elapsed time 84.82–85.72 s. The app recorded the
+first `scene:RESTRICTED` hide at uptime 85,931 ms and remove return at
+86,026 ms for session `54608640796`, window 1, widget 4. Keep those software
+receipts and the elapsed-time sample bracket as distinct observations.
+The earliest established divergence is the simultaneous visible ORB and
+restricted panel before the observed log of removal. This still leaves the
+precise compositor frame and trigger-to-classification split unmeasured.
+[Raw shade images, hierarchy, windows, receipts](https://github.com/elizerpist/exptv2/actions/runs/46062176110/artifacts/15228923338) · [Job](https://github.com/elizerpist/exptv2/actions/runs/46062176110/job/140718815335)
+
+The two later `confirmed-shade` screenshots show fully expanded quick
+settings without the ORB, and the inventories show no Fluvi overlay.
+The command intended to collapse the panel left Quick Settings on screen
+through `after-confirmed-shade-18`. The job's final same-ID readmission
+assertion failed. Main-scene return never became observable in that trial,
+so readmission is INCONCLUSIVE. The preserved ingress failure stands
+independently of the collapse command. The qualifying owner test can verify
+whether the same visible overlap occurs on the A142. A scene-policy change
+requires reviewer selection under the retained WA contract.
+
+**Implementation** — committed, pushed and built from
+`c1e674b2bcf31feab2ce5f5143b5032a109215ba`. [Exact diff](https://github.com/elizerpist/exptv2/compare/a5d40dd512ed1b802b5ad028b3e9ef2440ad98ec...c1e674b2bcf31feab2ce5f5143b5032a109215ba) · [Dart graph and native inventory](https://github.com/elizerpist/exptv2/blob/2e6bbbfc35d3f0c435449f12e7cf1ff94545aa89/docs/codegraph-r50-balance-orb.md)
+
+**Automated qualification** — FAIL overall. Open endpoints include the
+API 35 sampled shade ingress, API 37 original motion threshold and shade
+precondition, installed home-material parity, existing bound-ID migration,
+awaiting-consent revocation and the unexercised device geometry cases. PASS
+for the signed dormant-frame data update, normal consent, and the targeted
+real host, size, settled drag and sampled PIN/unlock/display-off controls.
+[Continuous integration](https://github.com/elizerpist/exptv2/actions/runs/46059162982)
+
+**APK delivery** — PASS. Anonymous full GET, 113,932,899 bytes, exact hash,
+original signer and embedded source were verified. The same bytes passed the
+R49 data update. This is the signed owner diagnostics build.
+[Direct APK](https://media.githubusercontent.com/media/elizerpist/exptv2/4fdd6c43d55d1aa00c95307ed4d5eaf7a232e287/Fluvi_R50_HUMAN_c1e674b2bcf3.apk)
+
+**Physical acceptance — PENDING, USER ONLY.** The installed emulator samples
+cannot determine the physical button-to-first-correct-pixel measurement or
+first forbidden handset frame.
