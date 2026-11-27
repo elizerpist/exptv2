@@ -84,7 +84,7 @@ jobs:
           test -c /dev/kvm
           sudo chmod 0666 /dev/kvm
           test -r /dev/kvm && test -w /dev/kvm
-      - name: Witness the secure scene and a real capture-process restart
+      - name: Smoke the real home Balance provider after the Browse picker
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.system == '37.0' && 36 || 35 }}
