@@ -23596,3 +23596,142 @@ Conclusion: the two video patterns are distinguishable in the first marked trial
 ### R47 synthetic evidence retention
 
 The three complete synthetic trial artifacts were copied without an APK by [45953538375](https://github.com/elizerpist/exptv2/actions/runs/45953538375), all three archive jobs PASS. Source trials 45948179372, 45949821696 and 45951672202 produced retained artifacts 15177782231, 15177562918 and 15178106837 respectively, each expiring 2027-02-25 (90-day retention). The archive job checked top-level and nested tar entries for APK/AAB files, refusing to upload if found; all three retained ZIP inventories also have zero APK entries. They contain 416, 2377 and 2442 individually SHA-256-listed original evidence files, including blank images, full recorded video frames, crops and traces. Eight selected original screenshot/video files across all three runs were independently matched to the retained manifests. These are synthetic emulator artifacts; no signed Human APK was uploaded. The paired CI failure evidence remains in its original linked run artifacts.
+
+## 2026-11-27 — R48 physical zero visual on both routes and coding handoff
+
+Reviewer checkpoint. The owner saw no ORB with either presenter on the R47 phone build. Eleven direct and four WA private denials are recorded; WA wake 17 remained unresolved at stop. The active-header shader was prepared. D1 is a bounded private-admission evidence collection; D2 preserves the independent R47 conceal failure. No application change or physical fix in this review. Use the following complete handoff. The current project rules are also provided in the owner's private handoff attachment.
+
+````markdown
+# R48 — Both lockscreen ORB routes invisible on Nothing A142
+
+## 1. Title and task intent
+
+EVIDENCE_COLLECTION. Reviewer decision D1. Determine whether the ordinary, private-material reader has an observable positive witness for the main lockscreen on this OS, and account for wakes that terminate before a decision. Build the replay, observation and comparison defined below. Deliver a result usable on the owner's phone. An evidence build, if required, is a separate capability from a qualifying active-header fix. No authorization, renderer, visual fallback or conceal-policy change is authorized in this round.
+
+## 2. Authoritative application state
+
+Repository `elizerpist/exptv2`. Phone-reported source `af20365a5ec96ff92b35321a03c0a2679ee7d2fd` on `implement/r47-header-orb-parity`; parent `84cf6443cc9a15cc1513759a4ed3c23e65719917`. Profile, Android API 37, Nothing A142, build CP2A.260605.016, incremental 2611121938. Both sessions used the same service process, FULL, ORB/orbOnly, full privacy, foreground/background off, sampleOnly=false. The registered R47 Human APK at artifact commit `d6f121d2ed2e0830597c5bbac26b3cc10a87a870` has LFS OID SHA-256 `74c39c4930261363721ed875f0c3889b2cc6f69f7a2fcb2086728e2464d597ea`, 121600977 bytes. Source identity is in the exports. The phone exports do not attest the installed bytes or signer. Exact-source graph `c3c0c9532d326654c0c43c7a164c550402367e1c`. Coordination baseline `f5e4369515421ad6b0c08b7ea6db094915de7045` on `fix/orb-v4-latency-lockscreen`. Keep these identities separate.
+
+## 3. Hard preflight
+
+Read the complete current FLUVI_PROMPT_WRITER_RULES 2.2, FLUVI_WIDGET_DEBUGGING_PROMPT_ADDENDUM 1.3, and FLUVI_PROJECT_DEBUGGING_INSTRUCTIONS 1.0 from the Fluvi project assets or the private handoff attachment's reference appendix. Read the complete current coordination `docs/FLUVI_ENGINEERING_JOURNAL.md` including the named DEBUGGING_LOOP_VERY_IMPORTANT block, the R44.5 through R47 decisions, `docs/ORB következtetések.md` and the applicable `MILESTONE_COMMITS.md` entries. Older embedded 2.1/1.2 copies are historical. State exactly which sources were accessible. This handoff supplies the operative experiment and normalized facts for repo-only execution. Raw phone exports stay with the owner; use attached private originals when available. Do not publish them.
+
+Fetch and report remote tips, parent, local HEAD, `git status --short --branch`, `git worktree list`, exact baseline-to-working diff and source in graph manifest. Isolate uncommitted or newer work. The reviewer owns diagnosis, causal interpretation, repair design and refactor decisions. Execute this specified experiment. Preserve contradictions and return the affected decision with evidence. Continue independent work within scope.
+
+## 4. Physical user evidence
+
+Owner, 27 November 2026 local time: “Fluvi test: zero visual, wA: zero visual”. Current-state visibility failed on both routes. Both START/STOP flows produced sealed exports. Earlier R46 occasionally displayed a public fixed sample. The owner previously reported the normal home widget moving with expected colors. The R47 captures establish neither a fresh home-widget comparison, an optical removal time, nor the actual color or animation of a displayed private header. The user has already tested this application source on the device.
+
+## 5. Frozen log audit
+
+Frozen report bodies hash correctly through the byte before the bodyBytes footer. The following are exact observations of the recordings; unobserved events are not counted as failures to physically draw by themselves. The owner independently supplies the optical observation.
+
+| Route, local start | Full attachment SHA-256 / sealed body SHA-256 | Transport / internal coverage |
+| --- | --- | --- |
+| FLUVI_STREAM 09:44:44, capture 3f2e9189-612d-418a-a952-97edffb3190a | a529e2dae6e01563bd08596f1911ef00610aa209860489a04ed50fe1e5ef6c50 / d4355fe46c5852725c35069a63a72d8e2855be1a65a623e39c7f1c81dd3e53cf | 501162 body bytes, 836/836 written; 396 events and 224 raw samples evicted |
+| WIDGETS_ANYWHERE 09:45:58, capture 32eb2e48-912f-4cd8-9276-e6580e6e0f6e | ae51739d19fa5a3c05c7f2e9a32a855a3b721751dbdd1bbeee0dc8b5f558db3e / 937b3fcde98cf4459329a949d0984a88e215e107834a53d94faecd48d3d9c9bf | 291043 body bytes, 515/515 written; 0 events and 151 raw samples evicted |
+
+| Wake | Earliest discriminating evidence and later termination |
+| --- | --- |
+| Fluvi 3 | Requests 36,38,39 current. ELIGIBLE_SAMPLE, UNKNOWN/NO_MAIN_MARKER, PRIVATE_NOT_AUTHORIZED. End systemGate, interactive=false. |
+| Fluvi 5 | SCENE_CHANGED on earlier work. Current requests 74–77 and adopted successor 100 still denied private material. Later keyguardLocked=false. |
+| Fluvi 7 | Current requests 142–144 denied. Target missing and scene changes also occurred; successor 162 is distinct from the earlier denials. Later keyguardLocked=false. |
+| WA 11 | Revision 6, all four exclusions CLEAR, normalSurface=UNKNOWN, MATERIAL_UNAUTHORIZED. End screenOff. |
+| WA 13 | TRUNCATED/EXCLUSION_UNKNOWN, then revision 39 complete exclusion evidence/CLEAR, still MATERIAL_UNAUTHORIZED. End screenOff. |
+| WA 15 | Revisions 97 and 127 clean exclusions, both denied. End screenOff. |
+| WA 17 | Intent and 43 INGRESS/REASSESS rows, then r46UserStop. No completed admission recorded. Exact loss/termination point open. |
+
+Deduplicate duplicated summary/spool rows by capture, wake, owner, request or restriction revision and stage. Distinguish wake from a screen-off generation. Both files report semantic active-header playback, animated=true, sourceRevision=2, frameStatus=unverifiedLoop. That is an allowed semantic fallback, prepared before admission. Neither capture provides a same-wake issue/reveal + material draw for any wake. Report physical endpoints as UNOBSERVED in machine output.
+
+## 6. Commit and agent-evidence audit
+
+R46 phone baseline fd74df6057793f6fdd12e0ccb61a20bdbfdd7f20 used the isolated compiled-public material. The R47 series introduced coherent active-header publication, frame-package validation, private authorization and separate telemetry. Parent 84cf6443 added prepared playback work. af20365a records actual presenter material and authorization domain, including first prepared-frame vs shader receipt. Its final diff did not change conceal order. R44.5 already tried installed/exact small clock, large clock and entry lookups on Nothing and had five no-show wakes. Do not rerun that idea under a new label.
+
+R47 synthetic hosts verified two distinct prepared images, 12351/15648 interior pixels changing. The signed API 37 installed-app runs 45920259910 / 45920327832 obtained 0/3 and 2/3 matching receipts. The current owner result takes precedence for phone visibility. The hosted Dual Tide diagnostic 45922553863 legitimately fell back after an unverified loop. Keep the separate signed-emulator rendererUnavailable observation distinct from this phone's unverifiedLoop. Paired API 35 run 45945903621 had 21/155 material failures on R46 and 16/155 on R47, 15 shared, 2/2 subsequent service tests failed on both. The R22.4 black-strip control passed on R46 and failed on R47 in both paired trials. Earlier exact-source JVM 662 PASS, LIGHT/FULL pair PASS, dashboard profile FAIL, full analysis exited nonzero on 22 informational findings. Retain recorded failures and exact scopes.
+
+R47 marked/repeat conceal runs 45949821696 and 45951672202 already tested the previous reviewer's controls on the same app. WA recorded a FORBIDDEN host marker with ORB followed by clear. DIRECT had a clear first crop in the repeat; the repeat clean control skipped markers. Exact first prohibited display frame, physical phone timing and causal stage remain unproven; original first-sample gate FAIL. Reuse the retained raw trials. A no-show cannot pass conceal.
+
+## 7. Graph provenance and impact
+
+Use the 816-document Dart index and exact Kotlin inventory in `docs/codegraph-r47-header-inventory.md` and `docs/codegraph-r47-header-query.txt` on the graph ref above. Index SHA-256 407fa446a667914aceb6d34b419e80f494bc8db549ccdd1c9bf3d215bbf00e41. DASHBOARD header → active-header bridge → store → selected native presenter is an upstream comparison. Kotlin admission and observer edges require direct source inspection. Expected product diff for replay-only work is empty.
+
+| Risk | Source, reachable transition | Applied safeguard and proving test |
+| --- | --- | --- |
+| R1 | KeyguardWindowSnapshotReader → R43/R44 evidence → normal classification. Host visible but content missing, hidden, or truncated | Replay the actual reader's normalized input/adapter. Call real classifiers and both admission adapters. Reader-limited facts remain UNKNOWN. Test host-only, hidden ancestor, real normal positive and identical host on PIN. |
+| R2 | FluviKeyguardCardService direct pre-issue branch and WA R449 read/debounce → owner change, cancellation or stop | Keep capture/session, request/revision and terminal distinct. Interleave 13's incomplete + complete reads, 5's successor and 17's stop. One terminal per wake. |
+| R3 | KeyguardCardDiagnostics / KeyguardR46RecordingStore → truncated summaries plus durable spool | Join records once, retain disagreement and drop/eviction counters, verify byte length/hash; deliberately omit a decision and truncate a report in tests. |
+| R4 | Existing R43 observer → passive or held observations. First wake vs later generation, cutoff, inaccessible node | Bound extraction from existing reads. Mark incomplete coverage; keep labels outside runtime eligibility. Inject reused window ID across wake and a label landing after a transition. |
+| R5 | Conditional capture-only instrumentation → CPU cost, old callbacks, leak of sensitive notification text | No new production polling or IPC for the base experiment; capture-scoped scalar state, bounded rows, no node objects or user text. Require equal decisions with capture off/on, disposal on STOP, and zero presentation in any collector-only variant. |
+
+## 8. Current source facts
+
+At the tested SHA, `FluviKeyguardCardService.kt` around 5972 uses `KeyguardR44SurfaceClassifier.classify(... syntheticTrial=false)` for the ordinary direct result. Around 1397–1423 the private check precedes ticket issue. `KeyguardR449RestrictionEvidence.kt` around 95 similarly obtains privateSurface via the normal classifier when the inventory is covered; the WA service around 835–857 can deny before requestShow. `KeyguardR44SurfaceEvidence.kt` around 124–135 returns the legacy classification after exclusion/cover checks on this normal path. `KeyguardCardSurface.kt` defines the exact main markers and the policy for UNKNOWN. `KeyguardR47PrivateAdmission.kt` requires complete evidence, current material and SHOW_FULL. A test that injects MAIN downstream misses this failure. The experimental classifier itself often reported NO_CONTENT. WA requests 219/221 had installed small/large resources but empty clock hits and an entry excluded due to a hidden ancestor or hidden node. Those snapshots do not automatically belong to each earlier admission.
+
+## 9. Evidence ledger
+
+E1 PROVEN physical: zero visible ORB per owner on both routes. E2 PROVEN trace: eleven distinct current direct private denials across three wakes and four WA CLEAR/private denials across three wakes. E3 PROVEN source and trace: exclusion clearance and an eligible public sample do not grant private material. E4 PROVEN partial: same prepared semantic generation in both recordings; no retained issue/reveal/draw chain. E5 PROVEN measurement limitation: earlier scheduled CLOCK/PIN labels are offsets; both exports have upstream loss. E6 PROVEN separate test failure: R47 synthetic conceal counterexample. UNPROVEN: actual scene at every sampled instant, a stable positive that discriminates the phone's main surface, full cause of wake 17, and downstream actual color/motion once authorized. MISSING: independently identified steady-state positive/negative intervals on this OS and a joined trace from the same read. No physical latency estimate can be derived from a wake without an identified first pixel.
+
+## 10. Hypotheses and decision
+
+| H | Evidence for / remaining alternative | Prediction and discriminating or falsifying test |
+| --- | --- | --- |
+| H1. Main lockscreen exposed but not recognized by the normal classifier | Current reads without a legacy positive, verified host, empty clock lookups. Independent scene labels missing. | On two separately confirmed main-lock holds, current normal classifier still UNKNOWN, with a repeatable visible system-owned structural feature absent from matched PIN/shade/cover controls. Failure to obtain the distinguishing feature leaves recognition unqualified. An eligible MAIN result with same-wake private grant refutes H1 for that sample. |
+| H2. The tree cannot distinguish these states with the available evidence | Shared scene root, notification subtree and optional UDFPS; hidden entry, no visible clock. No adequate independently labelled pair yet. | Same bounded observable feature vector on confirmed MAIN and a restrictive scene invalidates that candidate. Incomplete acquisitions cannot prove observational equivalence. |
+| H3. Rapid revision changes, incomplete reads, or stop prevent a usable decision | Direct 5/7 had churn; WA13 had a truncated acquisition and WA17 has reassessment without a retained decision. Complete/current denials refute this as sole explanation. | Join queued/start/finish/discard/admit by request/revision. Stable complete denial vs cancellation vs absent record have different outcomes. If no reliable join survives, retain INCONCLUSIVE. |
+| H4. Other private predicates contribute | Current animated material was prepared; some terminal samples show screen off or unlocked. These are later legitimate vetoes. | On the same request snapshot, record completeness, current material and individual policy checks. An additional false predicate shows coexisting veto; an all-true result with denial indicates a different decision-wiring defect. |
+| H5. Wrong color, frozen animation or late composition | Independent R47 risks. This symptom already has a demonstrated upstream blocker. | Reopen downstream causation only on a wake with matching private grant + submit/draw and zero physical output. No-show evidence has no power to qualify downstream parity or removal. |
+
+D1: implement the bounded observation/replay contract below. A production repair would need a positive discriminator independent of user timing and safe on PIN/shade/cover. Existing material cannot justify one. D2: keep the original admission and conceal gates. A successful diagnostic round returns a reviewable candidate discriminator, a decisive counterexample, or a precise evidence boundary. The coding agent does not promote a candidate to permission.
+
+## 11. Scope lock
+
+Preserve public fixture isolation, private material policy, per-wake ownership, both independent presenters, dashboard, home widget, existing one-button-per-route recorder and clipboard receiver. Protect R41 (97f9704120e2ae997185ea6e35fbc053e1d7f0ab) and R29.1 (de807259) as earlier API 35 user observations. Keep the ≤10 ms physical wake-to-visible target and first-forbidden-frame withdrawal. No renderer rewrite, fixed demo substitution, privacy downgrade, permission widening, syntheticTrial promotion, hardcoded Nothing window ID, retry loop, delay, root requirement or OEM patch.
+
+## 12. Layers, bounds and ownership
+
+Use primary display and verified SystemUI ownership, relative layer, active/focused status, ancestor visibility, containment and complete acquisition as attributes. The root, scanner success, a hidden resource, UDFPS, screenOn, or the absence of a known threat cannot independently be a positive. Exclude our overlay and foreign content. Keep the two presenters' ownership domains separate. Geometry of a previously observed window has no authority in a later wake. Never read PIN/notification text, screen contents, account data or a real header's pixel values into the report.
+
+## 13. Required red tests
+
+Create sanitized fixtures from the seven normalized episodes above. Mark any reconstructed field as synthetic/unknown. Run the normal reader/adapter boundary using realistic rooted candidates and invoke the existing policies. Expect the R47 baseline to reproduce direct UNKNOWN/private denial and WA CLEAR/UNKNOWN/private denial. Positive control: an eligible verified SystemUI host with an actual visible legacy main marker, live material, complete evidence and true system gates reaches the production private admission boundary. Negative twin: move/hide the marker, reuse its resource only under a hidden ancestor, or introduce a verified PIN/shade/upper foreign window. Apply the production semantics applicable to each case and record any counterexample. Never make a fake assert MAIN before testing the reader. Add a stop-with-work-pending case; an intentionally lost record must yield INCONCLUSIVE. Exercise a cold session, same-generation rearm, and a stale completion following a route change. Reset stores and stop collectors between cases.
+
+## 14. Measurement contract
+
+Start with the existing signed R47 and unmodified capture flow. Write a reusable offline parser and fixtures; do not require another APK merely to parse a report. Output one row per wake and a child row per distinct read. Record IDs, input domain, last proven stage, reader completeness, positive main marker, exclusion tuple, normal surface, material/current status if actually observed, decision, backend attempt, and terminal. Preserve UNOBSERVED, FALSE, TRUNCATED and EVICTED as distinct. Reject corrupt body/hash. Use source-side timestamps for intervals only where clocks and identities match.
+
+For independently labelled scenes use separate, named recordings or independently timestamped operator bookmarks. Pair only a documented steady interval with a current snapshot from that interval. First run the lab harness with known visible main lock, credential, shade, foreign cover and unlocked/off as controls. In the owner pass use one reference/main session and one restricted session initially on the same existing APK. Start with the same route and header. On the main session, wake once and keep the clock page visibly unchanged. On the restricted session enter the PIN page without typing the PIN and hold it. Hold each through an existing observation window (about 8–12 s if the display stays on); discard transition/uncertain or screen-off samples. The owner records which scene actually remained visible and its stable interval. For cross-scene sessions with ambiguous timing, use independently time-correlated observations or return UNLABELLED; a scheduled CLOCK/PIN marker alone is inadmissible. Follow with the other route and shade/cover only if the first pair is complete and discriminating; record untested scenes explicitly. No camera, ADB or companion app is required for the ordinary two-control recording. If precise alignment is unavailable, narrow the claim accordingly.
+
+Use the already-read R43 per-window candidates, parent/depth, visibility/hidden-ancestor outcomes, verified resource existence, and overflow/omission facts; ignore counts/IDs derived solely from notifications as positive witnesses. Compare the same label across separate wakes. Candidate is observational only. One complete negative collision rejects the candidate. A match on the small sample is evidence for review, never production approval.
+
+If an indispensable field is absent from the existing channels, document it first. The only authorized capture extension is a passive, bounded scalar summary taken from the existing normal acquisition and its decision lifecycle: record which actual positive/negative predicate was reached, observed/available vs unavailable, and queue/reader completion, rejection as stale, supersession or stop. Coalesced rows carry counts; preserve first and terminal rows. No fresh permission or tree walk, text, screenshots, raw private data or per-frame logging. If a new diagnostic APK is indispensable for that extension, make it a **collector-only Human variant**: prove both actual presenters unreachable in this variant, maintain private classifier evaluation in shadow with explicit labels, and keep its output distinct from R47 production receipts. A non-rendering variant is qualified solely for evidence collection. Apply its own scoped signed update/recorder/no-presentation checks before handing it off. Otherwise use the installed R47.
+
+## 15. Performance gate
+
+Passive extraction must not add another SystemUI acquisition, timer-driven retry, synchronous file write or material decode to the wake path. Compare the same deterministic replay with collection off/on: classifier calls, decisions, requests, callbacks and ownership unchanged. Record existing observer cost and counters separately from product time; preserve both clocks when supplied. No new visual performance claim.
+
+## 16. Execution order
+
+Pin baseline → verify checksums and loss ledger → replay normal adapter plus the positive/negative twins → test joins against deliberate duplication, loss and rapid owner change → run the stock API 37 controls → return one applicable owner capture protocol and intake command. Only apply the bounded extension if the concrete missing-field test above fails. Run focused validation once per materially different instrumentation change. An unavailable physical device cannot be silently replaced by an emulator.
+
+## 17. Validation and stop conditions
+
+Run `git diff --check`, `bash scripts/verify-fluvi-boundaries.sh`, `python3 scripts/test-r40-opening-contract.py`, and `python3 scripts/test-r41-opening-contract.py`. For the proposed offline parser use `python3 -m unittest discover -s <actual-test-directory> -p '<actual-R48-test-file>'`, retaining the exact expanded command. For Android boundary tests run from android: `./gradlew :app:testDebugUnitTest --tests '*KeyguardR47PrivateAdmissionTest' --tests '*KeyguardR449RestrictionEvidenceTest' --tests '*KeyguardR44SurfaceClassifierTest' --tests '*KeyguardR48*'`. If adding instrumentation, compile both app and test APKs for the matching flavor used by the existing API 37 service workflow, then execute the new cases on that verified lane. No new production permission in any flavor. Restore device state and prior settings in teardown; verify separate-receiver paste and spool hash on any phone-bound collector build.
+
+Initial limit: one replay per fixture; one full labelled lab sequence per route, one repeat only for a recorded ambiguity or to verify a putative feature on a second independent wake. Preserve every result, including invalid samples. No full release CI for offline replay. A changed phone-bound build requires its applicable exact-source delivery gates; qualification of the active-header lane stays open. Reuse the paired CI and frame-correlation artifacts unless source or endpoint changes. Report PASS / FAIL / NOT RUN with exact commands, build/harness refs, reasons and artifacts; limited host resources are infrastructure findings.
+
+## 18. Commit discipline
+
+Separate anonymized fixture/parser, optional observer instrumentation, tooling graph, and coordination record. Include why, evidence, change, scope, tests, failures and physical status. Private source captures and real screen images stay out of Git and hosted artifacts. Record all relevant red outcomes, lost data and counterexamples in the common journal.
+
+## 19. Push, build and graph
+
+Use an isolated diagnostics branch from af20365a. After the focused proof, push the scoped artifacts and return immutable links; update the shared journal without overwriting concurrent entries. No rebuild for replay-only work. If adding a collector build, use the established Human signing workflow, verify package/signature and in-place update, embedded source, verified downloadable bytes/hash, and a separate exact-source graph/inventory for any app changes. Preserve R47's active-header release and conceal status. A previous public fixture or collector-only package cannot satisfy the active-header delivery gate.
+
+## 20. Completion report
+
+First line in Hungarian: which APK the owner should use (the existing R47 unless a qualified collector is necessary), exact branch/commit, and the one smallest useful physical action. Provide per-wake and per-read tables, rejections/unknowns, independent label provenance and uncertainty, candidate vs negative matrix, cost/loss, exact commands and immutable synthetic artifact links. State what was completed locally, what awaits a phone, and which result returns to the reviewer. Report the separate status of showing, hiding, color, motion and launcher regression checks. The original physical R47 finding is FAIL, both routes.
+
+## 21. Definition of done
+
+The agent delivers the replay with the observed failure on both normal paths, positive and negative controls, working offline command, and a bounded, testable way to collect the missing discriminator. The reviewer receives the complete new evidence when the owner has supplied the labelled capture. If the same evidence is possible on a restricted surface, reject it explicitly and return that counterexample. No gate widening or automatic second repair. Two real header styles, natural motion, sustained presence, first forbidden frame and wake-to-visible latency require a subsequent admitted and physically tested candidate. PHYSICAL VALIDATION OF A FIX — PENDING, USER ONLY.
+````
