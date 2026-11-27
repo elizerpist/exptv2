@@ -88,6 +88,75 @@ void main() {
   );
 
   testWidgets(
+    'both arm choices use native readback and show verified restoration',
+    (tester) async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      var state = 'IDLE';
+      var timeout = 50;
+      var selected = 50;
+      var reject = false;
+      final requested = <int>[];
+      messenger.setMockMethodCallHandler(capture, (call) async {
+        if (call.method == 'start') {
+          selected = call.arguments['armMs'] as int;
+          requested.add(selected);
+          if (!reject) {
+            state = 'RECORDING';
+            timeout = selected;
+          }
+        }
+        if (call.method == 'stop') {
+          state = 'FROZEN';
+          timeout = 50;
+        }
+        return {
+          'state': state,
+          'armAvailable': true,
+          'armMs': selected,
+          'effectiveMs': timeout,
+          'restoration': state == 'RECORDING' ? 'ACTIVE' : 'RESTORED',
+          'hasCapture': state != 'IDLE',
+          'armError': reject ? 'ARM_READBACK_FAILED' : null,
+        };
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(capture, null));
+      await tester.pumpWidget(const MaterialApp(home: DebugConsoleDialog()));
+      await tester.tap(find.byKey(tab));
+      await tester.pumpAndSettle();
+      expect(find.text('Visszaállítva: 50 ms'), findsOneWidget);
+
+      for (final arm in [50, 0]) {
+        await tester.tap(find.byKey(ValueKey('wa-capture-arm-$arm')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(toggle));
+        await tester.pumpAndSettle();
+        expect(find.text('Aktív beállítás: $arm ms'), findsOneWidget);
+        expect(
+          tester
+              .widget<ChoiceChip>(find.byKey(ValueKey('wa-capture-arm-$arm')))
+              .onSelected,
+          isNull,
+        );
+        await tester.tap(find.byKey(toggle));
+        await tester.pumpAndSettle();
+        expect(find.text('Visszaállítva: 50 ms'), findsOneWidget);
+      }
+      reject = true;
+      await tester.tap(find.byKey(toggle));
+      await tester.pumpAndSettle();
+      expect(requested, [50, 0, 0]);
+      expect(
+        find.text('A szolgáltatás nem igazolta a kért beállítást.'),
+        findsOneWidget,
+      );
+      expect(find.text('Aktív beállítás: 0 ms'), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
     'stop disables both actions until the native freeze returns',
     (tester) async {
       final messenger =

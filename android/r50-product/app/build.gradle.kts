@@ -9,12 +9,15 @@ android {
         applicationId = "com.fluvi.app"
         minSdk = 24
         targetSdk = 37
-        versionCode = 5
-        versionName = "0.1.3"
+        versionCode = 6
+        versionName = "0.1.4"
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64") }
     }
     buildTypes {
-        create("profile") { matchingFallbacks += "release" }
+        create("profile") {
+            matchingFallbacks += "release"
+            manifestPlaceholders["fluviTraceByShell"] = (System.getenv("FLUVI_BUILD_PURPOSE") == "human_diagnostic").toString()
+        }
     }
     packaging {
         jniLibs.useLegacyPackaging = false

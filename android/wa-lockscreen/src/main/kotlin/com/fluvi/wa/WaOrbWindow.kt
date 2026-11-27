@@ -57,6 +57,7 @@ class WaOrbWindow(
     }
 
     private val attached get() = root?.let(::live) == true
+    val hasAttachment get() = root?.let { it.isAttachedToWindow || it.parent != null } == true
     val owner: WaAttachment? get() = root?.takeIf(::live)?.owner
 
     private fun live(frame: OrbRoot): Boolean =
@@ -226,6 +227,7 @@ class WaOrbWindow(
         frame.revoked = true
         frame.hide = ++hideId
         frame.hideReason = reason
+        frame.mark(WaStage.REVOKE)
         val motion = frame.entrance
         frame.entrance = null
         motion?.removeAllListeners()
@@ -443,6 +445,11 @@ class WaOrbWindow(
                 }
             }
             return true
+        }
+
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            mark(WaStage.ROOT_ATTACHED)
         }
 
         override fun onDetachedFromWindow() {

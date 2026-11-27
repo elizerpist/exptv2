@@ -23,6 +23,7 @@ class _DebugLockscreenCaptureState extends State<DebugLockscreenCapture>
   bool _polling = false;
   int _revision = 0;
   String? _feedback;
+  int _armMs = 50;
 
   bool get _recording => _status?['state'] == 'RECORDING';
 
@@ -58,15 +59,13 @@ class _DebugLockscreenCaptureState extends State<DebugLockscreenCapture>
   }
 
   Future<Map<String, Object?>> _request(String method) async =>
-      await _channel.invokeMapMethod<String, Object?>(
-        method,
-        method == 'start'
-            ? <String, Object?>{
-                'source': const String.fromEnvironment('FLUVI_BUILD_COMMIT'),
-                'purpose': kFluviBuildPurpose.diagnosticLabel,
-              }
-            : null,
-      ) ??
+      await _channel.invokeMapMethod<String, Object?>(method, <String, Object?>{
+        'purpose': kFluviBuildPurpose.diagnosticLabel,
+        if (method == 'start') ...{
+          'source': const String.fromEnvironment('FLUVI_BUILD_COMMIT'),
+          if (_status?['armAvailable'] == true) 'armMs': _armMs,
+        },
+      }) ??
       const <String, Object?>{};
 
   Future<void> _refresh() async {
@@ -130,7 +129,8 @@ class _DebugLockscreenCaptureState extends State<DebugLockscreenCapture>
     final state = switch (_status?['state']) {
       'RECORDING' => 'Rögzítés folyamatban',
       'FROZEN' => 'Lezárt felvétel',
-      'INTERRUPTED' => 'A felvétel megszakadt a folyamat leállásakor',
+      'INTERRUPTED' => 'A felvétel megszakadt',
+      'INVALID' => 'A felvétel érvénytelen',
       'IDLE' => 'Nincs felvétel',
       _ => 'Állapot betöltése',
     };
@@ -143,11 +143,59 @@ class _DebugLockscreenCaptureState extends State<DebugLockscreenCapture>
     final ms = _status?['elapsedMs'] as int? ?? 0;
     final id = _status?['id'] as String?;
     final drops = _status?['drops'] as int? ?? 0;
+    final observed = _status?['effectiveMs'] as int?;
+    final arm = _status?['armMs'] as int?;
+    final restoration = _status?['restoration'];
+    final readback = switch ((restoration, _recording, observed)) {
+      ('PENDING', _, _) => 'Visszaállítás függőben',
+      ('RESTORED' || 'NORMALIZED', false, 50) => 'Visszaállítva: 50 ms',
+      ('ACTIVE', true, final int effective) when effective == arm =>
+        'Aktív beállítás: $effective ms',
+      (_, _, final int effective) => 'Visszaolvasott beállítás: $effective ms',
+      _ => 'A szolgáltatás beállítása nem olvasható.',
+    };
+    final armError = switch (_status?['armError']) {
+      'SERVICE_UNAVAILABLE' =>
+        'Kapcsold be az ORB akadálymentesítési szolgáltatást.',
+      'FOREGROUND_REQUIRED' => 'Feloldott telefonnál indítsd a felvételt.',
+      'WINDOW_ACTIVE' => 'A felvétel indításakor még aktív az ORB ablaka.',
+      'ALREADY_RECORDING' => 'A korábbi felvétel még fut.',
+      'BASELINE_MISMATCH' => 'Az 50 ms-os alapbeállítás nem igazolható.',
+      'ARM_READBACK_FAILED' => 'A szolgáltatás nem igazolta a kért beállítást.',
+      'TIMEOUT_CHANGED' =>
+        'A szolgáltatás beállítása megváltozott a felvétel alatt.',
+      'SERVICE_DISCONNECTED' =>
+        'Az ORB-szolgáltatás kapcsolatát bontotta a rendszer.',
+      'CAPTURE_SETUP_FAILED' || 'INVALID_ARM' => 'A mérés indítása sikertelen.',
+      _ => null,
+    };
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
         Text(state, style: _text, key: const ValueKey('wa-capture-state')),
         if (service.isNotEmpty) Text(service, style: _text),
+        if (_status?['armAvailable'] == true) ...[
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final value in [50, 0])
+                ChoiceChip(
+                  key: ValueKey('wa-capture-arm-$value'),
+                  label: Text(value == 50 ? 'A · 50 ms' : 'B · 0 ms'),
+                  selected: (_recording ? arm : _armMs) == value,
+                  onSelected: _busy || _recording
+                      ? null
+                      : (_) => setState(() => _armMs = value),
+                ),
+            ],
+          ),
+          Text(
+            readback,
+            style: _text,
+            key: const ValueKey('wa-capture-arm-status'),
+          ),
+        ],
+        if (armError != null) Text(armError, style: _text),
         if (id != null) ...[
           Text('Azonosító $id', style: _text),
           Text(

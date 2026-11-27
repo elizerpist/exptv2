@@ -10,7 +10,10 @@ internal enum class WaSource {
     CONTENT, CONNECT, DISCONNECT, CONFIGURATION, SCAN_APPLY, ADD_RECHECK, ENTRANCE, INTERRUPT, PROBE,
 }
 
+internal enum class WaEventClass { UNKNOWN, OWN, SYSTEM_UI, HOME, OTHER }
+
 internal enum class WaStage(val terminal: Boolean = false, val coalescible: Boolean = false) {
+    CALLBACK, STATE_READ, DECISION(terminal = true), REVOKE(terminal = true), ROOT_ATTACHED,
     INGRESS(coalescible = true), FILTERED(coalescible = true), DENIED(coalescible = true),
     TERMINAL(terminal = true, coalescible = true), EPISODE_OPEN,
     SCAN_OFFER, SCAN_START, SCAN_RESULT, SCAN_APPLY, SCAN_CANCEL, STALE, ADD_WAIT,
@@ -38,29 +41,36 @@ internal class WaTraceRing(private val capacity: Int, private val sequence: Atom
         scan: Long, hide: Long, reason: WaHideReason, state: WaSystemState?, scene: WaLockscreenScene?,
         barrier: WaBarrier?, up: Long, elapsed: Long, received: Long, type: Int, eventTime: Long,
         detail: Long, detailEnd: Long, allowMerge: Boolean,
-    ) {
+        displayId: Int = 0, windowAlias: Int = 0, eventClass: WaEventClass = WaEventClass.UNKNOWN,
+        windowChanges: Int = -1, contentChanges: Int = -1,
+    ): Row {
         observed++
+        val observedSequence = sequence.incrementAndGet()
         val latest = slots[(next + capacity - 1) % capacity]
         if (size > 0 && allowMerge && latest.stage == stage && latest.source == source &&
             latest.service == service && latest.episode == episode && latest.owner == owner &&
             latest.hide == hide && latest.reason == reason && latest.state == state &&
-            latest.scene == scene && latest.barrier == barrier && latest.type == type
+            latest.scene == scene && latest.barrier == barrier && latest.type == type &&
+            latest.displayId == displayId && latest.windowAlias == windowAlias && latest.eventClass == eventClass &&
+            latest.windowChanges == windowChanges && latest.contentChanges == contentChanges
         ) {
             if (stage == WaStage.PROBE) {
                 val previousEnd = latest.latestProbeEnd
                 latest.maxGap = maxOf(latest.maxGap, elapsed - previousEnd)
                 latest.latestProbeEnd = detailEnd
             }
+            latest.lastSequence = observedSequence
             latest.lastUp = up
             latest.lastElapsed = elapsed
             latest.count++
             coalesced++
-            return
+            return latest
         }
         if (size == capacity) dropped++ else size++
         val row = slots[next]
         next = (next + 1) % capacity
-        row.sequence = sequence.incrementAndGet()
+        row.sequence = observedSequence
+        row.lastSequence = observedSequence
         row.stage = stage
         row.source = source
         row.service = service
@@ -79,17 +89,24 @@ internal class WaTraceRing(private val capacity: Int, private val sequence: Atom
         row.eventTime = eventTime
         row.detail = detail
         row.detailEnd = detailEnd
+        row.displayId = displayId
+        row.windowAlias = windowAlias
+        row.eventClass = eventClass
+        row.windowChanges = windowChanges
+        row.contentChanges = contentChanges
         row.count = 1
         row.lastUp = up
         row.lastElapsed = elapsed
         row.latestProbeEnd = detailEnd
         row.maxGap = 0
+        return row
     }
 
     fun rows(): List<Row> = if (size < capacity) slots.take(size) else slots.toList()
 
     class Row {
         var sequence = 0L
+        var lastSequence = 0L
         var stage = WaStage.INGRESS
         var source = WaSource.WINDOW
         var service = 0L
@@ -108,6 +125,11 @@ internal class WaTraceRing(private val capacity: Int, private val sequence: Atom
         var eventTime = 0L
         var detail = 0L
         var detailEnd = 0L
+        var displayId = 0
+        var windowAlias = 0
+        var eventClass = WaEventClass.UNKNOWN
+        var windowChanges = -1
+        var contentChanges = -1
         var count = 1
         var lastUp = 0L
         var lastElapsed = 0L
@@ -122,6 +144,12 @@ internal class WaTraceRing(private val capacity: Int, private val sequence: Atom
             if (reason != WaHideReason.NONE) append(" why=$reason")
             if (received != 0L) append(" recvUp=$received")
             if (type != 0 && stage != WaStage.PROBE) append(" event=$type eventUp=" + seenTime(eventTime))
+            if (stage == WaStage.CALLBACK) {
+                append(" eventClass=$eventClass displayId=" + if (displayId >= 0) displayId else "UNOBSERVED")
+                append(" alias=" + if (windowAlias != 0) windowAlias else "UNOBSERVED")
+                append(" windowChanges=" + if (windowChanges >= 0) windowChanges else "UNOBSERVED")
+                append(" contentChanges=" + if (contentChanges >= 0) contentChanges else "UNOBSERVED")
+            }
             if (state != null || source == WaSource.PROBE || stage == WaStage.TERMINAL) {
                 append(" display=${state?.displayState ?: "UNKNOWN"}")
                 append(" interactive=${state?.interactive ?: "UNKNOWN"} locked=${state?.locked ?: "UNKNOWN"}")
@@ -129,6 +157,7 @@ internal class WaTraceRing(private val capacity: Int, private val sequence: Atom
             if (scene != null) append(" scene=$scene")
             if (barrier != null) append(" gate=$barrier")
             when (stage) {
+                WaStage.STATE_READ -> append(" readStartEl=$detail readEndEl=$detailEnd")
                 WaStage.PROBE -> append(" readEndEl=$detailEnd lastReadEndEl=$latestProbeEnd maxIdleNs=$maxGap crossedVisibility=${type != 0}")
                 WaStage.SCAN_RESULT -> append(" workerBeginUp=$detail workerEndUp=$detailEnd")
                 WaStage.TERMINAL, WaStage.DENIED -> if (detail != 0L) append(" decideUp=$detail decideEl=$detailEnd")
@@ -146,6 +175,7 @@ internal class WaTraceRing(private val capacity: Int, private val sequence: Atom
 }
 
 internal const val WA_CAPTURE_MAGIC = "FLUVI_WA_LOCKSCREEN_CAPTURE_V1"
+internal const val WA_CAPTURE_MAGIC_V2 = "FLUVI_WA_LOCKSCREEN_CAPTURE_V2"
 internal const val WA_CAPTURE_BYTES = 128 * 1024
 
 /** The digest describes all UTF-8 bytes up to and including the final body newline. */

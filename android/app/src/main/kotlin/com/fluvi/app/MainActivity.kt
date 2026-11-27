@@ -144,7 +144,9 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "start", "status", "stop", "getFrozen" -> WaLockscreenCapture.request(
                     applicationContext, call.method, call.argument<String>("source"), call.argument<String>("purpose"),
+                    arm = call.argument<Int>("armMs"),
                     sizeDp = { HeaderOrbBinding.get(applicationContext).sizeDp() },
+                    foreground = { activityResumed },
                     reply = { result.success(it) },
                     error = { result.error("WA_CAPTURE", "The lockscreen capture operation failed", null) },
                 )

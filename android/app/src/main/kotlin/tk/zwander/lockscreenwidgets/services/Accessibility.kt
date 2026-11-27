@@ -29,6 +29,8 @@ class Accessibility : WaLockscreenService() {
 
     override fun orbOwner() = orb.owner
 
+    override fun hasOrbAttachment() = orb.hasAttachment
+
     override fun ownsOrbEvent(windowId: Int) = orb.ownsEvent(windowId)
 
     override fun showOrb(episode: Long, animate: Boolean): Boolean {
