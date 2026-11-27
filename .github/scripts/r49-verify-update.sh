@@ -6,13 +6,15 @@ mkdir -p "$out"
 adb shell getprop ro.build.fingerprint | tee "$out/device.txt"
 test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 37
 test "$(adb shell getprop ro.kernel.qemu | tr -d '\r')" = 1
-trap 'adb logcat -d -v threadtime > "$out/logcat.txt" 2>&1 || true' EXIT
+trap 'status=$?; adb logcat -d -v threadtime > "$out/logcat.txt" 2>&1 || true; printf "exit=%s\n" "$status" > "$out/exit.txt"' EXIT
+trap 'printf "first-failed-line=%s status=%s\n" "$LINENO" "$?" | tee "$out/error.txt"' ERR
 adb root
 adb wait-for-device
+test "$(adb shell id -u | tr -d '\r')" = 0
 apk_signer="$ANDROID_HOME/build-tools/36.0.0/apksigner"
 for apk in "$state"/{r43,r44}.apk; do
     "$apk_signer" verify --verbose --print-certs "$apk" | tee -a "$out/signatures.txt" |
-        rg 'Signer #1 certificate SHA-256 digest: faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb'
+        grep -F 'Signer #1 certificate SHA-256 digest: faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb'
 done
 python3 - "$state/r44.apk" "$APP_SHA" <<'PY'
 import sys, zipfile
@@ -60,6 +62,8 @@ for pref in "${legacy[@]}" "${preserve[@]}"; do
 done
 adb install -r "$state/r44.apk" | tee "$out/r49-update-install.txt"
 adb shell am start -W -n com.fluvi.app/.MainActivity | tee "$out/r49-launch.txt"
+grep -F 'Status: ok' "$out/r49-launch.txt"
+adb shell pidof com.fluvi.app
 basedir=/data/user/0/com.fluvi.app
 for i in $(seq 1 10); do
     if adb shell test -f "$basedir/no_backup/fluvi-retired-lockscreen-v1"; then break; fi
@@ -75,17 +79,20 @@ for pref in "${preserve[@]}"; do
     printf 'Retained owned prefs %s\n' "$pref" >> "$out/migration.txt"
 done
 adb shell test ! -f "$basedir/no_backup/header-orb-sharing-v1"
-if adb shell settings get secure enabled_accessibility_services | rg -q 'com\.fluvi\.app/tk\.zwander'; then
+if adb shell settings get secure enabled_accessibility_services | grep 'com\.fluvi\.app/tk\.zwander'; then
     echo 'New service unexpectedly enabled on install'
     exit 1
 fi
 adb shell am force-stop com.fluvi.app
 adb pull "$db" "$state/after.db" >/dev/null
 if adb shell test -f "$db-wal"; then adb pull "$db-wal" "$state/after.db-wal" >/dev/null; fi
-python3 - "$state/after.db" <<'PY'
+python3 - "$state/seed.db" "$state/after.db" <<'PY' | tee "$out/ledger.txt"
 import sqlite3,sys
-with sqlite3.connect(sys.argv[1]) as db:
-    assert db.execute('SELECT value FROM r49_fixture_sentinel').fetchone() == ('r49-disposable-update',)
-    print('Persisted database sentinel; original schema and ledger table reachable')
+with sqlite3.connect(sys.argv[1]) as original, sqlite3.connect(sys.argv[2]) as updated:
+    assert updated.execute('SELECT value FROM r49_fixture_sentinel').fetchone() == ('r49-disposable-update',)
+    ledger = 'SELECT * FROM fluvi_ledger_entries ORDER BY id'
+    before, after = original.execute(ledger).fetchall(), updated.execute(ledger).fetchall()
+    assert before == after, (len(before), len(after))
+    print(f'Persisted database sentinel and {len(before)} unchanged pre-existing ledger rows')
 PY
 printf '%s\n' 'PASS signed R48 → R49 install -r, database sentinel, owned prefs and retired-state migration.' > "$out/result.txt"
