@@ -1,3 +1,6 @@
+import '../../financial_snapshot_widget/domain/financial_snapshot_widget_repository.dart';
+import '../../financial_snapshot_widget/presentation/financial_snapshot_widget_page.dart';
+import '../../header_orb/presentation/header_orb_setup_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -5,8 +8,6 @@ import '../../automation/domain/automation_models.dart';
 import '../../automation/domain/automation_repository.dart';
 import '../../notification_appearance/domain/notification_appearance_repository.dart';
 import '../../runtime_monitoring/domain/runtime_monitoring_repository.dart';
-import '../../lock_screen_card/domain/lock_screen_card_repository.dart';
-import '../../lock_screen_card/presentation/lock_screen_card_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -14,13 +15,15 @@ class SettingsPage extends StatefulWidget {
     required this.permissions,
     this.runtime,
     this.notificationAppearance,
-    this.lockScreenCard,
+    this.financialSnapshotWidget,
+    this.headerOrbAvailable = false,
   });
 
   final AutomationPermissionRepository permissions;
   final RuntimeMonitoringRepository? runtime;
   final NotificationAppearanceRepository? notificationAppearance;
-  final LockScreenCardRepository? lockScreenCard;
+  final FinancialSnapshotWidgetRepository? financialSnapshotWidget;
+  final bool headerOrbAvailable;
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
@@ -30,7 +33,6 @@ class _SettingsPageState extends State<SettingsPage>
   AutomationPermissionStatus? _status;
   RuntimeMonitoringStatus? _runtimeStatus;
   NotificationSmallIconStyle? _smallIconStyle;
-  LockScreenCardStatus? _lockScreenCardStatus;
   bool _loading = true;
   bool _runtimeUpdating = false;
   bool _smallIconUpdating = false;
@@ -58,16 +60,13 @@ class _SettingsPageState extends State<SettingsPage>
     AutomationPermissionStatus? permissions;
     RuntimeMonitoringStatus? runtime;
     NotificationSmallIconStyle? smallIconStyle;
-    LockScreenCardStatus? lockScreenCardStatus;
     try {
       permissions = await widget.permissions.getPermissionStatus();
     } catch (_) {
       // Keep the settings page useful if the permission bridge is temporarily
       // unavailable; runtime state has a separate native source of truth.
     }
-    try {
-      lockScreenCardStatus = await widget.lockScreenCard?.load();
-    } catch (_) {
+    try {} catch (_) {
       // A failed optional preview must not obscure the other settings.
     }
     try {
@@ -86,7 +85,6 @@ class _SettingsPageState extends State<SettingsPage>
         _status = permissions ?? _status;
         _runtimeStatus = runtime ?? _runtimeStatus;
         _smallIconStyle = smallIconStyle ?? _smallIconStyle;
-        _lockScreenCardStatus = lockScreenCardStatus ?? _lockScreenCardStatus;
         _loading = false;
       });
     }
@@ -188,26 +186,32 @@ class _SettingsPageState extends State<SettingsPage>
                     await widget.permissions.openNotificationAccessSettings();
                   },
                 ),
-                if (widget.lockScreenCard != null) ...[
+                if (widget.headerOrbAvailable) ...[
                   const Divider(height: 1),
                   ListTile(
-                    key: const ValueKey('settings-lock-screen-card'),
+                    key: const ValueKey('settings-header-orb'),
                     leading: const Icon(Icons.lock_outline),
                     title: const Text('Zárképernyő'),
-                    subtitle: Text(_lockScreenSubtitle(_lockScreenCardStatus)),
                     trailing: const Icon(Icons.chevron_right),
-                    onTap: () async {
-                      await Navigator.of(context).push<void>(
-                        MaterialPageRoute<void>(
-                          builder: (_) => LockScreenCardPage(
-                            repository: widget.lockScreenCard!,
-                            openAndroidNotificationSettings:
-                                widget.permissions.openAppNotificationSettings,
-                          ),
-                        ),
-                      );
-                      _refresh();
-                    },
+                    onTap: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const HeaderOrbSetupPage(),
+                      ),
+                    ),
+                  ),
+                ],
+                if (widget.financialSnapshotWidget case final repository?) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.widgets_outlined),
+                    title: const Text('Pénzügyi widget'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            FinancialSnapshotWidgetPage(repository: repository),
+                      ),
+                    ),
                   ),
                 ],
                 const Divider(height: 1),
@@ -429,50 +433,6 @@ class _NotificationIconStyleTile extends StatelessWidget {
       ),
     );
   }
-}
-
-String _lockScreenSubtitle(LockScreenCardStatus? status) {
-  final native = status?.nativeCard;
-  if (native?.configuration.requested == true) {
-    if (native!.serviceConnected) {
-      return native.configuration.showFinancialDetails
-          ? 'Fluvi-kártya · Teljes · szolgáltatás csatlakoztatva'
-          : 'Fluvi-kártya · Diszkrét · szolgáltatás csatlakoztatva';
-    }
-    return native.systemServiceEnabled
-        ? 'Fluvi-kártya · kapcsolódás folyamatban'
-        : 'Fluvi-kártya · Android-engedély szükséges';
-  }
-  final widget = status?.widget;
-  if (widget != null && widget.hostWidgetCount > 0) {
-    return 'Pénzügyi widget konfigurálva · ${widget.hostWidgetCount} példány';
-  }
-  final configuration = status?.configuration;
-  if (configuration == null || !configuration.enabled) {
-    return 'Fluvi-kártya, widget és pénzügyi értesítés beállításai';
-  }
-  final mode = switch (configuration.mode) {
-    LockScreenCardMode.mind => 'Mind',
-    LockScreenCardMode.balance => 'Balance',
-    LockScreenCardMode.budget => 'Budget',
-  };
-  final axis = switch (configuration.timeAxis) {
-    LockScreenCardTimeAxis.sum => 'SUM',
-    LockScreenCardTimeAxis.year => 'Év',
-    LockScreenCardTimeAxis.month => 'Hónap',
-    LockScreenCardTimeAxis.day => 'Nap',
-  };
-  String? category;
-  for (final item in status!.categories) {
-    if (item.id == configuration.categoryId) {
-      category = item.name;
-      break;
-    }
-  }
-  final privacy = configuration.privacy == LockScreenCardPrivacy.discreet
-      ? 'Diszkrét'
-      : 'Teljes';
-  return [mode, axis, ?category, privacy].join(' · ');
 }
 
 class _PermissionTile extends StatelessWidget {

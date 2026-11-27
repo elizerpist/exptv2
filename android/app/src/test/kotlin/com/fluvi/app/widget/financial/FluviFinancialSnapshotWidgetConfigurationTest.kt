@@ -1,6 +1,5 @@
 package com.fluvi.app.widget.financial
 
-import com.fluvi.app.runtime.FluviLockScreenCardConfiguration
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -11,7 +10,7 @@ class FluviFinancialSnapshotWidgetConfigurationTest {
         val configuration = FluviFinancialSnapshotWidgetConfiguration()
 
         assertEquals(
-            FluviLockScreenCardConfiguration.Privacy.discreet,
+            FinancialSnapshotFocus.Privacy.discreet,
             configuration.privacy,
         )
         assertFalse(configuration.isValid)

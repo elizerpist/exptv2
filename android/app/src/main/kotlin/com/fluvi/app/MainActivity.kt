@@ -65,26 +65,11 @@ import com.fluvi.app.dashboard.DashboardPreparedIndexQueryGenerationOwner
 import com.fluvi.app.dashboard.DashboardQueryArguments
 import com.fluvi.app.query.QueryMenuMethodBridge
 import com.fluvi.app.runtime.FluviRuntimeCoordinator
-import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
-import com.fluvi.app.lockscreen.FluviKeyguardCardSettings
-import com.fluvi.app.lockscreen.FluviKeyguardCardService
-import com.fluvi.app.lockscreen.KeyguardCardDiagnostics
-import com.fluvi.app.lockscreen.FluviKeyguardCardServiceRegistry
-import com.fluvi.app.lockscreen.KeyguardOrbRenderMode
-import com.fluvi.app.lockscreen.KeyguardOrbRenderModeStatus
-import com.fluvi.app.lockscreen.KeyguardOrbRenderModeStore
-import com.fluvi.app.lockscreen.KeyguardR448DisplayRoute
-import com.fluvi.app.lockscreen.KeyguardR448DisplayRouteStore
-import com.fluvi.app.lockscreen.KeyguardR448ComparisonStore
-import com.fluvi.app.lockscreen.KeyguardR448Safety
-import com.fluvi.app.lockscreen.KeyguardR46RecordingStore
-import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialStore
-import com.fluvi.app.lockscreen.material.FluviActiveHeaderMaterialStore
-import com.fluvi.app.lockscreen.material.FluviKeyguardMaterialBridgeRegistry
 import com.fluvi.app.widget.financial.FluviFinancialSnapshotWidgetCoordinator
 import com.fluvi.app.widget.orb.OrbMaterialFrameStore
 import com.fluvi.app.widget.orb.FluviOrbWidgetProvider
 import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
+import com.fluvi.app.widget.orb.HeaderOrbWidgetContent
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.StandardMethodCodec
@@ -127,9 +112,7 @@ class MainActivity : FlutterActivity() {
     private var demoChannel: MethodChannel? = null
     private var dashboardPresentationChannel: MethodChannel? = null
     private var orbMaterialChannel: MethodChannel? = null
-    private var keyguardMaterialChannel: MethodChannel? = null
-    private var keyguardMaterialPublisherEpoch: Long = -1L
-    private var activeHeaderActivityResumed = false
+    private var headerOrbChannel: MethodChannel? = null
     private var coreRevisionEventChannel: EventChannel? = null
     private var coreRevisionObservation: Job? = null
     private var diagnosticEventChannel: EventChannel? = null
@@ -145,7 +128,6 @@ class MainActivity : FlutterActivity() {
         // Apply the persisted recents choice before Flutter constructs the
         // shell, including a launch originating from a notification/widget.
         FluviRuntimeCoordinator.applyRecentsVisibility(this)
-        FluviLockScreenCardCoordinator.reconcileCoreObserver(applicationContext)
         FluviFinancialSnapshotWidgetCoordinator.reconcileCoreObserver(applicationContext)
     }
 
@@ -370,222 +352,18 @@ class MainActivity : FlutterActivity() {
             RUNTIME_MONITORING_CHANNEL,
         ).also { channel ->
             channel.setMethodCallHandler { call, result ->
-                if (call.method in setOf("startR46Recording", "getR46Recording", "stopR46Recording",
-                        "getR46SealedReport", "markR46Copied")) {
-                    val values = call.arguments as? Map<*, *>
-                    scope.launch(Dispatchers.Main.immediate) {
-                        runCatching {
-                            val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
-                            when (call.method) {
-                                "startR46Recording" -> service?.startR46Recording(
-                                    values?.get("build") as? String, values?.get("buildMode") as? String,
-                                    values?.get("requestId") as? String, values?.get("route") as? String,
-                                ) ?: mapOf("active" to false, "reason" to "serviceUnavailable")
-                                "getR46Recording" -> {
-                                    val saved = withContext(Dispatchers.IO) { KeyguardR46RecordingStore.status(applicationContext) }
-                                    val native = service?.r442SampleStatus()
-                                    if (saved["state"] == "RECORDING" &&
-                                        (native?.get("active") != true || native["captureId"] != saved["captureId"]))
-                                        saved + mapOf("state" to "INTERRUPTED", "reason" to "serviceInterrupted")
-                                    else saved
-                                }
-                                "stopR46Recording" -> {
-                                    val id = requireNotNull(values?.get("captureId") as? String)
-                                    val before = withContext(Dispatchers.IO) { KeyguardR46RecordingStore.status(applicationContext) }
-                                    check(before["captureId"] == id) { "captureMismatch" }
-                                    val native = service?.r442SampleStatus()
-                                    val interrupted = before["state"] == "INTERRUPTED" || native?.get("active") != true ||
-                                        native["captureId"] != id
-                                    if (service != null) check(service.stopR46Owner(id)) { "ownerCleanupFailed" }
-                                    withContext(Dispatchers.IO) {
-                                        val snapshot = if (KeyguardCardDiagnostics.activeCaptureId() == id)
-                                            KeyguardCardDiagnostics.freezeR46Capture(applicationContext)
-                                        else KeyguardCardDiagnostics.captureSnapshot(applicationContext)
-                                        val summary = if (snapshot["captureId"] == id) snapshot["report"] as? String ?: ""
-                                            else "A korábbi natív összefoglaló nem érhető el."
-                                        val text = KeyguardR46RecordingStore.seal(applicationContext, id, summary,
-                                            if (interrupted) "INTERRUPTED" else "USER_STOP")
-                                        mapOf("state" to "SEALED", "captureId" to id, "report" to text)
-                                    }
-                                }
-                                "getR46SealedReport" -> {
-                                    val id = requireNotNull(values?.get("captureId") as? String)
-                                    withContext(Dispatchers.IO) { mapOf("captureId" to id,
-                                        "report" to KeyguardR46RecordingStore.sealedReport(applicationContext, id)) }
-                                }
-                                else -> {
-                                    val id = requireNotNull(values?.get("captureId") as? String)
-                                    withContext(Dispatchers.IO) { KeyguardR46RecordingStore.copied(applicationContext, id) }
-                                    mapOf("state" to "COPIED", "captureId" to id)
-                                }
-                            }
-                        }.onSuccess(result::success).onFailure { result.error("R46_RECORDING", it.message, null) }
-                    }
-                    return@setMethodCallHandler
-                }
-                if (call.method == "startR442SampleCapture" || call.method == "startR446PrintCapture" ||
-                    call.method == "startR449SampleCapture" || call.method == "getR442SampleCaptureStatus") {
-                    val values = call.arguments as? Map<*, *>
-                    scope.launch(Dispatchers.Main.immediate) {
-                        val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
-                        if (service == null) {
-                            result.success(mapOf("active" to false, "reason" to "serviceUnavailable"))
-                        } else {
-                            runCatching {
-                                if (call.method == "startR449SampleCapture") service.startR449SampleCapture(
-                                    values?.get("build") as? String, values?.get("buildMode") as? String,
-                                    values?.get("captureMode") as? String, values?.get("actionKind") as? String,
-                                    values?.get("routeRequested") as? String,
-                                    values?.get("diagnosticCircle") == true,
-                                ) else if (call.method == "startR446PrintCapture") service.startR446PrintCapture(
-                                    values?.get("build") as? String, values?.get("buildMode") as? String,
-                                    values?.get("captureMode") as? String,
-                                ) else if (call.method == "startR442SampleCapture") service.startR442SampleCapture(
-                                    values?.get("build") as? String, values?.get("buildMode") as? String,
-                                    values?.get("captureMode") as? String, values?.get("expanded") == true,
-                                ) else service.r442SampleStatus()
-                            }.onSuccess(result::success).onFailure {
-                                result.error("R442_START", it.message ?: "A rögzítés nem indult el.", null)
-                            }
-                        }
-                    }
-                    return@setMethodCallHandler
-                }
-                if (call.method == "getR44SyntheticTrial" || call.method == "setR44SyntheticTrial") {
-                    scope.launch(Dispatchers.Main.immediate) {
-                        val available = android.os.Build.VERSION.SDK_INT == 37 &&
-                            KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext)
-                        val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
-                        if (call.method == "setR44SyntheticTrial") {
-                            val enabled = (call.arguments as? Map<*, *>)?.get("enabled") as? Boolean
-                            if (!available || service == null || enabled == null || !service.setR44SyntheticTrial(enabled)) {
-                                result.error("R44_TRIAL", "A próba csak feloldott telefonon, bekapcsolt ORB-szolgáltatással indítható.", null)
-                                return@launch
-                            }
-                        }
-                        result.success(mapOf("available" to available, "enabled" to com.fluvi.app.lockscreen.KeyguardR44Trial.active))
-                    }
-                    return@setMethodCallHandler
-                }
-                if (call.method == "getKeyguardOrbRenderMode" || call.method == "setKeyguardOrbRenderMode") {
-                    scope.launch(Dispatchers.Main.immediate) {
-                        if (!KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext)) {
-                            result.success(mapOf("available" to false))
-                            return@launch
-                        }
-                        val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
-                        if (call.method == "setKeyguardOrbRenderMode") {
-                            val value = (call.arguments as? Map<*, *>)?.get("mode") as? String
-                            val mode = KeyguardOrbRenderMode.entries.firstOrNull { it.name == value }
-                            if (mode == null) {
-                                result.error("validation", "Ismeretlen orb megjelenítési mód.", null)
-                                return@launch
-                            }
-                            KeyguardOrbRenderModeStore.write(applicationContext, mode)
-                            service?.onOrbRenderModeChanged()
-                        }
-                        val configured = KeyguardOrbRenderModeStore.read(applicationContext)
-                        result.success((service?.renderModeStatus()
-                            ?: KeyguardOrbRenderModeStatus(configured, configured, visible = false)).toMap())
-                    }
-                    return@setMethodCallHandler
-                }
-                if (call.method == "getR448DisplayRoute" || call.method == "setR448DisplayRoute") {
-                    scope.launch(Dispatchers.Main.immediate) {
-                        if (!KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext)) {
-                            result.success(mapOf("available" to false))
-                            return@launch
-                        }
-                        val service = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
-                        if (call.method == "setR448DisplayRoute") {
-                            val value = (call.arguments as? Map<*, *>)?.get("route") as? String
-                            val requested = KeyguardR448DisplayRoute.entries.firstOrNull { it.name == value }
-                            val old = KeyguardR448DisplayRouteStore.read(applicationContext)
-                            if (requested == null ||
-                                getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked != false ||
-                                (service != null && !service.setR448DisplayRoute(requested))) {
-                                result.error("R448_ROUTE", "Az útvonal csak feloldott készüléken váltható.", null)
-                                return@launch
-                            }
-                            if (!KeyguardR448DisplayRouteStore.write(applicationContext, requested)) {
-                                service?.setR448DisplayRoute(old)
-                                result.error("R448_ROUTE", "A választást nem sikerült menteni.", null)
-                                return@launch
-                            }
-                        }
-                        val configured = KeyguardR448DisplayRouteStore.read(applicationContext)
-                        val native = service?.r448DisplayRouteStatus() ?: mapOf(
-                            "configured" to configured.name, "active" to "NONE", "reason" to "DISCONNECTED", "generation" to 0L,
-                            "sampleOnly" to KeyguardR448Safety.sampleOnly(applicationContext))
-                        result.success(mapOf("available" to true, "connected" to (service != null)) + native)
-                    }
-                    return@setMethodCallHandler
-                }
-                if (call.method == "getR448Comparison") {
-                    scope.launch(Dispatchers.IO) {
-                        val text = if (KeyguardOrbRenderModeStore.diagnosticBuild(applicationContext))
-                            KeyguardR448ComparisonStore.export(applicationContext) else ""
-                        withContext(Dispatchers.Main.immediate) { result.success(mapOf("report" to text)) }
-                    }
-                    return@setMethodCallHandler
-                }
-                if (call.method in setOf("startKeyguardDiagnosticCapture", "getKeyguardDiagnosticCapture", "freezeKeyguardDiagnosticCapture", "clearKeyguardDiagnosticCapture")) {
-                    // FIFO capture barriers/export may wait for the reducer;
-                    // they must never occupy Android's visibility/UI owner.
-                    val values = call.arguments as? Map<*, *>
-                    scope.launch {
-                        runCatching {
-                            if (call.method != "getKeyguardDiagnosticCapture") {
-                                val owner = FluviKeyguardCardServiceRegistry.serviceForInstrumentation()
-                                if (owner != null && !owner.stopR444Trial("captureBoundary"))
-                                    error("Az Android-próbaprofil visszaállítása nem igazolt.")
-                            }
-                            withContext(Dispatchers.IO) {
-                                when (call.method) {
-                                    "startKeyguardDiagnosticCapture" -> KeyguardCardDiagnostics.startCapture(
-                                        applicationContext, values?.get("build") as? String,
-                                        values?.get("buildMode") as? String, values?.get("captureMode") as? String,
-                                        values?.get("r43Evidence") == true,
-                                    )
-                                    "getKeyguardDiagnosticCapture" -> KeyguardCardDiagnostics.captureSnapshot(applicationContext)
-                                    "freezeKeyguardDiagnosticCapture" -> KeyguardCardDiagnostics.freezeCapture(applicationContext)
-                                    else -> KeyguardCardDiagnostics.clearCapture(applicationContext)
-                                }
-                            }
-                        }.onSuccess { result.success(it) }
-                            .onFailure { result.error("KEYGUARD_CAPTURE", it.message, null) }
-                    }
-                    return@setMethodCallHandler
-                }
                 if (call.method == "getFinancialSnapshotWidgetLaunch") {
                     result.success(consumeFinancialSnapshotWidgetLaunch())
                     return@setMethodCallHandler
                 }
-                if (call.method == "getLockScreenCard") {
+                if (call.method == "getFinancialSnapshotWidget") {
                     scope.launch {
                         runCatching {
-                            lockScreenCardStatus()
-                        }.onSuccess(result::success)
-                            .onFailure { error ->
-                                result.error("lock_screen_card_error", error.message, null)
+                            withContext(Dispatchers.IO) {
+                                FluviFinancialSnapshotWidgetCoordinator.preview(applicationContext)
                             }
-                    }
-                    return@setMethodCallHandler
-                }
-                if (call.method == "setLockScreenCard") {
-                    val values = call.arguments as? Map<*, *>
-                    if (values == null) {
-                        result.error("validation", "Hiányzó zárképernyő-beállítás.", null)
-                        return@setMethodCallHandler
-                    }
-                    scope.launch {
-                        runCatching {
-                            FluviLockScreenCardCoordinator.update(applicationContext, values)
-                            lockScreenCardStatus()
                         }.onSuccess(result::success)
-                            .onFailure { error ->
-                                result.error("lock_screen_card_error", error.message, null)
-                            }
+                            .onFailure { result.error("financial_snapshot_widget_error", it.message, null) }
                     }
                     return@setMethodCallHandler
                 }
@@ -598,49 +376,12 @@ class MainActivity : FlutterActivity() {
                     scope.launch {
                         runCatching {
                             FluviFinancialSnapshotWidgetCoordinator.update(applicationContext, values)
-                            lockScreenCardStatus()
+                            FluviFinancialSnapshotWidgetCoordinator.preview(applicationContext)
                         }.onSuccess(result::success)
                             .onFailure { error ->
                                 result.error("financial_snapshot_widget_error", error.message, null)
                             }
                     }
-                    return@setMethodCallHandler
-                }
-                if (call.method == "setNativeKeyguardCard") {
-                    val values = call.arguments as? Map<*, *>
-                    if (values == null) {
-                        result.error("validation", "Hiányzó natív zárképernyő-beállítás.", null)
-                        return@setMethodCallHandler
-                    }
-                    scope.launch {
-                        runCatching {
-                            FluviKeyguardCardSettings.update(applicationContext, values)
-                            lockScreenCardStatus()
-                        }.onSuccess(result::success)
-                            .onFailure { error -> result.error("native_keyguard_card_error", error.message, null) }
-                    }
-                    return@setMethodCallHandler
-                }
-                if (call.method == "patchNativeKeyguardCardLayout") {
-                    val values = call.arguments as? Map<*, *>
-                    if (values == null) {
-                        result.error("validation", "Hiányzó zárképernyő-elrendezés.", null)
-                        return@setMethodCallHandler
-                    }
-                    scope.launch {
-                        runCatching {
-                            FluviKeyguardCardSettings.patchLayout(applicationContext, values)
-                            lockScreenCardStatus()
-                        }.onSuccess(result::success)
-                            .onFailure { error -> result.error("native_keyguard_layout_error", error.message, null) }
-                    }
-                    return@setMethodCallHandler
-                }
-                if (call.method == "openNativeKeyguardSettings") {
-                    runCatching {
-                        startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                    }.onSuccess { result.success(true) }
-                        .onFailure { result.error("accessibility_settings", it.message, null) }
                     return@setMethodCallHandler
                 }
                 if (call.method == "openRuntimeNotificationChannelSettings") {
@@ -1355,141 +1096,45 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
-        keyguardMaterialChannel = MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            KEYGUARD_MATERIAL_CHANNEL,
-        ).also { channel ->
-            channel.setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "requestActiveHeaderRefresh" -> {
-                        if (FluviActiveHeaderMaterialStore.applicable(applicationContext) == null)
-                            FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
-                        result.success(null)
+        headerOrbChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "fluvi/header_orb_widget")
+            .also { channel ->
+                channel.setMethodCallHandler { call, result ->
+                    if (call.method == "openSetup") {
+                        runCatching { startActivity(HeaderOrbWidgetContent.setupIntent(this)) }
+                            .onSuccess { result.success(null) }
+                            .onFailure { result.error("header_orb_setup", "Host unavailable", null) }
+                        return@setMethodCallHandler
                     }
-                    "beginActiveHeaderPublisher", "invalidateActiveHeaderProfile" -> {
-                        val values = call.arguments as? Map<*, *>
-                        val publisherSession = values?.get("publisherSession") as? String
-                        val instance = (values?.get("publisherInstance") as? Number)?.toLong()
-                        val revision = (values?.get("publisherRevision") as? Number)?.toLong()
-                        val accepted = if (publisherSession == null || instance == null || revision == null) false
-                        else if (call.method == "beginActiveHeaderPublisher")
-                            FluviActiveHeaderMaterialStore.bindPublisher(keyguardMaterialPublisherEpoch, instance, publisherSession)
-                        else FluviActiveHeaderMaterialStore.invalidatePublisher(keyguardMaterialPublisherEpoch, instance, publisherSession, revision)
-                        if (accepted) FluviKeyguardCardServiceRegistry.notifyActiveHeaderChanged()
-                        result.success(mapOf("accepted" to accepted))
-                    }
-                    "publishActiveHeaderProfile" -> {
-                        val values = call.arguments as? Map<*, *>
-                        if (values == null) {
-                            result.error("validation", "Hiányzó fejlécanyag.", null)
-                        } else {
-                            val unlocked = getSystemService(android.app.KeyguardManager::class.java)
-                                ?.isKeyguardLocked == false
-                            val receipt = FluviActiveHeaderMaterialStore.publish(applicationContext, values,
-                                keyguardMaterialPublisherEpoch, activeHeaderActivityResumed && unlocked)
-                            if (receipt.accepted) FluviKeyguardCardServiceRegistry.notifyActiveHeaderChanged()
-                            result.success(mapOf("accepted" to receipt.accepted, "reason" to receipt.reason,
-                                "token" to receipt.token))
-                        }
-                    }
-                    "reportActiveHeaderFrameStatus" -> {
-                        val values = call.arguments as? Map<*, *>
-                        val token = values?.get("token") as? String
-                        val status = values?.get("status") as? String
-                        val accepted = token != null && status != null &&
-                            FluviActiveHeaderMaterialStore.noteFrameStatus(applicationContext, token, status)
-                        result.success(mapOf("accepted" to accepted))
-                    }
-                    "publishActiveHeaderFrames" -> {
-                        val values = call.arguments as? Map<*, *>
-                        val unlocked = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == false
-                        if (values == null || !activeHeaderActivityResumed || !unlocked) {
-                            result.success(mapOf("accepted" to false, "reason" to "foregroundUnavailable"))
-                        } else {
-                            // PNG admission, copying and decoding run away from
-                            // Main. Completion rechecks both the exact owner and
-                            // the foreground/unlocked state before publication.
-                            val publisherEpoch = keyguardMaterialPublisherEpoch
-                            queryScope.launch {
-                                var decoded: List<android.graphics.Bitmap>? = null
-                                try {
-                                    val admission = FluviActiveHeaderMaterialStore.admitFrames(
-                                        applicationContext, values, publisherEpoch)
-                                    val request = admission.request
-                                    if (request != null) decoded = FluviActiveHeaderMaterialStore.decodeFrames(request)
-                                    withContext(Dispatchers.Main.immediate) {
-                                        val stillUnlocked = getSystemService(android.app.KeyguardManager::class.java)
-                                            ?.isKeyguardLocked == false
-                                        val frames = decoded
-                                        val accepted = request != null && frames != null && activeHeaderActivityResumed &&
-                                            stillUnlocked && keyguardMaterialPublisherEpoch == publisherEpoch &&
-                                            FluviActiveHeaderMaterialStore.commitFrames(applicationContext, request, frames)
-                                        // commitFrames consumes accepted and rejected decoded lists.
-                                        if (request != null && frames != null && activeHeaderActivityResumed &&
-                                            stillUnlocked && keyguardMaterialPublisherEpoch == publisherEpoch) decoded = null
-                                        result.success(mapOf("accepted" to accepted, "reason" to
-                                            if (accepted) "accepted" else if (request == null) admission.reason else "staleOrInvalid"))
-                                    }
-                                } finally {
-                                    decoded?.forEach { if (!it.isRecycled) it.recycle() }
+                    val application = applicationContext
+                    HeaderOrbWidgetContent.execute {
+                        runCatching {
+                            when (call.method) {
+                                "status" -> HeaderOrbWidgetContent.status(application)
+                                "setSharing" -> {
+                                    HeaderOrbWidgetContent.setSharing(application, call.arguments as Boolean)
+                                    null
                                 }
+                                "prepare" -> HeaderOrbWidgetContent.prepare(
+                                    application, requireNotNull(call.argument("mode")),
+                                    requireNotNull(call.argument("signature")),
+                                )
+                                "unavailable" -> {
+                                    HeaderOrbWidgetContent.unavailable(call.argument("token"))
+                                    null
+                                }
+                                "publish" -> HeaderOrbWidgetContent.publish(
+                                    application,
+                                    call.argument("token"), call.argument("size"),
+                                    call.argument("intervalMs"), call.argument<Number>("phaseOriginUtcMs")?.toLong(),
+                                    call.argument("motion"), call.argument("frames"),
+                                )
+                                else -> return@execute result.notImplemented()
                             }
-                        }
+                        }.onSuccess(result::success)
+                            .onFailure { result.error("header_orb_widget", it.javaClass.simpleName, null) }
                     }
-                    "publishProfile" -> {
-                        val values = call.arguments as? Map<*, *>
-                        if (values == null) {
-                            result.error("validation", "Hiányzó keyguard anyagprofil.", null)
-                        } else {
-                            result.success(
-                                mapOf(
-                                    "accepted" to FluviKeyguardMaterialStore.publish(
-                                        applicationContext,
-                                        values,
-                                        keyguardMaterialPublisherEpoch,
-                                    ),
-                                ),
-                            )
-                        }
-                    }
-                    "sceneTarget" -> {
-                        val initialSettings = FluviKeyguardCardSettings.read(applicationContext)
-                        val focus = initialSettings.focus
-                        // This is the keyguard card's own focus.  It is never
-                        // borrowed from an AppWidget host or the notification
-                        // configuration, even while those surfaces exist.
-                        queryScope.launch {
-                            val target = FluviLockScreenCardCoordinator
-                                .materialSceneTarget(applicationContext, focus.asFinancialFocus())
-                            val currentCoreRevision = withContext(Dispatchers.IO) {
-                                fluviCore.query.currentCoreRevision()
-                            }
-                            withContext(Dispatchers.Main.immediate) {
-                                val currentSettings = FluviKeyguardCardSettings.read(applicationContext)
-                                val unchanged = currentSettings.focus == initialSettings.focus &&
-                                    currentSettings.layoutRevision == initialSettings.layoutRevision &&
-                                    currentSettings.generation == initialSettings.generation &&
-                                    currentSettings.requested == initialSettings.requested &&
-                                    currentSettings.showFinancialDetails == initialSettings.showFinancialDetails
-                                // These are provenance observations, not visibility authority.
-                                // An enrolled publisher must recheck them against current state.
-                                result.success(target.toMap() + mapOf(
-                                    "r29SettingsCurrent" to unchanged,
-                                    "r29CurrentCoreRevision" to currentCoreRevision,
-                                    "r29LayoutRevision" to initialSettings.layoutRevision,
-                                    "r29PrivacyRevision" to initialSettings.generation,
-                                    "r29ShowFinancialDetails" to initialSettings.showFinancialDetails,
-                                ))
-                            }
-                        }
-                    }
-                    else -> result.notImplemented()
                 }
             }
-        }
-        keyguardMaterialPublisherEpoch = FluviKeyguardMaterialBridgeRegistry.connect(
-            requireNotNull(keyguardMaterialChannel),
-        )
         coreRevisionEventChannel = EventChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             DASHBOARD_CORE_REVISION_STREAM_CHANNEL,
@@ -1526,9 +1171,6 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
-        activeHeaderActivityResumed = true
-        if (FluviActiveHeaderMaterialStore.applicable(applicationContext) == null)
-            FluviKeyguardMaterialBridgeRegistry.requestSceneRefresh()
         FluviRuntimeCoordinator.reconcileHistoricalUserStop(applicationContext)
         FluviRuntimeCoordinator.onAppSurfaceVisibilityChanged(applicationContext, true)
         FluviRuntimeCoordinator.applyRecentsVisibility(this)
@@ -1539,11 +1181,6 @@ class MainActivity : FlutterActivity() {
                 runCatching { fluviCore.pulsePriority.reevaluateCurrent() }
             }
         }
-    }
-
-    override fun onPause() {
-        activeHeaderActivityResumed = false
-        super.onPause()
     }
 
     override fun onStop() {
@@ -1561,42 +1198,13 @@ class MainActivity : FlutterActivity() {
         FluviRuntimeCoordinator.applyRecentsVisibility(this)
     }
 
-    private suspend fun lockScreenCardStatus(): Map<String, Any?> =
-        FluviLockScreenCardCoordinator.preview(applicationContext).toMutableMap().apply {
-            val keyguardFocus = FluviKeyguardCardSettings.read(applicationContext).focus
-            put("widget", FluviFinancialSnapshotWidgetCoordinator.preview(applicationContext))
-            put("nativeCard", FluviKeyguardCardSettings.statusMap(applicationContext))
-            put(
-                "keyguardCategories",
-                FluviLockScreenCardCoordinator.categories(
-                    applicationContext,
-                    keyguardFocus.direction,
-                    keyguardFocus.timeAxis,
-                ),
-            )
-            put(
-                "keyguardContent",
-                if (keyguardFocus.isValid) {
-                    runCatching {
-                        withContext(Dispatchers.IO) {
-                            FluviLockScreenCardCoordinator.resolve(applicationContext, keyguardFocus.asFinancialFocus()).toMap()
-                        }
-                    }.getOrNull()
-                } else null,
-            )
-        }
-
     private fun consumeFinancialSnapshotWidgetLaunch(): Map<String, Any?>? =
         pendingFinancialSnapshotLaunch.also { pendingFinancialSnapshotLaunch = null }
 
     private fun financialSnapshotWidgetLaunch(source: android.content.Intent?): Map<String, Any?>? {
         source ?: return null
-        val fromWidget = source.action == "com.fluvi.app.widget.financial.OPEN"
-        val fromKeyguard = source.action == FluviKeyguardCardService.ACTION_OPEN_FOCUS
-        if (!fromWidget && !fromKeyguard) return null
-        // The exported launcher Activity must not treat arbitrary extras as
-        // financial authority. Both the AppWidget and the native overlay open
-        // only the focus stored by Fluvi itself.
+        if (source.action != "com.fluvi.app.widget.financial.OPEN") return null
+        // The exported launcher only opens the focus stored by Fluvi itself.
         val focus = FluviFinancialSnapshotWidgetCoordinator.configuration(applicationContext)
         return mapOf(
             "mode" to focus.mode.name,
@@ -1645,10 +1253,8 @@ class MainActivity : FlutterActivity() {
         dashboardPresentationChannel = null
         orbMaterialChannel?.setMethodCallHandler(null)
         orbMaterialChannel = null
-        keyguardMaterialChannel?.setMethodCallHandler(null)
-        FluviKeyguardMaterialBridgeRegistry.disconnect(keyguardMaterialChannel)
-        keyguardMaterialChannel = null
-        keyguardMaterialPublisherEpoch = -1L
+        headerOrbChannel?.setMethodCallHandler(null)
+        headerOrbChannel = null
         coreRevisionObservation?.cancel()
         coreRevisionObservation = null
         coreRevisionEventChannel?.setStreamHandler(null)
@@ -3675,7 +3281,6 @@ class MainActivity : FlutterActivity() {
         const val DEMO_CHANNEL = "com.fluvi/demo_data"
         const val DASHBOARD_PRESENTATION_CHANNEL = "fluvi/dashboard_presentation"
         const val ORB_MATERIAL_CHANNEL = "fluvi/orb_material_frames"
-        const val KEYGUARD_MATERIAL_CHANNEL = "fluvi/keyguard_material"
         const val DASHBOARD_PRESENTATION_PREFERENCES = "dashboard_presentation"
         const val DASHBOARD_CORE_REVISION_STREAM_CHANNEL =
             "com.fluvi/dashboard_core_revision_stream"

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -56,24 +55,6 @@ void main() {
               colorB: colors.last,
             ),
           );
-          final profile = snapshot.keyguardMaterialProfile(
-            publisherSession: 'r47-test-only',
-            publisherRevision: 1,
-            referenceGeometry: const Size(412, 188),
-            sceneIdentity: 'active-header:balance:0',
-          );
-          profile.addAll(<String, Object?>{
-            'activeMode': 'balance',
-            'modeEpoch': 0,
-            'motionEnabled': true,
-            'sourceAnimated': snapshot.isAnimated,
-          });
-          if (_directory.isNotEmpty) {
-            final dir = Directory(_directory)..createSync(recursive: true);
-            File(
-              '${dir.path}/$name.json',
-            ).writeAsStringSync(jsonEncode(profile));
-          }
           Uint8List? first;
           for (final time in times) {
             final image = (await tester.runAsync(

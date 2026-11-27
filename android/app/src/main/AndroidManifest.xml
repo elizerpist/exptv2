@@ -19,8 +19,11 @@
         </intent>
     </queries>
     <application
-        android:name="${applicationName}"
         android:label="fluvi">
+        <provider
+            android:name="com.fluvi.app.runtime.FluviWidgetStartupProvider"
+            android:authorities="${applicationId}.fluvi-widget-startup"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
@@ -55,18 +58,6 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="User-requested notification monitoring session with a visible status notification; it does not duplicate notification capture." />
         </service>
-        <service
-            android:name=".lockscreen.FluviKeyguardCardService"
-            android:exported="true"
-            android:label="@string/fluvi_keyguard_card_service_label"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/fluvi_keyguard_card_service" />
-        </service>
         <receiver
             android:name=".runtime.FluviRuntimeActionReceiver"
             android:exported="false" />
@@ -82,6 +73,17 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/fluvi_orb_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.orb.FluviHeaderOrbWidgetProvider"
+            android:exported="false"
+            android:label="Fluvi · Aktuális header ORB">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/fluvi_header_orb_widget_info" />
         </receiver>
         <receiver
             android:name=".widget.financial.FluviFinancialSnapshotWidgetProvider"

@@ -23,7 +23,6 @@ import '../../core/diagnostics/fluvi_diagnostic_bridge.dart';
 import '../../core/diagnostics/fluvi_diagnostic_event.dart';
 import '../../core/diagnostics/fluvi_diagnostic_logger.dart';
 import '../../core/diagnostics/fluvi_onscreen_diagnostics.dart';
-import '../../core/diagnostics/keyguard_timing_capture_bridge.dart';
 import '../../core/demo_data/demo_data_bridge.dart';
 import '../../core/navigation/creation_slide_up_route.dart';
 import '../../features/manual_transactions/data/method_channel_manual_transaction_repository.dart';
@@ -43,7 +42,7 @@ import '../../features/automation/presentation/recurring_navigation.dart';
 import '../../features/settings/presentation/settings_page.dart';
 import '../../features/runtime_monitoring/data/method_channel_runtime_monitoring_repository.dart';
 import '../../features/runtime_monitoring/domain/runtime_monitoring_repository.dart';
-import '../../features/lock_screen_card/data/method_channel_lock_screen_card_repository.dart';
+import '../../features/financial_snapshot_widget/data/method_channel_financial_snapshot_widget_repository.dart';
 import '../../features/notification_appearance/data/method_channel_notification_appearance_repository.dart';
 import '../../features/notification_appearance/domain/notification_appearance_repository.dart';
 import '../../features/pulse/data/method_channel_pulse_repository.dart';
@@ -1411,9 +1410,13 @@ class _FluviAppShellState extends State<FluviAppShell>
                                         runtime: _runtimeMonitoringRepository,
                                         notificationAppearance:
                                             _notificationAppearanceRepository,
-                                        lockScreenCard: kIsWeb
+                                        headerOrbAvailable:
+                                            !kIsWeb &&
+                                            defaultTargetPlatform ==
+                                                TargetPlatform.android,
+                                        financialSnapshotWidget: kIsWeb
                                             ? null
-                                            : MethodChannelLockScreenCardRepository(),
+                                            : const MethodChannelFinancialSnapshotWidgetRepository(),
                                       ),
                                     ],
                                   );
@@ -1425,21 +1428,6 @@ class _FluviAppShellState extends State<FluviAppShell>
                                   diagnosticStatusProvider: _diagnosticStatus,
                                   automationPermissions:
                                       _automationPermissionRepository,
-                                  keyguardTimingCapture:
-                                      KeyguardTimingCaptureBridge(),
-                                  onDialogClosed: () async {
-                                    try {
-                                      await const MethodChannel(
-                                        'fluvi/keyguard_material',
-                                      ).invokeMethod<void>(
-                                        'requestActiveHeaderRefresh',
-                                      );
-                                    } on MissingPluginException {
-                                      // Non-Android hosts have no native sink.
-                                    } on PlatformException {
-                                      // The Activity can disappear during navigation.
-                                    }
-                                  },
                                 ),
                             ],
                           ),

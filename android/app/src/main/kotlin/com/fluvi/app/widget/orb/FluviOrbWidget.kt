@@ -384,51 +384,7 @@ class FluviOrbWidgetProvider : AppWidgetProvider() {
                         )
                         return@runCatching
                     }
-                    val view = android.widget.RemoteViews(context.packageName, R.layout.fluvi_orb_widget)
-                    // One active ViewFlipper switches opaque, completed shader
-                    // frames. There is no outgoing/incoming alpha layer which
-                    // could expose wallpaper or pulse the orb brightness.
-                    val flipperId = R.id.fluvi_orb_frame_flipper
-                    view.removeAllViews(flipperId)
-                    view.setInt(
-                        flipperId,
-                        "setFlipInterval",
-                        sequence.plan.intervalMs,
-                    )
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        val displaySizeFloat = displaySize.toFloat()
-                        view.setViewLayoutWidth(
-                            R.id.fluvi_orb_circle_container,
-                            displaySizeFloat,
-                            android.util.TypedValue.COMPLEX_UNIT_PX,
-                        )
-                        view.setViewLayoutHeight(
-                            R.id.fluvi_orb_circle_container,
-                            displaySizeFloat,
-                            android.util.TypedValue.COMPLEX_UNIT_PX,
-                        )
-                        view.setViewOutlinePreferredRadius(
-                            R.id.fluvi_orb_circle_container,
-                            displaySizeFloat / 2f,
-                            android.util.TypedValue.COMPLEX_UNIT_PX,
-                        )
-                    }
-                    sequence.frames.forEach { frame ->
-                        val child = android.widget.RemoteViews(
-                            context.packageName,
-                            R.layout.fluvi_orb_widget_frame,
-                        )
-                        child.setImageViewBitmap(R.id.fluvi_orb_frame_image, frame)
-                        view.addView(flipperId, child)
-                    }
-                    // Each committed package chooses its intended child only
-                    // after all opaque frames have been added. This is phase
-                    // alignment intent, not proof of launcher frame pacing.
-                    view.setInt(
-                        flipperId,
-                        "setDisplayedChild",
-                        sequence.plan.initialFrameIndex(),
-                    )
+                    val view = orbPlaybackViews(context, sequence.plan, sequence.frames, displaySize)
                     view.setContentDescription(
                         R.id.fluvi_orb_root,
                         "Fluvi élő orb · ${configuration.mode.name} · ${capability.backend}",

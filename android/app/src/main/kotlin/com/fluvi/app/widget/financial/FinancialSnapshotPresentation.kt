@@ -1,0 +1,89 @@
+package com.fluvi.app.widget.financial
+
+import android.graphics.Bitmap
+import android.graphics.Color
+
+/** Presentation shared by the financial snapshot widget and its preview. */
+internal data class FluviFinancialCardPresentation(
+    val focus: String,
+    val primary: String,
+    val secondary: String,
+    val event: String?,
+    val eventLabel: String?,
+    val contentDescription: String,
+    val orbAccentColor: Int,
+    val full: Boolean,
+    /** Stable rendered-input identity. Bitmap allocation identity is not a
+     * visual change and must never trigger an accessibility-window update. */
+    val visualKey: String,
+) {
+    /** Construct pixels only for an actual consumer. Each presentation owns
+     * its one bitmap; synchronized lazy also covers concurrent consumers. */
+    private val orbValue: Bitmap by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        renderFinancialOrbBitmap(orbAccentColor)
+    }
+    val orb: Bitmap
+        get() {
+            return orbValue
+        }
+}
+
+internal object FluviFinancialCardPresenter {
+    private val neutral = FinancialSnapshotContent(
+        focus = "Fluvi",
+        primary = "",
+        secondary = "",
+        event = null,
+        eventLabel = null,
+        accentColor = Color.rgb(70, 105, 157),
+        available = true,
+    )
+
+    fun discreet(): FluviFinancialCardPresentation = FluviFinancialCardPresentation(
+        focus = "Fluvi · Pénzügyi pillanatkép",
+        primary = "Pénzügyi pillanatkép",
+        secondary = "A részletek feloldás után láthatók",
+        event = null,
+        eventLabel = null,
+        contentDescription = "Fluvi · Pénzügyi pillanatkép",
+        orbAccentColor = neutral.accentColor,
+        full = false,
+        visualKey = "discreet:v1",
+    )
+
+    fun loading(): FluviFinancialCardPresentation = FluviFinancialCardPresentation(
+        focus = "Fluvi · Pénzügyi pillanatkép",
+        primary = "Adatok frissítése",
+        secondary = "A kiválasztott fókusz betöltése folyamatban van",
+        event = null,
+        eventLabel = null,
+        contentDescription = "Fluvi pénzügyi pillanatkép",
+        orbAccentColor = neutral.accentColor,
+        full = true,
+        visualKey = "loading:v1",
+    )
+
+    fun full(content: FinancialSnapshotContent, showEvent: Boolean): FluviFinancialCardPresentation {
+        val eventIsPrimary = showEvent && content.event != null
+        return FluviFinancialCardPresentation(
+            focus = content.focus,
+            primary = if (eventIsPrimary) requireNotNull(content.event) else content.primary,
+            secondary = if (eventIsPrimary) content.eventLabel ?: "Utolsó tétel" else content.secondary,
+            event = if (eventIsPrimary) null else content.event,
+            eventLabel = if (eventIsPrimary) null else content.eventLabel,
+            contentDescription = content.focus,
+            orbAccentColor = content.accentColor,
+            full = true,
+            visualKey = listOf(
+                "full:v1",
+                content.focus,
+                content.primary,
+                content.secondary,
+                content.event.orEmpty(),
+                content.eventLabel.orEmpty(),
+                content.accentColor.toString(),
+                eventIsPrimary.toString(),
+            ).joinToString("\u001f"),
+        )
+    }
+}

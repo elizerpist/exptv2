@@ -13,11 +13,6 @@ import android.view.View
 import android.widget.RemoteViews
 import com.fluvi.app.MainActivity
 import com.fluvi.app.R
-import com.fluvi.app.runtime.FluviLockScreenCardConfiguration
-import com.fluvi.app.runtime.FluviLockScreenCardContent
-import com.fluvi.app.runtime.FluviLockScreenCardCoordinator
-import com.fluvi.app.runtime.FluviFinancialCardPresentation
-import com.fluvi.app.runtime.FluviFinancialCardPresenter
 import com.fluvi.core.FluviCoreFactory
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
@@ -33,27 +28,25 @@ import kotlinx.coroutines.launch
  * AppWidget host owns placement and lifecycle, including a lock-screen host.
  */
 internal data class FluviFinancialSnapshotWidgetConfiguration(
-    val mode: FluviLockScreenCardConfiguration.Mode = FluviLockScreenCardConfiguration.Mode.budget,
-    val timeAxis: FluviLockScreenCardConfiguration.TimeAxis = FluviLockScreenCardConfiguration.TimeAxis.month,
-    val direction: FluviLockScreenCardConfiguration.Direction = FluviLockScreenCardConfiguration.Direction.expense,
+    val mode: FinancialSnapshotFocus.Mode = FinancialSnapshotFocus.Mode.budget,
+    val timeAxis: FinancialSnapshotFocus.TimeAxis = FinancialSnapshotFocus.TimeAxis.month,
+    val direction: FinancialSnapshotFocus.Direction = FinancialSnapshotFocus.Direction.expense,
     val categoryId: String? = null,
-    val eventLine: FluviLockScreenCardConfiguration.EventLine = FluviLockScreenCardConfiguration.EventLine.related,
+    val eventLine: FinancialSnapshotFocus.EventLine = FinancialSnapshotFocus.EventLine.related,
     // A widget host receives all rendered RemoteViews fields.  Never inherit
     // notification privacy here: new widget configuration is always discreet.
-    val privacy: FluviLockScreenCardConfiguration.Privacy = FluviLockScreenCardConfiguration.Privacy.discreet,
+    val privacy: FinancialSnapshotFocus.Privacy = FinancialSnapshotFocus.Privacy.discreet,
     val generation: Long = 0L,
 ) {
-    val isValid: Boolean get() = mode != FluviLockScreenCardConfiguration.Mode.budget || !categoryId.isNullOrBlank()
+    val isValid: Boolean get() = mode != FinancialSnapshotFocus.Mode.budget || !categoryId.isNullOrBlank()
 
-    fun asFinancialFocus() = FluviLockScreenCardConfiguration(
-        enabled = true,
+    fun asFinancialFocus() = FinancialSnapshotFocus(
         mode = mode,
         timeAxis = timeAxis,
         direction = direction,
         categoryId = categoryId,
         eventLine = eventLine,
         privacy = privacy,
-        generation = generation,
     )
 }
 
@@ -65,12 +58,12 @@ internal class FluviFinancialSnapshotWidgetStore(context: Context) {
 
     fun read(): FluviFinancialSnapshotWidgetConfiguration = runCatching {
         FluviFinancialSnapshotWidgetConfiguration(
-            mode = enum("mode", FluviLockScreenCardConfiguration.Mode.budget),
-            timeAxis = enum("axis", FluviLockScreenCardConfiguration.TimeAxis.month),
-            direction = enum("direction", FluviLockScreenCardConfiguration.Direction.expense),
+            mode = enum("mode", FinancialSnapshotFocus.Mode.budget),
+            timeAxis = enum("axis", FinancialSnapshotFocus.TimeAxis.month),
+            direction = enum("direction", FinancialSnapshotFocus.Direction.expense),
             categoryId = preferences.getString("categoryId", null),
-            eventLine = enum("eventLine", FluviLockScreenCardConfiguration.EventLine.related),
-            privacy = enum("privacy", FluviLockScreenCardConfiguration.Privacy.discreet),
+            eventLine = enum("eventLine", FinancialSnapshotFocus.EventLine.related),
+            privacy = enum("privacy", FinancialSnapshotFocus.Privacy.discreet),
             generation = preferences.getLong("generation", 0L),
         )
     }.getOrDefault(FluviFinancialSnapshotWidgetConfiguration())
@@ -125,13 +118,13 @@ internal class FluviFinancialSnapshotWidgetContentStore(context: Context) {
         Context.MODE_PRIVATE,
     )
 
-    data class Cached(val content: FluviLockScreenCardContent, val generation: Long)
+    data class Cached(val content: FinancialSnapshotContent, val generation: Long)
 
-    fun read(expectedGeneration: Long): FluviLockScreenCardContent? {
+    fun read(expectedGeneration: Long): FinancialSnapshotContent? {
         if (!preferences.getBoolean("available", false) ||
             preferences.getLong("generation", -1L) != expectedGeneration
         ) return null
-        return FluviLockScreenCardContent(
+        return FinancialSnapshotContent(
             focus = preferences.getString("focus", "Fluvi") ?: "Fluvi",
             primary = preferences.getString("primary", "") ?: "",
             secondary = preferences.getString("secondary", "") ?: "",
@@ -142,7 +135,7 @@ internal class FluviFinancialSnapshotWidgetContentStore(context: Context) {
         )
     }
 
-    fun write(content: FluviLockScreenCardContent, generation: Long) {
+    fun write(content: FinancialSnapshotContent, generation: Long) {
         preferences.edit()
             .putBoolean("available", content.available)
             .putLong("generation", generation)
@@ -205,7 +198,7 @@ internal object FluviFinancialSnapshotWidgetCoordinator {
             val current = configuration(application)
             if (current.generation != expected) return@launch
             val content = if (current.isValid) {
-                runCatching { FluviLockScreenCardCoordinator.resolve(application, current.asFinancialFocus()) }.getOrNull()
+                runCatching { FinancialSnapshotQueries.resolve(application, current.asFinancialFocus()) }.getOrNull()
             } else {
                 null
             }
@@ -265,9 +258,9 @@ internal object FluviFinancialSnapshotWidgetCoordinator {
     suspend fun preview(context: Context): Map<String, Any?> {
         val application = context.applicationContext
         val current = configuration(application)
-        val categories = FluviLockScreenCardCoordinator.categories(application, current.direction)
+        val categories = FinancialSnapshotQueries.categories(application, current.direction)
         val content = if (current.isValid) {
-            runCatching { FluviLockScreenCardCoordinator.resolve(application, current.asFinancialFocus()) }
+            runCatching { FinancialSnapshotQueries.resolve(application, current.asFinancialFocus()) }
                 .getOrNull()
         } else {
             null
@@ -325,7 +318,7 @@ class FluviFinancialSnapshotWidgetProvider : AppWidgetProvider() {
             val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
             val configuration = FluviFinancialSnapshotWidgetCoordinator.configuration(context)
             if (id != AppWidgetManager.INVALID_APPWIDGET_ID &&
-                configuration.privacy == FluviLockScreenCardConfiguration.Privacy.full
+                configuration.privacy == FinancialSnapshotFocus.Privacy.full
             ) {
                 FluviFinancialSnapshotWidgetViewStore(context).toggle(id)
                 renderCached(context, AppWidgetManager.getInstance(context), intArrayOf(id))
@@ -361,7 +354,7 @@ class FluviFinancialSnapshotWidgetProvider : AppWidgetProvider() {
             context: Context,
             id: Int,
             configuration: FluviFinancialSnapshotWidgetConfiguration,
-            content: FluviLockScreenCardContent?,
+            content: FinancialSnapshotContent?,
             showEvent: Boolean,
         ): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.fluvi_financial_snapshot_widget)
@@ -369,7 +362,7 @@ class FluviFinancialSnapshotWidgetProvider : AppWidgetProvider() {
                 .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 220) < 180
             val actual = if (configuration.isValid) content else null
             val presentation = when {
-                configuration.privacy == FluviLockScreenCardConfiguration.Privacy.discreet -> FluviFinancialCardPresenter.discreet()
+                configuration.privacy == FinancialSnapshotFocus.Privacy.discreet -> FluviFinancialCardPresenter.discreet()
                 actual == null -> FluviFinancialCardPresenter.loading()
                 else -> FluviFinancialCardPresenter.full(actual, showEvent)
             }
