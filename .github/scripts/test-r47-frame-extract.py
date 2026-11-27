@@ -8,19 +8,21 @@ from PIL import Image, ImageDraw
 
 SCRIPT=Path(__file__).with_name('r47-frame-extract.py')
 class ExtractTest(unittest.TestCase):
-    def capture(self, first):
+    def capture(self, first, offset=False):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); p=root/'probe'/'case'; p.mkdir(parents=True)
-            (p/'frame-correlation.txt').write_text('control=ONE_FRAME\nmarkerScreen=0,0 size=400x400\n')
+            mx,my=(24,220) if offset else (0,0)
+            width,height=(600,800) if offset else (400,400)
+            (p/'frame-correlation.txt').write_text(f'control=ONE_FRAME\nmarkerScreen={mx},{my} size={width}x{height} contentScreen=0,0\n')
             v=root/'video-validated'; f=v/'frames'; f.mkdir(parents=True)
             (v/'decode-summary.json').write_text('{"timestamp_mapping":"VALIDATED"}')
             lines=[]
             for i,(state,visible) in enumerate([(False,True),(True,first),(True,False)]):
-                im=Image.new('RGB',(400,400),(11,177,67)); d=ImageDraw.Draw(im)
-                d.rectangle((0,0,48,48), fill=(240,20,20) if state else (20,20,240))
+                im=Image.new('RGB',(width,height),(11,177,67)); d=ImageDraw.Draw(im)
+                d.rectangle((mx,my,mx+48,my+48), fill=(240,20,20) if state else (20,20,240))
                 for bit in range(12):
-                    d.rectangle((52+20*bit,0,70+20*bit,40),fill='white' if ((i+1)&(1<<bit)) else 'black')
-                if visible: d.ellipse((110,110,290,290),fill=(240,120,20))
+                    d.rectangle((mx+52+20*bit,my,mx+70+20*bit,my+40),fill='white' if ((i+1)&(1<<bit)) else 'black')
+                if visible: d.ellipse((width//2-90,height//2-90,width//2+90,height//2+90),fill=(240,120,20))
                 im.save(f/f'{i:08}.png')
                 lines.append(json.dumps({'index':i,'elapsed_ns':1000+i}))
             (v/'frame-index.jsonl').write_text('\n'.join(lines)+'\n')
@@ -34,4 +36,5 @@ class ExtractTest(unittest.TestCase):
     def test_both_visual_controls_and_missing_display_identity(self):
         self.assertEqual(self.capture(False),(['VISIBLE','CLEAR','CLEAR'],[1,2,3]))
         self.assertEqual(self.capture(True),(['VISIBLE','VISIBLE','CLEAR'],[1,2,3]))
+        self.assertEqual(self.capture(True,offset=True),(['VISIBLE','VISIBLE','CLEAR'],[1,2,3]))
 if __name__=='__main__': unittest.main(verbosity=2)

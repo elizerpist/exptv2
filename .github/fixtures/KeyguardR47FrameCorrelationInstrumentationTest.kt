@@ -50,6 +50,10 @@ import org.junit.runner.RunWith
  * a package through the native player; separate Dart tests verify loop admission. */
 @RunWith(AndroidJUnit4::class)
 class KeyguardR47FrameCorrelationInstrumentationTest {
+    companion object {
+        private const val MARKER_X = 24
+        private const val MARKER_Y = 220
+    }
     @Test fun controlClean() = control(false)
     @Test fun controlOneFrame() = control(true)
     @Test fun directFirstSample() = exercise(true, "first")
@@ -85,10 +89,12 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
             super.onDraw(canvas)
             seq = (seq + 1) and 4095
             paint.color = if (forbidden) Color.rgb(240, 20, 20) else Color.rgb(20, 20, 240)
-            canvas.drawRect(0f, 0f, 48f, 48f, paint)
+            canvas.drawRect(MARKER_X.toFloat(), MARKER_Y.toFloat(),
+                (MARKER_X + 48).toFloat(), (MARKER_Y + 48).toFloat(), paint)
             for (i in 0 until 12) {
                 paint.color = if ((seq and (1 shl i)) != 0) Color.WHITE else Color.BLACK
-                canvas.drawRect((52 + i * 20).toFloat(), 0f, (70 + i * 20).toFloat(), 40f, paint)
+                canvas.drawRect((MARKER_X + 52 + i * 20).toFloat(), MARKER_Y.toFloat(),
+                    (MARKER_X + 70 + i * 20).toFloat(), (MARKER_Y + 40).toFloat(), paint)
             }
             if (synthetic && controlVisible) {
                 paint.color = Color.rgb(240, 120, 20)
@@ -119,10 +125,15 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
             }
             SystemClock.sleep(1000)
             val loc = IntArray(2); ins.runOnMainSync { marker.getLocationOnScreen(loc) }
-            log.append("markerScreen=${loc[0]},${loc[1]} size=${marker.width}x${marker.height}\n")
+            log.append("markerScreen=${loc[0] + MARKER_X},${loc[1] + MARKER_Y} " +
+                "size=${marker.width}x${marker.height} contentScreen=${loc[0]},${loc[1]}\n")
             for (i in 0..2) {
                 checkNotNull(ui.takeScreenshot()).also { image ->
                     File(out, "control-before-$i.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }
+                    val c = image.getPixel(loc[0] + MARKER_X + 24, loc[1] + MARKER_Y + 24)
+                    check(Color.blue(c) > 160 && Color.red(c) < 100 && Color.green(c) < 100) {
+                        "NOT REACHED: allowed marker is not visible in control screenshot"
+                    }
                     image.recycle()
                 }
             }
@@ -318,10 +329,14 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
             }
             val markerLoc = IntArray(2)
             main { checkNotNull(marker).getLocationOnScreen(markerLoc) }
-            log.append("markerScreen=${markerLoc[0]},${markerLoc[1]} targetWindow=$hostId attachment=1 " +
+            log.append("markerScreen=${markerLoc[0] + MARKER_X},${markerLoc[1] + MARKER_Y} targetWindow=$hostId attachment=1 " +
                 "orbGeneration=1 generationScope=syntheticHarness route=${if (direct) "DIRECT" else "WA"}\n")
             val nominalBounds = Rect(bounds)
             val calibration = checkNotNull(ui.takeScreenshot()).also { held.add(it) }
+            val markerPixel = calibration.getPixel(markerLoc[0] + MARKER_X + 24, markerLoc[1] + MARKER_Y + 24)
+            check(Color.blue(markerPixel) > 160 && Color.red(markerPixel) < 100 && Color.green(markerPixel) < 100) {
+                "NOT REACHED: allowed marker is not visible in calibrated screenshot"
+            }
             val search = Rect((bounds.left - size / 2).coerceAtLeast(0), (bounds.top - size / 2).coerceAtLeast(0),
                 (bounds.right + size / 2).coerceAtMost(calibration.width), (bounds.bottom + size / 2).coerceAtMost(calibration.height))
             for (y in search.top until search.bottom step 8) for (x in search.left until search.right step 8) {

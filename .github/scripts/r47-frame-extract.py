@@ -24,7 +24,10 @@ size = re.search(r'markerScreen=\d+,\d+ size=(\d+)x(\d+)', log)
 control = 'control=' in log.splitlines()[0]
 if control and size:
     w, h = map(int, size.groups())
-    bounds = (x + w // 2 - 100, y + h // 2 - 100, x + w // 2 + 100, y + h // 2 + 100)
+    origin = re.search(r'contentScreen=(\d+),(\d+)', log)
+    content_x, content_y = map(int, origin.groups()) if origin else (x, y)
+    bounds = (content_x + w // 2 - 100, content_y + h // 2 - 100,
+              content_x + w // 2 + 100, content_y + h // 2 + 100)
 elif geometry:
     bounds = tuple(map(int, geometry.groups()))
 else:
