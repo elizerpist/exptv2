@@ -1,0 +1,14 @@
+{
+  "provenance": "R48 journal section 5 normalized evidence. All tree shape, owner, timing, resource and transport values in the test serialization are synthetic unless explicitly listed here. No owner capture or user presentation fields are included.",
+  "FLUVI_STREAM": [
+    {"wake": 3, "currentRequests": [36, 38, 39], "terminal": "systemGate", "interactive": false},
+    {"wake": 5, "sceneChanged": true, "currentRequests": [74, 75, 76, 77, 100], "adoptedSuccessor": 100, "terminal": "systemGate", "keyguardLocked": false},
+    {"wake": 7, "currentRequests": [142, 143, 144], "targetMissing": true, "sceneChanged": true, "distinctSuccessor": 162, "terminal": "systemGate", "keyguardLocked": false}
+  ],
+  "WIDGETS_ANYWHERE": [
+    {"wake": 11, "completeClearRevisions": [6], "terminal": "screenOff"},
+    {"wake": 13, "truncated": true, "truncatedRevision": "UNOBSERVED", "completeClearRevisions": [39], "terminal": "screenOff"},
+    {"wake": 15, "completeClearRevisions": [97, 127], "terminal": "screenOff"},
+    {"wake": 17, "retainedReassessments": 43, "terminal": "r46UserStop", "completedAdmission": "UNOBSERVED"}
+  ]
+}
