@@ -41,9 +41,9 @@ import sqlite3,sys
 with sqlite3.connect(sys.argv[1]) as db:
     db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
     db.execute('PRAGMA journal_mode=DELETE')
+    db.execute('PRAGMA foreign_keys=ON')
     db.execute('CREATE TABLE r49_fixture_sentinel (value TEXT NOT NULL)')
     db.execute('INSERT INTO r49_fixture_sentinel VALUES (?)', ('r49-disposable-update',))
-    db.execute('PRAGMA foreign_keys=ON')
     category = db.execute('SELECT id FROM fluvi_categories ORDER BY is_system_uncategorized DESC LIMIT 1').fetchone()
     assert category is not None, 'R48 did not initialize the ordinary category model'
     category_id = category[0]
@@ -56,7 +56,7 @@ with sqlite3.connect(sys.argv[1]) as db:
             (id,partner_id,category_id,category_assignment_mode,note,direction,amount_scaled_100,
              booked_local_epoch_day,booked_local_time_minutes,occurred_at_utc_ms,origin_kind,
              created_at_utc_ms,updated_at_utc_ms,revision)
-        VALUES ('r49-upgrade-ledger','r49-upgrade-partner',?,'partnerDefault','R49 disposable fixture',
+        VALUES ('01JN8F4K1P0000000000000001','r49-upgrade-partner',?,'partnerDefault','R49 disposable fixture',
                 'expense',94200,20784,600,1795734000000,'manual',1795734000000,1795734000000,1)
     ''', (category_id,))
     assert not db.execute('PRAGMA foreign_key_check').fetchall()
@@ -111,7 +111,7 @@ with sqlite3.connect(sys.argv[1]) as original, sqlite3.connect(sys.argv[2]) as u
     before, after = original.execute(ledger).fetchall(), updated.execute(ledger).fetchall()
     assert before == after, (len(before), len(after))
     assert updated.execute(
-        "SELECT note,amount_scaled_100,revision FROM fluvi_ledger_entries WHERE id='r49-upgrade-ledger'"
+        "SELECT note,amount_scaled_100,revision FROM fluvi_ledger_entries WHERE id='01JN8F4K1P0000000000000001'"
     ).fetchone() == ('R49 disposable fixture',94200,1)
     print(f'Persisted database sentinel and {len(before)} unchanged pre-existing ledger rows')
 PY
