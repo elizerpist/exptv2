@@ -237,20 +237,31 @@ class KeyguardR47MeasuredFrameInstrumentationTest {
                     assertTrue(checkNotNull(frame).requestShow(owner, geometry) { allowed.get() }) }
             }
             waitFor("current prepared frame draw") { draws.get() > 0 && frameDraws.get() > 0 }
-            val discoveryBefore = SystemClock.uptimeMillis()
-            val discovery = checkNotNull(ui.takeScreenshot()).also { held.add(it) }
-            val discoveryAfter = SystemClock.uptimeMillis()
-            File(out, "discovery-full.png").outputStream().use { check(discovery.compress(Bitmap.CompressFormat.PNG, 100, it)) }
             var minX = search.right; var minY = search.bottom; var maxX = -1; var maxY = -1
-            for (y in search.top until search.bottom) for (x in search.left until search.right) {
-                val c = discovery.getPixel(x, y)
-                if (maxOf(abs(Color.red(c) - 11), abs(Color.green(c) - 177), abs(Color.blue(c) - 67)) > 20) {
-                    minX = minOf(minX, x); maxX = maxOf(maxX, x); minY = minOf(minY, y); maxY = maxOf(maxY, y)
+            var discoveryBefore = 0L; var discoveryAfter = 0L; var discoveryAttempt = 0
+            waitFor("full orb compositor bounds") {
+                discoveryBefore = SystemClock.uptimeMillis()
+                val discovery = checkNotNull(ui.takeScreenshot())
+                discoveryAfter = SystemClock.uptimeMillis()
+                try {
+                    File(out, "discovery-full-${discoveryAttempt++}.png").outputStream().use {
+                        check(discovery.compress(Bitmap.CompressFormat.PNG, 100, it))
+                    }
+                    minX = search.right; minY = search.bottom; maxX = -1; maxY = -1
+                    for (y in search.top until search.bottom) for (x in search.left until search.right) {
+                        val c = discovery.getPixel(x, y)
+                        if (maxOf(abs(Color.red(c) - 11), abs(Color.green(c) - 177), abs(Color.blue(c) - 67)) > 20) {
+                            minX = minOf(minX, x); maxX = maxOf(maxX, x); minY = minOf(minY, y); maxY = maxOf(maxY, y)
+                        }
+                    }
+                    val width = maxX - minX + 1; val height = maxY - minY + 1
+                    val reached = width in size - 4..size + 4 && height in size - 4..size + 4
+                    log.append("discovery attempt=${discoveryAttempt - 1} bounds=$minX/$minY/$maxX/$maxY " +
+                        "size=$width/$height expected=$size before=$discoveryBefore after=$discoveryAfter reached=$reached\n")
+                    reached
+                } finally {
+                    discovery.recycle()
                 }
-            }
-            val foundWidth = maxX - minX + 1; val foundHeight = maxY - minY + 1
-            check(foundWidth in size - 4..size + 4 && foundHeight in size - 4..size + 4) {
-                "NOT REACHED: full orb bounds invalid $minX/$minY/$maxX/$maxY expected=$size"
             }
             val actualLeft = (minX + maxX + 1 - size) / 2; val actualTop = (minY + maxY + 1 - size) / 2
             val measured = Rect(actualLeft, actualTop, actualLeft + size, actualTop + size)
