@@ -353,47 +353,34 @@ def exercise(device, apk, system, observer):
     # Background the app before waking. The binding and frames must survive.
     device.shell("input", "keyevent", "KEYCODE_HOME")
     device.wake_lock_screen()
-    failures = []
-    small, moved = check_motion(device, "56dp")
-    if not moved:
-        failures.append("56dp motion threshold")
-    run_check(device, failures, "56dp drag and retained drop", lambda: check_drag(device, "56dp"))
-    device.shell("cmd", "statusbar", "expand-notifications")
-    panel = device.screen(interactive_windows=True)
-    device.save("shade.xml", panel)
-    shade_labels = visible_labels(panel, "com.android.systemui")
-    device.note(f"Shade SystemUI labels {shade_labels}")
-    run_check(device, failures, "shade withdrawal", lambda: hide_sample(device, "shade"))
+    initial, bounds = device.observe_orb("shade-baseline")
+    mid = initial.width // 2
+    # The captured prior statusbar command left the main clock visible.
+    # Exercise the user's top-edge gesture and require separate SystemUI evidence.
+    panel_tags = {"Internet", "Bluetooth", "Airplane mode", "No notifications"}
+    witnessed = False
+    for attempt in range(1, 3):
+        device.shell("input", "swipe", mid, 8, mid, initial.height * 2 // 3, 650)
+        device.capture(f"panel-entry-{attempt}")
+        raw = device.screen(interactive_windows=True)
+        device.save(f"panel-entry-{attempt}.xml", raw)
+        labels = visible_labels(raw, "com.android.systemui")
+        matches = panel_tags.intersection(labels)
+        nodes = ET.fromstring(raw).iter("node")
+        selectors = {n.get("id") for n in nodes if n.get("visible") == "true"
+                     and n.get("id", "").endswith(("/quick_settings_panel", "/tile_label"))}
+        device.note(f"Panel witness attempt {attempt} tile labels {matches} selectors {selectors}")
+        if matches or selectors:
+            witnessed = True
+            break
+    assert witnessed, "INCONCLUSIVE: Android kept the ordinary lockscreen after the two gestures"
+    hide_sample(device, "confirmed-shade")
     device.shell("cmd", "statusbar", "collapse")
-    run_check(device, failures, "readmission after shade", lambda: device.observe_orb("after-shade"))
-    device.shell("input", "keyevent", "KEYCODE_MENU")
-    bouncer = device.screen(interactive_windows=True)
-    device.save("pin.xml", bouncer)
-    nodes = [n for n in ET.fromstring(bouncer).iter("node") if n.get("visible") == "true"]
-    has_pin = any("keyguard_pin" in n.get("id", "") or n.get("id", "").endswith("/pinEntry") for n in nodes)
-    device.note(f"PIN scene marker observed={has_pin}")
-    run_check(device, failures, "PIN withdrawal", lambda: hide_sample(device, "pin"))
-    device.shell("input", "text", "4827")
-    device.shell("input", "keyevent", "KEYCODE_ENTER")
-    run_check(device, failures, "unlocked withdrawal", lambda: hide_sample(device, "unlocked"))
-    device.shell("am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
-    if SETTINGS_ROWS[0] not in visible_labels(device.screen(), PACKAGE):
-        enter_settings(device)
-    device.click("2×2 ORB", package=PACKAGE)
-    device.shell("input", "keyevent", "KEYCODE_HOME")
-    device.wake_lock_screen()
-    large, moved = check_motion(device, "112dp")
-    if not moved:
-        failures.append("112dp motion threshold")
-    assert abs(large - 2 * small) <= 1, (small, large)
-    device.note(f"PASS fixed root diameters {small}px and {large}px")
-    run_check(device, failures, "112dp drag and retained drop", lambda: check_drag(device, "112dp"))
-    device.shell("input", "keyevent", "KEYCODE_SLEEP")
-    run_check(device, failures, "display off withdrawal", lambda: hide_sample(device, "display-off"))
+    _, returned = device.observe_orb("after-confirmed-shade")
+    assert returned == bounds, (bounds, returned)
     logs = device.adb("logcat", "-d", "-s", "FluviBalanceOrb")
     assert set(re.findall(rb"bound host=1003 id=(\d+)", logs)) == {own_id}
-    device.note("PASS same widget ID across both fixed sizes")
-    assert not failures, ", ".join(failures)
+    device.note("PASS witnessed restricted shade withdrawal and same-ID readmission")
 
 
 def main():

@@ -67,6 +67,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r50-independent-scenes-${{ matrix.system }}-${{ github.sha }}
+          name: r50-shade-gesture-${{ matrix.system }}-${{ github.sha }}
           path: r50-device-evidence/
           if-no-files-found: warn
