@@ -18,7 +18,7 @@ jobs:
           packages: platform-tools platforms;android-35 build-tools;36.0.0
       - name: Prepare decoder and runner
         run: |
-          command -v ffmpeg || sudo apt-get -qq install -y ffmpeg
+          command -v ffmpeg || { sudo apt-get -qq update && sudo apt-get -qq install -y --no-install-recommends ffmpeg; }
           python3 -m pip install --user --break-system-packages Pillow==11.3.0
           test -c /dev/kvm
           sudo chmod 0666 /dev/kvm
