@@ -6,7 +6,7 @@ import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.util.Log
-import com.fluvi.app.widget.orb.HeaderOrbWidgetContent
+import com.fluvi.app.widget.orb.HeaderOrbBinding
 import java.io.File
 
 /** Runs in the application process, including a service-first or provider-first start. */
@@ -15,7 +15,10 @@ class FluviWidgetStartupProvider : ContentProvider() {
         val application = requireNotNull(context)
         runCatching { RetiredLockscreenState.remove(application) }
             .onFailure { Log.w("FluviMigration", "Lockscreen cleanup will retry on next start") }
-        HeaderOrbWidgetContent.execute { HeaderOrbWidgetContent.refresh(application) }
+        // Establish the fixed host authority on Main before the frame queue
+        // restores the last valid packet, including a service-first restart.
+        runCatching { HeaderOrbBinding.get(application) }
+            .onFailure { Log.w("FluviMigration", "Balance ORB initialization will retry") }
         return true
     }
 

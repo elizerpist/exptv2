@@ -212,6 +212,13 @@ internal class HeaderOrbBinding private constructor(private val context: Context
         reconcile()
         persist()
         publishState()
+        if (active != INVALID) {
+            try {
+                widgetManager.updateAppWidgetOptions(active, WaOrbHost.options(sizeDp))
+            } catch (error: RuntimeException) {
+                Log.w(TAG, "size options deferred: ${error.javaClass.simpleName}")
+            }
+        }
         if (enabled) maybeBind(activity, resumed)
     }
 
