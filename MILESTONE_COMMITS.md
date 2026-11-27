@@ -1,5 +1,10 @@
 # Milestone commits
 
+## 2026-11-28 — R51 · owner-accepted WA wake fade on Nothing A142, Android 17
+
+- On R51 HUMAN_DIAGNOSTIC 0.1.3 (5), the owner reported “A fade in működik” while reporting unchanged slow disappearance. Protect the wake entrance on the single WA Balance ORB route. This milestone covers the visual entrance. The owner rejected withdrawal speed, and physical wake latency still lacks measurement. [Tested application](https://github.com/elizerpist/exptv2/commit/e7542639d22d78d10e7b123e836ee9bc9758c91a) · [Signed APK](https://media.githubusercontent.com/media/elizerpist/exptv2/6962d94f0c78b14ded193c3543340507fc4c0006/Fluvi_R51_HUMAN_e7542639d22d.apk)
+- Capture `b40ad57d-4f30-4f91-8318-ccbcd1d653d2`, WA_BALANCE, 112 dp. The final observed entrance ran from ENTRANCE_BEGIN to ENTRANCE_END in 311.131 ms on the app clock. The R22.4 entry below remains the historical owner reference for fast withdrawal. [R52 evidence and exact build identity](docs/diagnostics/FLUVI_R52_ORB_WITHDRAWAL_REVIEW.md)
+
 ## 2026-11-25 — R41: fastest lockscreen ORB opening observed by the owner
 
 - **Owner acceptance.** On the stock Nothing Phone (2a), A142, Android 15 / API 35, the owner tested R41 and reported “Ez eddig a leggyorsabb.” Use R41 as the primary comparison and rollback point for perceived ORB appearance on wake. R29.1 remains the earlier opening milestone. [Tested application commit `97f9704120e2ae997185ea6e35fbc053e1d7f0ab`](https://github.com/elizerpist/exptv2/commit/97f9704120e2ae997185ea6e35fbc053e1d7f0ab)
