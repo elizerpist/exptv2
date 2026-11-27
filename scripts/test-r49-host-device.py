@@ -33,8 +33,9 @@ class Device:
     def save(self, name, content):
         (self.output / name).write_bytes(content)
 
-    def screen(self):
-        output = self.shell("am", "instrument", "-w",
+    def screen(self, interactive_windows=False):
+        options = ["-e", "interactiveWindows", "true"] if interactive_windows else []
+        output = self.shell("am", "instrument", "-w", *options,
                             "com.fluvi.r49.fixture/.ReadVisibleHierarchy", timeout=8)
         value = re.search(r"INSTRUMENTATION_RESULT: hierarchy=(.*)", output)
         if not value:
@@ -160,21 +161,39 @@ class Device:
         self.note(f"{name} markerPixels={matches} readBracketSec={begin}..{end}")
         return matches
 
+    def wake_lock_screen(self):
+        self.shell("input", "keyevent", "KEYCODE_SLEEP")
+        time.sleep(0.6)
+        self.shell("input", "keyevent", "KEYCODE_WAKEUP")
+        end = time.monotonic() + 8
+        while time.monotonic() < end:
+            policy = self.adb("shell", "dumpsys", "window", "policy")
+            self.save("keyguard-precondition.txt", policy)
+            if re.search(rb"(?m)^\s*(mShowingLockscreen|showing)=true\b", policy):
+                return
+            time.sleep(0.4)
+        raise AssertionError("Real SystemUI keyguard did not become active after stock sleep/wake")
+
     def tutorial(self):
-        for fingers in (2, 2, 3):
-            raw = self.screen()
-            self.save(f"tutorial-{fingers}.xml", raw)
-            root = ET.fromstring(raw)
-            hint = next((node for node in root.iter("node")
-                         if "Tap the widget frame with" in node.get("text", "") or
-                         "Tap with two fingers" in node.get("text", "")), None)
+        for stage, fingers in enumerate((2, 2, 3), start=1):
+            end = time.monotonic() + 10
+            hint = None
+            while time.monotonic() < end:
+                raw = self.screen(interactive_windows=True)
+                self.save(f"tutorial-{stage}.xml", raw)
+                root = ET.fromstring(raw)
+                hint = next((node for node in root.iter("node") if node.get("visible") == "true"
+                             and ("Tap the widget frame with" in node.get("text", "") or
+                                  "Tap with two fingers" in node.get("text", ""))), None)
+                if hint is not None:
+                    break
             if hint is None:
-                raise AssertionError("WA first-view tutorial did not appear during normal lockscreen display")
-            x1, y1, x2, y2 = map(int, re.findall(r"\d+", hint.attrib["bounds"]))
+                raise AssertionError("WA first-view tutorial absent with actual SystemUI keyguard active")
+            x1, y1, x2, y2 = map(int, re.findall(r"-?\d+", hint.attrib["bounds"]))
             result = self.shell(
                 "am", "instrument", "-w", "-e", "x", (x1 + x2) // 2,
                 "-e", "y", (y1 + y2) // 2, "-e", "fingers", fingers,
-                "com.fluvi.r49.control.test/com.fluvi.r49.control.FrameTutorialTouch",
+                "com.fluvi.r49.fixture/.FrameTutorialTouch",
             )
             assert "gesture=accepted" in result, result
             self.note(f"Tutorial gesture with {fingers} fingers")
@@ -250,13 +269,16 @@ def exercise(device, apk, system, control_apk, control_test, observer, external_
     # Leave setup so its preview buttons and window cannot satisfy the main witness.
     device.shell("input", "keyevent", "KEYCODE_HOME")
     assert device.crop("unlocked-control") < 100, "Marker already visible on unlocked control"
-    device.shell("input", "keyevent", "KEYCODE_SLEEP")
-    device.shell("input", "keyevent", "KEYCODE_WAKEUP")
+    assert device.shell("getprop", "ro.kernel.qemu") == "1", "Disposable emulator required"
+    pin_result = device.shell("locksettings", "set-pin", "4827")
+    assert "Pin set" in pin_result, pin_result
+    device.shell("settings", "put", "secure", "lock_screen_lock_after_timeout", "0")
+    device.note("Real SystemUI credential provisioned in the disposable profile")
+    device.wake_lock_screen()
     device.tutorial()
     # A new physical wake clears the last tutorial gesture's temporary hide.
     for wake in range(1, 4):
-        device.shell("input", "keyevent", "KEYCODE_SLEEP")
-        device.shell("input", "keyevent", "KEYCODE_WAKEUP")
+        device.wake_lock_screen()
         time.sleep(0.6)
         assert device.crop(f"main-{wake}") >= 650, "No independent marker pixels under the real host"
         device.shell("cmd", "statusbar", "expand-notifications")

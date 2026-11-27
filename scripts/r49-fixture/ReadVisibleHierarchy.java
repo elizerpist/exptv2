@@ -10,6 +10,7 @@ import android.os.SystemClock;
 import android.util.Base64;
 import android.util.Xml;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 
 import org.xmlpull.v1.XmlSerializer;
 
@@ -19,9 +20,11 @@ import java.nio.charset.StandardCharsets;
 
 /** Observe the disposable device without suspending the host's accessibility service. */
 public final class ReadVisibleHierarchy extends Instrumentation {
+    private boolean interactiveWindows;
     @Override
     public void onCreate(Bundle arguments) {
         super.onCreate(arguments);
+        interactiveWindows = "true".equals(arguments.getString("interactiveWindows"));
         start();
     }
 
@@ -32,6 +35,7 @@ public final class ReadVisibleHierarchy extends Instrumentation {
             UiAutomation automation = getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
             AccessibilityServiceInfo info = automation.getServiceInfo();
             info.flags |= AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
+            if (interactiveWindows) info.flags |= AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
             automation.setServiceInfo(info);
             long deadline = SystemClock.uptimeMillis() + 2500;
             String xml;
@@ -41,8 +45,16 @@ public final class ReadVisibleHierarchy extends Instrumentation {
                 XmlSerializer serializer = Xml.newSerializer();
                 serializer.setOutput(writer);
                 serializer.startTag(null, "hierarchy");
-                AccessibilityNodeInfo root = automation.getRootInActiveWindow();
-                hasLabels = root != null && writeNode(root, serializer, 0);
+                if (interactiveWindows) {
+                    hasLabels = false;
+                    for (AccessibilityWindowInfo window : automation.getWindows()) {
+                        AccessibilityNodeInfo root = window.getRoot();
+                        if (root != null) hasLabels |= writeNode(root, serializer, 0);
+                    }
+                } else {
+                    AccessibilityNodeInfo root = automation.getRootInActiveWindow();
+                    hasLabels = root != null && writeNode(root, serializer, 0);
+                }
                 serializer.endTag(null, "hierarchy");
                 serializer.flush();
                 xml = writer.toString();
