@@ -66,7 +66,7 @@ flutter test \
   test/boundary/query_menu_boundary_test.dart \
   test/boundary/dashboard_interaction_performance_boundary_test.dart \
   test/boundary/human_diagnostic_apk_delivery_boundary_test.dart \
-  test/boundary/keyguard_first_render_architecture_boundary_test.dart \
+  test/boundary/r49_lock_screen_host_boundary_test.dart \
   test/boundary/dashboard_motion_data_isolation_boundary_test.dart \
   test/boundary/dashboard_single_data_runtime_boundary_test.dart \
   test/boundary/dashboard_avatar_target_liveness_boundary_test.dart \

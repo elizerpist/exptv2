@@ -125,14 +125,19 @@ def exercise(device, apk, system, control_apk, control_test):
     expected_api = system.split(".")[0]
     actual = device.shell("getprop", "ro.build.version.sdk")
     assert actual == expected_api, (actual, expected_api)
-    assert "package:" not in device.shell("pm", "path", WA), "Standalone WA is installed"
-    assert "package:" not in device.shell("pm", "path", PACKAGE), "Expected a fresh emulator profile"
+    packages = set(device.shell("pm", "list", "packages").splitlines())
+    assert f"package:{WA}" not in packages, "Standalone WA is installed"
+    assert f"package:{PACKAGE}" not in packages, "Expected a fresh emulator profile"
     device.note(f"STOCK API {actual} {device.shell('getprop', 'ro.build.fingerprint')}")
     device.note(device.adb("install", apk, timeout=90).decode().strip())
     device.note(device.adb("install", control_apk, timeout=30).decode().strip())
     device.note(device.adb("install", control_test, timeout=30).decode().strip())
     device.shell("wm", "dismiss-keyguard")
-    device.shell("am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
+    launch = device.shell("am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
+    device.save("fluvi-launch.txt", launch.encode())
+    assert "Status: ok" in launch, launch
+    assert device.shell("pidof", PACKAGE), "Fluvi exited during launch"
+    device.note("Fluvi launcher started without standalone WA")
     device.click("Beállítások", "Settings")
     device.click("Zárképernyő")
     device.click("Aktuális fejléc megosztása")
