@@ -230,7 +230,8 @@ class KeyguardR48StockPrivateAdmissionInstrumentationTest {
             assertEquals(receipt.toString(), "activeHeader", receipt["printPurpose"])
             assertEquals(route.name, receipt["routeConfirmed"])
             val observerStatus = ledger.readText()
-            ledger.writeText("captureId=$capture route=${route.name} source=independent_ui_automation_boundaries fixture=stock\n")
+            ledger.writeText("captureId=$capture route=${route.name} source=independent_ui_automation_boundaries fixture=stock\n" +
+                observerStatus)
             shell("input keyevent KEYCODE_SLEEP")
             hold("OFF")
             shell("input keyevent KEYCODE_WAKEUP")
