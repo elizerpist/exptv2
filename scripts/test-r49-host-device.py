@@ -51,7 +51,9 @@ class Device:
                 continue
             root = ET.fromstring(raw)
             for node in root.iter("node"):
-                if {node.get("text", "").casefold(), node.get("content-desc", "").casefold()} & names:
+                labels = {line.strip().casefold() for key in ("text", "content-desc")
+                          for line in node.get(key, "").splitlines()}
+                if labels & names:
                     a, b, c, d = map(int, re.findall(r"\d+", node.attrib["bounds"]))
                     if a == c or b == d:
                         continue
@@ -147,7 +149,9 @@ def exercise(device, apk, system, control_apk, control_test):
     for _ in range(10):
         raw = device.screen()
         device.save("onboarding.xml", raw)
-        if b"Accessibility Settings" in raw:
+        if b"Accessibility Settings" in raw and SERVICE not in device.shell(
+            "settings", "get", "secure", "enabled_accessibility_services",
+        ).split(":"):
             device.settings_consent()
         if device.click("Done", "Finish", optional=True, limit=2):
             break
@@ -156,7 +160,8 @@ def exercise(device, apk, system, control_apk, control_test):
     enabled = device.shell("settings", "get", "secure", "enabled_accessibility_services")
     assert SERVICE in enabled.split(":"), "Ordinary accessibility onboarding did not finish"
     assert device.service_connected()
-    device.click("Frame Enabled", "Enable Frame")
+    # WA renders the first feature card's enabled state as a clickable label.
+    device.click("Disabled", "Frame Enabled", "Enable Frame")
     for label in ("R49 Test Marker", ORB):
         device.click("Add Widget")
         device.click(label)
