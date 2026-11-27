@@ -13,6 +13,11 @@
 - **Reproduction identity.** Profile HUMAN_DIAGNOSTIC, ordinary ORB, orbOnly, FULL, keyguard only. Capture `a5caf6ab-c255-4346-acde-ce35aae33b8a` at 07:57 on 2026-11-23 (Europe/Budapest). App parent `9d9444795ea34e64525e990f5c08d1b655a6fdaf`. APK SHA-256 `057406296e14bb10c6dbe6ae94e5f6d7564bed02a89c8787bf23c4b9b6fec773`. [Application commit](https://github.com/elizerpist/exptv2/commit/de807259cd370d18e422772ed0943b8d65be4bca)
 - **Comparison evidence.** Four detailed stock DIRECT wakes (1, 3, 4, 5) returned from native reveal 356, 407, 342 and 320 ms after the app wake callback. Capture truncation, unobserved physical endpoints and unpaired runs prevent a quantified optical gain or attribution to one code change. The experimental SystemUI host did not render these episodes. The open R22.4 privacy result is tracked independently.
 
+## 2026-11-22 — R22.4 fast ORB disappearance on unlock, as observed by the owner
+
+- **Protected behavior.** The owner of a Nothing A142 on Android 15/API 35 reported fast ORB disappearance when unlocking with R22.4 and continued lag on wake. This is the historical comparison for perceived withdrawal. Reference build `ad1eac09442cb8d78a992874d22157fe6bd5a05f`, signed HUMAN_DIAGNOSTIC APK SHA-256 `c94e496f933d663f4bc9567d66efc56c31da081fb3d2910aa873aaa28cfb9ef3`. [Original November 22 journal entry](https://github.com/elizerpist/exptv2/blob/60f96ab6584952d9964550a43da723278f6c8091/docs/FLUVI_ENGINEERING_JOURNAL.md#L15559) · [Application commit](https://github.com/elizerpist/exptv2/commit/ad1eac09442cb8d78a992874d22157fe6bd5a05f)
+- **Evidence boundary.** The recorded route was stock DIRECT. The LIGHT/FULL captures have no optical last-pixel measurement. The separate isolated panel privacy/visual gate failed. Preserve the user's observed behavior across renderer changes and check it on the current phone build. [R22.4 qualification](https://github.com/elizerpist/exptv2/blob/ddebb11de0cd42673d76cb047dcad7224e05fcb9/docs/R22_4_ORB_QUALIFICATION_REPORT_2026-11-21.md)
+
 ## 2026-09-10 — Avatar render-pacing physical performance milestone
 
 - Behavioural milestone:
