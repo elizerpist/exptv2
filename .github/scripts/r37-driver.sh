@@ -9,7 +9,7 @@ case "${1:-}" in
  build)
   test "$(git rev-parse HEAD)" = "$APP_SHA"
   test -z "$(git status --porcelain --untracked-files=no)"
-  if [[ "$TEST_SCOPE" == r48_private_admission ]]; then
+  if [[ "$TEST_SCOPE" == r48_private_admission* ]]; then
     test "$APP_SHA" = af20365a5ec96ff92b35321a03c0a2679ee7d2fd
     harness="$GITHUB_WORKSPACE/harness"
     test "$(git -C "$harness" rev-parse HEAD)" = "$HARNESS_SHA"
@@ -19,6 +19,11 @@ case "${1:-}" in
       cp -- "$harness/$fixture" "$fixture"
       sha256sum "$fixture" >> "$out/r48-fixtures.sha256"
     done
+    if [[ "$TEST_SCOPE" == r48_private_admission_repeat ]]; then
+      fixture=android/app/src/androidTest/AndroidManifest.xml
+      cp -- "$harness/$fixture" "$fixture"
+      sha256sum "$fixture" >> "$out/r48-fixtures.sha256"
+    fi
     git status --short > "$out/r48-build-tree.txt"
   fi
   if [[ "$BASELINE" = true ]]; then
@@ -292,7 +297,7 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
-    r48_private_admission)
+    r48_private_admission|r48_private_admission_repeat)
       class=com.fluvi.app.lockscreen.KeyguardR48StockPrivateAdmissionInstrumentationTest
       methods=(directStockPrivateAdmission waStockPrivateAdmission)
       ;;

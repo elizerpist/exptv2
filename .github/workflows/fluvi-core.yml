@@ -78,7 +78,7 @@ jobs:
           path: app
           fetch-depth: 0
       - uses: actions/checkout@v5
-        if: ${{ inputs.baseline || inputs.test_scope == 'r48_private_admission' }}
+        if: ${{ inputs.baseline || startsWith(inputs.test_scope, 'r48_private_admission') }}
         with:
           ref: ${{ env.HARNESS_SHA }}
           path: harness
