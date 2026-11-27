@@ -58,7 +58,7 @@ permissions:
   contents: read
 jobs:
   service:
-    if: ${{ !startsWith(inputs.test_scope, 'r47_ui_') && !startsWith(inputs.test_scope, 'r46_ui_') && !startsWith(inputs.test_scope, 'r45_ui_') && inputs.test_scope != 'r47_update_route' && inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' && inputs.test_scope != 'r44_update' && inputs.test_scope != 'r448_update_routes' && inputs.test_scope != 'r448_update_restart' && inputs.test_scope != 'r449_ui_fluvi' && inputs.test_scope != 'r449_ui_wa' && inputs.test_scope != 'r446_update_once' && inputs.test_scope != 'r446_update_arm' && inputs.test_scope != 'r44_update_reopen' && inputs.test_scope != 'r44_update_private' && inputs.test_scope != 'r43_flutter' }}
+    if: ${{ !startsWith(inputs.test_scope, 'r47_ui_') && !startsWith(inputs.test_scope, 'r46_ui_') && !startsWith(inputs.test_scope, 'r45_ui_') && inputs.test_scope != 'r47_update_route' && inputs.test_scope != 'update_probe' && inputs.test_scope != 'r43_update' && inputs.test_scope != 'r44_update' && inputs.test_scope != 'r448_update_routes' && inputs.test_scope != 'r448_update_restart' && inputs.test_scope != 'r449_ui_fluvi' && inputs.test_scope != 'r449_ui_wa' && inputs.test_scope != 'r446_update_once' && inputs.test_scope != 'r446_update_arm' && inputs.test_scope != 'r44_update_reopen' && inputs.test_scope != 'r44_update_private' && inputs.test_scope != 'r43_flutter' && inputs.test_scope != 'r47_animated_flutter' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -353,6 +353,48 @@ jobs:
             ${{ runner.temp }}/r44-update/r449frames/*.png
             ${{ runner.temp }}/r44-update/r45frames/**/*.png
             ${{ runner.temp }}/r44-update/r46frames/**/*.png
+          if-no-files-found: warn
+          retention-days: 14
+
+  r47-animated-flutter:
+    if: ${{ inputs.test_scope == 'r47_animated_flutter' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: orchestrator
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.app_sha }}
+          path: app
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: stable
+          cache: true
+      - name: Diagnose the real animated header frame preparer
+        shell: bash
+        working-directory: app
+        env:
+          APP_SHA: ${{ inputs.app_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$APP_SHA"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          mkdir -p "$RUNNER_TEMP/r47-animated"
+          fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/r47_animated_frame_diagnostic_test.dart"
+          sha256sum "$fixture" > "$RUNNER_TEMP/r47-animated/fixture.sha256"
+          cp "$fixture" test/app/platform/r47_animated_frame_diagnostic_test.dart
+          printf 'app=%s\nharness=%s\n' "$APP_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/r47-animated/source.txt"
+          flutter pub get > "$RUNNER_TEMP/r47-animated/pub-get.log" 2>&1
+          flutter test test/app/platform/r47_animated_frame_diagnostic_test.dart --reporter expanded 2>&1 | tee "$RUNNER_TEMP/r47-animated/test.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r47-animated-flutter-${{ github.run_id }}
+          path: ${{ runner.temp }}/r47-animated/**
           if-no-files-found: warn
           retention-days: 14
 
