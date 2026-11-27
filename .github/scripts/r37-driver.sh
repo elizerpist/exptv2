@@ -90,6 +90,11 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR42SignedProfileProbeTest.kt
     sha256sum "$fixture" > "$out/fixture-r42-profile.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r47_prepared_direct_measured ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR47MeasuredFrameInstrumentationTest.kt"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR47MeasuredFrameInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r47-measured.sha256"
+  fi
   if [[ "$TEST_SCOPE" == r43_api37 ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR43Api37BaselineTest.kt"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR43Api37BaselineTest.kt
@@ -270,6 +275,10 @@ case "${1:-}" in
     r47_prepared_wa)
       class=com.fluvi.app.lockscreen.KeyguardR47PreparedFrameInstrumentationTest
       methods=(waPlaysPreparedHeaderAndWithdraws)
+      ;;
+    r47_prepared_direct_measured)
+      class=com.fluvi.app.lockscreen.KeyguardR47MeasuredFrameInstrumentationTest
+      methods=(directMeasuredPreparedFrameAndWithdrawal)
       ;;
     r47_diagnostic_pressure)
       class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
