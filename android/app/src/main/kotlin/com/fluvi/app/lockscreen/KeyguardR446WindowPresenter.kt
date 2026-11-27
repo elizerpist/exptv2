@@ -38,6 +38,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
     private var r46PublicTelemetry = false
     private var r47Telemetry: String? = null
     private var r47Animated: Boolean? = null
+    private var r47FramePlayback = false
     internal var onR46Interval: ((String) -> Unit)? = null
     private var inputReady = false
     private var inputReadySignal = CompletableDeferred<Boolean>()
@@ -58,8 +59,13 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
             freezeClock = !material.motionEnabled)
         if (prepared) {
             r47Animated = material.motionEnabled && material.profile.animated
-            r47Telemetry = "origin=active_header_semantic token=${material.correlation} " +
-                "sourceRevision=${material.profile.publisherRevision} animated=$r47Animated playback=shader"
+            r47FramePlayback = view?.setActiveHeaderFrames(material) == true
+            val origin = if (r47FramePlayback) "active_header_frame_package" else "active_header_semantic"
+            val playback = if (r47FramePlayback) "verified_frames" else "shader"
+            val interval = material.preparedFrames?.takeIf { r47FramePlayback }?.intervalMs
+            r47Telemetry = "origin=$origin token=${material.correlation} " +
+                "sourceRevision=${material.profile.publisherRevision} animated=$r47Animated playback=$playback " +
+                "frameStatus=${material.frameStatus} intervalMs=${interval ?: "UNOBSERVED"}"
         }
         return prepared
     }
@@ -165,9 +171,11 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
             attachedAt = attached
             if (!valid()) { dispose(); return Receipt("POSTATTACH_REVOKED", attached) }
             owner = token
-            material.onNextShaderDrawForDiagnostic = { at ->
+            val contentDraw: (Long) -> Unit = { at ->
                 if (owner === token && stillOwned()) { firstDraw = at; onFirstDraw(at) }
             }
+            if (r47FramePlayback) material.onNextPreparedFrameDrawForDiagnostic = contentDraw
+            else material.onNextShaderDrawForDiagnostic = contentDraw
             phase = "SUBMIT"
             SurfaceControl.Transaction().use {
                 it.setPosition(child, localX.toFloat(), localY.toFloat())
@@ -185,6 +193,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
     }
 
     fun firstDrawAt(): Long? = firstDraw
+    internal fun usesPreparedFrames(): Boolean = r47FramePlayback
     internal fun shaderDrawCountForInstrumentation(): Int = view?.diagnostics()?.shaderDrawCount ?: 0
     internal fun frameForInstrumentation() { view?.frame(System.nanoTime()) }
 
@@ -257,6 +266,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         view?.endR46SampleInterval()?.let { detail -> runCatching { onR46Interval?.invoke(detail) } }
         view?.onFirstShaderDraw = null
         view?.onNextShaderDrawForDiagnostic = null
+        view?.onNextPreparedFrameDrawForDiagnostic = null
         view?.onNextDrawForDiagnostic = null
         runCatching { oldSurface?.release() }.onFailure { if (errorClass == null) errorClass = it.javaClass.simpleName.take(48) }
         val oldHost = host
@@ -270,6 +280,7 @@ internal class KeyguardR446WindowPresenter(private val service: AccessibilitySer
         r46PublicTelemetry = false
         r47Telemetry = null
         r47Animated = null
+        r47FramePlayback = false
         host = null
         firstDraw = null
         return Retirement(hideReturn, releaseReturn, errorClass)

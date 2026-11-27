@@ -965,6 +965,7 @@ class FluviKeyguardCardService : AccessibilityService() {
                 "ATTACHED" -> previous.copy(backend = "WA_ATTACHED", attachEnd = event.at)
                 "ADD_RETURN" -> previous.copy(backend = "WA_ADD_RETURN")
                 "FIRST_SHADER_DRAW" -> previous.copy(backend = "WA_SHADER_DRAW", frameAt = event.at)
+                "FIRST_FRAME_DRAW" -> previous.copy(backend = "WA_FRAME_DRAW", frameAt = event.at)
                 else -> previous
             }
             if (next !== previous) {
@@ -1508,7 +1509,8 @@ class FluviKeyguardCardService : AccessibilityService() {
                 val next = previous.copy(frameAt = at)
                 r446Observation = next
                 KeyguardCardDiagnostics.recordR446(next)
-                r45RecordStage(context, "FLUVI_STREAM", "FIRST_SHADER_DRAW", at)
+                r45RecordStage(context, "FLUVI_STREAM",
+                    if (qualifiedPresenter.usesPreparedFrames()) "FIRST_FRAME_DRAW" else "FIRST_SHADER_DRAW", at)
             }
         }
         if (receipt.status != "SUBMITTED") {

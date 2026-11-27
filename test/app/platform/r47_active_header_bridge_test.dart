@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluvi/app/platform/dashboard_keyguard_material_bridge.dart';
+import 'package:fluvi/app/platform/dashboard_active_header_frame_preparer.dart';
+import 'package:fluvi/app/platform/dashboard_orb_material_playback_profile.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_core_mode_controller.dart';
 import 'package:fluvi/features/dashboard/application/dashboard_mode_spec.dart';
 import 'package:fluvi/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
@@ -222,4 +224,110 @@ void main() {
       messenger.setMockMethodCallHandler(channel, null);
     }
   });
+
+  testWidgets(
+    'a late prepared package cannot replace the newer active header',
+    (tester) async {
+      const channel = MethodChannel('fluvi/keyguard_material');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final visual = DashboardHeaderVisualController(vsync: tester)
+        ..selectEffect(DashboardHeaderEffectId.staticEffect);
+      final mode = DashboardCoreModeController(
+        initialMode: DashboardModeSpec.balance,
+      );
+      final balance = ValueNotifier(
+        DashboardHeaderVisualFrame.staticTone(const Color(0xffa12345)),
+      );
+      final budget = ValueNotifier(
+        DashboardHeaderVisualFrame.staticTone(const Color(0xff2244aa)),
+      );
+      final mind = ValueNotifier(
+        DashboardHeaderVisualFrame.staticTone(const Color(0xff338833)),
+      );
+      final sentProfiles = <Map<Object?, Object?>>[];
+      final sentPackages = <Map<Object?, Object?>>[];
+      final first = Completer<ActiveHeaderPreparedFrames>();
+      var rendererCalls = 0;
+      Future<ActiveHeaderPreparedFrames> staticPackage() =>
+          prepareActiveHeaderFrames(
+            playback: DashboardOrbMaterialPlaybackProfile.resolve(
+              isAnimated: false,
+              requiresDenseShaderSampling: false,
+              characteristicCycleMs: 1000,
+              preferredTextureSizePx: 32,
+              maximumFrameCount: 5,
+              maximumDecodedBytes: 700 * 1024,
+              applyCircularAlphaMask: false,
+            ),
+            animated: false,
+            isCurrent: () => true,
+            render: (_) async => ActiveHeaderRenderedFrame(
+              png: Uint8List.fromList(<int>[1]),
+              rgba: Uint8List(32 * 32 * 4),
+            ),
+          );
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'sceneTarget') return <String, Object?>{};
+        if (call.method == 'publishActiveHeaderProfile') {
+          final profile = Map<Object?, Object?>.from(call.arguments as Map);
+          sentProfiles.add(profile);
+          return <String, Object?>{
+            'accepted': true,
+            'token': 'token-${profile['publisherRevision']}',
+          };
+        }
+        if (call.method == 'publishActiveHeaderFrames') {
+          sentPackages.add(Map<Object?, Object?>.from(call.arguments as Map));
+        }
+        return <String, Object?>{'accepted': true};
+      });
+      final bridge = DashboardKeyguardMaterialBridge(
+        controller: visual,
+        balanceFrame: balance,
+        budgetFrame: budget,
+        mindFrame: mind,
+        activeMode: mode,
+        channel: channel,
+        activeFramesRenderer:
+            ({
+              required snapshot,
+              required headerSize,
+              required devicePixelRatio,
+              required motionEnabled,
+              required isCurrent,
+            }) {
+              rendererCalls++;
+              return rendererCalls == 1 ? first.future : staticPackage();
+            },
+      );
+      try {
+        bridge.updateHeaderGeometry(const Size(400, 200));
+        await tester.pump(const Duration(milliseconds: 60));
+        await tester.pump();
+        expect(rendererCalls, 1);
+        mode.setProgrammaticMode(DashboardModeSpec.mind);
+        await tester.pump(const Duration(milliseconds: 60));
+        await tester.pump();
+        expect(sentProfiles.length, 2);
+        final oldToken = 'token-${sentProfiles.first['publisherRevision']}';
+        final newToken = 'token-${sentProfiles.last['publisherRevision']}';
+        first.complete(await staticPackage());
+        await tester.pump();
+        await tester.pump();
+        expect(rendererCalls, 2);
+        expect(sentPackages, hasLength(1));
+        expect(sentPackages.single['token'], newToken);
+        expect(sentPackages.single['token'], isNot(oldToken));
+      } finally {
+        bridge.dispose();
+        mode.dispose();
+        visual.dispose();
+        balance.dispose();
+        budget.dispose();
+        mind.dispose();
+        messenger.setMockMethodCallHandler(channel, null);
+      }
+    },
+  );
 }

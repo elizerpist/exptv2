@@ -6,6 +6,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
@@ -246,6 +248,7 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     private var r46SampleStartedAt = 0L
     private var r46FirstFrameNs = 0L
     private var r46SecondFrameNs = 0L
+    private var r46LastFrameNs = 0L
     private var r46FirstPhase = Float.NaN
     private var r46SecondPhase = Float.NaN
     private var r46LastDrawAt = 0L
@@ -253,6 +256,15 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     private var r46ShaderFrames = 0
     private var r46FallbackFrames = 0
     private var r46CircleFrames = 0
+    private var r47PreparedFrameDraws = 0
+    private var r47FirstFrameIndex = -1
+    private var r47LastFrameIndex = -1
+    private var r47FrameIndexChanges = 0
+    private var r47Frames: FluviActiveHeaderMaterialStore.PreparedFrames? = null
+    private var r47FrameOwner: FluviActiveHeaderMaterialStore.Snapshot? = null
+    private val r47FramePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val r47FrameBounds = RectF()
+    private val r47FrameClip = Path()
     private var r46SourceDescription = "palette=compiled_public_v1"
 
     internal fun beginR46SampleInterval(sourceDescription: String = "palette=compiled_public_v1") {
@@ -260,15 +272,18 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         r46SourceDescription = sourceDescription
         r46SampleStartedAt = SystemClock.uptimeMillis()
         r46FirstFrameNs = 0L; r46SecondFrameNs = 0L
+        r46LastFrameNs = 0L
         r46FirstPhase = Float.NaN; r46SecondPhase = Float.NaN
         r46LastDrawAt = 0L; r46MaxGap = 0L
         r46ShaderFrames = 0; r46FallbackFrames = 0; r46CircleFrames = 0
+        r47PreparedFrameDraws = 0; r47FirstFrameIndex = -1; r47LastFrameIndex = -1; r47FrameIndexChanges = 0
     }
 
     private fun r46CountDraw() {
         val at = SystemClock.uptimeMillis()
         if (r46LastDrawAt > 0L) r46MaxGap = maxOf(r46MaxGap, at - r46LastDrawAt)
         r46LastDrawAt = at
+        r46LastFrameNs = frameNanos
     }
 
     internal fun endR46SampleInterval(): String? {
@@ -276,6 +291,8 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         r46SampleActive = false
         val second = if (r46SecondFrameNs == 0L) "UNOBSERVED" else r46SecondFrameNs.toString()
         val missingSecond = when {
+            r47PreparedFrameDraws > 0 && r47FrameIndexChanges == 0 -> "NO_DISTINCT_FRAME"
+            r47PreparedFrameDraws > 0 -> "none"
             r46ShaderFrames == 0 -> "NO_SHADER_FRAME"
             r46ShaderFrames == 1 -> "ONE_SHADER_FRAME"
             r46SecondFrameNs == 0L -> "NO_DISTINCT_PHASE"
@@ -283,7 +300,10 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         }
         return "$r46SourceDescription start=$r46SampleStartedAt end=${SystemClock.uptimeMillis()} " +
             "shader=$r46ShaderFrames fallback=$r46FallbackFrames circle=$r46CircleFrames " +
+            "preparedFrames=$r47PreparedFrameDraws firstFrameIndex=${if (r47FirstFrameIndex < 0) "UNOBSERVED" else r47FirstFrameIndex} " +
+            "lastFrameIndex=${if (r47LastFrameIndex < 0) "UNOBSERVED" else r47LastFrameIndex} frameIndexChanges=$r47FrameIndexChanges " +
             "firstFrameNs=${if (r46FirstFrameNs == 0L) "UNOBSERVED" else r46FirstFrameNs} " +
+            "lastFrameNs=${if (r46LastFrameNs == 0L) "UNOBSERVED" else r46LastFrameNs} " +
             "firstPhase=$r46FirstPhase secondFrameNs=$second secondPhase=$r46SecondPhase " +
             "secondReason=$missingSecond maxGapMs=$r46MaxGap frameClock=choreographer"
     }
@@ -300,6 +320,8 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     var onNextDrawForDiagnostic: ((Long) -> Unit)? = null
     /** Optional one-shot observation for an explicitly armed sample host. */
     var onNextShaderDrawForDiagnostic: ((Long) -> Unit)? = null
+    /** A verified bitmap frame is a distinct observation, not a shader draw. */
+    var onNextPreparedFrameDrawForDiagnostic: ((Long) -> Unit)? = null
     /** Once per actually drawn current scene, used to qualify transitions. */
     var onCurrentShaderDraw: ((KeyguardMaterialScene) -> Unit)? = null
     private var lastReportedCurrentScene: KeyguardMaterialScene? = null
@@ -355,6 +377,9 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        r47FrameBounds.set(0f, 0f, w.toFloat(), h.toFloat())
+        r47FrameClip.reset()
+        r47FrameClip.addCircle(w / 2f, h / 2f, min(w, h) / 2f, Path.Direction.CW)
         rebuildBootstrapPaint()
         notifyRendererState()
     }
@@ -393,6 +418,9 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
     var onFirstBootstrapDraw: ((Long) -> Unit)? = null
 
     fun setScene(scene: KeyguardMaterialScene?, enabled: Boolean) {
+        // A retained View must never carry a frame package into another scene.
+        r47Frames = null
+        r47FrameOwner = null
         materialEnabled = enabled && scene != null
         if (scene == null) {
             current = null
@@ -464,6 +492,21 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
         // controller before attachment. A hardware Canvas is still required
         // before this view reports renderer readiness or FIRST_SHADER_DRAW.
         invalidate()
+    }
+
+    /** Only the exact private source captured by this scene may supply its
+     * already decoded package. Public fixtures never call this entrypoint. */
+    internal fun setActiveHeaderFrames(owner: FluviActiveHeaderMaterialStore.Snapshot): Boolean {
+        val scene = current ?: return false
+        val frames = owner.preparedFrames ?: return false
+        if (!scene.full || !FluviActiveHeaderMaterialStore.isCurrentReference(owner) ||
+            frames.token != owner.correlation ||
+            scene.profile.publisherSession != owner.profile.publisherSession ||
+            scene.profile.publisherRevision != owner.profile.publisherRevision) return false
+        r47Frames = frames
+        r47FrameOwner = owner
+        invalidate()
+        return true
     }
 
     /**
@@ -692,6 +735,13 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             drawBootstrap(canvas, scene)
             return
         }
+        val preparedFrames = r47Frames
+        if (shape == Shape.ORB && preparedFrames != null) {
+            val owner = r47FrameOwner ?: return
+            if (!FluviActiveHeaderMaterialStore.isCurrentReference(owner)) return
+            drawPreparedActiveHeaderFrame(canvas, preparedFrames)
+            return
+        }
         // The Dashboard's static Header is not the shader's static branch.
         // Preserve its audited 112° CSS-gradient route whenever neither
         // Portal layer is active, exactly as DashboardHeaderStaticColorRenderer
@@ -740,6 +790,35 @@ internal class KeyguardHeaderMaterialView @JvmOverloads constructor(
             }
         }
         measuringShader = false
+    }
+
+    private fun drawPreparedActiveHeaderFrame(
+        canvas: Canvas, frames: FluviActiveHeaderMaterialStore.PreparedFrames,
+    ) {
+        val index = KeyguardR47FrameContract.frameIndex(frameNanos, frames.originNanos,
+            frames.intervalMs, frames.bitmaps.size)
+        val bitmap = frames.bitmaps[index]
+        if (bitmap.isRecycled) return
+        val save = canvas.save()
+        canvas.clipPath(r47FrameClip)
+        canvas.drawBitmap(bitmap, null, r47FrameBounds, r47FramePaint)
+        canvas.restoreToCount(save)
+        if (r46SampleActive) {
+            r47PreparedFrameDraws++
+            r46CountDraw()
+            if (r47FirstFrameIndex < 0) {
+                r47FirstFrameIndex = index
+                r46FirstFrameNs = frameNanos
+            } else if (r47LastFrameIndex >= 0 && r47LastFrameIndex != index) {
+                r47FrameIndexChanges++
+                if (r46SecondFrameNs == 0L) r46SecondFrameNs = frameNanos
+            }
+            r47LastFrameIndex = index
+        }
+        onNextPreparedFrameDrawForDiagnostic?.let { callback ->
+            onNextPreparedFrameDrawForDiagnostic = null
+            callback(SystemClock.uptimeMillis())
+        }
     }
 
     private fun drawShader(canvas: Canvas, shader: KeyguardHeaderShader, scene: KeyguardMaterialScene, alpha: Float) {

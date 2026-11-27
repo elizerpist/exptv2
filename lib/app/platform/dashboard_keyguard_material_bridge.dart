@@ -8,6 +8,7 @@ import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_category_scale.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
+import 'dashboard_active_header_frame_preparer.dart';
 
 /// Sends semantic Header material input to the native keyguard card. This is
 /// deliberately independent from AppWidget host count and from the Header's
@@ -20,11 +21,13 @@ final class DashboardKeyguardMaterialBridge {
     required this.mindFrame,
     DashboardCoreModeController? activeMode,
     bool Function()? activeHeaderVisible,
+    @visibleForTesting ActiveHeaderFramesRenderer? activeFramesRenderer,
     MethodChannel? channel,
   }) : _controller = controller,
        _activeMode = activeMode,
        _activeHeaderVisible = activeHeaderVisible,
        _observedMotionEnabled = controller.motionEnabled,
+       _activeFramesRenderer = activeFramesRenderer ?? renderActiveHeaderFrames,
        _publisherInstance = ++_nextPublisherInstance,
        _channel = channel ?? const MethodChannel(_channelName),
        _session =
@@ -51,9 +54,11 @@ final class DashboardKeyguardMaterialBridge {
   final ValueListenable<DashboardHeaderVisualFrame> budgetFrame;
   final ValueListenable<DashboardHeaderVisualFrame> mindFrame;
   final MethodChannel _channel;
+  final ActiveHeaderFramesRenderer _activeFramesRenderer;
   final String _session;
   final int _publisherInstance;
   Size? _geometry;
+  double _geometryDevicePixelRatio = 1;
   Timer? _debounce;
   var _publishing = false;
   var _pending = false;
@@ -61,6 +66,8 @@ final class DashboardKeyguardMaterialBridge {
   var _disposed = false;
   String? _activeVisualKey;
   bool _observedMotionEnabled;
+  bool _preparingActiveFrames = false;
+  _ActiveHeaderFrameRequest? _pendingActiveFrames;
 
   void _handleMotionPreference() {
     final enabled = _controller.motionEnabled;
@@ -82,9 +89,17 @@ final class DashboardKeyguardMaterialBridge {
     );
   }
 
-  void updateHeaderGeometry(Size value) {
-    if (_disposed || value.isEmpty || _geometry == value) return;
+  void updateHeaderGeometry(Size value, {double devicePixelRatio = 1}) {
+    final dpr = devicePixelRatio.isFinite && devicePixelRatio > 0
+        ? devicePixelRatio
+        : 1.0;
+    if (_disposed ||
+        value.isEmpty ||
+        (_geometry == value && _geometryDevicePixelRatio == dpr)) {
+      return;
+    }
     _geometry = value;
+    _geometryDevicePixelRatio = dpr;
     schedule();
   }
 
@@ -148,7 +163,17 @@ final class DashboardKeyguardMaterialBridge {
       profile['publisherInstance'] = _publisherInstance;
       profile['motionEnabled'] = _observedMotionEnabled;
       profile['sourceAnimated'] = _observedMotionEnabled && snapshot.isAnimated;
-      unawaited(_publishActiveHeader(profile, key, requestedGeneration));
+      unawaited(
+        _publishActiveHeader(
+          profile,
+          key,
+          requestedGeneration,
+          snapshot,
+          geometry,
+          _geometryDevicePixelRatio,
+          _observedMotionEnabled,
+        ),
+      );
     });
     SchedulerBinding.instance.scheduleFrame();
   }
@@ -157,6 +182,10 @@ final class DashboardKeyguardMaterialBridge {
     Map<String, Object?> profile,
     String key,
     int requestedGeneration,
+    DashboardHeaderMaterialSnapshot snapshot,
+    Size geometry,
+    double devicePixelRatio,
+    bool motionEnabled,
   ) async {
     try {
       final receipt = await _channel.invokeMapMethod<Object?, Object?>(
@@ -167,11 +196,98 @@ final class DashboardKeyguardMaterialBridge {
           requestedGeneration == _generation &&
           receipt?['accepted'] == true) {
         _activeVisualKey = key;
+        final token = receipt?['token'];
+        if (token is String && token.isNotEmpty) {
+          _pendingActiveFrames = _ActiveHeaderFrameRequest(
+            token: token,
+            generation: requestedGeneration,
+            snapshot: snapshot,
+            geometry: geometry,
+            devicePixelRatio: devicePixelRatio,
+            motionEnabled: motionEnabled,
+          );
+          if (!_preparingActiveFrames) unawaited(_prepareActiveFrames());
+        }
       }
     } on MissingPluginException {
       // The optional active-header transport is unavailable on this host.
     } on PlatformException {
       // A rejected or detached publication must not become a cache hit.
+    }
+  }
+
+  Future<void> _prepareActiveFrames() async {
+    if (_preparingActiveFrames) return;
+    _preparingActiveFrames = true;
+    try {
+      while (!_disposed && _pendingActiveFrames != null) {
+        final request = _pendingActiveFrames!;
+        _pendingActiveFrames = null;
+        bool current() => !_disposed && request.generation == _generation;
+        final prepared = await _activeFramesRenderer(
+          snapshot: request.snapshot,
+          headerSize: request.geometry,
+          devicePixelRatio: request.devicePixelRatio,
+          motionEnabled: request.motionEnabled,
+          isCurrent: current,
+        );
+        if (!current()) continue;
+        if (!prepared.ready) {
+          try {
+            await _channel.invokeMethod<Object?>(
+              'reportActiveHeaderFrameStatus',
+              <String, Object>{
+                'token': request.token,
+                'status': prepared.status.name,
+              },
+            );
+          } on MissingPluginException {
+            // The semantic shader remains the fallback.
+          } on PlatformException {
+            // A retired source cannot change current diagnostics.
+          }
+          continue;
+        }
+        final frames = prepared.frames;
+        final playback = prepared.playback;
+        if (frames == null || playback == null) continue;
+        try {
+          final receipt = await _channel.invokeMapMethod<Object?, Object?>(
+            'publishActiveHeaderFrames',
+            <String, Object>{
+              'token': request.token,
+              'publisherSession': _session,
+              'publisherInstance': _publisherInstance,
+              'publisherRevision': request.generation,
+              'animated': request.motionEnabled && request.snapshot.isAnimated,
+              'loopStatus': request.motionEnabled && request.snapshot.isAnimated
+                  ? 'accepted'
+                  : 'static',
+              'intervalMs': playback.intervalMs,
+              'frameSizePx': playback.frameSizePx,
+              'frames': frames,
+            },
+          );
+          if (current() && receipt?['accepted'] != true) {
+            await _channel.invokeMethod<Object?>(
+              'reportActiveHeaderFrameStatus',
+              <String, Object>{
+                'token': request.token,
+                'status': 'nativeRejected',
+              },
+            );
+          }
+        } on MissingPluginException {
+          // The same-generation semantic shader remains the fallback.
+        } on PlatformException {
+          // A stale or unsupported package cannot replace the fallback.
+        }
+      }
+    } finally {
+      _preparingActiveFrames = false;
+      if (!_disposed && _pendingActiveFrames != null) {
+        unawaited(_prepareActiveFrames());
+      }
     }
   }
 
@@ -329,4 +445,22 @@ final class DashboardKeyguardMaterialBridge {
     _activeMode?.removeListener(schedule);
     _channel.setMethodCallHandler(null);
   }
+}
+
+final class _ActiveHeaderFrameRequest {
+  const _ActiveHeaderFrameRequest({
+    required this.token,
+    required this.generation,
+    required this.snapshot,
+    required this.geometry,
+    required this.devicePixelRatio,
+    required this.motionEnabled,
+  });
+
+  final String token;
+  final int generation;
+  final DashboardHeaderMaterialSnapshot snapshot;
+  final Size geometry;
+  final double devicePixelRatio;
+  final bool motionEnabled;
 }

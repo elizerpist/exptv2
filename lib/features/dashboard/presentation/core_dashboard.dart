@@ -1231,6 +1231,7 @@ class _CoreDashboardState extends State<CoreDashboard>
         );
         _keyguardMaterialBridge.updateHeaderGeometry(
           Size(geometry.headerBounds.width, geometry.headerBounds.height),
+          devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
         );
         final collapseTravel = controller.metrics.collapseTravel;
         final normalizedCollapseProgress = collapseTravel == 0

@@ -355,6 +355,11 @@ final class DashboardHeaderMaterialFrameRenderer {
   final bool _ownsBackend;
   final DashboardHeaderDeepDriftSkeleton _deepDrift =
       DashboardHeaderDeepDriftSkeleton();
+  bool _lastPaintWasExact = false;
+
+  /// A fallback gradient is useful to the launcher, but must not be labelled
+  /// as a verified copy of an active animated Header on the lockscreen.
+  bool get lastPaintWasExact => _lastPaintWasExact;
 
   Future<ui.Image> render({
     required DashboardHeaderMaterialSnapshot snapshot,
@@ -442,6 +447,7 @@ final class DashboardHeaderMaterialFrameRenderer {
     // applied once by the shared static/shader route.
     canvas.drawRect(Offset.zero & logicalSize, Paint()..color = Colors.white);
     if (_usesStatic(snapshot)) {
+      _lastPaintWasExact = true;
       DashboardHeaderStaticColorRenderer.paint(
         canvas: canvas,
         rect: Offset.zero & logicalSize,
@@ -463,6 +469,7 @@ final class DashboardHeaderMaterialFrameRenderer {
       input: snapshot.inputAt(offset, _deepDrift),
       rasterSize: rasterSize,
     );
+    _lastPaintWasExact = painted;
     if (!painted) {
       DashboardHeaderStaticColorRenderer.paint(
         canvas: canvas,

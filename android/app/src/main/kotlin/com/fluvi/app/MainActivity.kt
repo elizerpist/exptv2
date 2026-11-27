@@ -1388,7 +1388,52 @@ class MainActivity : FlutterActivity() {
                             val receipt = FluviActiveHeaderMaterialStore.publish(applicationContext, values,
                                 keyguardMaterialPublisherEpoch, activeHeaderActivityResumed && unlocked)
                             if (receipt.accepted) FluviKeyguardCardServiceRegistry.notifyActiveHeaderChanged()
-                            result.success(mapOf("accepted" to receipt.accepted, "reason" to receipt.reason))
+                            result.success(mapOf("accepted" to receipt.accepted, "reason" to receipt.reason,
+                                "token" to receipt.token))
+                        }
+                    }
+                    "reportActiveHeaderFrameStatus" -> {
+                        val values = call.arguments as? Map<*, *>
+                        val token = values?.get("token") as? String
+                        val status = values?.get("status") as? String
+                        val accepted = token != null && status != null &&
+                            FluviActiveHeaderMaterialStore.noteFrameStatus(applicationContext, token, status)
+                        result.success(mapOf("accepted" to accepted))
+                    }
+                    "publishActiveHeaderFrames" -> {
+                        val values = call.arguments as? Map<*, *>
+                        val unlocked = getSystemService(android.app.KeyguardManager::class.java)?.isKeyguardLocked == false
+                        if (values == null || !activeHeaderActivityResumed || !unlocked) {
+                            result.success(mapOf("accepted" to false, "reason" to "foregroundUnavailable"))
+                        } else {
+                            // PNG admission, copying and decoding run away from
+                            // Main. Completion rechecks both the exact owner and
+                            // the foreground/unlocked state before publication.
+                            val publisherEpoch = keyguardMaterialPublisherEpoch
+                            queryScope.launch {
+                                var decoded: List<android.graphics.Bitmap>? = null
+                                try {
+                                    val admission = FluviActiveHeaderMaterialStore.admitFrames(
+                                        applicationContext, values, publisherEpoch)
+                                    val request = admission.request
+                                    if (request != null) decoded = FluviActiveHeaderMaterialStore.decodeFrames(request)
+                                    withContext(Dispatchers.Main.immediate) {
+                                        val stillUnlocked = getSystemService(android.app.KeyguardManager::class.java)
+                                            ?.isKeyguardLocked == false
+                                        val frames = decoded
+                                        val accepted = request != null && frames != null && activeHeaderActivityResumed &&
+                                            stillUnlocked && keyguardMaterialPublisherEpoch == publisherEpoch &&
+                                            FluviActiveHeaderMaterialStore.commitFrames(applicationContext, request, frames)
+                                        // commitFrames consumes accepted and rejected decoded lists.
+                                        if (request != null && frames != null && activeHeaderActivityResumed &&
+                                            stillUnlocked && keyguardMaterialPublisherEpoch == publisherEpoch) decoded = null
+                                        result.success(mapOf("accepted" to accepted, "reason" to
+                                            if (accepted) "accepted" else if (request == null) admission.reason else "staleOrInvalid"))
+                                    }
+                                } finally {
+                                    decoded?.forEach { if (!it.isRecycled) it.recycle() }
+                                }
+                            }
                         }
                     }
                     "publishProfile" -> {

@@ -49,6 +49,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
     private var r46PublicTelemetry = false
     private var r47Telemetry: String? = null
     private var r47Animated: Boolean? = null
+    private var r47FramePlayback = false
     private val openingDelay = KeyguardR46OpeningDelay()
     private var event: ((Event) -> Unit)? = null
 
@@ -118,8 +119,13 @@ internal class KeyguardR448WidgetsAnywhereFrame(
             freezeClock = !material.motionEnabled)
         if (prepared) {
             r47Animated = material.motionEnabled && material.profile.animated
-            r47Telemetry = "origin=active_header_semantic token=${material.correlation} " +
-                "sourceRevision=${material.profile.publisherRevision} animated=$r47Animated playback=shader"
+            r47FramePlayback = view?.setActiveHeaderFrames(material) == true
+            val origin = if (r47FramePlayback) "active_header_frame_package" else "active_header_semantic"
+            val playback = if (r47FramePlayback) "verified_frames" else "shader"
+            val interval = material.preparedFrames?.takeIf { r47FramePlayback }?.intervalMs
+            r47Telemetry = "origin=$origin token=${material.correlation} " +
+                "sourceRevision=${material.profile.publisherRevision} animated=$r47Animated playback=$playback " +
+                "frameStatus=${material.frameStatus} intervalMs=${interval ?: "UNOBSERVED"}"
         }
         return prepared
     }
@@ -209,11 +215,14 @@ internal class KeyguardR448WidgetsAnywhereFrame(
             // hidden until the current post-add system check completes.
             material.visibility = if (validateAsync == null) View.VISIBLE else View.INVISIBLE
             material.alpha = if (validateAsync == null) 1f else 0f
-            material.onNextShaderDrawForDiagnostic = { at ->
+            val contentDraw: (Long) -> Unit = { at ->
                 if (view === material && viewOwner == owner && leaseLive && attached) {
-                    runCatching { event?.invoke(Event(owner, "FIRST_SHADER_DRAW", at)) }
+                    runCatching { event?.invoke(Event(owner,
+                        if (r47FramePlayback) "FIRST_FRAME_DRAW" else "FIRST_SHADER_DRAW", at)) }
                 }
             }
+            if (r47FramePlayback) material.onNextPreparedFrameDrawForDiagnostic = contentDraw
+            else material.onNextShaderDrawForDiagnostic = contentDraw
             material.onNextDrawForDiagnostic = { at ->
                 if (view === material && viewOwner == owner && leaseLive && attached && material.visibility == View.VISIBLE)
                     runCatching { event?.invoke(Event(owner, "FIRST_DRAW", at)) }
@@ -390,6 +399,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         frame = null
         val old = view ?: return false
         old.onNextShaderDrawForDiagnostic = null
+        old.onNextPreparedFrameDrawForDiagnostic = null
         old.onNextDrawForDiagnostic = null
         old.visibility = View.INVISIBLE
         old.alpha = 0f
@@ -411,6 +421,7 @@ internal class KeyguardR448WidgetsAnywhereFrame(
         r46PublicTelemetry = false
         r47Telemetry = null
         r47Animated = null
+        r47FramePlayback = false
         viewOwner = null
         event = null
         return true
