@@ -106,9 +106,9 @@ class Device:
         assert self.service_connected(), "Exact lockscreen service did not connect"
         for _ in range(3):
             screen = self.screen()
-            if "Android kisegítő lehetőségek".encode() in screen:
+            if SETTINGS_ROWS[0] in visible_labels(screen, PACKAGE):
                 break
-            if b"Create widget" in screen:
+            if any(label in ("Create", "Create widget") for label in visible_labels(screen, "com.android.settings")):
                 break
             self.shell("input", "keyevent", "KEYCODE_BACK")
 
@@ -182,13 +182,38 @@ def pixel_change(a, b, bounds):
     return inside, outside
 
 
+def visible_labels(raw, package=None):
+    return [
+        part.strip()
+        for node in ET.fromstring(raw).iter("node")
+        if node.get("visible") == "true" and (package is None or node.get("package") == package)
+        for key in ("text", "content-desc")
+        for part in node.get(key, "").splitlines()
+        if part.strip()
+    ]
+
+
+SETTINGS_ROWS = ["Android kisegítő lehetőségek", "1×1 ORB", "2×2 ORB"]
+
+
 def settings_rows(device):
-    raw = device.screen()
-    device.save("three-settings-rows.xml", raw)
-    labels = {node.get("text") for node in ET.fromstring(raw).iter("node")}
-    assert {"Android kisegítő lehetőségek", "1×1 ORB", "2×2 ORB"} <= labels, labels
-    assert "Aktuális fejléc megosztása" not in labels
-    assert "Zárképernyős widget elhelyezése" not in labels
+    until = time.monotonic() + 12
+    sample = 0
+    while time.monotonic() < until:
+        raw = device.screen()
+        device.save(f"three-settings-rows-{sample:02d}.xml", raw)
+        labels = visible_labels(raw, PACKAGE)
+        if all(row in labels for row in SETTINGS_ROWS):
+            indices = [labels.index(row) for row in SETTINGS_ROWS]
+            assert indices == sorted(indices)
+            assert labels.count("Android kisegítő lehetőségek") == 1
+            assert "Aktuális fejléc megosztása" not in labels
+            assert "Zárképernyős widget elhelyezése" not in labels
+            device.note("Three Fluvi setting rows observed in order")
+            return
+        sample += 1
+        time.sleep(.3)
+    raise AssertionError("The three settings rows were not identified")
 
 
 def enter_settings(device):
@@ -287,7 +312,7 @@ def exercise(device, apk, system, observer):
     device.shell("input", "keyevent", "KEYCODE_ENTER")
     hide_sample(device, "unlocked")
     device.shell("am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
-    if "Android kisegítő lehetőségek".encode() not in device.screen():
+    if SETTINGS_ROWS[0] not in visible_labels(device.screen(), PACKAGE):
         enter_settings(device)
     device.click("2×2 ORB", package=PACKAGE)
     device.shell("input", "keyevent", "KEYCODE_HOME")
