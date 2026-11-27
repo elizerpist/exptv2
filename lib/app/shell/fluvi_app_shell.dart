@@ -63,6 +63,7 @@ import '../../features/dashboard/application/dashboard_interaction_readiness.dar
 import '../../features/dashboard/application/dashboard_mode_spec.dart';
 import '../../features/dashboard/application/dashboard_render_readiness_diagnostics.dart';
 import '../../features/dashboard/presentation/core_dashboard.dart';
+import '../../features/dashboard/presentation/core_modes/dashboard_header_balance_color_scale.dart';
 import '../../features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart';
 import '../../features/dashboard/presentation/dashboard_shell_presentation.dart';
 import '../../features/dashboard/presentation/widgets/fluvi_brand_mark.dart';
