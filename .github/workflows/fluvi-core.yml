@@ -74,8 +74,6 @@ jobs:
         shell: bash
         run: |
           python -m pip install Pillow==11.3.0
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends ffmpeg
           bash scripts/r49-fixture/build-observer.sh "$RUNNER_TEMP/observer"
           keytool -genkeypair -keystore "$RUNNER_TEMP/observer.jks" -alias fixture -storepass android \
             -keypass android -dname 'CN=Fluvi disposable observer' -keyalg RSA -validity 1
@@ -86,7 +84,7 @@ jobs:
           test -c /dev/kvm
           sudo chmod 0666 /dev/kvm
           test -r /dev/kvm && test -w /dev/kvm
-      - name: Separate visible-start unlock, sleep and clipboard
+      - name: Witness the secure scene and a real capture-process restart
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.system == '37.0' && 36 || 35 }}
