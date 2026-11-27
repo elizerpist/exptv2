@@ -2,6 +2,7 @@
 """Record every video frame and visual marker; never infer SF/physical identity."""
 from __future__ import annotations
 import json
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -44,6 +45,18 @@ if validated:
     for line in (video_dir / 'frame-index.jsonl').read_text().splitlines():
         row = json.loads(line)
         times[row['index']] = row['elapsed_ns']
+clock_source = 'r15-demuxed-winscope-v2' if validated else 'UNOBSERVED'
+if not validated and (case/'winscope-valid.json').exists():
+    clock = json.loads((case/'winscope-valid.json').read_text())
+    video = case/'recording.mp4'
+    elapsed = clock.get('elapsed_ns', [])
+    if (clock.get('status') == 'VALIDATED' and video.is_file() and
+        hashlib.sha256(video.read_bytes()).hexdigest() == clock.get('video_sha256') and
+        len(elapsed) == len(frames) and all(type(value) is int and value >= 0 for value in elapsed) and
+        all(b > a for a,b in zip(elapsed,elapsed[1:]))):
+        times = dict(enumerate(elapsed))
+        validated = True
+        clock_source = 'validated-mp4-metadata-track-winscope-v2'
 if not frames:
     print('NOT_DECIDABLE: no decoded video frames')
     raise SystemExit(1)
@@ -83,7 +96,7 @@ transitions=[]
 for before,after in zip(rows,rows[1:]):
     if before['state']=='ALLOWED' and after['state']=='FORBIDDEN':
         transitions.append({'before':before,'first_sample':after,'next_sample':rows[after['capture_index']+1] if after['capture_index']+1<len(rows) else None})
-report={'clock':'VALIDATED' if validated else 'UNOBSERVED','frames':len(rows),'marker_location':[x,y],
+report={'clock':'VALIDATED' if validated else 'UNOBSERVED','clock_source':clock_source,'frames':len(rows),'marker_location':[x,y],
         'orb_bounds':bounds,'transitions':transitions,'compositor_frame_id':'UNOBSERVED',
         'screenshot_frame_id':'UNOBSERVED','actual_first_forbidden_frame':'NOT_DECIDABLE',
         'physical_presentation':'UNOBSERVED','note':'Host producer marker and screenrecord sample are not SurfaceFlinger display identity.'}

@@ -37,6 +37,7 @@ if ! timeout -k 2s 60s bash scripts/prepare-keyguard-lower-environment.sh "$out/
 fi
 python3 -B "$GITHUB_WORKSPACE/orchestrator/.github/scripts/test-r47-frame-verdict.py" > "$out/correlation/verdict-selftest.txt" 2>&1 || exit 1
 python3 -B "$GITHUB_WORKSPACE/orchestrator/.github/scripts/test-r47-frame-extract.py" > "$out/correlation/extract-selftest.txt" 2>&1 || exit 1
+python3 -B "$GITHUB_WORKSPACE/orchestrator/.github/scripts/test-r47-winscope-mp4.py" > "$out/correlation/winscope-selftest.txt" 2>&1 || exit 1
 trace_processor="$out/correlation/trace_processor"
 if curl -fsSL --retry 2 https://get.perfetto.dev/trace_processor -o "$trace_processor"; then
  chmod +x "$trace_processor"
@@ -113,6 +114,7 @@ for method in controlClean controlOneFrame directFirstSample waFirstSample direc
  if [[ -s $dir/recording.mp4 ]]; then
    sha256sum "$dir/recording.mp4" > "$dir/recording.sha256"
    python3 scripts/keyguard-r15-video.py --video "$dir/recording.mp4" --out "$dir/video-validated" > "$dir/video-validation.txt" 2>&1 || true
+   python3 -B "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r47-winscope-mp4.py" "$dir/recording.mp4" "$dir/winscope-valid.json" > "$dir/winscope-validation.txt" 2>&1 || true
    if [[ ! -d $dir/video-validated/frames ]]; then
      mkdir -p "$dir/video-fallback-frames"
      ffmpeg -v error -i "$dir/recording.mp4" -map 0:v:0 -fps_mode passthrough -start_number 0 "$dir/video-fallback-frames/%08d.png" > "$dir/video-extract.txt" 2>&1 || true
