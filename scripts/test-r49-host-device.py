@@ -88,7 +88,11 @@ class Device:
             ):
                 records = self.adb("shell", "dumpsys", "activity", "services", self.service)
                 self.save("accessibility-binding.txt", records)
-                if self.service.encode() in records:
+                package, class_name = self.service.split("/", 1)
+                names = {self.service}
+                if class_name.startswith(package + "."):
+                    names.add(package + "/" + class_name[len(package):])
+                if any(f"cmp={component}".encode() in records for component in names):
                     return True
             time.sleep(1)
         return False
