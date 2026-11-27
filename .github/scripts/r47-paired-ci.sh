@@ -16,14 +16,14 @@ build_arm() {
   (
     set -euo pipefail
     cd "$directory"
-    test "$(git rev-parse HEAD)" = "$expected"
-    test -z "$(git status --porcelain --untracked-files=no)"
+    test "$(git rev-parse HEAD)" = "$expected" || exit 1
+    test -z "$(git status --porcelain --untracked-files=no)" || exit 1
     printf 'source=%s\npair_kind=%s\n' "$expected" "$PAIR_KIND" > "$out/$label/source.txt"
-    sha256sum scripts/test-keyguard-runtime.sh scripts/test-keyguard-service-trace.sh scripts/run-dashboard-profile.sh > "$out/$label/scripts.sha256"
-    flutter pub get
+    sha256sum scripts/test-keyguard-runtime.sh scripts/test-keyguard-service-trace.sh scripts/run-dashboard-profile.sh > "$out/$label/scripts.sha256" || exit 1
+    flutter pub get || exit $?
     if [[ "$PAIR_KIND" == native ]]; then
-      (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain)
-      sha256sum build/app/outputs/apk/debug/app-debug.apk build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$out/$label/apks.sha256"
+      (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain) || exit $?
+      sha256sum build/app/outputs/apk/debug/app-debug.apk build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk > "$out/$label/apks.sha256" || exit 1
     elif [[ "$PAIR_KIND" == dashboard ]]; then
       flutter build apk --profile --target=integration_test/dashboard_interaction_profile_test.dart \
         --dart-define=FLUVI_VERBOSE_FLOW=false --dart-define=FLUVI_RAIL_FLIGHT_RECORDER=true \
@@ -31,8 +31,9 @@ build_arm() {
         --dart-define=FLUVI_BUILD_PURPOSE=automated_profile_test \
         --dart-define=FLUVI_AUTOMATED_SCENARIO_RUNNER_PRESENT=true \
         --dart-define=FLUVI_AUTOMATED_INPUT_DRIVER_ACTIVE=true \
-        --dart-define="FLUVI_BUILD_COMMIT=$expected"
-      sha256sum build/app/outputs/flutter-apk/app-profile.apk > "$out/$label/apks.sha256"
+        --dart-define="FLUVI_BUILD_COMMIT=$expected" || exit $?
+      test -s build/app/outputs/flutter-apk/app-profile.apk || exit 1
+      sha256sum build/app/outputs/flutter-apk/app-profile.apk > "$out/$label/apks.sha256" || exit 1
       (cd android && ./gradlew --stop)
     else exit 64; fi
   ) > "$out/$label/build.log" 2>&1
