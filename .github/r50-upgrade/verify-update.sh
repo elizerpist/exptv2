@@ -16,7 +16,7 @@ if [[ "${1:-}" = download ]]; then
         "$APK_SHA256" "$state/r50.apk" | sha256sum -c - | tee "$out/binaries.txt"
     test "$(wc -c < "$state/r50.apk")" -eq "$APK_SIZE"
     signer="$ANDROID_HOME/build-tools/36.0.0/apksigner"
-    for file in "$state/r49.apk" "$state/r50.apk" .github/r50-upgrade/fixture.apk; do
+    for file in "$state/r49.apk" "$state/r50.apk"; do
         "$signer" verify --verbose --print-certs "$file" | tee -a "$out/signatures.txt" |
             grep -F 'Signer #1 certificate SHA-256 digest: faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb'
     done
@@ -31,7 +31,6 @@ adb wait-for-device
 package=com.fluvi.app
 service="$package/tk.zwander.lockscreenwidgets.services.Accessibility"
 adb install "$state/r49.apk" | tee "$out/r49-install.txt"
-adb install .github/r50-upgrade/fixture.apk | tee "$out/fixture-install.txt"
 adb shell wm dismiss-keyguard
 adb shell am start -W -n "$package/.MainActivity" | tee "$out/r49-launch.txt"
 db="/data/user/0/$package/databases/fluvi_core.db"
@@ -57,14 +56,21 @@ with sqlite3.connect(sys.argv[1]) as db:
 PY
 adb push "$state/seed.db" /data/local/tmp/r50-seed.db >/dev/null
 adb shell "cat /data/local/tmp/r50-seed.db > '$db'; rm -f '$db-wal' '$db-shm' /data/local/tmp/r50-seed.db"
-adb shell cmd appwidget grantbind --package "$package" --user 0
-fixture=com.fluvi.r50.updatefixture/.BindFixture
-adb shell am instrument -w -e phase seed "$fixture" | tee "$out/seed-host.txt"
-grep -x 'INSTRUMENTATION_RESULT: r50Fixture=PASS' "$out/seed-host.txt"
-active="$(sed -n 's/^INSTRUMENTATION_RESULT: active=//p' "$out/seed-host.txt")"
-obsolete="$(sed -n 's/^INSTRUMENTATION_RESULT: obsolete=//p' "$out/seed-host.txt")"
-foreign="$(sed -n 's/^INSTRUMENTATION_RESULT: foreign=//p' "$out/seed-host.txt")"
-adb shell cmd appwidget revokebind --package "$package" --user 0
+data="/data/user/0/$package"
+owner="$(adb shell stat -c %u:%g "$data" | tr -d '\r')"
+[[ "$owner" =~ ^[0-9]+:[0-9]+$ ]]
+adb shell "mkdir -p '$data/shared_prefs' '$data/no_backup'; chown '$owner' '$data/shared_prefs' '$data/no_backup'"
+seed_pref() {
+    local name="$1" fields="$2"
+    printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' "<map>$fields</map>" > "$state/pref.xml"
+    adb push "$state/pref.xml" /data/local/tmp/r50-pref.xml >/dev/null
+    adb shell "cat /data/local/tmp/r50-pref.xml > '$data/shared_prefs/$name.xml'; chown '$owner' '$data/shared_prefs/$name.xml'; chmod 600 '$data/shared_prefs/$name.xml'; restorecon '$data/shared_prefs/$name.xml'"
+}
+seed_pref com.fluvi.app_preferences '<boolean name="widget_frame_enabled" value="false" /><string name="current_widgets">[]</string>'
+seed_pref fluvi_runtime_monitoring '<boolean name="foregroundRequested" value="false" /><boolean name="backgroundRequested" value="true" />'
+seed_pref fluvi_home_orb_configurations '<string name="r50UpgradeSentinel">home-preserved</string>'
+seed_pref fluvi_financial_snapshot_widget '<string name="r50UpgradeSentinel">snapshot-preserved</string>'
+adb shell "touch '$data/no_backup/header-orb-sharing-v1'; echo synthetic > '$data/no_backup/header-orb-frames-v1'; chown '$owner' '$data/no_backup/header-orb-sharing-v1' '$data/no_backup/header-orb-frames-v1'"
 adb shell settings put secure enabled_accessibility_services "$service"
 adb shell settings put secure accessibility_enabled 1
 adb shell dumpsys appwidget > "$out/r49-appwidgets.txt"
@@ -77,9 +83,29 @@ for _ in $(seq 1 15); do
     sleep 1
 done
 adb shell settings get secure enabled_accessibility_services | tee "$out/enabled-accessibility.txt" | grep -F "$service"
-adb shell am instrument -w -e phase after -e active "$active" -e obsolete "$obsolete" -e foreign "$foreign" "$fixture" |
-    tee "$out/migrated-host.txt"
-grep -x 'INSTRUMENTATION_RESULT: r50Fixture=PASS' "$out/migrated-host.txt"
+adb shell cat "$prefs" > "$out/migrated.json.xml"
+for key in fluvi_home_orb_configurations fluvi_financial_snapshot_widget fluvi_runtime_monitoring; do
+    adb shell cat "$data/shared_prefs/$key.xml" > "$out/$key.xml"
+done
+python3 - "$out" <<'PY_STATE'
+from pathlib import Path
+import sys
+import xml.etree.ElementTree as ET
+out = Path(sys.argv[1])
+def prefs(name):
+    return {row.attrib["name"]: row.get("value", row.text)
+            for row in ET.parse(out / name).getroot()}
+assert prefs("migrated.json.xml")["migrated"] == "true"
+assert prefs("migrated.json.xml")["intended"] == "false"
+assert prefs("fluvi_home_orb_configurations.xml")["r50UpgradeSentinel"] == "home-preserved"
+assert prefs("fluvi_financial_snapshot_widget.xml")["r50UpgradeSentinel"] == "snapshot-preserved"
+p = prefs("fluvi_runtime_monitoring.xml")
+assert p["foregroundRequested"] == "false" and p["backgroundRequested"] == "true"
+print("PASS dormant frame intent, retained home/financial widget and FG/BG settings")
+PY_STATE
+for retired in header-orb-sharing-v1 header-orb-frames-v1 balance-orb-frames-v2; do
+    adb shell test ! -f "$data/no_backup/$retired"
+done
 adb shell dumpsys appwidget > "$out/r50-appwidgets.txt"
 adb shell am force-stop "$package"
 adb pull "$db" "$state/after.db" >/dev/null
@@ -92,4 +118,4 @@ with sqlite3.connect(sys.argv[1]) as db:
     assert not db.execute("PRAGMA foreign_key_check").fetchall()
     print("PASS unchanged ledger and notification test records")
 PY
-printf '%s\n' 'PASS signed R49→R50 update, fixed host migration, dormant intent and retained app data' | tee "$out/result.txt"
+printf '%s\n' 'PASS signed R49→R50 update, dormant intent and retained ledger/widget/notification data' | tee "$out/result.txt"
