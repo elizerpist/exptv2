@@ -50,7 +50,7 @@ base_url='https://media.githubusercontent.com/media/elizerpist/exptv2/a955fca1f8
 base_sha=bc86c5c1d3545be15643b596344c1b57ac640361abfd90724d035e264bcd8ae3
 curl -fLsS --retry 3 "$base_url" -o "$out/r43.apk"
 printf '%s  %s\n' "$base_sha" "$out/r43.apk" | sha256sum -c -
-zstd -q -d --patch-from="$out/r43.apk" -f "$out/r44.zstpatch" -o "$out/r44.apk"
+zstd -q -d --long=28 --patch-from="$out/r43.apk" -f "$out/r44.zstpatch" -o "$out/r44.apk"
 test "$(wc -c < "$out/r44.apk")" -eq "$CANDIDATE_SIZE"
 printf '%s  %s\n' "$CANDIDATE_SHA256" "$out/r44.apk" | sha256sum -c -
 rm -f "$out/private.pem" "$out/key.txt" "$out/r44.zstpatch" "$out/stage.enc"
