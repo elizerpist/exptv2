@@ -20,7 +20,7 @@ jobs:
           java-version: '17'
       - uses: android-actions/setup-android@v3
         with:
-          packages: platform-tools build-tools;36.0.0
+          packages: platform-tools build-tools;36.0.0 platforms;android-35
       - uses: actions/download-artifact@v4
         with:
           name: r49-human-builder-a614bf74f7a0b17d3ebc822daf167fba331ee6af
@@ -37,6 +37,18 @@ jobs:
           sha256sum build/app/outputs/flutter-apk/app-profile.apk "$RUNNER_TEMP/r49-fixture.apk" \
             | tee r49-device-evidence/apks.sha256
           echo "FLUVI_R49_FIXTURE_APK=$RUNNER_TEMP/r49-fixture.apk" >> "$GITHUB_ENV"
+      - name: Build the fixture-only hierarchy observer and match fixture signatures
+        run: |
+          bash scripts/r49-fixture/build-observer.sh "$RUNNER_TEMP/observer"
+          for package in r49-control r49-control-test; do
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$RUNNER_TEMP/r49-test.jks" \
+              --ks-pass pass:android --key-pass pass:android --out "$RUNNER_TEMP/$package.apk" \
+              "build/app/outputs/flutter-apk/$package.apk"
+          done
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$RUNNER_TEMP/r49-test.jks" \
+            --ks-pass pass:android --key-pass pass:android --out "$RUNNER_TEMP/r49-observer.apk" \
+            "$RUNNER_TEMP/observer/observer-unsigned.apk"
+          sha256sum "$RUNNER_TEMP"/r49-{control,control-test,observer}.apk >> r49-device-evidence/apks.sha256
       - name: Enable KVM
         run: |
           test -e /dev/kvm
@@ -61,10 +73,10 @@ jobs:
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
           pre-emulator-launch-script: >-
             test -s "$FLUVI_R49_FIXTURE_APK" && test -s build/app/outputs/flutter-apk/r49-control.apk
-          script: python3 scripts/test-r49-host-device.py "$FLUVI_R49_FIXTURE_APK" "${{ matrix.system }}" r49-device-evidence --control-apk build/app/outputs/flutter-apk/r49-control.apk --control-test build/app/outputs/flutter-apk/r49-control-test.apk
+          script: python3 scripts/test-r49-host-device.py "$FLUVI_R49_FIXTURE_APK" "${{ matrix.system }}" r49-device-evidence --control-apk "$RUNNER_TEMP/r49-control.apk" --control-test "$RUNNER_TEMP/r49-control-test.apk" --observer "$RUNNER_TEMP/r49-observer.apk"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r49-host-retry-${{ matrix.system }}-a614bf74f7a0
+          name: r49-host-observed-${{ matrix.system }}-a614bf74f7a0
           path: r49-device-evidence/
           if-no-files-found: warn

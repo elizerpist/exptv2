@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Stock emulator setup control using ordinary Android UI consent."""
 import argparse
+import base64
 import io
 from pathlib import Path
 import re
@@ -32,9 +33,13 @@ class Device:
         (self.output / name).write_bytes(content)
 
     def screen(self):
-        xml = "/data/local/tmp/fluvi-r49-ui.xml"
-        self.shell("uiautomator", "dump", xml, timeout=8)
-        return self.adb("exec-out", "cat", xml)
+        output = self.shell("am", "instrument", "-w",
+                            "com.fluvi.r49.fixture/.ReadVisibleHierarchy", timeout=8)
+        value = re.search(r"INSTRUMENTATION_RESULT: hierarchy=(.*)", output)
+        if not value:
+            self.save("observer-error.txt", output.encode())
+            raise OSError("No UI hierarchy returned by the non-suppressing observer")
+        return base64.b64decode(value.group(1))
 
     def note(self, name):
         self.steps.append(name)
@@ -123,7 +128,7 @@ class Device:
             self.note(f"Tutorial gesture with {fingers} fingers")
 
 
-def exercise(device, apk, system, control_apk, control_test):
+def exercise(device, apk, system, control_apk, control_test, observer):
     expected_api = system.split(".")[0]
     actual = device.shell("getprop", "ro.build.version.sdk")
     assert actual == expected_api, (actual, expected_api)
@@ -134,6 +139,7 @@ def exercise(device, apk, system, control_apk, control_test):
     device.note(device.adb("install", apk, timeout=90).decode().strip())
     device.note(device.adb("install", control_apk, timeout=30).decode().strip())
     device.note(device.adb("install", control_test, timeout=30).decode().strip())
+    device.note(device.adb("install", observer, timeout=30).decode().strip())
     device.shell("wm", "dismiss-keyguard")
     launch = device.shell("am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
     device.save("fluvi-launch.txt", launch.encode())
@@ -198,12 +204,14 @@ def main():
     parser.add_argument("output", type=Path)
     parser.add_argument("--control-apk", type=Path, required=True)
     parser.add_argument("--control-test", type=Path, required=True)
+    parser.add_argument("--observer", type=Path, required=True)
     args = parser.parse_args()
     device = Device(args.output)
     try:
-        exercise(device, args.apk, args.system, args.control_apk, args.control_test)
+        exercise(device, args.apk, args.system, args.control_apk, args.control_test, args.observer)
     except (AssertionError, subprocess.SubprocessError, OSError, ET.ParseError) as error:
         device.note(f"FAILED: {error}")
+        device.save("first-divergence.png", device.adb("exec-out", "screencap", "-p"))
         raise
     finally:
         device.save("logcat.txt", device.adb("logcat", "-d", "-v", "threadtime"))
