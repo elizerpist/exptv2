@@ -46,7 +46,7 @@ class Device:
         (self.output / "steps.txt").write_text("\n".join(self.steps) + "\n")
         print(name, flush=True)
 
-    def click(self, label, *alternatives, optional=False, limit=10):
+    def click(self, label, *alternatives, optional=False, limit=10, package=None):
         names = {value.casefold() for value in (label, *alternatives)}
         end = time.monotonic() + limit
         while time.monotonic() < end:
@@ -56,11 +56,13 @@ class Device:
                 continue
             root = ET.fromstring(raw)
             for node in root.iter("node"):
+                if package and node.get("package") != package:
+                    continue
                 labels = {line.strip().casefold() for key in ("text", "content-desc")
                           for line in node.get(key, "").splitlines()}
                 if labels & names:
-                    a, b, c, d = map(int, re.findall(r"\d+", node.attrib["bounds"]))
-                    if a == c or b == d:
+                    a, b, c, d = map(int, re.findall(r"-?\d+", node.attrib["bounds"]))
+                    if a >= c or b >= d:
                         continue
                     self.shell("input", "tap", (a + c) // 2, (b + d) // 2)
                     self.note("CLICK " + label)
@@ -85,10 +87,11 @@ class Device:
     def settings_consent(self):
         self.click("More Info")
         self.click("Grant")
-        if not self.click("Widgets Anywhere", "Fluvi", optional=True, limit=3):
-            self.click("Downloaded apps", "Installed apps")
-            self.click("Widgets Anywhere", "Fluvi")
-        self.click("Use Widgets Anywhere", "Use Fluvi")
+        settings_package = "com.android.settings"
+        if not self.click("Fluvi", package=settings_package, optional=True, limit=4):
+            self.click("Downloaded apps", "Installed apps", package=settings_package)
+            self.click("Fluvi", package=settings_package)
+        self.click("Use Fluvi", "Use Widgets Anywhere", package=settings_package)
         self.click("Allow", "OK")
         enabled = self.shell("settings", "get", "secure", "enabled_accessibility_services")
         assert SERVICE in enabled.split(":"), "The exact component was not consented"
@@ -180,6 +183,11 @@ def exercise(device, apk, system, control_apk, control_test, observer):
     assert re.search(r"hostId[=:]\s*1003\b", bindings), "Real WA host ID absent"
     assert "FluviHeaderOrbWidgetProvider" in bindings, "Current-header provider was not bound"
     device.note("Normal OS binding and host registration observed")
+    # Produce the current header by entering the normal dashboard after consent.
+    device.shell("input", "keyevent", "KEYCODE_BACK")
+    device.shell("input", "keyevent", "KEYCODE_BACK")
+    device.click("Home", package=PACKAGE)
+    device.crop("actual-dashboard-reference")
     # Leave setup so its preview buttons and window cannot satisfy the main witness.
     device.shell("input", "keyevent", "KEYCODE_HOME")
     assert device.crop("unlocked-control") < 100, "Marker already visible on unlocked control"
