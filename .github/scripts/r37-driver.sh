@@ -9,6 +9,16 @@ case "${1:-}" in
  build)
   test "$(git rev-parse HEAD)" = "$APP_SHA"
   test -z "$(git status --porcelain --untracked-files=no)"
+  if [[ "$TEST_SCOPE" == r48_private_admission ]]; then
+    test "$APP_SHA" = af20365a5ec96ff92b35321a03c0a2679ee7d2fd
+    harness="$GITHUB_WORKSPACE/harness"
+    test "$(git -C "$harness" rev-parse HEAD)" = "$HARNESS_SHA"
+    for fixture in       android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR48PrivateAdmissionReplayTest.kt       android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR48StockPrivateAdmissionInstrumentationTest.kt; do
+      cp -- "$harness/$fixture" "$fixture"
+      sha256sum "$fixture" >> "$out/r48-fixtures.sha256"
+    done
+    git status --short > "$out/r48-build-tree.txt"
+  fi
   if [[ "$BASELINE" = true ]]; then
     test "$(git -C "$GITHUB_WORKSPACE/harness" rev-parse HEAD)" = "$HARNESS_SHA"
     if [[ "$TEST_SCOPE" == r46_frame_baseline ]]; then
@@ -225,6 +235,20 @@ case "${1:-}" in
     git diff -- android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR47VisualInstrumentationTest.kt > "$out/fixture-r47-clock-corrected.patch"
   fi
   flutter pub get > "$out/pub-get.log" 2>&1
+  if [[ "$TEST_SCOPE" == r48_private_admission ]]; then
+    rc=0
+    (
+      cd android
+      export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -Drobolectric.dependency.repo.url=https://maven-central.storage-download.googleapis.com/maven2"
+      ./gradlew :app:testDebugUnitTest --tests '*KeyguardR47PrivateAdmissionTest'         --tests '*KeyguardR449RestrictionEvidenceTest' --tests '*KeyguardR44SurfaceClassifierTest'         --tests '*KeyguardR48*' --no-daemon --max-workers=3 --console=plain
+    ) > "$out/r48-units.log" 2>&1 || rc=$?
+    printf '%s
+' "$rc" > "$out/r48-units-exit.txt"
+    if [[ -d build/app/test-results/testDebugUnitTest ]]; then
+      cp -r build/app/test-results/testDebugUnitTest "$out/r48-junit"
+    fi
+    if (( rc != 0 )); then tail -75 "$out/r48-units.log"; fi
+  fi
   rc=0
   (cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=3 --console=plain) > "$out/build.log" 2>&1 || rc=$?
   if (( rc != 0 )); then tail -100 "$out/build.log"; exit "$rc"; fi
@@ -265,6 +289,10 @@ case "${1:-}" in
   failed=0
   r37_uuids=""
   case "$TEST_SCOPE" in
+    r48_private_admission)
+      class=com.fluvi.app.lockscreen.KeyguardR48StockPrivateAdmissionInstrumentationTest
+      methods=(directStockPrivateAdmission waStockPrivateAdmission)
+      ;;
     r47_visual_direct|r47_clock_recheck_direct)
       class=com.fluvi.app.lockscreen.KeyguardR47VisualInstrumentationTest
       methods=(directPresenterMatchesFlutterAndWithdraws)
@@ -706,6 +734,7 @@ case "${1:-}" in
     fi
   done
   cat "$out/results.txt"
+  if [[ "$TEST_SCOPE" == r48_private_admission && "$(cat "$out/r48-units-exit.txt")" != 0 ]]; then failed=1; fi
   exit "$failed"
   ;;
  *) exit 2;;

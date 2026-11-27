@@ -1,5 +1,5 @@
 name: R44 Android 17 service and evidence controls
-run-name: R47 ${{ inputs.test_scope }} app ${{ inputs.app_sha }}
+run-name: ${{ inputs.test_scope }} app ${{ inputs.app_sha }}
 on:
   workflow_dispatch:
     inputs:
@@ -78,7 +78,7 @@ jobs:
           path: app
           fetch-depth: 0
       - uses: actions/checkout@v5
-        if: ${{ inputs.baseline }}
+        if: ${{ inputs.baseline || inputs.test_scope == 'r48_private_admission' }}
         with:
           ref: ${{ env.HARNESS_SHA }}
           path: harness
