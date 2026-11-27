@@ -11,20 +11,25 @@ from pathlib import Path
 def load(path: Path) -> dict:
     result = {'tests':{}, 'xml_files':[], 'service_status':'UNOBSERVED'}
     if not path.exists(): return result
+    def collect_xml(stream, name):
+        try: root=ET.parse(stream).getroot()
+        except ET.ParseError: return
+        result['xml_files'].append(name)
+        for case in root.iter('testcase'):
+            key=case.get('classname','?')+'#'+case.get('name','?')
+            failures=[f for kind in ('failure','error') for f in case.findall(kind)]
+            status='FAIL' if failures else 'SKIP' if case.find('skipped') is not None else 'PASS'
+            detail = (failures[0].get('message') or failures[0].text or '') if failures else ''
+            result['tests'][key]={'status':status,'time':case.get('time'), 'failure':detail[:600]}
+    if path.is_dir():
+        for item in path.rglob('*.xml'):
+            with item.open('rb') as stream: collect_xml(stream, str(item))
+        return result
     with tarfile.open(path,'r:gz') as archive:
         for item in archive:
             if not item.isfile(): continue
             if item.name.endswith('.xml') and 'androidTest-results/connected' in item.name:
-                stream=archive.extractfile(item)
-                try: root=ET.parse(stream).getroot()
-                except ET.ParseError: continue
-                result['xml_files'].append(item.name)
-                for case in root.iter('testcase'):
-                    key=case.get('classname','?')+'#'+case.get('name','?')
-                    failures=[f for kind in ('failure','error') for f in case.findall(kind)]
-                    status='FAIL' if failures else 'SKIP' if case.find('skipped') is not None else 'PASS'
-                    result['tests'][key]={'status':status,'time':case.get('time'),
-                        'failure':(failures[0].get('message','') if failures else '')[:600]}
+                collect_xml(archive.extractfile(item), item.name)
             if item.name.endswith('keyguard-lower-environment/runtime-status.txt'):
                 result['runtime_status']=archive.extractfile(item).read().decode(errors='replace')
             if 'keyguard-service-evidence/' in item.name and item.name.endswith('instrumentation.txt'):

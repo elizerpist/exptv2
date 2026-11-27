@@ -118,6 +118,20 @@ for method in controlClean controlOneFrame directFirstSample waFirstSample direc
  python3 -B "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r47-frame-extract.py" "$dir" > "$dir/frame-extract.log" 2>&1 || true
  adb shell rm -f "$remote_video" "$remote_pid" "$remote_trace" >/dev/null 2>&1 || true
 done
-python3 -B "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r47-frame-summary.py" "$out/correlation" > "$out/correlation/summary.log" 2>&1 || true
-printf 'aggregate_instrumentation_exit=%s\nframes_are_not_physical_presentation=true\n' "$result" > "$out/correlation/status.txt"
+python3 -B "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r47-frame-summary.py" "$out/correlation" > "$out/correlation/summary.log" 2>&1 || result=1
+if ! python3 -B - "$out/correlation/frame-correlation-verdict.json" <<'PY'
+import json,sys
+with open(sys.argv[1]) as f: result=json.load(f)
+controls=result['control_status']
+cases=result['cases']
+if controls.get('clean')!='PASS' or controls.get('one_frame')!='PASS': sys.exit(1)
+if any(case['verdict']['status']!='ORB_ABSENT' for case in cases.values()): sys.exit(1)
+PY
+then
+  printf 'correlated_frame_gate=FAIL_OR_NOT_DECIDABLE\n' > "$out/correlation/frame-gate.txt"
+  result=1
+else
+  printf 'correlated_frame_gate=PASS; prior_original_first_sample_failure_remains\n' > "$out/correlation/frame-gate.txt"
+fi
+printf 'aggregate_exit=%s\nframes_are_not_physical_presentation=true\n' "$result" > "$out/correlation/status.txt"
 exit "$result"

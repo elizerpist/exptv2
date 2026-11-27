@@ -60,7 +60,7 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
 
     // This is a producer marker, not proof of physical presentation or of the
     // frame selected by UiAutomation.takeScreenshot. No application code changes.
-    private class Marker(context: android.content.Context, private val log: StringBuilder,
+    private class Marker(context: android.content.Context, private val log: StringBuffer,
                          private val synthetic: Boolean = false) : View(context) {
         private val paint = Paint().apply { isAntiAlias = false }
         var forbidden = false
@@ -105,7 +105,7 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
         val app = ins.targetContext
         val id = UUID.fromString(requireNotNull(InstrumentationRegistry.getArguments().getString("runUuid")))
         val out = File(app.filesDir, "keyguard-service-probe/r43/$id").apply { check(mkdirs()) }
-        val log = StringBuilder("control=${if (oneFrame) "ONE_FRAME" else "CLEAN"}\n")
+        val log = StringBuffer("control=${if (oneFrame) "ONE_FRAME" else "CLEAN"}\n")
         val host = ins.startActivitySync(Intent(app, KeyguardMaterialTestActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as KeyguardMaterialTestActivity
         lateinit var marker: Marker
@@ -190,7 +190,7 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
         val ui = ins.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES)
         val id = UUID.fromString(requireNotNull(InstrumentationRegistry.getArguments().getString("runUuid")))
         val out = File(app.filesDir, "keyguard-service-probe/r43/$id").apply { check(mkdirs()) }
-        val log = StringBuilder("route=${if (direct) "DIRECT" else "WA"} host=app-owned " +
+        val log = StringBuffer("route=${if (direct) "DIRECT" else "WA"} host=app-owned " +
             "source=synthetic_flutter preparedPackage=forced_player_control fixture=measured_bounds scenario=$scenario\n")
         val failures = mutableListOf<String>()
         val held = mutableListOf<Bitmap>()
