@@ -23469,3 +23469,70 @@ were still running. They have not been counted as passes; final outcomes will
 be recorded separately. The measured fixture is test-only harness commit
 `a9f979085ccea2d107ff9f02e0eb74d7978f60bf`, while the application SHA and
 signed bytes above remain unchanged.
+
+### R47 continuation: final independent test outcomes
+
+All application results below use `af20365a5ec96ff92b35321a03c0a2679ee7d2fd`;
+the measured fixture and Flutter diagnostic are separate test-only harness
+commits and did not alter the signed application.
+
+* The first supplemental measured-bounds test
+  [45920872255](https://github.com/elizerpist/exptv2/actions/runs/45920872255),
+  harness `a9f979085ccea2d107ff9f02e0eb74d7978f60bf`, reached a software
+  draw but its immediate screenshot contained only the green underlay; full
+  orb bounds were **NOT REACHED**, not a product or privacy PASS. Preserve its
+  empty image and failure. The corrected, bounded waiter retained every empty
+  discovery frame, then identified the complete orb on the real compositor:
+  [45921911219](https://github.com/elizerpist/exptv2/actions/runs/45921911219),
+  harness `21ea12ebcc1fa231b63f9bb7270611fc0826203b`. On this run the requested
+  and measured bounds were both `Rect(456,1116-624,1284)`. Two synthetic
+  Flutter reference frames matched with mean RGB errors 0.221 and 0.281; the
+  observed interiors differed at 12,351/15,648 pixels. The test FAILS: the
+  first after-conceal sample, bracketed at uptime 44164–44350 ms, still had
+  orb pixels at all 15,648 measured interior positions; the next sample,
+  44408–44459 ms, matched the underlay. This app-owned-host observation is
+  not a timestamp of the first physical PIN, shade or unlock frame. It is not
+  proof that the user's actual palette or phone behaved identically.
+* The independent Flutter renderer diagnostic
+  [45922553863](https://github.com/elizerpist/exptv2/actions/runs/45922553863),
+  harness `b628add4ff6076600d27b6bf781cba2511089c8f`, used a synthetic
+  animated Dual Tide header with both portal channels. The actual offscreen
+  shader rendered exactly, and finite-loop preparation returned
+  `unverifiedLoop`, so the specified same-generation semantic shader fallback
+  remains necessary; an unverified frame package was not promoted. This is
+  distinct from the signed WA UI run's `rendererUnavailable` report, whose
+  precise underlying cause remains unproven. A preliminary local diagnostic
+  first had a test-only Dart constant error and, after correction, could not
+  start because the shared workspace ran out of disk. Those local attempts
+  are NOT RUN as renderer evidence; both logs were retained and the compiler
+  cache cleared. The hosted diagnostic above is the valid independent result.
+* Full exact-source workflow
+  [45919692513](https://github.com/elizerpist/exptv2/actions/runs/45919692513)
+  FAIL. `test-core`, `test-flutter` and dashboard-path detection PASS. The
+  API 35 keyguard material job
+  [140249255096](https://github.com/elizerpist/exptv2/actions/runs/45919692513/job/140249255096)
+  FAILS 16/155 material/diagnostic tests and 2/2 subsequent real-service tests.
+  Failures include critical FULL/LIGHT pressure record omissions, retained
+  buffer ownership, neutral/visibility/fiducial controls and a service backend
+  mismatch. The prior `346213e3` run failed 13/155; 12 failing test names
+  overlap, four occur only in this run and one only in the prior run. The runs
+  used separate emulators and these counts do not establish causation.
+  The separately dependent dashboard profile job
+  [140249255051](https://github.com/elizerpist/exptv2/actions/runs/45919692513/job/140249255051)
+  FAILS with an unready prepared vector atlas, `RangeError (year)` for 2026
+  outside 2027–2051, and an incomplete B-scenario report. The normal Human
+  job was skipped because its native dependency failed; the independently
+  built, signed, and API-37 update-tested profile remains as recorded above.
+  Nightly and historical-baseline lanes were not requested. The local host had
+  no connected Android device and no `/dev/kvm`; all runtime evidence above is
+  from hosted emulators, not the owner's Nothing phone.
+
+Both same-source synthetic prepared-frame presenters therefore match and move
+in the calibrated app-owned host, while both first-after-conceal controls FAIL.
+Neither the owner's actual header, real lockscreen transitions nor physical
+presentation timing have been optically qualified. The selected R47 contract
+requires a reviewer decision for the reproduced counterexample; no speculative
+change to the authorization or hide sequence has been applied. Section 19's
+qualification condition remains unmet. The private signed candidate is
+withheld; no anonymous owner download or qualified substitute is asserted.
+PHYSICAL VALIDATION — PENDING, USER ONLY.
