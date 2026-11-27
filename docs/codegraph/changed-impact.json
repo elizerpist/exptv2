@@ -1,18 +1,21 @@
 {
   "schema_version": 1,
-  "source_head": "af20365a5ec96ff92b35321a03c0a2679ee7d2fd",
-  "base_head": "84cf6443cc9a15cc1513759a4ed3c23e65719917",
+  "source_head": "a614bf74f7a0b17d3ebc822daf167fba331ee6af",
+  "base_head": "7ca3cd8af14c6519439bf895f2475f5fa3e28bea",
   "changed_files": [
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardCardDiagnosticsInstrumentationTest.kt",
-    "android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR47PreparedFrameInstrumentationTest.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/FluviKeyguardCardService.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardCardSettings.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR446WindowPresenter.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR448WidgetsAnywhereFrame.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR44ReadObservation.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/lockscreen/KeyguardR45Presentation.kt"
+    ".github/workflows/fluvi-core.yml",
+    "android/app/src/main/kotlin/com/fluvi/app/runtime/RetiredLockscreenState.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/widget/orb/FluviHeaderOrbWidgetProvider.kt",
+    "android/wa-integration/FluviHostDefaults.kt",
+    "android/wa-integration/README.md",
+    "android/wa-integration/check-payload-lock.py",
+    "scripts/build-r49-android.sh",
+    "scripts/verify-r49-host.py",
+    "test/boundary/dashboard_interaction_performance_boundary_test.dart"
   ],
-  "candidate_changed_symbols": [],
+  "candidate_changed_symbols": [
+    "scip-dart pub fluvi 0.1.0+1 test/boundary/`dashboard_interaction_performance_boundary_test.dart`/main()."
+  ],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
   "direct_reference_consumers": [],
   "affected_test_locations": [],

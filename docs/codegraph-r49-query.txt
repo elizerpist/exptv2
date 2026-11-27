@@ -1,0 +1,36 @@
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#
+DEFINITION
+lib/app/platform/dashboard_header_widget_publisher.dart:13
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#`<constructor>`().
+REFERENCES
+total=3 production=2 tests=1
+CONSUMER FILES
+lib/features/dashboard/presentation/core_dashboard.dart
+test/app/platform/header_widget_publisher_test.dart
+PRODUCTION REFERENCES
+lib/features/dashboard/presentation/core_dashboard.dart:199:13 reference
+lib/features/dashboard/presentation/core_dashboard.dart:346:29 reference
+TEST REFERENCES
+test/app/platform/header_widget_publisher_test.dart:55:24 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#
+DEFINITION
+lib/app/platform/dashboard_active_header_frame_preparer.dart:95
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_active_header_frame_preparer.dart`/ActiveHeaderPreparedFrames#
+REFERENCES
+total=7 production=7 tests=0
+CONSUMER FILES
+lib/app/platform/dashboard_active_header_frame_preparer.dart
+PRODUCTION REFERENCES
+lib/app/platform/dashboard_active_header_frame_preparer.dart:28:7 reference
+lib/app/platform/dashboard_active_header_frame_preparer.dart:83:11 reference
+lib/app/platform/dashboard_active_header_frame_preparer.dart:110:11 reference
+lib/app/platform/dashboard_active_header_frame_preparer.dart:122:7 reference
+lib/app/platform/dashboard_active_header_frame_preparer.dart:130:2 reference
+lib/app/platform/dashboard_active_header_frame_preparer.dart:131:6 reference
+lib/app/platform/dashboard_active_header_frame_preparer.dart:190:9 reference
+TEST REFERENCES
