@@ -83,8 +83,11 @@ class Device:
         return False
 
     def settings_consent(self):
-        self.click("Accessibility Settings")
-        self.click("Widgets Anywhere", "Fluvi")
+        self.click("More Info")
+        self.click("Grant")
+        if not self.click("Widgets Anywhere", "Fluvi", optional=True, limit=3):
+            self.click("Downloaded apps", "Installed apps")
+            self.click("Widgets Anywhere", "Fluvi")
         self.click("Use Widgets Anywhere", "Use Fluvi")
         self.click("Allow", "OK")
         enabled = self.shell("settings", "get", "secure", "enabled_accessibility_services")
@@ -152,10 +155,10 @@ def exercise(device, apk, system, control_apk, control_test, observer):
     device.click("Engedélyezem")
     device.click("Zárképernyős widget elhelyezése")
     # Upstream first-run pager. Never grant optional privileges to advance it.
-    for _ in range(10):
+    for step in range(10):
         raw = device.screen()
-        device.save("onboarding.xml", raw)
-        if b"Accessibility Settings" in raw and SERVICE not in device.shell(
+        device.save(f"onboarding-{step:02d}.xml", raw)
+        if b'text="Accessibility"' in raw and SERVICE not in device.shell(
             "settings", "get", "secure", "enabled_accessibility_services",
         ).split(":"):
             device.settings_consent()
