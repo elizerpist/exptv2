@@ -72,7 +72,7 @@ class KeyguardR48StockPrivateAdmissionInstrumentationTest {
         val shade = setOf("quick_settings_panel", "quick_qs_panel", "qs_frame", "split_shade_status_bar")
         val serviceComponent = ComponentName(app, FluviKeyguardCardService::class.java)
         val testPackage = ins.context.packageName
-        val cover = "$testPackage/${KeyguardR14ControlledOccluderActivity::class.java.name}"
+        val cover = "$testPackage/${KeyguardR48StockCoverActivity::class.java.name}"
         val prefs = app.getSharedPreferences("fluvi_native_keyguard_card", Context.MODE_PRIVATE)
         val savedSettings = prefs.all
         val savedServices = Settings.Secure.getString(app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
@@ -195,7 +195,7 @@ class KeyguardR48StockPrivateAdmissionInstrumentationTest {
             observer.flags = observerFlags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
                 AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
             ui.serviceInfo = observer
-            ledger.appendText("observerFlags=\${ui.serviceInfo.flags} injectedWindowInfo=false display=\${width}x$height\n")
+            ledger.appendText("observerFlags=${ui.serviceInfo.flags} injectedWindowInfo=false display=${width}x$height\n")
             shell("input keyevent KEYCODE_WAKEUP")
             shell("wm dismiss-keyguard")
             check(waitForState { power.isInteractive && !keyguard.isKeyguardLocked })
@@ -229,7 +229,8 @@ class KeyguardR48StockPrivateAdmissionInstrumentationTest {
             assertEquals(receipt.toString(), true, receipt["active"])
             assertEquals(receipt.toString(), "activeHeader", receipt["printPurpose"])
             assertEquals(route.name, receipt["routeConfirmed"])
-            ledger.appendText("captureId=$capture route=${route.name} source=independent_ui_automation_boundaries fixture=stock\n")
+            val observerStatus = ledger.readText()
+            ledger.writeText("captureId=$capture route=${route.name} source=independent_ui_automation_boundaries fixture=stock\n")
             shell("input keyevent KEYCODE_SLEEP")
             hold("OFF")
             shell("input keyevent KEYCODE_WAKEUP")
@@ -242,7 +243,7 @@ class KeyguardR48StockPrivateAdmissionInstrumentationTest {
             hold("FOREIGN")
             closeCover()
             if (!waitForState { scene() != "FOREIGN" }) missing += "FOREIGN_CLEANUP"
-            shell("input swipe \${width / 2} \${height * 9 / 10} \${width / 2} \${height / 5} 350")
+            shell("input swipe ${width / 2} ${height * 9 / 10} ${width / 2} ${height / 5} 350")
             hold("PIN")
             shell("input text 2468")
             shell("input keyevent KEYCODE_ENTER")
