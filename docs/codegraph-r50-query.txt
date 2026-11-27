@@ -1,0 +1,132 @@
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#
+DEFINITION
+lib/app/platform/dashboard_header_widget_publisher.dart:11
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#`<constructor>`().
+REFERENCES
+total=3 production=2 tests=1
+CONSUMER FILES
+lib/app/shell/fluvi_app_shell.dart
+test/app/platform/header_widget_publisher_test.dart
+PRODUCTION REFERENCES
+lib/app/shell/fluvi_app_shell.dart:268:13 reference
+lib/app/shell/fluvi_app_shell.dart:307:29 reference
+TEST REFERENCES
+test/app/platform/header_widget_publisher_test.dart:54:24 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_visual_engine.dart`/DashboardBalanceHeaderColorPolicy#
+DEFINITION
+lib/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:3680
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_visual_engine.dart`/DashboardBalanceHeaderColorPolicy#
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_visual_engine.dart`/DashboardBalanceHeaderColorPolicy#`<constructor>`().
+REFERENCES
+total=16 production=6 tests=10
+CONSUMER FILES
+lib/app/shell/fluvi_app_shell.dart
+lib/features/dashboard/presentation/core_dashboard.dart
+lib/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart
+test/features/dashboard/presentation/dashboard_core_mode_host_test.dart
+test/features/dashboard/presentation/dashboard_header_visual_engine_test.dart
+PRODUCTION REFERENCES
+lib/app/shell/fluvi_app_shell.dart:267:13 reference
+lib/app/shell/fluvi_app_shell.dart:304:32 reference
+lib/features/dashboard/presentation/core_dashboard.dart:152:8 reference
+lib/features/dashboard/presentation/core_dashboard.dart:195:13 reference
+lib/features/dashboard/presentation/core_dashboard.dart:331:8 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_visual_engine.dart:3688:11 reference
+TEST REFERENCES
+test/features/dashboard/presentation/dashboard_core_mode_host_test.dart:32:35 reference
+test/features/dashboard/presentation/dashboard_core_mode_host_test.dart:580:27 reference
+test/features/dashboard/presentation/dashboard_header_visual_engine_test.dart:547:23 reference
+test/features/dashboard/presentation/dashboard_header_visual_engine_test.dart:621:23 reference
+test/features/dashboard/presentation/dashboard_header_visual_engine_test.dart:668:24 reference
+test/features/dashboard/presentation/dashboard_header_visual_engine_test.dart:713:22 reference
+test/features/dashboard/presentation/dashboard_header_visual_engine_test.dart:752:24 reference
+test/features/dashboard/presentation/dashboard_header_visual_engine_test.dart:2477:21 reference
+test/features/dashboard/presentation/dashboard_header_visual_engine_test.dart:2520:22 reference
+test/features/dashboard/presentation/dashboard_header_visual_engine_test.dart:2561:22 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_orb_material.dart`/DashboardHeaderMaterialSnapshot#
+DEFINITION
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:17
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_orb_material.dart`/DashboardHeaderMaterialSnapshot#
+scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/presentation/core_modes/`dashboard_header_orb_material.dart`/DashboardHeaderMaterialSnapshot#capture().
+REFERENCES
+total=29 production=15 tests=14
+CONSUMER FILES
+lib/app/platform/dashboard_active_header_frame_preparer.dart
+lib/app/platform/dashboard_header_widget_publisher.dart
+lib/app/platform/dashboard_orb_material_export_bridge.dart
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart
+test/app/platform/r47_active_header_frame_preparer_test.dart
+test/app/platform/r47_header_reference_frames_test.dart
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart
+PRODUCTION REFERENCES
+lib/app/platform/dashboard_active_header_frame_preparer.dart:29:11 reference
+lib/app/platform/dashboard_active_header_frame_preparer.dart:111:15 reference
+lib/app/platform/dashboard_header_widget_publisher.dart:82:23 reference
+lib/app/platform/dashboard_header_widget_publisher.dart:82:55 reference
+lib/app/platform/dashboard_header_widget_publisher.dart:219:8 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:209:21 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:209:53 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:406:13 reference
+lib/app/platform/dashboard_orb_material_export_bridge.dart:450:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:31:8 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:236:4 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:309:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:340:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:385:13 reference
+lib/features/dashboard/presentation/core_modes/dashboard_header_orb_material.dart:428:26 reference
+TEST REFERENCES
+test/app/platform/r47_active_header_frame_preparer_test.dart:165:23 reference
+test/app/platform/r47_active_header_frame_preparer_test.dart:165:55 reference
+test/app/platform/r47_header_reference_frames_test.dart:47:27 reference
+test/app/platform/r47_header_reference_frames_test.dart:47:59 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:33:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:33:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:106:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:106:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:159:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:159:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:229:23 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:229:55 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:313:27 reference
+test/features/dashboard/presentation/dashboard_header_orb_material_test.dart:313:59 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#
+DEFINITION
+lib/features/header_orb/presentation/header_orb_setup_page.dart:7
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#
+scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#`<constructor>`().
+REFERENCES
+total=3 production=3 tests=0
+CONSUMER FILES
+lib/features/header_orb/presentation/header_orb_setup_page.dart
+lib/features/settings/presentation/settings_page.dart
+PRODUCTION REFERENCES
+lib/features/header_orb/presentation/header_orb_setup_page.dart:11:8 reference
+lib/features/header_orb/presentation/header_orb_setup_page.dart:14:45 reference
+lib/features/settings/presentation/settings_page.dart:197:46 reference
+TEST REFERENCES
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`header_orb_settings_channel.dart`/HeaderOrbSettingsChannel#
+DEFINITION
+lib/app/platform/header_orb_settings_channel.dart:2
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`header_orb_settings_channel.dart`/HeaderOrbSettingsChannel#
+REFERENCES
+total=4 production=4 tests=0
+CONSUMER FILES
+lib/app/shell/fluvi_app_shell.dart
+lib/features/header_orb/presentation/header_orb_setup_page.dart
+PRODUCTION REFERENCES
+lib/app/shell/fluvi_app_shell.dart:1024:27 reference
+lib/app/shell/fluvi_app_shell.dart:1028:25 reference
+lib/features/header_orb/presentation/header_orb_setup_page.dart:58:27 reference
+lib/features/header_orb/presentation/header_orb_setup_page.dart:62:19 reference
+TEST REFERENCES

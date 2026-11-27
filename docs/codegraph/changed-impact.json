@@ -1,16 +1,11 @@
 {
   "schema_version": 1,
-  "source_head": "a614bf74f7a0b17d3ebc822daf167fba331ee6af",
-  "base_head": "7ca3cd8af14c6519439bf895f2475f5fa3e28bea",
+  "source_head": "7f83664c1ad4d48b33f35fe05de2e2f593545f92",
+  "base_head": "52650ff698ea8973fa4b47da5a02d0e52c5257ec",
   "changed_files": [
-    ".github/workflows/fluvi-core.yml",
     "android/app/src/main/kotlin/com/fluvi/app/runtime/RetiredLockscreenState.kt",
-    "android/app/src/main/kotlin/com/fluvi/app/widget/orb/FluviHeaderOrbWidgetProvider.kt",
-    "android/wa-integration/FluviHostDefaults.kt",
-    "android/wa-integration/README.md",
-    "android/wa-integration/check-payload-lock.py",
-    "scripts/build-r49-android.sh",
-    "scripts/verify-r49-host.py",
+    "android/app/src/main/kotlin/com/fluvi/app/widget/orb/HeaderOrbBinding.kt",
+    "scripts/test-fluvi-fast.sh",
     "test/boundary/dashboard_interaction_performance_boundary_test.dart"
   ],
   "candidate_changed_symbols": [
