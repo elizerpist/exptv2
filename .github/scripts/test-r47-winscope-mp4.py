@@ -31,4 +31,8 @@ class ClockTest(unittest.TestCase):
  def test_duplicate_or_truncated_boxes_fail(self):
   with self.assertRaisesRegex(ValueError,'required_box_moov'):m.metadata_samples(box(b'mdat',sample([1])))
   with self.assertRaisesRegex(ValueError,'invalid_box_size'):m.metadata_samples(b'\x00\x00\xff\xffmdat')
+ def test_device_clock_bounds(self):
+  self.assertEqual(m.validate_uptime_bounds([1_100_000_000,1_900_000_000],'1.00 0.0','2.00 0.0')['status'],'PASS')
+  with self.assertRaisesRegex(ValueError,'device_clock_bounds_mismatch'):
+   m.validate_uptime_bounds([1_100_000_000,2_100_000_000],'1.00 0.0','2.00 0.0')
 if __name__=='__main__':unittest.main(verbosity=2)

@@ -50,7 +50,7 @@ if not validated and (case/'winscope-valid.json').exists():
     clock = json.loads((case/'winscope-valid.json').read_text())
     video = case/'recording.mp4'
     elapsed = clock.get('elapsed_ns', [])
-    if (clock.get('status') == 'VALIDATED' and video.is_file() and
+    if (clock.get('status') == 'VALIDATED' and clock.get('device_clock_bounds', {}).get('status') == 'PASS' and video.is_file() and
         hashlib.sha256(video.read_bytes()).hexdigest() == clock.get('video_sha256') and
         len(elapsed) == len(frames) and all(type(value) is int and value >= 0 for value in elapsed) and
         all(b > a for a,b in zip(elapsed,elapsed[1:]))):

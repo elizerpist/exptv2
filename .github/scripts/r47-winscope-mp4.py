@@ -85,6 +85,13 @@ def validate(sample: bytes, pts: list[int], tolerance_ns=2_000_000):
     if max(deviations,default=0)>tolerance_ns: raise ValueError('frame_clock_mapping_mismatch')
     return {'realtime_minus_elapsed_ns':offset,'frames':count,'max_relative_error_ns':max(deviations,default=0),'elapsed_ns':elapsed}
 
+def validate_uptime_bounds(elapsed, before_text, after_text, tolerance_ns=20_000_000):
+    before=int(decimal.Decimal(before_text.split()[0])*1_000_000_000)
+    after=int(decimal.Decimal(after_text.split()[0])*1_000_000_000)
+    if not elapsed or before<0 or after<before or elapsed[0]<before-tolerance_ns or elapsed[-1]>after+tolerance_ns:
+        raise ValueError('device_clock_bounds_mismatch')
+    return {'status':'PASS','before_ns':before,'after_ns':after,'rounding_tolerance_ns':tolerance_ns}
+
 def inspect(path: Path):
     data=path.read_bytes(); candidates=[(offset,s) for offset,s in metadata_samples(data) if s.startswith(MAGIC)]
     if len(candidates)!=1: raise ValueError('winscope_track_missing_or_ambiguous')
@@ -99,11 +106,16 @@ def inspect(path: Path):
     return result
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('video',type=Path);p.add_argument('output',type=Path);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('video',type=Path);p.add_argument('output',type=Path)
+    p.add_argument('--before',type=Path);p.add_argument('--after',type=Path);a=p.parse_args()
     try:
-        result=inspect(a.video); a.output.write_text(json.dumps(result,sort_keys=True)+'\n')
+        if (a.before is None)!=(a.after is None): raise ValueError('device_clock_bounds_incomplete')
+        result=inspect(a.video)
+        if a.before is not None:
+            result['device_clock_bounds']=validate_uptime_bounds(result['elapsed_ns'],a.before.read_text(),a.after.read_text())
+        a.output.write_text(json.dumps(result,sort_keys=True)+'\n')
         print(json.dumps({k:v for k,v in result.items() if k not in ('elapsed_ns','frame_pts_ns')},sort_keys=True))
-    except (ValueError,KeyError,decimal.InvalidOperation,struct.error,subprocess.SubprocessError,OSError) as e:
+    except (ValueError,KeyError,IndexError,decimal.InvalidOperation,struct.error,subprocess.SubprocessError,OSError) as e:
         a.output.write_text(json.dumps({'status':'NOT_ESTABLISHED','reason':str(e)})+'\n')
         print('NOT_ESTABLISHED',str(e));raise SystemExit(1)
 if __name__=='__main__': main()

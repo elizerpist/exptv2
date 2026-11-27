@@ -30,7 +30,7 @@ class ExtractTest(unittest.TestCase):
             (v/'frame-index.jsonl').write_text('\n'.join(lines)+'\n')
             if fallback_clock:
                 data=b'fixture-video'; (root/'recording.mp4').write_bytes(data)
-                (root/'winscope-valid.json').write_text(json.dumps({'status':'VALIDATED','video_sha256':hashlib.sha256(data).hexdigest(),'elapsed_ns':[1000,1001,1002]}))
+                (root/'winscope-valid.json').write_text(json.dumps({'status':'VALIDATED','device_clock_bounds':{'status':'PASS'},'video_sha256':hashlib.sha256(data).hexdigest(),'elapsed_ns':[1000,1001,1002]}))
             proc=subprocess.run(['python3','-B',str(SCRIPT),str(root)],capture_output=True,text=True)
             self.assertEqual(proc.returncode,0,proc.stderr)
             rows=[json.loads(x) for x in (root/'all-frame-observations.jsonl').read_text().splitlines()]
