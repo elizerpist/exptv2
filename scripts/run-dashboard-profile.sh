@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export FLUVI_R49_AUTOMATED_HARNESS=true
 
 device_args=()
 adb_device_args=()

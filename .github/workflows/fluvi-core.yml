@@ -17,34 +17,11 @@ on:
         required: false
         default: false
         type: boolean
-      native_diagnostic:
-        description: Run only the bounded keyguard terminal-observation diagnostic lane.
+      r49_build_only:
+        description: Build the new Human APK while independent qualification is pending.
         required: false
         default: false
         type: boolean
-      native_scope:
-        description: Fixed native diagnostic scope; focused panels require native_diagnostic.
-        required: false
-        default: full
-        type: choice
-        options:
-          - full
-          - r09_panel_baseline
-          - r09_panel_candidate
-          - r10_cold_baseline
-          - r10_cold_candidate
-          - r10_panel_candidate
-          - r11_cold_baseline
-          - r11_cold_candidate
-          - r11_panel_candidate
-          - r12_contract
-          - r12_admission_baseline
-          - r12_legacy
-          - r12_static
-          - r12_live
-          - r35_parent
-          - r35_candidate
-          - r36_widget
 
 permissions:
   contents: read
@@ -52,7 +29,7 @@ permissions:
 
 jobs:
   dashboard-paths:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) }}
     runs-on: ubuntu-latest
     outputs:
       profile: ${{ steps.changes.outputs.profile || steps.non_pr.outputs.profile }}
@@ -82,7 +59,7 @@ jobs:
         run: echo 'profile=true' >> "$GITHUB_OUTPUT"
 
   test-core:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) }}
     runs-on: ubuntu-latest
     # A clean Android/Room build needs ~17 minutes on a cold GitHub runner
     # before Robolectric starts; 20 minutes cancelled healthy test execution
@@ -130,7 +107,7 @@ jobs:
           if-no-files-found: warn
 
   test-flutter:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -145,6 +122,9 @@ jobs:
       - name: Run curated Flutter correctness suite
         run: ./scripts/test-fluvi-fast.sh
 
+      - name: Run the complete Flutter suite for R49
+        run: flutter test --reporter expanded
+
       - name: Retain failed Flutter golden comparisons
         if: failure()
         uses: actions/upload-artifact@v4
@@ -155,7 +135,7 @@ jobs:
           retention-days: 3
 
   test-flutter-nightly:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_nightly)) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_nightly)) }}
     needs: test-flutter
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -175,299 +155,121 @@ jobs:
   # deliberately compiles the generated production AGSL asset and mounts the
   # production retained View on an API-35 hardware Canvas before an APK is
   # handed to a physical-device tester.
-  test-keyguard-material-runtime:
-    needs: test-core
-    if: ${{ !cancelled() && ((github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) || needs.test-core.result == 'success') && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' && (startsWith(github.ref_name, 'fluvi-r14-candidate-contract-') || startsWith(github.ref_name, 'fluvi-r14-wiring-') || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-'))) }}
-    name: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && 'Keyguard material runtime (DIAGNOSTIC)' || 'Keyguard material runtime' }}
+  build-wa-profile:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
-
-      - name: Checkout exact R11 application for the R12 baseline control
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_admission_baseline' }}
-        uses: actions/checkout@v5
-        with:
-          ref: 1d19624751169e3af0270b151378cdfcdf1a1129
-          path: r12-stock
-
-      - name: Checkout exact R08 baseline for the focused panel
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r09_panel_baseline' }}
-        uses: actions/checkout@v5
-        with:
-          ref: 4464cd0f5fe7abf8eab1e8b876063bdbbf37350a
-          path: r09-baseline
-
-      - name: Checkout exact R09 application for the R10 cold experiment
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r10_cold_baseline' }}
-        uses: actions/checkout@v5
-        with:
-          ref: 1dddbf6f6fbe4b17ec0fdcb033848c8996721529
-          path: r10-baseline
-
-      - name: Checkout exact R10 application for the R11 cold experiment
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r11_cold_baseline' }}
-        uses: actions/checkout@v5
-        with:
-          ref: 8a91bf2d79f25780bb420c1a4d14abe846eac333
-          path: r11-baseline
-
-      - name: Checkout exact R34 source for the R35 control
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r35_parent' }}
-        uses: actions/checkout@v5
-        with:
-          ref: e41485b4988112947d6c8884668d9008ce96224b
-          path: r35-parent
-
-      - name: Checkout exact R35 source for the R36 manifest control
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r36_widget' }}
-        uses: actions/checkout@v5
-        with:
-          ref: c1d1c552315618e24a224b8dae6ef26852e48d03
-          path: r36-baseline
-
-      - name: Free disposable runner space for R35
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && (inputs.native_scope == 'r35_parent' || inputs.native_scope == 'r35_candidate' || inputs.native_scope == 'r36_widget') }}
-        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
-
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
-
+          java-version: '17'
+      - name: Pin Java 17 for Flutter and Fluvi native libraries
+        run: echo "FLUVI_JDK17=$JAVA_HOME" >> "$GITHUB_ENV"
       - uses: android-actions/setup-android@v3
         with:
-          packages: platform-tools
-
+          packages: platform-tools platforms;android-35 platforms;android-36 build-tools;36.0.0
       - uses: ./.github/actions/setup-fluvi-flutter
-
-      - name: Prepare R35 publisher fixture and check its evidence parser
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && (inputs.native_scope == 'r35_parent' || inputs.native_scope == 'r35_candidate') }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare isolated WA SDK
+        shell: bash
+        run: |
+          echo "FLUVI_JDK21=$JAVA_HOME" >> "$GITHUB_ENV"
+          sdkmanager --install 'platforms;android-37.0' 'ndk;29.0.14206865' 'cmake;3.22.1'
+          wa_sdk="$RUNNER_TEMP/fluvi-wa-sdk"
+          mkdir -p "$wa_sdk/platforms"
+          for entry in "$ANDROID_HOME"/*; do
+            case "${entry##*/}" in platforms) continue ;; esac
+            ln -s "$entry" "$wa_sdk/${entry##*/}"
+          done
+          cp -a "$ANDROID_HOME/platforms/android-37.0" "$wa_sdk/platforms/"
+          sdk_jar="$wa_sdk/platforms/android-37.0/android.jar"
+          curl --fail --silent --show-error --location --retry 2 \
+            'https://raw.githubusercontent.com/Reginer/aosp-android-jar/262f6ae931160011572a5adfe4ec6302585e8f60/android-37/android-jdk21.jar' \
+            --output "$sdk_jar"
+          test "$(wc -c < "$sdk_jar")" -eq 57746914
+          printf '%s  %s\n' 694b291a046b4ba1738e9df61577ec8cfddf250a7bbe9867a72ff19e161ea692 "$sdk_jar" | sha256sum --check
+          echo "FLUVI_WA_ANDROID_SDK=$wa_sdk" >> "$GITHUB_ENV"
+      - name: Build single-app WA Human profile
         env:
-          FLUVI_R09_SCOPE: ${{ inputs.native_scope }}
-          PYTHONDONTWRITEBYTECODE: '1'
+          FLUVI_BUILD_COMMIT: ${{ github.sha }}
+          FLUVI_R49_INCLUDE_FIXTURE: "true"
+        shell: bash
         run: |
-          bash -n scripts/test-r35-publisher-api35.sh
-          python3 scripts/test-r35-publisher-verdict.py
-          bash scripts/test-r35-publisher-api35.sh prepare
-
-      - name: Check R36 widget build and data-safety options
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r36_widget' }}
-        run: |
-          bash -n scripts/test-r36-widget-api35.sh
-          bash -n scripts/test-r36-baseline-manifest.sh
-          python3 scripts/test-r36-human-build-options.py
-          bash scripts/test-r36-baseline-manifest.sh
-
-      - name: Prepare exact R08 Flutter checkout
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r09_panel_baseline' }}
-        working-directory: r09-baseline
-        run: flutter pub get
-
-      - name: Prepare R09 cold baseline with observation-only instrumentation
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r10_cold_baseline' }}
-        run: |
-          cp android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt r10-baseline/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt
-          cp android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt r10-baseline/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
-          git -C r10-baseline diff --exit-code 1dddbf6f6fbe4b17ec0fdcb033848c8996721529 -- android/app/src/main lib pubspec.yaml pubspec.lock
-          cd r10-baseline
-          flutter pub get
-
-      - name: Prepare R10 cold baseline with observation-only instrumentation
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r11_cold_baseline' }}
-        run: |
-          cp android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt r11-baseline/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt
-          cp android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt r11-baseline/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/material/KeyguardHeaderMaterialViewInstrumentationTest.kt
-          git -C r11-baseline diff --exit-code 8a91bf2d79f25780bb420c1a4d14abe846eac333 -- android/app/src/main lib pubspec.yaml pubspec.lock
-          cd r11-baseline
-          flutter pub get
-
-      - name: Prepare stock R11 admission with the audited androidTest-only overlay
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_admission_baseline' }}
-        run: |
-          cp android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt r12-stock/android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt
-          test "$(git -C r12-stock diff --name-only 1d19624751169e3af0270b151378cdfcdf1a1129)" = android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardServiceOverlayInstrumentationTest.kt
-          cd r12-stock
-          flutter pub get
-
-      - name: Check affected delivery boundary contracts
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && (inputs.native_scope == 'r35_parent' || inputs.native_scope == 'r35_candidate' || inputs.native_scope == 'r36_widget')) }}
-        run: flutter test test/boundary/dashboard_interaction_performance_boundary_test.dart test/boundary/human_diagnostic_apk_delivery_boundary_test.dart test/boundary/dashboard_avatar_profile_boundary_test.dart --reporter expanded
-
-      - name: Check lower screenshot environment wrapper
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && (inputs.native_scope == 'r35_parent' || inputs.native_scope == 'r35_candidate' || inputs.native_scope == 'r36_widget')) }}
-        run: bash scripts/test-keyguard-lower-environment.sh
-
-      - name: Check exact R12 admission evidence parser
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_admission_baseline' }}
-        run: |
-          bash -n scripts/test-keyguard-r12-admission-baseline.sh
-          python3 scripts/test-keyguard-r12-harness.py
-
-      - name: Check R12 candidate evidence controls
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && (inputs.native_scope == 'r12_contract' || inputs.native_scope == 'r12_legacy' || inputs.native_scope == 'r12_static' || inputs.native_scope == 'r12_live') }}
-        run: |
-          python3 -c 'import PIL' || python3 -m pip install --user 'Pillow==11.3.0'
-          bash -n scripts/test-keyguard-r12-candidate.sh
-          bash -n scripts/verify-keyguard-installed-apk.sh
-          python3 scripts/test-keyguard-apk-install.py
-          python3 scripts/test-keyguard-r12-candidate-oracle.py
-          bash -n scripts/test-keyguard-r12-admission-candidate.sh
-          python3 scripts/test-keyguard-r12-harness.py
-          python3 scripts/test-keyguard-r15-visual.py
-          python3 scripts/test-keyguard-r15-comparison.py
-          python3 scripts/test-keyguard-r15-case-manifest.py
-          python3 scripts/test-keyguard-r15-slot-evidence.py
-
-      - name: Enable KVM for material runtime
-        run: &fluvi_enable_kvm |
-          test -e /dev/kvm
-          sudo chmod 0666 /dev/kvm
-          test -r /dev/kvm
-          test -w /dev/kvm
-
-      - name: Run production keyguard AGSL smoke on API 35
-        env:
-          FLUVI_KEYGUARD_EXECUTION_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && 'diagnostic' || 'normal' }}
-          FLUVI_R09_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope || 'full' }}
-        uses: reactivecircus/android-emulator-runner@v2
-        with: &fluvi_keyguard_api35
-          api-level: 35
-          emulator-build: 15081367
-          target: default
-          arch: x86_64
-          profile: pixel_7
-          cores: 4
-          ram-size: 2048M
-          disable-animations: false
-          emulator-options: &fluvi_keyguard_api35_options >-
-            -no-window -gpu swangle -feature -Vulkan -accel on
-            -no-snapshot -noaudio -no-boot-anim -camera-back none
-            -partition-size 4096
-          pre-emulator-launch-script: >-
-            if [ "$FLUVI_R09_SCOPE" = r36_widget ]; then bash scripts/test-r36-widget-api35.sh build; elif [ "$FLUVI_R09_SCOPE" = r35_parent ] || [ "$FLUVI_R09_SCOPE" = r35_candidate ]; then bash scripts/test-r35-publisher-api35.sh build; else if [ "$FLUVI_R09_SCOPE" = r12_admission_baseline ]; then cd r12-stock || exit 1; elif [ "$FLUVI_R09_SCOPE" = r09_panel_baseline ]; then cd r09-baseline || exit 1; elif [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ]; then cd r10-baseline || exit 1; elif [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ]; then cd r11-baseline || exit 1; fi; cd android && ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon; fi
-          # android-emulator-runner executes each physical input line through
-          # /usr/bin/sh. Keep this as one POSIX command so its conditional and
-          # aggregate status are owned by one shell invocation.
-          script: >-
-            if [ "$FLUVI_R09_SCOPE" = r36_widget ]; then bash scripts/test-r36-widget-api35.sh run; elif [ "$FLUVI_R09_SCOPE" = r35_parent ] || [ "$FLUVI_R09_SCOPE" = r35_candidate ]; then bash scripts/test-r35-publisher-api35.sh run; elif [ "${FLUVI_R14_CASE:-}" = r15-ab-comparison ]; then bash scripts/test-keyguard-r15-comparison-device.sh; elif [ -n "${FLUVI_R14_CASE:-}" ]; then bash scripts/test-keyguard-r14-candidate.sh; else test_result=0; if [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r12_contract ] && [ -f scripts/r14-export-pressure ] && [ "${GITHUB_REF_NAME#fluvi-r14-export-pressure-}" != "$GITHUB_REF_NAME" ]; then bash scripts/test-keyguard-r14-export.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" = r12_admission_baseline ]; then FLUVI_R12_APP_DIR="$PWD/r12-stock" bash scripts/test-keyguard-r12-admission-baseline.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r12_contract ] || [ "$FLUVI_R09_SCOPE" = r12_legacy ] || [ "$FLUVI_R09_SCOPE" = r12_static ] || [ "$FLUVI_R09_SCOPE" = r12_live ]; }; then if [ "$FLUVI_R09_SCOPE" = r12_contract ]; then FLUVI_R12_EXPECTED_APP_SHA="$GITHUB_SHA" bash scripts/test-keyguard-r12-admission-candidate.sh || test_result=$?; fi; FLUVI_R12_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r12-candidate.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r11_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r11_cold_candidate ]; }; then FLUVI_R11_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r11-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && { [ "$FLUVI_R09_SCOPE" = r10_cold_baseline ] || [ "$FLUVI_R09_SCOPE" = r10_cold_candidate ]; }; then FLUVI_R10_SCOPE="$FLUVI_R09_SCOPE" bash scripts/test-keyguard-r10-cold.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ] && [ "$FLUVI_R09_SCOPE" != full ]; then bash scripts/test-keyguard-r09-panel.sh || test_result=$?; elif [ "$FLUVI_KEYGUARD_EXECUTION_MODE" = diagnostic ]; then bash scripts/test-keyguard-native-diagnostic.sh || test_result=$?; else bash scripts/test-keyguard-native-diagnostic.sh --helper-only || test_result=$?; bash scripts/test-keyguard-runtime.sh || test_result=$?; fi; exit "$test_result"; fi
-
-      - name: Analyze bounded production overlay trace
-        if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && hashFiles('android/keyguard-service-evidence/fluvi-keyguard-service.perfetto-trace') != '' }}
-        run: bash scripts/analyze-keyguard-service-trace.sh
-
-      - name: Retain native runtime and observer evidence
-        if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) }}
-        uses: actions/upload-artifact@v4
+          mkdir -p r49-build-evidence
+          git rev-parse HEAD
+          java -version
+          flutter --version
+          bash scripts/build-human-diagnostic-apk.sh 2>&1 | tee r49-build-evidence/build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: keyguard-runtime-results-${{ github.sha }}
+          name: r49-human-builder-${{ github.sha }}
           path: |
-            build/app/reports/androidTests/connected/**
-            build/app/outputs/androidTest-results/connected/**
-            android/keyguard-draw-probe.log
-            android/keyguard-material-smoke.tar
-            android/keyguard-material-smoke-pull.log
-            android/keyguard-lower-environment/**
-            android/keyguard-service-evidence/**
-          retention-days: 14
-
-      - name: Retain terminal observation helper evidence
-        if: ${{ always() && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: keyguard-terminal-observation-helper-${{ github.sha }}
-          path: android/keyguard-native-diagnostic/helper-only/**
+            build/app/outputs/flutter-apk/app-profile.apk
+            build/app/outputs/flutter-apk/r49-control.apk
+            build/wa-profile-*/host/app/build/outputs/logs/
+            r49-build-evidence/
           if-no-files-found: warn
-          retention-days: 14
 
-      - name: Retain native diagnostic evidence
-        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.native_diagnostic }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: keyguard-native-diagnostic-${{ github.sha }}-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
-          path: |
-            android/keyguard-native-diagnostic/**
-            android/keyguard-r35-publisher/**
-            android/keyguard-r36-widget/**
-            android/keyguard-r09-panel/**
-            android/keyguard-r10-cold/**
-            android/keyguard-r11-cold/**
-            android/keyguard-r12-admission-baseline/**
-            android/keyguard-r12-admission-candidate/**
-            android/keyguard-r12-candidate-*/**
-            android/keyguard-r14-export/**
-            android/keyguard-draw-probe.log
-            android/keyguard-material-smoke.tar
-            android/keyguard-material-smoke-pull.log
-            android/keyguard-lower-environment/**
-            build/app/reports/androidTests/connected/**
-            build/app/outputs/androidTest-results/connected/**
-          if-no-files-found: warn
-          retention-days: 14
-
-  # Each controlled candidate specimen has its own disposable emulator.
-  # Ordinary r12_contract runs on a different pinned ref remain unchanged.
-  r14-candidate-contract:
-    needs: test-core
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.native_diagnostic && inputs.native_scope == 'r12_contract' && (startsWith(github.ref_name, 'fluvi-r14-candidate-contract-') || startsWith(github.ref_name, 'fluvi-r14-wiring-') || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-')) }}
-    name: R14 candidate ${{ matrix.case }} (API 35)
+  test-wa-host:
+    needs: build-wa-profile
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        case: ${{ fromJSON(startsWith(github.ref_name, 'fluvi-r14-wiring-') && '["exclusion","fresh-main","late-only","real-return"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-validation-') && '["r15-ab-comparison"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-motion-controls-') && '["r15-motion-red","r15-combined-recovery","r15-held-timeout","r15-motion-service"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-holder-') && '["r15-held-canvas"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-export-') && '["r15-phone-light","r15-phone-full","r15-stale-owner","pressure-light","pressure-full","pressure-combined","paired-light","paired-full","deferred-light","deferred-full"]' || startsWith(github.ref_name, 'fluvi-r15-first-acquisition-') && '["exclusion","fresh-main","late-only","real-return","terminal-stale","pressure-light","pressure-full","pressure-combined","paired-light","paired-full","deferred-light","deferred-full","r15-phone-light","r15-phone-full","r15-stale-owner","r15-first-live","r15-combined-recovery"]' || '["exclusion","fresh-main","late-only","real-return","terminal-stale","pressure-light","pressure-full","pressure-combined","paired-light","paired-full","deferred-light","deferred-full"]') }}
+        system: ['37.0', '35']
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 2
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
       - uses: android-actions/setup-android@v3
         with:
-          packages: platform-tools
-      - uses: ./.github/actions/setup-fluvi-flutter
-      - name: Check candidate collector and fail-closed oracles
-        run: |
-          python3 -c 'import PIL' || python3 -m pip install --user 'Pillow==11.3.0'
-          bash -n scripts/test-keyguard-r14-candidate.sh
-          python3 scripts/test-r14-stock-oracle.py
-          python3 scripts/test-r14-candidate-oracle.py
-          python3 scripts/test-keyguard-r14-aggregate.py
-          python3 scripts/test-keyguard-r12-harness.py
-          python3 scripts/test-keyguard-r12-candidate-oracle.py
-          python3 scripts/test-keyguard-r15-routing.py
-          python3 scripts/test-keyguard-r15-visual.py
-          python3 scripts/test-keyguard-r15-comparison.py
-          python3 scripts/test-keyguard-r15-case-manifest.py
-          python3 scripts/test-keyguard-r15-slot-evidence.py
-          bash scripts/test-keyguard-lower-environment.sh
-      - name: Prepare VM acceleration
-        run: *fluvi_enable_kvm
-      - name: Run isolated candidate specimen
-        env:
-          FLUVI_R14_CASE: ${{ matrix.case }}
-          FLUVI_R14_APP_SOURCE: ${{ startsWith(github.ref_name, 'fluvi-r14-wiring-') && 'b6c71cfc350819e9a10a33e3e4cb6e078a4198d9' || github.sha }}
-        uses: reactivecircus/android-emulator-runner@v2
-        with: *fluvi_keyguard_api35
-      - name: Preserve candidate specimen regardless of verdict
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+          packages: platform-tools build-tools;36.0.0
+      - uses: actions/download-artifact@v4
         with:
-          name: keyguard-r14-candidate-${{ matrix.case }}-${{ github.sha }}-run-${{ github.run_id }}
-          path: |
-            android/keyguard-r14-candidate/**
-            android/keyguard-r15-comparison/**
-            build/app/reports/androidTests/connected/**
-            build/app/outputs/androidTest-results/connected/**
+          name: r49-human-builder-${{ github.sha }}
+      - name: Prepare a disposable install of the same compiled product
+        run: |
+          mkdir -p r49-device-evidence
+          keytool -genkeypair -keystore "$RUNNER_TEMP/r49-test.jks" -storepass android -keypass android \
+            -alias fixture -keyalg RSA -keysize 2048 -validity 1 -dname 'CN=R49 Disposable Test'
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign --ks "$RUNNER_TEMP/r49-test.jks" \
+            --ks-pass pass:android --key-pass pass:android --out "$RUNNER_TEMP/r49-fixture.apk" \
+            build/app/outputs/flutter-apk/app-profile.apk
+          sha256sum build/app/outputs/flutter-apk/app-profile.apk "$RUNNER_TEMP/r49-fixture.apk" \
+            | tee r49-device-evidence/apks.sha256
+          echo "FLUVI_R49_FIXTURE_APK=$RUNNER_TEMP/r49-fixture.apk" >> "$GITHUB_ENV"
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise the installed single-APK host
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.system == '37.0' && 36 || 35 }}
+          system-image-api-level: ${{ matrix.system }}
+          target: default
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: false
+          emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
+          script: python3 scripts/test-r49-host-device.py "$FLUVI_R49_FIXTURE_APK" "${{ matrix.system }}" r49-device-evidence --control-apk build/app/outputs/flutter-apk/r49-control.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: r49-host-${{ matrix.system }}-${{ github.sha }}
+          path: r49-device-evidence/
           if-no-files-found: warn
-          retention-days: 14
 
   test-native-nightly:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_nightly)) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_nightly)) }}
     needs: test-core
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -489,79 +291,17 @@ jobs:
         run: ./gradlew testDebugUnitTest --no-daemon
 
   build-human-diagnostic-apk:
-    needs: [test-core, test-flutter, test-keyguard-material-runtime]
-    if: ${{ !cancelled() && !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && needs.test-core.result == 'success' && needs.test-flutter.result == 'success' && needs.test-keyguard-material-runtime.result == 'success' }}
+    needs: [test-core, test-flutter, test-wa-host]
+    if: ${{ !cancelled() && !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && needs.test-core.result == 'success' && needs.test-flutter.result == 'success' && needs.test-wa-host.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: write
-
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-
-      - uses: ./.github/actions/setup-fluvi-flutter
-
-      - name: Build human physical-device diagnostic APK
-        env:
-          FLUVI_BUILD_COMMIT: ${{ github.sha }}
-        run: ./scripts/build-human-diagnostic-apk.sh
-
-      - name: Name human diagnostic APK
-        id: apk_name
-        shell: bash
+      - name: Record the reviewed artifact
         run: |
-          short_sha="${GITHUB_SHA::7}"
-          apk_name="fluvi_HUMAN_DIAGNOSTIC_${short_sha}.apk"
-          mv build/app/outputs/flutter-apk/app-profile.apk \
-            "build/app/outputs/flutter-apk/${apk_name}"
-          printf 'apk_name=%s\nrelease_tag=fluvi-human-diagnostic-%s\n' \
-            "$apk_name" "$short_sha" >> "$GITHUB_OUTPUT"
-
-      - name: Publish direct APK download
-        id: publish_apk
-        env:
-          GH_TOKEN: ${{ github.token }}
-          APK_NAME: ${{ steps.apk_name.outputs.apk_name }}
-          RELEASE_TAG: ${{ steps.apk_name.outputs.release_tag }}
-        shell: bash
-        run: |
-          apk_path="build/app/outputs/flutter-apk/${APK_NAME}"
-
-          if gh release view "$RELEASE_TAG" \
-            --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            :
-          else
-            gh release create "$RELEASE_TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "Fluvi human diagnostic profile ${GITHUB_SHA::7}" \
-              --notes "Human-operated physical diagnostic profile APK for ${GITHUB_SHA}" \
-              --prerelease
-          fi
-
-          gh release upload "$RELEASE_TAG" "$apk_path" \
-            --repo "$GITHUB_REPOSITORY" --clobber
-
-          download_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${APK_NAME}"
-          printf 'download_url=%s\n' "$download_url" >> "$GITHUB_OUTPUT"
-
-          {
-            echo "### Fluvi human physical-device diagnostic profile APK"
-            echo
-            echo "[Download ${APK_NAME}](${download_url})"
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Qualified builder artifact r49-human-builder-$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Delivery uses the established update signer and independent APK verification." >> "$GITHUB_STEP_SUMMARY"
 
   run-dashboard-profile:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true') }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true') }}
     needs: [test-core, test-flutter, dashboard-paths]
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -660,7 +400,7 @@ jobs:
           if-no-files-found: warn
 
   run-dashboard-profile-baseline:
-    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)) }}
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)) }}
     needs: [test-core, test-flutter]
     runs-on: ubuntu-latest
     timeout-minutes: 60

@@ -49,3 +49,13 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.1.1")
     androidTestImplementation("androidx.test:core:1.2.0")
 }
+
+tasks.configureEach {
+    if (name in setOf("packageProfile", "packageRelease", "bundleRelease")) {
+        doFirst {
+            check(System.getenv("FLUVI_R49_AUTOMATED_HARNESS") == "true") {
+                "Use scripts/build-r49-android.sh for a Fluvi product APK."
+            }
+        }
+    }
+}
