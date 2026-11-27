@@ -153,12 +153,8 @@ jobs:
           profile: pixel_7
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
           pre-emulator-launch-script: bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r37-driver.sh" build
-          script: |
-            if [[ "$TEST_SCOPE" == r47_frame_correlation ]]; then
-              bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r47-frame-correlation.sh"
-            else
-              bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r37-driver.sh" run
-            fi
+          script: >-
+            if [ "$TEST_SCOPE" = r47_frame_correlation ]; then bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r47-frame-correlation.sh"; else bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r37-driver.sh" run; fi
       - name: Retain compact synthetic frame summaries
         if: always() && inputs.test_scope == 'r47_frame_correlation'
         uses: actions/upload-artifact@v4
