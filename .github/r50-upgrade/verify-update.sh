@@ -18,7 +18,7 @@ if [[ "${1:-}" = download ]]; then
     signer="$ANDROID_HOME/build-tools/36.0.0/apksigner"
     for file in "$state/r49.apk" "$state/r50.apk" .github/r50-upgrade/fixture.apk; do
         "$signer" verify --verbose --print-certs "$file" | tee -a "$out/signatures.txt" |
-            rg 'Signer #1 certificate SHA-256 digest: faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb'
+            grep -F 'Signer #1 certificate SHA-256 digest: faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb'
     done
     exit
 fi
@@ -60,7 +60,7 @@ adb shell "cat /data/local/tmp/r50-seed.db > '$db'; rm -f '$db-wal' '$db-shm' /d
 adb shell cmd appwidget grantbind --package "$package" --user 0
 fixture=com.fluvi.r50.updatefixture/.BindFixture
 adb shell am instrument -w -e phase seed "$fixture" | tee "$out/seed-host.txt"
-rg -x 'INSTRUMENTATION_RESULT: r50Fixture=PASS' "$out/seed-host.txt"
+grep -x 'INSTRUMENTATION_RESULT: r50Fixture=PASS' "$out/seed-host.txt"
 active="$(sed -n 's/^INSTRUMENTATION_RESULT: active=//p' "$out/seed-host.txt")"
 obsolete="$(sed -n 's/^INSTRUMENTATION_RESULT: obsolete=//p' "$out/seed-host.txt")"
 foreign="$(sed -n 's/^INSTRUMENTATION_RESULT: foreign=//p' "$out/seed-host.txt")"
@@ -69,7 +69,7 @@ adb shell settings put secure enabled_accessibility_services "$service"
 adb shell settings put secure accessibility_enabled 1
 adb shell dumpsys appwidget > "$out/r49-appwidgets.txt"
 adb install -r "$state/r50.apk" | tee "$out/r50-update-install.txt"
-rg -x Success "$out/r50-update-install.txt"
+grep -x Success "$out/r50-update-install.txt"
 adb shell am start -W -n "$package/.MainActivity" | tee "$out/r50-launch.txt"
 prefs="/data/user/0/$package/shared_prefs/fluvi_balance_orb.xml"
 for _ in $(seq 1 15); do
@@ -79,7 +79,7 @@ done
 adb shell settings get secure enabled_accessibility_services | tee "$out/enabled-accessibility.txt" | grep -F "$service"
 adb shell am instrument -w -e phase after -e active "$active" -e obsolete "$obsolete" -e foreign "$foreign" "$fixture" |
     tee "$out/migrated-host.txt"
-rg -x 'INSTRUMENTATION_RESULT: r50Fixture=PASS' "$out/migrated-host.txt"
+grep -x 'INSTRUMENTATION_RESULT: r50Fixture=PASS' "$out/migrated-host.txt"
 adb shell dumpsys appwidget > "$out/r50-appwidgets.txt"
 adb shell am force-stop "$package"
 adb pull "$db" "$state/after.db" >/dev/null
