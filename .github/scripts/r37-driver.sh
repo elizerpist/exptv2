@@ -13,7 +13,9 @@ case "${1:-}" in
     test "$APP_SHA" = af20365a5ec96ff92b35321a03c0a2679ee7d2fd
     harness="$GITHUB_WORKSPACE/harness"
     test "$(git -C "$harness" rev-parse HEAD)" = "$HARNESS_SHA"
-    for fixture in       android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR48PrivateAdmissionReplayTest.kt       android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR48StockPrivateAdmissionInstrumentationTest.kt; do
+    for fixture in \
+      android/app/src/test/kotlin/com/fluvi/app/lockscreen/KeyguardR48PrivateAdmissionReplayTest.kt \
+      android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR48StockPrivateAdmissionInstrumentationTest.kt; do
       cp -- "$harness/$fixture" "$fixture"
       sha256sum "$fixture" >> "$out/r48-fixtures.sha256"
     done
@@ -240,10 +242,11 @@ case "${1:-}" in
     (
       cd android
       export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -Drobolectric.dependency.repo.url=https://maven-central.storage-download.googleapis.com/maven2"
-      ./gradlew :app:testDebugUnitTest --tests '*KeyguardR47PrivateAdmissionTest'         --tests '*KeyguardR449RestrictionEvidenceTest' --tests '*KeyguardR44SurfaceClassifierTest'         --tests '*KeyguardR48*' --no-daemon --max-workers=3 --console=plain
+      ./gradlew :app:testDebugUnitTest --tests '*KeyguardR47PrivateAdmissionTest' \
+        --tests '*KeyguardR449RestrictionEvidenceTest' --tests '*KeyguardR44SurfaceClassifierTest' \
+        --tests '*KeyguardR48*' --no-daemon --max-workers=3 --console=plain
     ) > "$out/r48-units.log" 2>&1 || rc=$?
-    printf '%s
-' "$rc" > "$out/r48-units-exit.txt"
+    printf '%s\n' "$rc" > "$out/r48-units-exit.txt"
     if [[ -d build/app/test-results/testDebugUnitTest ]]; then
       cp -r build/app/test-results/testDebugUnitTest "$out/r48-junit"
     fi
