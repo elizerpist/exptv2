@@ -1,0 +1,1454 @@
+package tk.zwander.lockscreenwidgets.util
+
+import android.app.WallpaperManager
+import android.content.Context
+import android.content.SharedPreferences
+import android.graphics.*
+import android.view.*
+import androidx.compose.animation.*
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.core.graphics.component1
+import androidx.core.graphics.component2
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.viewModelScope
+import dev.zwander.lazyspannedgrid.rememberLazySpannedGridState
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import mx.platacard.pagerindicator.PagerWormIndicator
+import tk.zwander.common.activities.DismissOrUnlockActivity
+import tk.zwander.common.activities.SelectIconPackActivity
+import tk.zwander.common.compose.WidgetGrid
+import tk.zwander.common.compose.components.Side
+import tk.zwander.common.compose.util.createComposeViewHolder
+import tk.zwander.common.compose.util.findAccessibility
+import tk.zwander.common.compose.util.rememberBooleanPreferenceState
+import tk.zwander.common.compose.util.rememberPreferenceState
+import tk.zwander.common.data.provider.IFramePrefsProvider
+import tk.zwander.common.data.provider.IFrameProvider
+import tk.zwander.common.listeners.WidgetResizeListener
+import tk.zwander.common.util.*
+import tk.zwander.lockscreenwidgets.R
+import tk.zwander.lockscreenwidgets.activities.add.AddFrameWidgetActivity
+import tk.zwander.lockscreenwidgets.activities.add.ReconfigureFrameWidgetActivity
+import tk.zwander.lockscreenwidgets.compose.WidgetFrameLayout
+import tk.zwander.lockscreenwidgets.data.Mode
+import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
+
+/**
+ * Handle most of the logic involving the widget frame.
+ */
+open class WidgetFrameDelegate protected constructor(
+    context: Context,
+    protected val id: Int = ID,
+    initialDisplayId: String,
+    override val targetDisplayId: MutableStateFlow<String> = MutableStateFlow(initialDisplayId),
+) : BaseDelegate<WidgetFrameDelegate.State>(
+    context = context,
+    targetDisplayId = targetDisplayId,
+), IFrameProvider {
+    companion object {
+        const val ID = -1
+
+        // Used to prevent trying to add the window too quickly in a short period to try to avoid
+        // native Skia crashes.
+        private val WINDOW_ADD_DEBOUNCE_DELAY = 50.milliseconds
+
+        // A zero/negative window size gives the window an invalid surface, which aborts the process
+        // in libhwui (EGL_BAD_ACCESS when setting the damage region).
+        private const val MIN_FRAME_SIZE_DP = 48
+
+        private val instance = MutableStateFlow<WidgetFrameDelegate?>(null)
+
+        val readOnlyInstance = instance.asStateFlow()
+
+        @Synchronized
+        fun peekInstance(context: Context): WidgetFrameDelegate? {
+            if (instance.value == null) {
+                context.logUtils.debugLog("Accessibility isn't running yet")
+
+                return null
+            }
+
+            return instance.value
+        }
+
+        @Synchronized
+        fun getInstance(context: Context, displayId: String): WidgetFrameDelegate {
+            return instance.value ?: run {
+                val accessibilityContext = context.findAccessibility()
+
+                if (accessibilityContext == null) {
+                    throw IllegalStateException("Delegate can only be initialized by Accessibility Service!")
+                } else {
+                    WidgetFrameDelegate(accessibilityContext, initialDisplayId = displayId).also {
+                        instance.value = it
+                    }
+                }
+            }
+        }
+
+        @Synchronized
+        fun invalidateInstance(delegate: WidgetFrameDelegate) {
+            if (delegate == instance.value) {
+                instance.value = null
+            }
+        }
+
+        fun allIds(context: Context): List<Int> {
+            return [ID] + context.prefManager.currentSecondaryFramesWithStringDisplay.keys
+        }
+    }
+
+    override val holderId: Int
+        get() = id
+
+    private fun clampFrameWidth(width: Int, display: LSDisplay): Int {
+        return clampFrameDimension(width, display, display.rotatedRealSize.x)
+    }
+
+    private fun clampFrameHeight(height: Int, display: LSDisplay): Int {
+        return clampFrameDimension(height, display, display.rotatedRealSize.y)
+    }
+
+    private fun clampFrameDimension(value: Int, display: LSDisplay, displaySizePx: Int): Int {
+        val minPx = display.dpToPx(MIN_FRAME_SIZE_DP)
+        val maxPx = displaySizePx.coerceAtLeast(1)
+        val lower = minPx.coerceAtMost(maxPx)
+
+        return value.coerceIn(lower, maxPx)
+    }
+
+    override var state = MutableStateFlow(State())
+
+    private val saveMode: FrameSizeAndPosition.FrameType
+        get() {
+            val isLandscape = prefManager.separateFrameLayoutForLandscape &&
+                    (state.value.screenOrientation == Surface.ROTATION_90 ||
+                            state.value.screenOrientation == Surface.ROTATION_270)
+            val isMainFrame = id == ID
+
+            return when {
+                globalState.notificationsPanelFullyExpanded.value[this@WidgetFrameDelegate.display?.displayId] == true &&
+                        framePrefs.showInNotificationShade -> {
+                    if (kgm.isKeyguardLocked && framePrefs.separateLockNCPosition) {
+                        if (isMainFrame) {
+                            FrameSizeAndPosition.FrameType.LockNotification.select(!isLandscape)
+                        } else {
+                            FrameSizeAndPosition.FrameType.SecondaryLockNotification.select(
+                                !isLandscape,
+                                id,
+                            )
+                        }
+                    } else {
+                        if (isMainFrame) {
+                            FrameSizeAndPosition.FrameType.NotificationNormal.select(!isLandscape)
+                        } else {
+                            FrameSizeAndPosition.FrameType.SecondaryNotification.select(
+                                !isLandscape,
+                                id,
+                            )
+                        }
+                    }
+                }
+
+                else -> {
+                    if (isMainFrame) {
+                        FrameSizeAndPosition.FrameType.LockNormal.select(!isLandscape)
+                    } else {
+                        FrameSizeAndPosition.FrameType.SecondaryLockscreen.select(!isLandscape, id)
+                    }
+                }
+            }
+        }
+
+    //The size, position, and such of the widget frame on the lock screen.
+    final override val params by lazy {
+        WindowManager.LayoutParams().apply {
+            type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+
+            this@WidgetFrameDelegate.display?.let { display ->
+                frameSizeAndPosition.getSizeForType(saveMode, display).let { size ->
+                    width = clampFrameWidth(display.dpToPx(size.x), display)
+                    height = clampFrameHeight(display.dpToPx(size.y), display)
+                }
+                frameSizeAndPosition.getPositionForType(saveMode, display).let { pos ->
+                    x = pos.x
+                    y = pos.y
+                }
+            }
+
+            gravity = Gravity.CENTER
+
+            @Suppress("DEPRECATION")
+            flags =
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+            format = PixelFormat.RGBA_8888
+        }
+    }
+
+    private val animationMutex = Mutex()
+
+    private var pendingShowJob: Job? = null
+
+    override val rootView by lazy {
+        viewModel.createComposeViewHolder {
+            WidgetFrameLayout(
+                modifier = Modifier.fillMaxSize(),
+                removeWidgetConfirmed = ::removeWidget,
+                frameMoveFinished = {
+                    viewModelScope.launch {
+                        updateWallpaperLayerIfNeeded()
+                    }
+                },
+                frameIntercept = {
+                    lifecycleScope.launch {
+                        forceWakelock(it)
+                    }
+                },
+                frameMoved = { velX, velY ->
+                    lifecycleScope.launch {
+                        params.x += velX.toInt()
+                        params.y += velY.toInt()
+
+                        updateOverlay()
+
+                        frameSizeAndPosition.setPositionForType(
+                            saveMode,
+                            Point(params.x, params.y),
+                        )
+                    }
+                },
+                frameResized = { which, velocity, isUp ->
+                    lifecycleScope.launch {
+                        when (which) {
+                            Side.LEFT -> {
+                                params.width -= velocity
+                                params.x += (velocity / 2)
+                            }
+
+                            Side.TOP -> {
+                                params.height -= velocity
+                                params.y += (velocity / 2)
+                            }
+
+                            Side.RIGHT -> {
+                                params.width += velocity
+                                params.x += (velocity / 2)
+                            }
+
+                            Side.BOTTOM -> {
+                                params.height += velocity
+                                params.y += (velocity / 2)
+                            }
+                        }
+
+                        this@WidgetFrameDelegate.display?.let { display ->
+                            params.width = clampFrameWidth(params.width, display)
+                            params.height = clampFrameHeight(params.height, display)
+                        }
+
+                        updateOverlay()
+
+                        frameSizeAndPosition.setPositionForType(
+                            saveMode,
+                            Point(params.x, params.y),
+                        )
+                        this@WidgetFrameDelegate.display?.let { display ->
+                            frameSizeAndPosition.setSizeForType(
+                                saveMode,
+                                PointF(display.pxToDp(params.width), display.pxToDp(params.height)),
+                            )
+                        }
+
+                        if (isUp) {
+                            updateWallpaperLayerIfNeeded()
+                        }
+                    }
+                },
+                centerFrameVertically = {
+                    lifecycleScope.launch {
+                        this@WidgetFrameDelegate.display?.let { display ->
+                            frameSizeAndPosition.setPositionForType(
+                                saveMode,
+                                Point(
+                                    frameSizeAndPosition.getPositionForType(saveMode, display).x,
+                                    0,
+                                ),
+                            )
+                        }
+                        updateWindow()
+                    }
+                },
+                centerFrameHorizontally = {
+                    lifecycleScope.launch {
+                        this@WidgetFrameDelegate.display?.let { display ->
+                            frameSizeAndPosition.setPositionForType(
+                                saveMode,
+                                Point(
+                                    0,
+                                    frameSizeAndPosition.getPositionForType(saveMode, display).y,
+                                ),
+                            )
+                        }
+                        updateWindow()
+                    }
+                },
+                tempHide = {
+                    lifecycleScope.launch {
+                        updateState { it.copy(isTempHide = true) }
+                        updateWindowState()
+                    }
+                },
+            )
+        }
+    }
+
+
+    override val viewModel = WidgetFrameViewModel(this)
+
+    override val prefsHandler = HandlerRegistry {
+        handler(PrefManager.KEY_FRAME_MASKED_MODE) {
+            if (framePrefs.maskedMode) {
+                wallpaperClient.tryBindService()
+            }
+            updateWallpaperLayerIfNeeded()
+        }
+        handler(PrefManager.KEY_SHOW_IN_NOTIFICATION_CENTER) {
+            updateState { it.copy(isPendingNotificationStateChange = true) }
+        }
+        handler(
+            PrefManager.KEY_LOCK_WIDGET_FRAME,
+        ) {
+            viewModel.currentEditingInterfaceId.value = null
+        }
+        handler(PrefManager.KEY_WIDGET_FRAME_ENABLED) {
+            lifecycleScope.launch {
+                updateState {
+                    it.copy(isPreview = false)
+                }
+                updateWindowState()
+            }
+        }
+        handler(PrefManager.KEY_CAN_SHOW_FRAME_FROM_TASKER, PrefManager.KEY_FORCE_SHOW_FRAME) {
+            lifecycleScope.launch {
+                updateWindowState()
+            }
+        }
+        handler(PrefManager.KEY_PRIMARY_FRAME_DISPLAY) {
+            val display = prefManager.primaryFrameDisplay
+            targetDisplayId.value = display
+
+            removeWindow()
+            updateWindowState()
+        }
+        handler(PrefManager.KEY_FRAME_IGNORE_TOUCHES) {
+            updateState {
+                it.copy(ignoreAllTouches = framePrefs.ignoreAllTouches)
+            }
+        }
+    }
+
+    private val showWallpaperLayerCondition: Boolean
+        get() = !state.value.isPreview &&
+                framePrefs.maskedMode &&
+                (globalState.notificationsPanelFullyExpanded.value[this@WidgetFrameDelegate.display?.displayId] == false ||
+                        !framePrefs.showInNotificationShade) &&
+                (globalState.showingNotificationsPanel.value[this@WidgetFrameDelegate.display?.displayId] == false ||
+                        framePrefs.hideOnNotificationShade)
+
+    override suspend fun onEvent(event: Event) {
+        super.onEvent(event)
+
+        when (event) {
+            is Event.PreviewFrames -> {
+                updateState {
+                    val isPreview = event.show == Event.PreviewFrames.ShowMode.SHOW ||
+                            (event.show == Event.PreviewFrames.ShowMode.TOGGLE && !it.isPreview)
+                    it.copy(
+                        isPreview = isPreview,
+                        isTempHide = !isPreview && it.isTempHide,
+                    )
+                }
+            }
+
+            else -> {}
+        }
+    }
+
+    override fun onWidgetClick(trigger: Boolean): Boolean {
+        val ignoreTouches = framePrefs.ignoreWidgetTouches || globalState.itemIsActive.value[holderId] == true
+
+        if (!ignoreTouches) {
+            if (trigger && prefManager.requestUnlock && prefManager.frameDirectlyCheckForActivity) {
+                DismissOrUnlockActivity.launch(this)
+            } else {
+                if (prefManager.requestUnlock) {
+                    globalState.handlingClick[id] = Unit
+                }
+            }
+        }
+
+        return !ignoreTouches
+    }
+
+    override fun onCreate() {
+        if (created) {
+            return
+        }
+
+        super.onCreate()
+
+        viewModel.viewModelScope.launch(Dispatchers.Main) {
+            lsDisplayManager.displayPowerStates
+                .map { it.displayStates[this@WidgetFrameDelegate.display?.uniqueIdCompat] != false }
+                .collect { isScreenOn ->
+                    if (!isScreenOn) {
+                        this@WidgetFrameDelegate.display?.displayId?.let {
+                            globalState.notificationsPanelFullyExpanded[it] = false
+                        }
+                        updateState { it.copy(isPreview = false, isTempHide = false) }
+
+                        //If the device has some sort of AOD or ambient display, by the time we receive
+                        //an accessibility event and see that the display is off, it's usually too late
+                        //and the current screen content has "frozen," causing the widget frame to show
+                        //where it shouldn't. ACTION_SCREEN_OFF is called early enough that we can remove
+                        //the frame before it's frozen in place.
+                        forceWakelock(false)
+                        updateStateAndWindowState(
+                            transform = {
+                                it.copy(
+                                    isTempHide = false,
+                                    isPreview = false,
+                                )
+                            },
+                        )
+                    } else {
+                        updateWindowState()
+                    }
+                }
+        }
+
+        viewModel.viewModelScope.launch(Dispatchers.Main) {
+            globalState.notificationsPanelFullyExpanded.collect {
+                updateState { it.copy(isPendingNotificationStateChange = true, isPreview = false) }
+            }
+        }
+
+        viewModel.viewModelScope.launch(Dispatchers.Main) {
+            globalState.notificationCount.collect {
+                //Receive updates from our notification listener service on how many
+                //notifications are currently shown to the user. This count excludes
+                //notifications not visible on the lock screen.
+                //If the notification count is > 0, and the user has the option enabled,
+                //make sure to hide the widget frame.
+                updateWindowState()
+            }
+        }
+
+        updateState {
+            it.copy(
+                ignoreAllTouches = framePrefs.ignoreAllTouches,
+            )
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+
+        if (id == ID) {
+            invalidateInstance(this)
+        }
+    }
+
+    override fun updateState(transform: (State) -> State) {
+        val oldState = state.value
+        super.updateState(transform)
+
+        var actualNewState = state.value
+
+        if (actualNewState.isTempHide != oldState.isTempHide && actualNewState.isTempHide) {
+            actualNewState = actualNewState.copy(isPreview = false)
+        }
+
+        if (actualNewState.screenOrientation != oldState.screenOrientation) {
+            actualNewState =
+                actualNewState.copy(isPendingOrientationStateChange = true, isPreview = false)
+        }
+
+        // ------------ //
+
+        if (actualNewState.isPreview != oldState.isPreview) {
+            lifecycleScope.launch(Dispatchers.Main) {
+                updateWindowState()
+            }
+        }
+
+        if (actualNewState.ignoreAllTouches != oldState.ignoreAllTouches) {
+            lifecycleScope.launch(Dispatchers.Main) {
+                updateIgnoreAllTouches()
+            }
+        }
+
+        state.value = actualNewState
+    }
+
+    suspend fun updateStateAndWindowState(
+        updateAccessibility: Boolean = false,
+        transform: (State) -> State = { it },
+    ) {
+        updateState(transform)
+        updateWindowState(updateAccessibility)
+    }
+
+    suspend fun hideIfShouldNotShow() {
+        if (!isAttached) {
+            return
+        }
+
+        if (!canShow()) {
+            updateWindowState()
+        }
+    }
+
+    private suspend fun addWindow() {
+        logUtils.debugLog(
+            "Adding overlay",
+            extras = mapOf("frameId" to id, "rootAttachedBefore" to rootView.isAttachedToWindow),
+        )
+
+        withContext(Dispatchers.Main) {
+            if (!rootView.isAttachedToWindow) {
+                updateWindow()
+            }
+
+            logUtils.debugLog(
+                "Trying to add overlay ${viewModel.animationState.value}",
+                extras = mapOf(
+                    "frameId" to id,
+                    "rootAttachedBefore" to rootView.isAttachedToWindow,
+                    "animState" to viewModel.animationState.value.toString(),
+                ),
+            )
+
+            if (!rootView.isAttachedToWindow && viewModel.animationState.value != AnimationState.STATE_ADDING) {
+                logUtils.debugLog(
+                    "Actually adding overlay",
+                    extras = mapOf(
+                        "frameId" to id,
+                        "displayId" to this@WidgetFrameDelegate.display?.uniqueIdCompat,
+                        "paramsWidth" to params.width,
+                        "paramsHeight" to params.height,
+                    ),
+                )
+
+                viewModel.animationState.value = AnimationState.STATE_ADDING
+
+                val addSuccess = animationMutex.withLock {
+                    wm?.safeAddView(rootView, params) == true
+                }
+
+                if (addSuccess) {
+                    logUtils.debugLog("Overlay added successfully", extras = mapOf("frameId" to id))
+                    rootView.awaitNextDraw()
+                    rootView.fadeAndScaleIn(DrawerOrFrame.FRAME)
+                } else {
+                    logUtils.debugLog(
+                        "Adding overlay failed",
+                        extras = mapOf(
+                            "frameId" to id,
+                            "animState" to viewModel.animationState.value.toString(),
+                        ),
+                    )
+                }
+
+                viewModel.animationState.value = AnimationState.STATE_IDLE
+            }
+        }
+    }
+
+    private suspend fun removeWindow() {
+        if (isAttached) {
+            logUtils.debugLog(
+                "Removing overlay",
+                extras = mapOf("frameId" to id, "rootAttachedBefore" to rootView.isAttachedToWindow),
+            )
+        }
+
+        if (rootView.isAttachedToWindow && viewModel.animationState.value != AnimationState.STATE_REMOVING) {
+            logUtils.debugLog(
+                "Trying to remove overlay ${viewModel.animationState.value}",
+                extras = mapOf(
+                    "frameId" to id,
+                    "rootAttachedBefore" to rootView.isAttachedToWindow,
+                    "animState" to viewModel.animationState.value.toString(),
+                ),
+            )
+
+            if (!rootView.isAttachedToWindow) {
+                logUtils.debugLog("Root view already detached during removeWindow", extras = mapOf("frameId" to id))
+                return
+            }
+
+            viewModel.animationState.value = AnimationState.STATE_REMOVING
+
+            updateIgnoreAllTouches(true)
+
+            withContext(Dispatchers.Main + NonCancellable) {
+                logUtils.debugLog(
+                    "Actually removing overlay",
+                    extras = mapOf(
+                        "frameId" to id,
+                        "displayId" to this@WidgetFrameDelegate.display?.uniqueIdCompat,
+                    ),
+                )
+
+                viewModel.currentEditingInterfaceId.value = null
+
+                globalState.handlingClick.remove(id)
+                forceWakelock(on = false, updateOverlay = false)
+
+                animationMutex.withLock {
+                    rootView.fadeAndScaleOut(DrawerOrFrame.FRAME)
+                    wm?.safeRemoveViewImmediate(rootView)
+                }
+
+                logUtils.debugLog("Overlay removed successfully", extras = mapOf("frameId" to id))
+            }
+
+            updateIgnoreAllTouches()
+
+            viewModel.animationState.value = AnimationState.STATE_IDLE
+        } else if (!rootView.isAttachedToWindow) {
+            logUtils.debugLog("Attempting emergency removeViewImmediate", extras = mapOf("frameId" to id))
+            animationMutex.withLock {
+                wm?.safeRemoveViewImmediate(rootView, false)
+            }
+        }
+    }
+
+    private fun onFrameAttachmentStateChanged(attached: Boolean) {
+        if (lifecycleRegistry.currentState == Lifecycle.State.DESTROYED) {
+            logUtils.debugLog("Already destroyed, not handling attachment state", null)
+            return
+        }
+
+        try {
+            if (attached) {
+                viewModel.viewModelScope.launch {
+                    updateWallpaperLayerIfNeeded()
+                }
+            }
+        } catch (e: NullPointerException) {
+            //The stupid "Attempt to read from field 'com.android.server.appwidget.AppWidgetServiceImpl$ProviderId
+            //com.android.server.appwidget.AppWidgetServiceImpl$Provider.id' on a null object reference"
+            //Exception is thrown on stopListening() as well for some reason.
+            logUtils.debugLog("Error handling attachment state", e)
+        }
+    }
+
+    suspend fun updateWindowState(updateAccessibility: Boolean = false) {
+        if (canShow()) {
+            pendingShowJob?.cancel()
+
+            if (rootView.isAttachedToWindow &&
+                viewModel.animationState.value == AnimationState.STATE_IDLE
+            ) {
+                if (updateAccessibility) updateAccessibilityPass()
+                return
+            }
+
+            val job = lifecycleScope.launch {
+                delay(WINDOW_ADD_DEBOUNCE_DELAY)
+
+                // Make sure we can still show the frame.
+                if (canShow()) {
+                    if (updateAccessibility) updateAccessibilityPass()
+                    addWindow()
+                }
+            }
+            pendingShowJob = job
+            job.join()
+        } else {
+            pendingShowJob?.cancel()
+
+            lifecycleScope.launch {
+                removeWindow()
+                if (updateAccessibility) updateAccessibilityPass()
+            }.join()
+        }
+    }
+
+    /**
+     * Check if the widget frame should show onscreen. There are quite a few conditions for this.
+     * This method attempts to check those conditions in increasing order of intensiveness (check simple
+     * members first, then try SharedPreferences, then use IPC methods).
+     *
+     * The widget frame can only show if ALL of the following conditions are met:
+     *
+     * =======
+     * - [saveMode] is [Mode.PREVIEW]
+     * =======
+     * OR
+     * =======
+     * - The display this frame is hosted on is fully on.
+     * - [State.isTempHide] is false
+     * - [GlobalState.notificationsPanelFullyExpanded] is true AND [FrameSpecificPreferences.showInNotificationShade] is true
+     * - [GlobalState.hideForPresentIds] is false
+     * - [GlobalState.hideForNonPresentIds] is false
+     * - [PrefManager.widgetFrameEnabled] is true
+     * - [PrefManager.hideInLandscape] is false OR [State.screenOrientation] represents a portrait rotation
+     * =======
+     * OR
+     * =======
+     * - [GlobalState.wasOnKeyguard] is true
+     * - The display this frame is hosted on is fully on (i.e. the display is properly on: not in Doze or on the AOD)
+     * - [State.isTempHide] is false
+     * - [FrameSpecificPreferences.showOnMainLockScreen] is true OR [FrameSpecificPreferences.showInNotificationShade] is false
+     * - [FrameSpecificPreferences.hideOnFaceWidgets] is false OR [GlobalState.isOnFaceWidgets] is false
+     * - [GlobalState.currentAppLayer] is less than 0 (i.e. doesn't exist)
+     * - [GlobalState.isOnEdgePanel] is false OR [FrameSpecificPreferences.hideOnEdgePanel] is false
+     * - [GlobalState.isOnScreenOffMemo] is false
+     * - [GlobalState.onMainLockScreen] is true
+     * - [GlobalState.showingSecurityInput] is false OR [FrameSpecificPreferences.hideOnSecurityPage] is false
+     * - [GlobalState.showingNotificationsPanel] is false OR [FrameSpecificPreferences.hideOnNotificationShade] is false (OR [GlobalState.notificationsPanelFullyExpanded] is true AND [FrameSpecificPreferences.showInNotificationShade] is true
+     * - [GlobalState.notificationCount] is 0 (i.e. no notifications shown on lock screen, not necessarily no notifications at all) OR [FrameSpecificPreferences.hideOnNotifications] is false
+     * - [GlobalState.hideForPresentIds] is false OR [PrefManager.presentIds] is empty
+     * - [GlobalState.hideForNonPresentIds] is false OR [PrefManager.nonPresentIds] is empty
+     * - [PrefManager.hideInLandscape] is false OR [State.screenOrientation] represents a portrait rotation
+     * - [PrefManager.widgetFrameEnabled] is true (i.e. the widget frame is actually enabled)
+     * =======
+     */
+    private fun canShow(): Boolean {
+        val [displayId, uniqueIdCompat] = this@WidgetFrameDelegate.display?.let {
+            it.displayId to it.uniqueIdCompat
+        } ?: (null to null)
+        val framePrefs = framePrefs
+        val prefManager = prefManager
+        val lsDisplayManager = lsDisplayManager
+        val globalState = globalState
+        val state = state.value
+
+        val isPreview = state.isPreview
+        val isTempHide = state.isTempHide
+        val widgetFrameEnabled = prefManager.widgetFrameEnabled
+        val isDisplayOn = lsDisplayManager.displayPowerStates.value.displayStates[uniqueIdCompat] == true
+        val hidingForPresentIds = globalState.hideForPresentIds.value[displayId] == true
+        val hidingForNonPresentIds = globalState.hideForNonPresentIds.value[displayId] == true
+        val hideInLandscape = prefManager.hideInLandscape
+        val isPortrait = state.screenOrientation == Surface.ROTATION_0 || state.screenOrientation == Surface.ROTATION_180
+        val canShowFromTasker = framePrefs.canShowFromTasker
+        val hideWhenKeyboardShown = framePrefs.hideWhenKeyboardShown
+        val showingKeyboard = globalState.showingKeyboard.value[displayId] == true
+        val wasOnKeyguard = globalState.wasOnKeyguard.value
+        val isDefaultDisplay = displayId == Display.DEFAULT_DISPLAY
+        val notificationsPanelFullyExpanded = globalState.notificationsPanelFullyExpanded.value[displayId] == true
+        val showInNotificationShade = framePrefs.showInNotificationShade
+        val showOnMainLockScreen = framePrefs.showOnMainLockScreen
+        val hideOnFaceWidgets = framePrefs.hideOnFaceWidgets
+        val isOnFaceWidgets = globalState.isOnFaceWidgets.value[displayId] == true
+        val hasAppLayer = (globalState.currentAppLayer.value[displayId] ?: 0) >= 0 ||
+                globalState.currentAppPackage.value[displayId] != null
+        val hideOnEdgePanel = framePrefs.hideOnEdgePanel
+        val isOnEdgePanel = globalState.isOnEdgePanel.value[displayId] == true
+        val isOnScreenOffMemo = globalState.isOnScreenOffMemo.value[displayId] == true
+        val showingNotificationsPanel = globalState.showingNotificationsPanel.value[displayId] == true
+        val hideOnNotificationShade = framePrefs.hideOnNotificationShade
+        val showingSecurityInput = globalState.showingSecurityInput.value[displayId] == true
+        val hideOnSecurityPage = framePrefs.hideOnSecurityPage
+        val hasNotifications = globalState.notificationCount.value > 0
+        val hideOnNotifications = framePrefs.hideOnNotifications
+        val hidingForPresentApp = globalState.hidingForPresentApp.value[displayId] == true
+        val showOverPowerMenu = framePrefs.showOverPowerMenu
+        val showingPowerMenu = globalState.showingPowerMenu.value[displayId] == true
+        val forceShow = framePrefs.forceShow
+
+        fun forPreview(): Boolean {
+            return isPreview && !isTempHide && widgetFrameEnabled
+        }
+
+        fun forCommon(): Boolean {
+            return isDisplayOn &&
+                    !isTempHide &&
+                    !hidingForPresentIds &&
+                    !hidingForNonPresentIds &&
+                    widgetFrameEnabled &&
+                    (!hideInLandscape || isPortrait) &&
+                    canShowFromTasker &&
+                    (!hideWhenKeyboardShown || !showingKeyboard)
+        }
+
+        fun forSecondaryDisplay(): Boolean {
+            return wasOnKeyguard &&
+                    !isDefaultDisplay &&
+                    forCommon()
+        }
+
+        fun forNotificationCenter(): Boolean {
+            return notificationsPanelFullyExpanded &&
+                    showInNotificationShade &&
+                    forCommon()
+        }
+
+        fun forLockscreen(): Boolean {
+            return wasOnKeyguard &&
+                    (showOnMainLockScreen || !showInNotificationShade) &&
+                    (!hideOnFaceWidgets || !isOnFaceWidgets) &&
+                    !hasAppLayer &&
+                    (!isOnEdgePanel || !hideOnEdgePanel) &&
+                    !isOnScreenOffMemo &&
+                    (!showingNotificationsPanel || !hideOnNotificationShade) &&
+                    (!showingSecurityInput || !hideOnSecurityPage) &&
+                    (!hasNotifications || !hideOnNotifications) &&
+                    !hidingForPresentApp &&
+                    (showOverPowerMenu || !showingPowerMenu) &&
+                    forCommon()
+        }
+
+        fun forced(): Boolean {
+            return widgetFrameEnabled && forceShow
+        }
+
+        return (forced() || forSecondaryDisplay() || forPreview() || forNotificationCenter() || forLockscreen()).also {
+            logUtils.debugLog(
+                message = { "canShow $id: $it" },
+                debugMessage = {
+                    "canShow $id: $it\n" +
+                            "forced: ${forced()}, forSecondaryDisplay: ${forSecondaryDisplay()}, forPreview: ${forPreview()}, forNotificationCenter: ${forNotificationCenter()}, forLockscreen: ${forLockscreen()}, forCommon: ${forCommon()}\n" +
+                            "state: ${state}\n" +
+                            "globalState: $globalState\n" +
+                            "showOnMainLockScreen: ${showOnMainLockScreen}\n" +
+                            "widgetFrameEnabled: ${widgetFrameEnabled}\n" +
+                            "hideOnSecurityPage: ${hideOnSecurityPage}\n" +
+                            "hideOnNotifications: ${hideOnNotifications}\n" +
+                            "hideOnNotificationShade: ${hideOnNotificationShade}\n" +
+                            "presentIds: ${prefManager.presentIds}\n" +
+                            "nonPresentIds: ${prefManager.nonPresentIds}\n" +
+                            "hideInLandscape: ${hideInLandscape}\n" +
+                            "showInNotificationCenter: ${showInNotificationShade}\n" +
+                            "hideOnEdgePanel: ${hideOnEdgePanel}\n" +
+                            "canShowFrameFromTasker: ${canShowFromTasker}\n" +
+                            "forceShowFrame: ${forceShow}\n" +
+                            "hideOnFaceWidgets: ${hideOnFaceWidgets}\n" +
+                            "hideWhenKeyboardShown: ${hideWhenKeyboardShown}\n" +
+                            "displayPower: ${isDisplayOn}\n" +
+                            "showingPowerMenu: ${showingPowerMenu}\n" +
+                            "showOverPowerMenu: ${showOverPowerMenu}\n"
+                },
+            )
+        }
+    }
+
+    /**
+     * Compute and draw the appropriate portion of the wallpaper as the widget background,
+     * if masked mode is enabled.
+     *
+     * TODO: this doesn't work properly on a lot of devices. It seems to be something to do with the scale.
+     * TODO: I don't know enough about [Matrix]es to fix it.
+     *
+     * TODO: There are also a lot of limitations related to wallpaper offsets. It doesn't seem to be
+     * TODO: possible to retrieve those offsets unless you're the active wallpaper, so this method
+     * TODO: just assumes that a wallpaper [Bitmap] that's larger than the screen is centered,
+     * TODO: which isn't always true.
+     *
+     * TODO: You can only specifically retrieve the lock screen wallpaper on Nougat and up.
+     */
+    private suspend fun updateWallpaperLayerIfNeeded() {
+        val display = this@WidgetFrameDelegate.display ?: run {
+            logUtils.debugLog("Couldn't find display for $targetDisplayId to update wallpaper", null)
+            return
+        }
+
+        val showWallpaperLayer = showWallpaperLayerCondition
+
+        logUtils.debugLog("updateWallpaperLayerIfNeeded() called $showWallpaperLayer")
+
+        val wallpaperInfo = if (showWallpaperLayer) {
+            logUtils.debugLog("Trying to retrieve wallpaper", null)
+
+            try {
+                val drawable = withContext(Dispatchers.IO) {
+                    wallpaperUtils.getWallpaperBitmap(WallpaperManager.FLAG_LOCK)
+                }
+
+                logUtils.debugLog("Retrieved wallpaper: $drawable", null)
+
+                drawable?.let {
+                    logUtils.debugLog("Setting wallpaper drawable.", null)
+
+                    val realSize = display.rotatedRealSize
+                    val loc = rootView.locationOnScreen ?: intArrayOf(0, 0)
+
+                    val dWidth: Int = it.width
+                    val dHeight: Int = it.height
+
+                    val wallpaperAdjustmentX = (dWidth - realSize.x) / 2f
+                    val wallpaperAdjustmentY = (dHeight - realSize.y) / 2f
+
+                    val dx = (-loc[0].toFloat() - wallpaperAdjustmentX)
+                    //TODO: a bunch of skins don't like this
+                    val dy = (-loc[1].toFloat() - wallpaperAdjustmentY)
+
+                    WallpaperInfo(
+                        bitmap = it,
+                        dx = dx,
+                        dy = dy,
+                    )
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                }
+                logUtils.normalLog("Error setting wallpaper", e)
+                null
+            }
+        } else {
+            logUtils.debugLog("Removing wallpaper", null)
+            null
+        }
+
+        viewModel.wallpaperInfo.value = wallpaperInfo
+    }
+
+    /**
+     * This is called by the Accessibility Service on an event,
+     * after all other logic has finished (e.g. frame removal/addition
+     * calls). Use this method for updating things that are conditional
+     * upon the frame's state after an event.
+     */
+    private suspend fun updateAccessibilityPass() {
+        if (viewModel.animationState.value == AnimationState.STATE_IDLE) {
+            if (state.value.isPendingNotificationStateChange || state.value.isPendingOrientationStateChange) {
+                updateWindow()
+                updateState {
+                    it.copy(
+                        isPendingNotificationStateChange = false,
+                        isPendingOrientationStateChange = false,
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Update the frame's params for its current state (normal
+     * or in expanded notification center).
+     */
+    override suspend fun updateWindow() {
+        val display = this@WidgetFrameDelegate.display ?: run {
+            logUtils.debugLog("Couldn't find display for $targetDisplayId to update window", null)
+            return
+        }
+
+        logUtils.debugLog("Checking if params need to be updated")
+
+        logUtils.debugLog(
+            "Possibly updating params with display size ${display.rotatedRealSize}",
+            null,
+        )
+
+        val [newX, newY] = frameSizeAndPosition.getPositionForType(saveMode, display)
+        val [newW, newH] = frameSizeAndPosition.getSizeForType(saveMode, display).run {
+            Point(
+                clampFrameWidth(display.dpToPx(x), display),
+                clampFrameHeight(display.dpToPx(y), display),
+            )
+        }
+
+        var changed = false
+
+        if (params.x != newX) {
+            logUtils.debugLog("x changed", null)
+
+            changed = true
+            params.x = newX
+        }
+
+        if (params.y != newY) {
+            logUtils.debugLog("y changed", null)
+
+            changed = true
+            params.y = newY
+        }
+
+        if (params.width != newW) {
+            logUtils.debugLog("w changed", null)
+
+            changed = true
+            params.width = newW
+        }
+
+        if (params.height != newH) {
+            logUtils.debugLog("h changed", null)
+
+            changed = true
+            params.height = newH
+        }
+
+        if (changed) {
+            logUtils.debugLog("Updating params", null)
+
+            updateOverlay()
+            updateWallpaperLayerIfNeeded()
+        }
+    }
+
+    override suspend fun onDisplayChanged() {
+        this@WidgetFrameDelegate.display?.let { display ->
+            frameSizeAndPosition.getSizeForType(saveMode, display).let { size ->
+                params.width = clampFrameWidth(display.dpToPx(size.x), display)
+                params.height = clampFrameHeight(display.dpToPx(size.y), display)
+            }
+            frameSizeAndPosition.getPositionForType(saveMode, display).let { pos ->
+                params.x = pos.x
+                params.y = pos.y
+            }
+
+            updateOverlay()
+        }
+    }
+
+    override fun onViewAttached(view: View) {
+        super.onViewAttached(view)
+
+        rootView.post {
+            onFrameAttachmentStateChanged(true)
+        }
+    }
+
+    override fun onViewDetached(view: View) {
+        viewModel.isEditing.value = false
+        viewModel.isRemoving.value = false
+
+        super.onViewDetached(view)
+
+        onFrameAttachmentStateChanged(false)
+    }
+
+    private suspend fun updateIgnoreAllTouches(override: Boolean = false) {
+        params.flags = if ((state.value.ignoreAllTouches && !state.value.isPreview) || override) {
+            params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        } else {
+            params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        }
+        updateOverlay()
+    }
+
+    data class State(
+        val isPreview: Boolean = false,
+        //This is used to track when the notification shade has
+        //been expanded/collapsed or when the "show in NC" setting
+        //has been changed. Since the params are different for the
+        //widget frame depending on whether it's showing in the NC
+        //or not, we need to update them. We could do it directly,
+        //but that causes weird shifting and resizing since it happens
+        //before the Accessibility Service hides or shows the frame.
+        //So instead, we set this flag to true when the params should be
+        //updated. The Accessibility Service takes care of calling
+        //the update method after it starts a frame removal or addition.
+        //The method itself checks whether it can run (i.e. the
+        //animation state of the frame is IDLE) and then updates
+        //the params.
+        val isPendingNotificationStateChange: Boolean = false,
+        val isPendingOrientationStateChange: Boolean = false,
+        val isTempHide: Boolean = false,
+        val screenOrientation: Int = Surface.ROTATION_0,
+        val ignoreAllTouches: Boolean = false,
+    )
+
+    open class WidgetFrameViewModel(delegate: WidgetFrameDelegate) :
+        IWidgetFrameViewModel<State, WidgetFrameDelegate>(delegate) {
+        val wallpaperInfo = MutableStateFlow<WallpaperInfo?>(null)
+        val animationState = MutableStateFlow(AnimationState.STATE_IDLE)
+        val acknowledgedTwoFingerTap = MutableStateFlow<Boolean?>(null)
+        val acknowledgedThreeFingerTap = MutableStateFlow(false)
+        val isAdjustingMask = MutableStateFlow(false)
+        val isEditing = MutableStateFlow(false)
+        val isRemoving = MutableStateFlow(false)
+
+        override val containerCornerRadiusKey: String = PrefManager.KEY_FRAME_CORNER_RADIUS
+        override val widgetCornerRadiusKey: String = PrefManager.KEY_FRAME_WIDGET_CORNER_RADIUS
+        override val ignoreWidgetTouchesKey: Pair<String, SharedPreferences>
+            get() = PrefManager.KEY_FRAME_IGNORE_WIDGET_TOUCHES to framePrefs.framePreferences
+        override val doubleTapTurnOffDisplayKey: String =
+            PrefManager.KEY_DOUBLE_TAP_EMPTY_FRAME_SPACE_TURN_OFF_DISPLAY
+
+        override val saveMode: FrameSizeAndPosition.FrameType
+            get() = delegate.saveMode
+
+        @Composable
+        override fun GridWrapper(modifier: Modifier) {
+            val context = LocalContext.current
+            val prefManager = remember {
+                context.prefManager
+            }
+
+            BoxWithConstraints(
+                modifier = modifier,
+            ) {
+                val constraints = constraints
+                val rowCount by rememberPreferenceState(
+                    key = PrefManager.KEY_FRAME_ROW_COUNT,
+                    preferences = framePrefs.framePreferences,
+                ) {
+                    framePrefs.rowCount
+                }
+                val columnCount by rememberPreferenceState(
+                    key = PrefManager.KEY_FRAME_COL_COUNT,
+                    preferences = framePrefs.framePreferences,
+                ) {
+                    framePrefs.colCount
+                }
+                val gridState = rememberLazySpannedGridState(
+                    initialFirstVisibleLine = if (prefManager.rememberFramePosition) {
+                        val stored = framePrefs.currentIndex
+                        // Stored positions are page starts, i.e. multiples of columnCount. Snap any
+                        // value that isn't (from an older build, or from a session with a different
+                        // column count) to the nearest page so it can't restore between two pages.
+                        ((stored + columnCount / 2) / columnCount) * columnCount
+                    } else {
+                        0
+                    },
+                )
+                var currentWidgetsState by rememberPreferenceState(
+                    key = FramePrefs.generateCurrentWidgetsKey(holderId),
+                    value = { currentWidgets.toList() },
+                    onChanged = { _, value -> currentWidgets = value.toSet() },
+                )
+                val controlBarVisible by rememberPreferenceState(
+                    key = PrefManager.KEY_FRAME_SHOW_BOTTOM_BAR,
+                    value = { framePrefs.showControlBar },
+                    preferences = framePrefs.framePreferences,
+                )
+
+                val rememberFramePosition by rememberPreferenceState(
+                    key = PrefManager.KEY_FRAME_REMEMBER_POSITION,
+                ) {
+                    prefManager.rememberFramePosition
+                }
+                var storedPosition by rememberPreferenceState(
+                    key = PrefManager.KEY_CURRENT_PAGE,
+                    value = { framePrefs.currentIndex },
+                    onChanged = { _, value ->
+                        framePrefs.currentIndex = value
+                    },
+                    preferences = framePrefs.framePreferences,
+                )
+                val derivedStoredPosition by remember {
+                    derivedStateOf { storedPosition }
+                }
+                val pageAlignedStoredLine by remember {
+                    derivedStateOf {
+                        ((derivedStoredPosition + columnCount / 2) / columnCount) * columnCount
+                    }
+                }
+                val pageIndicatorBehavior by rememberPreferenceState(
+                    key = PrefManager.KEY_PAGE_INDICATOR_BEHAVIOR,
+                    value = { context.prefManager.pageIndicatorBehavior },
+                )
+                var showingPager by remember(pageIndicatorBehavior) {
+                    mutableStateOf(
+                        pageIndicatorBehavior != PrefManager.VALUE_PAGE_INDICATOR_BEHAVIOR_HIDDEN,
+                    )
+                }
+                val pageInfo by remember(pageIndicatorBehavior) {
+                    derivedStateOf {
+                        val pageSizePx = gridState.lineSizePx * gridState.mainAxisLineCount.coerceAtLeast(1)
+                        val scrollOffsetPx =
+                            gridState.firstVisibleLine * gridState.lineSizePx + gridState.firstVisibleLineScrollOffset
+                        val pageOffset =
+                            (scrollOffsetPx % pageSizePx.coerceAtLeast(1)) / constraints.maxWidth.toFloat()
+                                .coerceAtLeast(1f)
+                        val page = (scrollOffsetPx / pageSizePx.coerceAtLeast(1))
+
+                        val pageCount = gridState.layoutInfo.totalLineCount / columnCount
+
+                        (page + pageOffset) to pageCount
+                    }
+                }
+                // The scroll position rounded to the nearest whole line, rather than the line that
+                // contains the viewport's leading edge. firstVisibleLine truncates, so a page whose
+                // scroll offset is a fraction of a pixel short of its exact start (the grid's content
+                // and viewport widths can differ by rounding) reports the previous line. Saving that
+                // line makes the next show restore to a position between two pages.
+                val nearestLine by remember {
+                    derivedStateOf {
+                        val linePitchPx = gridState.lineSizePx + gridState.lineSpacingPx
+                        if (linePitchPx <= 0) {
+                            0
+                        } else {
+                            val scrollOffsetPx =
+                                gridState.firstVisibleLine * linePitchPx + gridState.firstVisibleLineScrollOffset
+                            (scrollOffsetPx.toFloat() / linePitchPx).roundToInt()
+                        }
+                    }
+                }
+                val frameLocked by rememberBooleanPreferenceState(
+                    key = PrefManager.KEY_LOCK_WIDGET_FRAME,
+                )
+                val state by state.collectAsState()
+                val scope = rememberCoroutineScope()
+
+                LaunchedEffect(pageInfo) {
+                    showingPager = pageIndicatorBehavior != PrefManager.VALUE_PAGE_INDICATOR_BEHAVIOR_HIDDEN
+                }
+
+                LaunchedEffect(showingPager, pageInfo) {
+                    if (showingPager && pageIndicatorBehavior == PrefManager.VALUE_PAGE_INDICATOR_BEHAVIOR_AUTO_HIDE) {
+                        delay(2000.milliseconds)
+                        showingPager = false
+                    }
+                }
+
+                LaunchedEffect(null) {
+                    // Wait for a real layout before restoring or saving, otherwise the initial
+                    // (empty) layout reports line 0 and overwrites the stored position.
+                    snapshotFlow { gridState.layoutInfo.totalLineCount }.first { it > 0 }
+
+                    if (rememberFramePosition && nearestLine != pageAlignedStoredLine) {
+                        gridState.scrollToLine(pageAlignedStoredLine)
+                    }
+
+                    snapshotFlow { nearestLine to gridState.isScrollInProgress }
+                        .filter { !it.second && gridState.layoutInfo.totalLineCount > 0 }
+                        .collect {
+                            val newLine = it.first
+                            if (newLine != derivedStoredPosition) {
+                                storedPosition = newLine
+                            }
+                        }
+                }
+
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    WidgetGrid(
+                        currentWidgets = currentWidgetsState,
+                        onWidgetsChanged = { widgets ->
+                            currentWidgetsState = widgets
+                        },
+                        orientation = Orientation.Horizontal,
+                        columnCount = columnCount,
+                        rowCount = rowCount,
+                        resizeThresholdPx = remember(context) {
+                            { which ->
+                                val display = display.orDefault(context)
+                                val frameSize = context.frameSizeAndPosition.getSizeForType(saveMode, display)
+                                if (which == WidgetResizeListener.Which.LEFT || which == WidgetResizeListener.Which.RIGHT) {
+                                    display.dpToPx(frameSize.x.toInt()) / colCount
+                                } else {
+                                    display.dpToPx(frameSize.y.toInt()) / rowCount
+                                }
+                            }
+                        },
+                        launchAddActivity = {
+                            AddFrameWidgetActivity.launch(context, holderId)
+                        },
+                        launchReconfigure = { id, providerInfo ->
+                            updateState {
+                                it.copy(isPreview = false)
+                            }
+                            ReconfigureFrameWidgetActivity.launch(context, id, holderId, providerInfo)
+                        },
+                        launchShortcutIconOverride = { id ->
+                            SelectIconPackActivity.launchForOverride(context, id)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        rowSpanForAddButton = 1,
+                        enableSnapping = true,
+                        lazyGridState = gridState,
+                        locked = frameLocked && !state.isPreview,
+                        itemSpacingKey = PrefManager.KEY_FRAME_ITEM_SPACING,
+                        preferences = framePrefs.framePreferences,
+                    )
+
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = controlBarVisible,
+                        modifier = Modifier.fillMaxWidth(),
+                        enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+                        exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        isEditing.value = true
+                                    },
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_baseline_settings_24),
+                                        contentDescription = stringResource(R.string.settings),
+                                        modifier = Modifier.size(24.dp),
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+
+                            PagerIndicator(
+                                showingPager = pageInfo.second > 1,
+                                pageFraction = pageInfo.first,
+                                pageCount = pageInfo.second,
+                                onPageClick = {
+                                    scope.launch {
+                                        gridState.animateScrollToLine(
+                                            (it * columnCount)
+                                                .coerceAtLeast(0)
+                                                .coerceAtMost((pageInfo.second * columnCount) - 1),
+                                        )
+                                    }
+                                },
+                            )
+
+                            if (pageInfo.second > 1) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Spacer(modifier = Modifier.weight(1f))
+
+                                    IconButton(
+                                        onClick = {
+                                            scope.launch {
+                                                gridState.animateScrollToLine(
+                                                    (nearestLine + (pageInfo.second * columnCount) - columnCount)
+                                                            % (pageInfo.second.coerceAtLeast(1) * columnCount),
+                                                )
+                                            }
+                                        },
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.arrow_left_24px),
+                                            contentDescription = stringResource(R.string.previous),
+                                            modifier = Modifier.size(24.dp),
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            scope.launch {
+                                                gridState.animateScrollToLine(
+                                                    (nearestLine + columnCount) % (pageInfo.second * columnCount),
+                                                )
+                                            }
+                                        },
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.arrow_left_24px),
+                                            contentDescription = stringResource(R.string.next),
+                                            modifier = Modifier
+                                                .rotate(180f)
+                                                .size(24.dp),
+                                        )
+                                    }
+                                }
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+
+                PagerIndicator(
+                    showingPager = showingPager && !controlBarVisible,
+                    pageFraction = pageInfo.first,
+                    pageCount = pageInfo.second,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 8.dp),
+                    onPageClick = {
+                        scope.launch {
+                            gridState.animateScrollToLine(
+                                (it * columnCount)
+                                    .coerceAtLeast(0)
+                                    .coerceAtMost(pageInfo.second * columnCount - 1),
+                            )
+                        }
+                    },
+                )
+            }
+        }
+
+        @Composable
+        private fun PagerIndicator(
+            showingPager: Boolean,
+            pageFraction: Float,
+            pageCount: Int,
+            onPageClick: (Int) -> Unit,
+            modifier: Modifier = Modifier,
+        ) {
+            val updatedPageFraction by rememberUpdatedState(pageFraction)
+
+            AnimatedVisibility(
+                visible = showingPager && pageCount > 1,
+                enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
+                exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
+                modifier = modifier,
+            ) {
+                PagerWormIndicator(
+                    pageCount = pageCount,
+                    currentPageFraction = remember {
+                        derivedStateOf {
+                            updatedPageFraction
+                        }
+                    },
+                    activeDotColor = LocalContentColor.current,
+                    dotColor = LocalContentColor.current.copy(alpha = 0.5f),
+                    onDotClick = onPageClick,
+                    dotCount = pageCount,
+                )
+            }
+        }
+    }
+
+    abstract class IWidgetFrameViewModel<
+            State : Any,
+            Delegate : BaseDelegate<State>,
+            >(delegate: Delegate) : BaseViewModel<State, Delegate>(delegate), IFramePrefsProvider {
+        abstract val saveMode: FrameSizeAndPosition.FrameType
+
+        override val containerCornerRadiusKey: String = PrefManager.KEY_FRAME_CORNER_RADIUS
+        override val widgetCornerRadiusKey: String = PrefManager.KEY_FRAME_WIDGET_CORNER_RADIUS
+    }
+
+    data class WallpaperInfo(
+        val bitmap: Bitmap?,
+        val dx: Float,
+        val dy: Float,
+    )
+
+    enum class AnimationState {
+        STATE_ADDING,
+        STATE_REMOVING,
+        STATE_IDLE,
+    }
+}

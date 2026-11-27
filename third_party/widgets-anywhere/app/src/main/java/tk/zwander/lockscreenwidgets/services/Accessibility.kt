@@ -1,0 +1,271 @@
+package tk.zwander.lockscreenwidgets.services
+
+import android.accessibilityservice.AccessibilityService
+import android.annotation.SuppressLint
+import android.os.Build
+import android.util.SparseArray
+import android.view.Display
+import android.view.WindowManager
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
+import android.view.inputmethod.InputMethodManager
+import dev.zwander.lswinterconnect.safeApplicationContext
+import kotlinx.coroutines.*
+import tk.zwander.common.util.*
+import tk.zwander.common.util.AccessibilityUtils.runAccessibilityJob
+import tk.zwander.common.util.AccessibilityUtils.runWindowOperation
+import tk.zwander.lockscreenwidgets.appwidget.IDListProvider
+import tk.zwander.lockscreenwidgets.appwidget.WidgetStackProvider
+import tk.zwander.lockscreenwidgets.util.FramePrefs
+import tk.zwander.lockscreenwidgets.util.FrameSpecificPreferences
+import tk.zwander.lockscreenwidgets.util.SecondaryWidgetFrameDelegate
+import tk.zwander.lockscreenwidgets.util.WidgetFrameDelegate
+import tk.zwander.widgetdrawer.util.DrawerDelegate
+
+/**
+ * This is where a lot of the magic happens.
+ * In Android 5.1+, there's a special overlay type: [WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY].
+ * Accessibility overlays can show over almost all other windows, including System UI, and therefore the keyguard/lock screen.
+ * To actually use this overlay type, we need an AccessibilityService.
+ *
+ * This service is also used to detect what's onscreen and respond appropriately. For instance, if the user
+ * has enabled the "Hide When Notification Shade Shown" option, we use our access to the screen content to
+ * check that the left lock screen shortcut is no longer visible, since it hides when the notification shade
+ * is shown.
+ */
+@SuppressLint("AccessibilityPolicy")
+class Accessibility : AccessibilityService(), CoroutineScope by MainScope(), EventObserver {
+    private val kgm by lazy { keyguardManager }
+    private val imm by lazy { getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager }
+    private val lsDisplayManager by lazy { LSDisplayManager.getInstance(this) }
+    private val frameDelegate: WidgetFrameDelegate
+        get() = WidgetFrameDelegate.getInstance(this, "${Display.DEFAULT_DISPLAY}")
+    private val drawerDelegate: DrawerDelegate
+        get() = DrawerDelegate.getInstance(this, "${Display.DEFAULT_DISPLAY}")
+
+    private val sharedPreferencesChangeHandler = HandlerRegistry {
+        handler(PrefManager.KEY_ACCESSIBILITY_EVENT_DELAY) {
+            serviceInfo?.let {
+                it.notificationTimeout = prefManager.accessibilityEventDelay.toLong()
+                serviceInfo = it
+            }
+        }
+        handler(PrefManager.KEY_DEBUG_LOG) {
+            IDListProvider.sendUpdate()
+        }
+        handler(PrefManager.KEY_CURRENT_FRAMES_WITH_STRING_DISPLAY) {
+            val newFrameIds = prefManager.currentSecondaryFramesWithStringDisplay
+            val currentFrames = FrameInstances.secondaryFrameDelegates
+
+            val removedFrames = currentFrames.filter { [id] -> !newFrameIds.contains(id) }
+            val addedFrameIds = newFrameIds.filter { !currentFrames.containsKey(it.key) }
+            val existingFrames = newFrameIds.mapNotNull { id -> currentFrames[id.key]?.let { id.value to it } }
+
+            removedFrames.forEach { [id, frame] ->
+                frame.onDestroy()
+                FramePrefs.removeFrame(this@Accessibility, id)
+                currentFrames.remove(id)
+            }
+
+            addedFrameIds.forEach { [id, displayId] ->
+                val newFrame = SecondaryWidgetFrameDelegate(
+                    context = this@Accessibility,
+                    id = id,
+                    displayId = displayId,
+                )
+                newFrame.onCreate()
+                currentFrames.values.firstOrNull()?.let { referenceFrame ->
+                    newFrame.updateState { referenceFrame.state.value }
+                }
+                currentFrames[id] = newFrame
+            }
+
+            existingFrames.forEach { [displayId, frame] ->
+                frame.targetDisplayId.value = displayId
+            }
+        }
+    }
+
+    private var state = State()
+    private var alreadyConnected = false
+
+    @SuppressLint("ClickableViewAccessibility", "NewApi")
+    override fun onCreate() {
+        super.onCreate()
+
+        logUtils.debugLog("Accessibility service created.", null)
+
+        launch(Dispatchers.Main) {
+            lsDisplayManager.displayPowerStates.collect {
+                if (!it.anyOn) {
+                    state.accessibilityJob?.cancel()
+                    globalState.powerMenuNodeId.value = 0L
+                }
+            }
+        }
+
+        WidgetStackProvider.refreshAll(this)
+        IDListProvider.refreshWidgetIds(this)
+    }
+
+    override fun onServiceConnected() {
+        if (alreadyConnected) {
+            return
+        }
+
+        if (FrameSpecificPreferences.doAnyFramesHaveSettingEnabled(
+                context = this,
+                baseKey = PrefManager.KEY_FRAME_MASKED_MODE,
+            )
+        ) {
+            wallpaperClient.tryBindService()
+        }
+
+        serviceInfo = serviceInfo.apply {
+            notificationTimeout = prefManager.accessibilityEventDelay.toLong()
+        }
+
+        launch(Dispatchers.Main) {
+            lsDisplayManager.handleDisplayUpdates(this@Accessibility)
+        }
+
+        frameDelegate.onCreate()
+        drawerDelegate.onCreate()
+
+        WidgetStackProvider.updateWidgetStackMonitor(this)
+
+        prefManager.currentSecondaryFramesWithStringDisplay.forEach { [secondaryId, secondaryDisplay] ->
+            FrameInstances.secondaryFrameDelegates[secondaryId] =
+                SecondaryWidgetFrameDelegate(this, secondaryId, secondaryDisplay).also {
+                    it.onCreate()
+                }
+        }
+
+        sharedPreferencesChangeHandler.register(this)
+
+        eventManager.sendEvent(Event.RequestNotificationCount)
+        eventManager.addObserver(this)
+        logUtils.debugLog("Accessibility service connected.", null)
+
+        launch(Dispatchers.Main) {
+            globalState.wasOnKeyguard.value = kgm.isKeyguardLocked
+
+            // Make sure displays are populated before initial accessibility pass
+            lsDisplayManager.fetchDisplays().join()
+
+            runWindowOperation(
+                frameDelegates = FrameInstances.secondaryFrameDelegates + (WidgetFrameDelegate.ID to frameDelegate),
+                drawerDelegate = drawerDelegate,
+                getWindows = ::getWindowsSafely,
+                initialRun = true,
+            )
+        }
+
+        alreadyConnected = true
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            if (event.packageName != null &&
+                AccessibilityUtils.IDMaps.sysUiPackageNames[event.packageName?.toString()] == null) {
+                // Limit content change processing to System UI-related windows.
+                return
+            }
+        }
+
+        //Since we're launching our logic on the main Thread, it's possible
+        //that [event] will be reused by Android, causing some crash issues.
+        //Make a copy that is recycled later.
+        val eventCopy = event.copyCompat()
+
+        state.accessibilityJob?.cancel()
+        updateState {
+            it.copy(
+                accessibilityJob = runAccessibilityJob(
+                    context = this@Accessibility,
+                    event = eventCopy,
+                    frameDelegates = FrameInstances.secondaryFrameDelegates + (WidgetFrameDelegate.ID to frameDelegate),
+                    drawerDelegate = drawerDelegate,
+                    kgm = kgm,
+                    imm = imm,
+                    getWindows = ::getWindowsSafely,
+                ).also { job ->
+                    job.invokeOnCompletion {
+                        try {
+                            //Make sure to recycle the copy of the event.
+                            @Suppress("DEPRECATION")
+                            eventCopy.recycle()
+                        } catch (_: IllegalStateException) {
+                            //Sometimes the event is already recycled somehow.
+                        }
+                    }
+                },
+            )
+        }
+    }
+
+    override fun onInterrupt() {
+        logUtils.debugLog("Accessibility service interrupted.", null)
+    }
+
+    override suspend fun onEvent(event: Event) {
+        when (event) {
+            Event.TurnOffDisplay -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    logUtils.debugLog("Sending display off global action", null)
+                    performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
+                }
+            }
+
+            else -> {}
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+
+        sharedPreferencesChangeHandler.unregister(this)
+        eventManager.removeObserver(this)
+
+        frameDelegate.onDestroy()
+        drawerDelegate.onDestroy()
+        FrameInstances.secondaryFrameDelegates.forEach { (val delegate = value) ->
+            delegate.onDestroy()
+        }
+        FrameInstances.secondaryFrameDelegates.clear()
+
+        WidgetStackProvider.updateWidgetStackMonitor(safeApplicationContext)
+
+        lsDisplayManager.displayAndWmCache.value = mapOf()
+        cancel()
+        logUtils.debugLog("Accessibility service destroyed.", null)
+    }
+
+    private fun updateState(transform: (State) -> State) {
+        val newState = transform(state)
+        logUtils.debugLog("Updating accessibility state from $state to $newState")
+        state = newState
+    }
+
+    private fun getWindowsSafely(): SparseArray<List<AccessibilityWindowInfo>>? {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                windowsOnAllDisplays
+            } else {
+                SparseArray<List<AccessibilityWindowInfo>>(1).apply {
+                    this[Display.DEFAULT_DISPLAY] = ArrayList(windows)
+                }
+            }
+        } catch (e: SecurityException) {
+            // Sometimes throws a SecurityException talking about mismatching
+            // user IDs. In that case, return null and don't update any window-based
+            // state items.
+            logUtils.debugLog("Error getting windows", e)
+            null
+        }
+    }
+
+    private data class State(
+        val accessibilityJob: Job? = null,
+    )
+}

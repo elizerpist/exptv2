@@ -1,0 +1,14 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+/deploymentTargetSelector.xml
+/other.xml
+/appInsightsSettings.xml
+/csv-editor.xml
+/runConfigurations.xml
+/compiler.xml
+/go.imports.xml
+/LanguageServersSettings.xml
+/noctule.xml
+/editor.xml
+/php.xml

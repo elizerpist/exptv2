@@ -1,0 +1,465 @@
+package tk.zwander.lockscreenwidgets.compose
+
+import android.graphics.Matrix
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
+import android.view.MotionEvent
+import android.widget.ImageView
+import androidx.appcompat.widget.AppCompatImageView
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.motionEventSpy
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
+import androidx.core.graphics.drawable.toDrawable
+import com.bugsnag.android.performance.compose.MeasuredComposable
+import tk.zwander.common.compose.components.*
+import tk.zwander.common.compose.util.rememberBooleanPreferenceState
+import tk.zwander.common.compose.util.rememberPreferenceState
+import tk.zwander.common.util.*
+import tk.zwander.lockscreenwidgets.R
+import tk.zwander.lockscreenwidgets.activities.ComposeFrameSettingsActivity
+import tk.zwander.lockscreenwidgets.util.FramePrefs
+import tk.zwander.lockscreenwidgets.util.WidgetFrameDelegate
+
+@Composable
+fun WidgetFrameDelegate.WidgetFrameViewModel.WidgetFrameLayout(
+    removeWidgetConfirmed: (Boolean, Int?) -> Unit,
+    frameMoveFinished: () -> Unit,
+    frameIntercept: (Boolean) -> Unit,
+    frameMoved: (velX: Float, velY: Float) -> Unit,
+    frameResized: (which: Side, velocity: Int, isUp: Boolean) -> Unit,
+    centerFrameHorizontally: () -> Unit,
+    centerFrameVertically: () -> Unit,
+    tempHide: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val resources = LocalResources.current
+    val frameCornerRadius by rememberPreferenceState(
+        key = PrefManager.KEY_FRAME_CORNER_RADIUS,
+        value = { context.prefManager.cornerRadiusDp.dp },
+    )
+    val backgroundColor by rememberPreferenceState(
+        key = PrefManager.KEY_FRAME_BACKGROUND_COLOR,
+        value = { Color(framePrefs.backgroundColor) },
+        preferences = framePrefs.framePreferences,
+    )
+    val firstViewing by rememberPreferenceState(
+        key = PrefManager.KEY_FIRST_VIEWING,
+        value = { context.prefManager.firstViewing },
+    )
+
+    var acknowledgedTwoFingerTap by this.acknowledgedTwoFingerTap.collectAsMutableState()
+    var acknowledgedThreeFingerTap by this.acknowledgedThreeFingerTap.collectAsMutableState()
+    var itemToRemove by this.itemToRemove.collectAsMutableState()
+
+    val animatedBackgroundColor by animateColorAsState(backgroundColor)
+
+    val doubleTapTurnOffDisplay by rememberBooleanPreferenceState(
+        key = PrefManager.KEY_DOUBLE_TAP_EMPTY_FRAME_SPACE_TURN_OFF_DISPLAY,
+    )
+    val touchProtectionEnabled by rememberBooleanPreferenceState(
+        key = PrefManager.KEY_TOUCH_PROTECTION,
+    )
+    val proxTooClose by globalState.proxTooClose.collectAsState()
+    var isInEditingMode by isEditing.collectAsMutableState()
+    var removing by isRemoving.collectAsMutableState()
+    var isAdjustingMask by this.isAdjustingMask.collectAsMutableState()
+
+    val frameLocked by rememberBooleanPreferenceState(
+        PrefManager.KEY_LOCK_WIDGET_FRAME,
+    )
+
+    var maskAdjustment by rememberPreferenceState(
+        key = PrefManager.KEY_MASKED_MODE_ADJUSTMENT_FOR_DISPLAY,
+        value = {
+            display?.uniqueIdCompat?.let {
+                context.prefManager.maskedModeAdjustment[it]
+            } ?: Offset(0f, 0f)
+        },
+        onChanged = { _, value ->
+            display?.uniqueIdCompat?.let {
+                val mutatedValue = HashMap(context.prefManager.maskedModeAdjustment.toMutableMap())
+                mutatedValue[it] = value
+                context.prefManager.maskedModeAdjustment = mutatedValue
+            }
+        },
+        resetKey = display?.uniqueIdCompat,
+    )
+    var maskScale by rememberPreferenceState(
+        key = PrefManager.KEY_MASKED_MODE_SCALE_FOR_DISPLAY,
+        value = {
+            context.prefManager.maskedModeScaleForDisplay[display?.uniqueIdCompat] ?: 1.0f
+        },
+        onChanged = { _, value ->
+            val mutatedValue = HashMap(context.prefManager.maskedModeScaleForDisplay.toMutableMap())
+            mutatedValue[display?.uniqueIdCompat] = value
+            context.prefManager.maskedModeScaleForDisplay = mutatedValue
+        },
+        resetKey = display?.uniqueIdCompat,
+    )
+
+    Card(
+        modifier = modifier
+            .pointerInput(Unit) {
+                interceptOutOfBoundsChildEvents = true
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                        val interestingChanges = event.changes.filter { it.pressed }
+
+                        if (interestingChanges.size >= 2 && !isAdjustingMask) {
+                            event.changes.forEach { it.consume() }
+                            val thirdFinger = withTimeoutOrNull(50L) {
+                                awaitPointerEvent(pass = PointerEventPass.Initial)
+                            }
+                            val interestingThirdChanges = thirdFinger?.changes?.filter {
+                                it.pressed
+                            }.orEmpty()
+
+                            if (interestingThirdChanges.size < 3) {
+                                isInEditingMode = !isInEditingMode && (!frameLocked || state.value.isPreview)
+                                if (acknowledgedTwoFingerTap == null) {
+                                    acknowledgedTwoFingerTap = false
+                                } else if (acknowledgedTwoFingerTap == false) {
+                                    acknowledgedTwoFingerTap = true
+                                }
+                            } else {
+                                if (firstViewing) {
+                                    acknowledgedThreeFingerTap = true
+                                } else {
+                                    tempHide()
+                                }
+                            }
+
+                            thirdFinger?.changes?.forEach { it.consume() }
+                            waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                        }
+                    }
+                }
+            }
+            .pointerInput(
+                doubleTapTurnOffDisplay,
+                firstViewing,
+            ) {
+                if (doubleTapTurnOffDisplay && !firstViewing) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            context.logUtils.debugLog(
+                                "Sending display off from base frame layer",
+                                null,
+                            )
+                            context.eventManager.sendEvent(Event.TurnOffDisplay)
+                        },
+                    )
+                }
+            }
+            .motionEventSpy { event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        frameIntercept(true)
+                    }
+
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        frameIntercept(false)
+                    }
+                }
+            },
+        shape = RoundedCornerShape(size = frameCornerRadius),
+        elevation = CardDefaults.outlinedCardElevation(),
+        colors = CardDefaults.cardColors().copy(
+            containerColor = animatedBackgroundColor,
+        ),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize(),
+        ) {
+            val wallpaper by wallpaperInfo.collectAsState()
+
+            BlurView(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(-1f),
+                blurKey = PrefManager.KEY_BLUR_BACKGROUND to framePrefs.framePreferences,
+                blurAmountKey = PrefManager.KEY_BLUR_BACKGROUND_AMOUNT to framePrefs.framePreferences,
+                cornerRadiusKey = PrefManager.KEY_FRAME_CORNER_RADIUS,
+            )
+
+            wallpaper?.let { wallpaper ->
+                wallpaper.bitmap?.let { bitmap ->
+                    val drawable = remember(bitmap) {
+                        bitmap.toDrawable(resources)
+                    }
+                    val maskedModeDimAmount by rememberPreferenceState(
+                        key = PrefManager.KEY_MASKED_MODE_DIM_AMOUNT,
+                        value = { framePrefs.maskedModeDimAmount },
+                        preferences = framePrefs.framePreferences,
+                    )
+
+                    AndroidView(
+                        factory = {
+                            AppCompatImageView(it).apply {
+                                scaleType = ImageView.ScaleType.MATRIX
+                            }
+                        },
+                        update = {
+                            it.setImageDrawable(drawable)
+                            it.imageMatrix = Matrix().apply {
+                                setTranslate(
+                                    wallpaper.dx +
+                                            with(density) { maskAdjustment.x.dp.toPx() },
+                                    wallpaper.dy +
+                                            with(density) { maskAdjustment.y.dp.toPx() },
+                                )
+                                postScale(maskScale, maskScale)
+                            }
+                            it.colorFilter = PorterDuffColorFilter(
+                                android.graphics.Color.argb(
+                                    ((maskedModeDimAmount / 100f) * 255).toInt(),
+                                    0, 0, 0,
+                                ),
+                                PorterDuff.Mode.SRC_ATOP,
+                            )
+                        },
+                        modifier = Modifier.zIndex(0f),
+                    )
+                }
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                modifier = Modifier.zIndex(1f),
+                enter = fadeIn(),
+                exit = fadeOut(),
+                visible = !firstViewing,
+            ) {
+                GridWrapper(modifier = Modifier.fillMaxSize())
+            }
+
+            HintIntroLayout(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(2f),
+            )
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = itemToRemove != null,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.zIndex(3f),
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ConfirmWidgetRemovalLayout(
+                        itemToRemove = itemToRemove,
+                        onItemRemovalConfirmed = { removed, data ->
+                            removeWidgetConfirmed(removed, data?.id)
+                            itemToRemove = null
+                        },
+                    )
+                }
+            }
+
+            val debugIdVisibility by rememberPreferenceState(
+                key = PrefManager.KEY_SHOW_DEBUG_ID_VIEW,
+                value = { context.prefManager.showDebugIdView },
+            )
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = debugIdVisibility,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.zIndex(4f),
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    MeasuredComposable(name = "IDList") {
+                        IDListLayout(
+                            modifier = Modifier.fillMaxSize(),
+                            displayId = this@WidgetFrameLayout.display?.displayId,
+                        )
+                    }
+                }
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isInEditingMode && !isAdjustingMask,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.zIndex(5f),
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    FrameEditWrapperLayout(
+                        frameId = holderId,
+                        onRemovePressed = {
+                            removing = true
+                        },
+                        onClose = {
+                            isInEditingMode = false
+                        },
+                        onSettings = {
+                            ComposeFrameSettingsActivity.launch(context, holderId)
+                        },
+                        frameMoveFinished = frameMoveFinished,
+                        frameMoved = frameMoved,
+                        frameResized = frameResized,
+                        centerFrameHorizontally = centerFrameHorizontally,
+                        centerFrameVertically = centerFrameVertically,
+                        tempHide = tempHide,
+                    )
+                }
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = removing,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.zIndex(6f),
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ConfirmFrameRemovalLayout(
+                        itemToRemove = holderId,
+                        onItemRemovalConfirmed = { removed, data ->
+                            if (removed && data != null) {
+                                FramePrefs.removeFrame(context, data)
+                            }
+                            removing = false
+                        },
+                    )
+                }
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isAdjustingMask,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.zIndex(7f),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .draggable2D(
+                            state = rememberDraggable2DState { offset ->
+                                with(density) {
+                                    maskAdjustment = Offset(
+                                        maskAdjustment.x + offset.x.toDp().value,
+                                        maskAdjustment.y + offset.y.toDp().value,
+                                    )
+                                }
+                            },
+                        )
+                        .transformable(
+                            state = rememberTransformableState { _, zoomChange, panChange, _ ->
+                                with(density) {
+                                    maskAdjustment = Offset(
+                                        maskAdjustment.x + panChange.x.toDp().value,
+                                        maskAdjustment.y + panChange.y.toDp().value,
+                                    )
+                                }
+                                maskScale *= zoomChange
+                            },
+                        ),
+                ) {
+                    Row(
+                        modifier = Modifier.align(Alignment.BottomEnd),
+                    ) {
+                        IconButton(
+                            onClick = {
+                                maskAdjustment = Offset.Zero
+                            },
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.recenter_24px),
+                                contentDescription = stringResource(R.string.reset_mask_alignment),
+                                modifier = Modifier.size(32.dp),
+                                tint = Color.White,
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                maskScale = 1f
+                            },
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.outline_1x_mobiledata_24),
+                                contentDescription = stringResource(R.string.reset_mask_scale),
+                                modifier = Modifier.size(32.dp),
+                                tint = Color.White,
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                isAdjustingMask = false
+                            },
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.baseline_check_24),
+                                contentDescription = stringResource(R.string.done),
+                                modifier = Modifier.size(32.dp),
+                                tint = Color.White,
+                            )
+                        }
+                    }
+                }
+            }
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = proxTooClose && touchProtectionEnabled,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.zIndex(8f),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(colorResource(R.color.backdrop))
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(R.string.touch_protection_active),
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        fontSize = 18.sp,
+                    )
+                }
+            }
+        }
+    }
+}

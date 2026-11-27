@@ -1,0 +1,535 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
+
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+<!--    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />-->
+<!--    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />-->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.ACCESS_HIDDEN_PROFILES" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <uses-permission android:name="com.huawei.android.totemweather.permission.ACCESS_WEATHERCLOCK_PROVIDER" />
+    <uses-permission android:name="android.permission.ACCESS_WEATHERCLOCK_PROVIDER" />
+    <uses-permission android:name="android.calendar.huawei.permission.CALENDAR_RECESS" />
+    <uses-permission android:name="com.android.calendar.huawei.permission.CALENDAR_RECESS" />
+    <uses-permission android:name="com.huawei.calendar.permission.WRITE_CALENDAR_RECESS" />
+
+<!--    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" tools:node="remove" />-->
+<!--    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" tools:node="remove" />-->
+
+    <!-- Some weird crash on earlier Android versions caused by the receiver in IconPackManager. -->
+    <uses-permission android:name="tk.zwander.lockscreenwidgets.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+
+    <uses-sdk tools:overrideLibrary="
+        com.example.jetpack_loading,rikka.shizuku.provider,
+        rikka.shizuku.api,
+        rikka.shizuku.shared,
+        rikka.shizuku.aidl,
+        com.anggrayudi.storage,
+        "
+        />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/AppTheme"
+        android:name="tk.zwander.lockscreenwidgets.App">
+        <activity android:name="tk.zwander.lockscreenwidgets.MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/AppTheme.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name="tk.zwander.lockscreenwidgets.activities.add.AddFrameWidgetActivity"
+            android:exported="true"
+            android:label="@string/add_widget"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:windowSoftInputMode="adjustResize"
+            />
+        <activity android:name="tk.zwander.lockscreenwidgets.activities.add.AddWidgetStackWidgetActivity"
+            android:exported="true"
+            android:label="@string/add_widget"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:windowSoftInputMode="adjustResize"
+            />
+        <activity android:name="tk.zwander.common.activities.add.AddTileWidgetActivity"
+            android:exported="true"
+            android:label="@string/add_widget"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:windowSoftInputMode="adjustResize"
+            />
+        <activity android:name="tk.zwander.common.activities.OnboardingActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme"
+            android:windowSoftInputMode="adjustResize"
+            />
+        <activity android:name="tk.zwander.common.activities.DismissOrUnlockActivity"
+            android:exported="false"
+            android:launchMode="singleInstancePerTask"
+            android:excludeFromRecents="true"
+            android:theme="@style/AppTheme.Null"
+            />
+        <activity android:name="tk.zwander.common.activities.HideForIDsActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:windowSoftInputMode="adjustResize"
+            />
+        <activity android:name=".activities.UsageActivity"
+            android:exported="false"
+            android:label="@string/usage"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:windowSoftInputMode="adjustResize"
+            />
+        <activity android:name="tk.zwander.lockscreenwidgets.activities.add.ReconfigureFrameWidgetActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme.Null"
+            android:excludeFromRecents="true"
+            />
+        <activity android:name="tk.zwander.lockscreenwidgets.activities.add.WidgetStackReconfigureActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme.Null"
+            android:excludeFromRecents="true"
+            />
+        <activity android:name="tk.zwander.widgetdrawer.activities.add.ReconfigureDrawerWidgetActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme.Null"
+            android:excludeFromRecents="true"
+            />
+        <activity android:name="tk.zwander.widgetdrawer.activities.add.AddDrawerWidgetActivity"
+            android:exported="false"
+            android:label="@string/add_widget"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:windowSoftInputMode="adjustResize"
+            />
+        <activity android:name="tk.zwander.widgetdrawer.activities.TriggerActivity"
+            android:label="@string/open_drawer"
+            android:theme="@style/AppTheme.Null"
+            android:exported="true"
+            android:launchMode="singleInstancePerTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+            </intent-filter>
+        </activity>
+        <activity-alias
+            android:name=".activities.LaunchDrawer"
+            android:targetActivity="tk.zwander.widgetdrawer.activities.TriggerActivity"
+            android:exported="true"
+            android:label="@string/open_widget_drawer">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+            </intent-filter>
+        </activity-alias>
+        <activity
+            android:name="tk.zwander.widgetdrawer.activities.ShortcutConfigActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:theme="@style/AppTheme.Null"
+            android:label="@string/open_widget_drawer">
+            <intent-filter>
+                <action android:name="android.intent.action.CREATE_SHORTCUT" />
+            </intent-filter>
+        </activity>
+        <activity android:name="tk.zwander.common.activities.HideOnAppsChooserActivity"
+            android:label="@string/settings_screen_hide_on_present_apps"
+            android:exported="false"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:windowSoftInputMode="adjustResize"
+            />
+        <activity android:name="tk.zwander.common.activities.PermissionIntentLaunchActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme.Null"
+            android:launchMode="singleInstancePerTask"
+            android:excludeFromRecents="true"
+            />
+        <activity android:name=".activities.TaskerCanShowActivity"
+            android:exported="true"
+            android:label="@string/allow_show_frame"
+            android:theme="@style/AppTheme.NoActionBar">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".activities.TaskerCanNotShowActivity"
+            android:exported="true"
+            android:label="@string/disallow_show_frame"
+            android:theme="@style/AppTheme.NoActionBar">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".activities.TaskerForceShowActivity"
+            android:exported="true"
+            android:label="@string/force_show_frame"
+            android:theme="@style/AppTheme.Null">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".activities.TaskerUnForceShowActivity"
+            android:exported="true"
+            android:label="@string/unforce_show_frame"
+            android:theme="@style/AppTheme.NoActionBar">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".activities.TaskerIsAllowedToShowFrame"
+            android:exported="true"
+            android:label="@string/frame_allowed_to_show"
+            android:theme="@style/AppTheme.NoActionBar">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_CONDITION" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".activities.TaskerIsShowingFrame"
+            android:exported="true"
+            android:label="@string/is_showing_frame"
+            android:theme="@style/AppTheme.NoActionBar">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_CONDITION" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".activities.TaskerIsForceShowingFrame"
+            android:exported="true"
+            android:label="@string/frame_forced_to_show"
+            android:theme="@style/AppTheme.NoActionBar">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_CONDITION" />
+            </intent-filter>
+        </activity>
+        <activity android:name="tk.zwander.widgetdrawer.activities.TaskerShowDrawerActivity"
+            android:exported="true"
+            android:label="@string/open_drawer"
+            android:theme="@style/AppTheme.Null">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+        </activity>
+        <activity android:name="tk.zwander.widgetdrawer.activities.TaskerHideDrawerActivity"
+            android:exported="true"
+            android:label="@string/close_widget_drawer"
+            android:theme="@style/AppTheme.Null">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_SETTING" />
+            </intent-filter>
+        </activity>
+        <activity android:name="tk.zwander.widgetdrawer.activities.TaskerIsShowingDrawer"
+            android:exported="true"
+            android:label="@string/is_showing_drawer"
+            android:theme="@style/AppTheme.Null">
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.EDIT_CONDITION" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".activities.WidgetStackConfigure"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:windowSoftInputMode="adjustResize"
+            android:taskAffinity="@string/configure_task_affinity"
+            android:excludeFromRecents="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/>
+            </intent-filter>
+        </activity>
+        <activity android:name="tk.zwander.common.activities.SelectIconPackActivity"
+            android:exported="false"
+            android:label="@string/choose_icon_pack"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/AppTheme.NoActionBar"
+            />
+        <activity android:name="tk.zwander.common.activities.SelectIconFromPackActivity"
+            android:exported="false"
+            android:label="@string/choose_icon_override"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/AppTheme.NoActionBar"
+            />
+        <activity android:name="tk.zwander.widgetdrawer.activities.ComposeDrawerSettingsActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/AppTheme.NoActionBar"
+            />
+        <activity android:name="tk.zwander.lockscreenwidgets.activities.ComposeFrameSettingsActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/AppTheme.NoActionBar"
+            />
+        <activity android:name="tk.zwander.common.activities.settings.CommonSettingsActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/AppTheme.NoActionBar"
+            />
+        <activity android:name="tk.zwander.common.activities.WidgetStackListActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/AppTheme.NoActionBar"
+            />
+        <activity android:name=".activities.FrameReorderActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/AppTheme.NoActionBar"
+            />
+
+        <service
+            android:name="tk.zwander.lockscreenwidgets.services.Accessibility"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true"
+            tools:ignore="AccessibilityPolicy">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility" />
+        </service>
+        <service android:name="tk.zwander.lockscreenwidgets.services.NotificationListener"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+        <service
+            android:name="tk.zwander.common.tiles.EnableDisableTile"
+            android:label="@string/frame_enabled"
+            android:icon="@drawable/ic_baseline_power_settings_new_24"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true"
+            tools:targetApi="n">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name="tk.zwander.common.tiles.EnableDisableDrawerTile"
+            android:label="@string/drawer_enabled"
+            android:icon="@drawable/ic_baseline_power_settings_new_24"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true"
+            tools:targetApi="n">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name="tk.zwander.common.tiles.widget.WidgetTileOne"
+            android:label="@string/app_name"
+            android:icon="@drawable/ic_baseline_launch_24"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true"
+            tools:targetApi="n">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+
+            <meta-data android:name="android.service.quicksettings.SEM_SUPPORT_DETAIL_VIEW" android:value="true" />
+            <meta-data android:name="android.service.quicksettings.SEM_ACTIVE_TILE_SUPPORT_SEM_PLATFORM_VER" android:value="28" />
+            <meta-data android:name="android.service.quicksettings.SEM_DEFAULT_TILE_NAME" android:resource="@string/app_name" />
+        </service>
+        <service
+            android:name="tk.zwander.common.tiles.widget.WidgetTileTwo"
+            android:label="@string/app_name"
+            android:icon="@drawable/ic_baseline_launch_24"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true"
+            tools:targetApi="n">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+
+            <meta-data android:name="android.service.quicksettings.SEM_SUPPORT_DETAIL_VIEW" android:value="true" />
+            <meta-data android:name="android.service.quicksettings.SEM_ACTIVE_TILE_SUPPORT_SEM_PLATFORM_VER" android:value="28" />
+            <meta-data android:name="android.service.quicksettings.SEM_DEFAULT_TILE_NAME" android:resource="@string/app_name" />
+        </service>
+        <service
+            android:name="tk.zwander.common.tiles.widget.WidgetTileThree"
+            android:label="@string/app_name"
+            android:icon="@drawable/ic_baseline_launch_24"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true"
+            tools:targetApi="n">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+
+            <meta-data android:name="android.service.quicksettings.SEM_SUPPORT_DETAIL_VIEW" android:value="true" />
+            <meta-data android:name="android.service.quicksettings.SEM_ACTIVE_TILE_SUPPORT_SEM_PLATFORM_VER" android:value="28" />
+            <meta-data android:name="android.service.quicksettings.SEM_DEFAULT_TILE_NAME" android:resource="@string/app_name" />
+        </service>
+        <service
+            android:name="tk.zwander.common.tiles.widget.WidgetTileFour"
+            android:label="@string/app_name"
+            android:icon="@drawable/ic_baseline_launch_24"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true"
+            tools:targetApi="n">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+
+            <meta-data android:name="android.service.quicksettings.SEM_SUPPORT_DETAIL_VIEW" android:value="true" />
+            <meta-data android:name="android.service.quicksettings.SEM_ACTIVE_TILE_SUPPORT_SEM_PLATFORM_VER" android:value="28" />
+            <meta-data android:name="android.service.quicksettings.SEM_DEFAULT_TILE_NAME" android:resource="@string/app_name" />
+        </service>
+        <service
+            android:name="tk.zwander.common.tiles.widget.WidgetTileFive"
+            android:label="@string/app_name"
+            android:icon="@drawable/ic_baseline_launch_24"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true"
+            tools:targetApi="n">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+
+            <meta-data android:name="android.service.quicksettings.SEM_SUPPORT_DETAIL_VIEW" android:value="true" />
+            <meta-data android:name="android.service.quicksettings.SEM_ACTIVE_TILE_SUPPORT_SEM_PLATFORM_VER" android:value="28" />
+            <meta-data android:name="android.service.quicksettings.SEM_DEFAULT_TILE_NAME" android:resource="@string/app_name" />
+        </service>
+        <service android:name="tk.zwander.common.appwidget.RemoteViewsProxyService"
+            android:exported="true"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <service android:name="tk.zwander.common.appwidget.WidgetStackMonitorService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <property android:name="PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                      android:value="
+                      This service is used to keep the connection between proxied widgets and the widget stack feature
+                      alive. Without it, this app wouldn't receive updates to widgets it's proxying for the widget stack
+                      feature.
+                                    " />
+        </service>
+
+        <receiver android:name=".appwidget.IDListProvider"
+            android:label="@string/id_list"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/id_list_provider_info" />
+        </receiver>
+        <receiver android:name=".appwidget.BlankWidgetProvider"
+            android:label="@string/blank_widget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/blank_widget_provider_info" />
+        </receiver>
+        <receiver android:name=".appwidget.WidgetStackProvider"
+            android:label="@string/widget_stack"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/widget_stack_provider" />
+        </receiver>
+
+        <receiver android:name="tk.zwander.common.appwidget.OpenDrawerProvider"
+            android:label="@string/open_drawer"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider"
+                android:resource="@xml/open_drawer_provider_info" />
+        </receiver>
+
+        <receiver android:name="tk.zwander.common.appwidget.GlanceTestWidgetReceiver"
+            android:label="Test Widget"
+            android:exported="true"
+            android:enabled="${isDebug}">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/glance_test_widget_provider_info" />
+        </receiver>
+
+        <receiver android:name="tk.zwander.common.receivers.OpenDrawerReceiver"
+            android:label="@string/open_drawer"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="${applicationId}.action.OPEN_DRAWER" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name="tk.zwander.common.receivers.PackageReplacedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name="tk.zwander.common.receivers.BootReceiver"
+                  android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <!-- Tasker Workaround -->
+        <service android:name="com.joaomgcd.taskerpluginlibrary.action.IntentServiceAction"
+            android:exported="true"
+            tools:ignore="ExportedService">
+            <meta-data android:name="canBind" android:value="true" />
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.FIRE_SETTING" />
+            </intent-filter>
+        </service>
+
+        <service android:name="com.joaomgcd.taskerpluginlibrary.condition.IntentServiceCondition"
+            android:exported="true"
+            tools:ignore="ExportedService">
+            <meta-data android:name="canBind" android:value="true" />
+            <intent-filter>
+                <action android:name="com.twofortyfouram.locale.intent.action.QUERY_CONDITION" />
+            </intent-filter>
+        </service>
+    </application>
+
+</manifest>

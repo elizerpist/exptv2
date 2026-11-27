@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="page_indicator_behavior_names">
+        <item>@string/settings_screen_page_indicator_behavior_hidden</item>
+        <item>@string/settings_screen_page_indicator_behavior_auto_hide</item>
+        <item>@string/settings_screen_page_indicator_behavior_shown</item>
+    </string-array>
+</resources>

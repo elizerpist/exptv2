@@ -1,0 +1,152 @@
+package tk.zwander.widgetdrawer.compose
+
+import android.view.MotionEvent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.motionEventSpy
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.zIndex
+import tk.zwander.common.compose.components.BlurView
+import tk.zwander.common.compose.components.ConfirmWidgetRemovalLayout
+import tk.zwander.common.compose.components.DrawerToolbar
+import tk.zwander.common.compose.util.rememberBooleanPreferenceState
+import tk.zwander.common.compose.util.rememberPreferenceState
+import tk.zwander.common.util.*
+import tk.zwander.widgetdrawer.activities.add.AddDrawerWidgetActivity
+import tk.zwander.widgetdrawer.util.DrawerDelegate
+
+@Composable
+fun DrawerDelegate.DrawerViewModel.DrawerLayout(
+    removeWidgetConfirmed: (Boolean, Int?) -> Unit,
+    drawerIntercept: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val backgroundColor by rememberPreferenceState(
+        key = PrefManager.KEY_DRAWER_BACKGROUND_COLOR,
+        value = { Color(context.prefManager.drawerBackgroundColor) },
+    )
+
+    var itemToRemove by this.itemToRemove.collectAsMutableState()
+    val cutoutPadding = WindowInsets.displayCutout
+    val statusBarHeight = rememberSaveable {
+        context.statusBarHeight
+    }
+    val statusBarPadding = cutoutPadding.only(WindowInsetsSides.Top).takeIf {
+        it.getTop(density) > 0
+    } ?: WindowInsets(top = statusBarHeight)
+
+    val backgroundOverStatusBar by rememberBooleanPreferenceState(
+        key = PrefManager.KEY_DRAWER_BACKGROUND_OVER_STATUS_BAR,
+        defaultValue = true,
+    )
+
+    Box(
+        modifier = modifier.motionEventSpy { event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    drawerIntercept(true)
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    drawerIntercept(false)
+                }
+            }
+        },
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        if (backgroundOverStatusBar) {
+                            PaddingValues.Zero
+                        } else {
+                            statusBarPadding.asPaddingValues()
+                        },
+                    )
+                    .background(backgroundColor),
+            )
+
+            val blurStatusBarArea by rememberBooleanPreferenceState(
+                key = PrefManager.KEY_BLUR_DRAWER_STATUS_BAR_AREA,
+                defaultValue = true,
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(
+                        if (blurStatusBarArea) {
+                            PaddingValues.Zero
+                        } else {
+                            statusBarPadding.asPaddingValues()
+                        },
+                    ),
+            ) {
+                BlurView(
+                    blurKey = PrefManager.KEY_BLUR_DRAWER_BACKGROUND to context.prefManager.prefs,
+                    blurAmountKey = PrefManager.KEY_BLUR_DRAWER_BACKGROUND_AMOUNT to context.prefManager.prefs,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(-1f),
+                )
+            }
+
+            GridWrapper(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(0f),
+            )
+
+            DrawerToolbar(
+                addWidget = {
+                    context.eventManager.sendEvent(Event.CloseDrawer)
+                    AddDrawerWidgetActivity.launch(context, true)
+                },
+                closeDrawer = {
+                    context.eventManager.sendEvent(Event.CloseDrawer)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .zIndex(1f),
+            )
+
+            AnimatedVisibility(
+                visible = itemToRemove != null,
+                enter = fadeIn(),
+                exit = fadeOut(),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(2f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ConfirmWidgetRemovalLayout(
+                        itemToRemove = itemToRemove,
+                        onItemRemovalConfirmed = { removed, data ->
+                            removeWidgetConfirmed(removed, data?.id)
+                            itemToRemove = null
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
