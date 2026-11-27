@@ -248,11 +248,17 @@ jobs:
           sha256sum build/app/outputs/flutter-apk/app-profile.apk "$RUNNER_TEMP/r49-fixture.apk" \
             | tee r49-device-evidence/apks.sha256
           echo "FLUVI_R49_FIXTURE_APK=$RUNNER_TEMP/r49-fixture.apk" >> "$GITHUB_ENV"
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+      - name: Enable KVM
+        run: |
+          test -e /dev/kvm
+          sudo chmod 0666 /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Install the screenshot sampler
-        run: python3 -m pip install --user Pillow==11.3.0
+        run: python -m pip install Pillow==11.3.0
       - name: Exercise the installed single-APK host
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -261,8 +267,11 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_7
+          ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
+          pre-emulator-launch-script: >-
+            test -s "$FLUVI_R49_FIXTURE_APK" && test -s build/app/outputs/flutter-apk/r49-control.apk
           script: python3 scripts/test-r49-host-device.py "$FLUVI_R49_FIXTURE_APK" "${{ matrix.system }}" r49-device-evidence --control-apk build/app/outputs/flutter-apk/r49-control.apk --control-test build/app/outputs/flutter-apk/r49-control-test.apk
       - uses: actions/upload-artifact@v4
         if: always()

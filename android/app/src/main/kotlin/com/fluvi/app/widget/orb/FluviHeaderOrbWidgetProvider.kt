@@ -37,6 +37,16 @@ class FluviHeaderOrbWidgetProvider : AppWidgetProvider() {
         refresh(context, intArrayOf(appWidgetId))
     }
 
+    companion object {
+        /** Called by the embedded host when its frame or access is disabled. */
+        fun revokeSharing(context: Context) {
+            val application = context.applicationContext
+            HeaderOrbWidgetContent.execute {
+                HeaderOrbWidgetContent.setSharing(application, false)
+            }
+        }
+    }
+
     private fun refresh(context: Context, ids: IntArray) {
         val pending = goAsync()
         val application = context.applicationContext
@@ -253,6 +263,7 @@ internal data class HeaderOrbPackage(
         require(plan.sizePx in OrbMaterialPlaybackContract.minimumFrameSizePx..OrbMaterialPlaybackContract.maximumFrameSizePx)
         require(plan.intervalMs in OrbMaterialPlaybackContract.minimumFlipIntervalMs..OrbMaterialPlaybackContract.maximumFlipIntervalMs)
         require(plan.phaseOriginUtcMs > 0 && animated == (plan.frameCount > 1))
+        require(!animated || plan.frameCount >= 3)
         require(pngs.size == plan.frameCount && pngs.all { it.isNotEmpty() })
         require(plan.estimatedRawBytes <= OrbMaterialPlaybackContract.maximumDecodedBytes)
         require(pngs.sumOf { it.size.toLong() } <= OrbMaterialPlaybackContract.maximumEncodedBytes)

@@ -18,7 +18,7 @@ OLD = (
     "KeyguardR446WindowPresenter", "KeyguardR46RecordingStore",
     "KeyguardR448DisplayRoute", "FluviOrbLockscreenTrialProvider",
     "R35DebugResidentService", "FluviActiveHeaderMaterialStore",
-    "fluvi/keyguard_material",
+    "fluvi/keyguard_material", "dev/flutter/plugins/integration_test",
 )
 
 

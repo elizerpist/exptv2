@@ -36,7 +36,10 @@ native_gradle="${GRADLE_USER_HOME:-$stage/native-gradle}"
     ln -s "$root/assets" "$module/assets"
     ln -s "$root/shaders" "$module/shaders"
     cp "$root/pubspec.lock" "$module/pubspec.lock"
-    cp "$root/pubspec.yaml" "$module/pubspec.yaml"
+    # Device-test plugins belong to the independent test harness. Embedding
+    # integration_test in the product also imports legacy Espresso manifests
+    # with conflicting namespaces on the WA packaging toolchain.
+    sed '/^  integration_test:$/,+1d' "$root/pubspec.yaml" > "$module/pubspec.yaml"
     cat >> "$module/pubspec.yaml" <<'YAML'
   module:
     androidX: true
@@ -46,7 +49,7 @@ YAML
     (
         cd "$module"
         flutter pub get
-        cmp pubspec.lock "$root/pubspec.lock"
+        python3 "$root/android/wa-integration/check-payload-lock.py" "$root/pubspec.lock" pubspec.lock
         modes=(--no-debug --no-profile --no-release)
         case "$mode" in
             debug) modes[0]=--debug ;;

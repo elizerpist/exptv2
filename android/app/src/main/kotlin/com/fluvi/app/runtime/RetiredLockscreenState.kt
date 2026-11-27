@@ -50,7 +50,7 @@ internal object RetiredLockscreenState {
         if (completed.isFile) return
 
         val oldCard = context.getSharedPreferences("fluvi_lock_screen_card", Context.MODE_PRIVATE)
-        if (oldCard.getBoolean("enabled", false)) {
+        if (oldCard.all["enabled"] == true) {
             // The retired card shared notification 4052. Reconcile using the
             // independent FG/BG preferences before discarding the old flag.
             FluviRuntimeNotificationController.reconcileVisible(context, FluviRuntimeCoordinator.status(context))

@@ -385,9 +385,9 @@ void main() {
     );
     expect(
       RegExp(r'emulator-build: 15081367').allMatches(profileWorkflow).length,
-      3,
+      2,
       reason:
-          'Profiles and the material smoke must pin Android Emulator 36.5.10.',
+          'Both benchmark profiles must retain their pinned Android Emulator 36.5.10.',
     );
     expect(
       profileWorkflow,
