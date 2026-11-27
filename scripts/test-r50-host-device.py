@@ -101,10 +101,20 @@ class Device:
         if not self.click(self.host_label, package=settings, optional=True, limit=5):
             self.click("Downloaded apps", "Installed apps", package=settings)
             self.click(self.host_label, package=settings)
-        raw = self.screen()
-        self.save("service-switch.xml", raw)
-        nodes = list(ET.fromstring(raw).iter("node"))
-        title, = [node for node in nodes if node.get("text") == f"Use {self.host_label}"]
+        end = time.monotonic() + 10
+        attempt = 0
+        while time.monotonic() < end:
+            raw = self.screen()
+            self.save(f"service-switch-{attempt:02d}.xml", raw)
+            nodes = list(ET.fromstring(raw).iter("node"))
+            matches = [n for n in nodes if n.get("text") == f"Use {self.host_label}"]
+            if len(matches) == 1:
+                title = matches[0]
+                break
+            attempt += 1
+            time.sleep(.25)
+        else:
+            raise AssertionError("The Android service-detail switch never appeared")
         _, top, right, bottom = map(int, re.findall(r"-?\d+", title.attrib["bounds"]))
         y = (top + bottom) / 2
         targets = set()
