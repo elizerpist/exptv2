@@ -95,6 +95,11 @@ case "${1:-}" in
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR47MeasuredFrameInstrumentationTest.kt
     sha256sum "$fixture" > "$out/fixture-r47-measured.sha256"
   fi
+  if [[ "$TEST_SCOPE" == r47_frame_correlation ]]; then
+    fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR47FrameCorrelationInstrumentationTest.kt"
+    cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR47FrameCorrelationInstrumentationTest.kt
+    sha256sum "$fixture" > "$out/fixture-r47-correlation.sha256"
+  fi
   if [[ "$TEST_SCOPE" == r43_api37 ]]; then
     fixture="$GITHUB_WORKSPACE/orchestrator/.github/fixtures/KeyguardR43Api37BaselineTest.kt"
     cp "$fixture" android/app/src/androidTest/kotlin/com/fluvi/app/lockscreen/KeyguardR43Api37BaselineTest.kt
