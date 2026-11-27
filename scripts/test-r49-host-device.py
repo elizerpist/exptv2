@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Stock emulator setup control using ordinary Android UI consent."""
 import argparse
+import io
 from pathlib import Path
 import re
 import subprocess
 import time
 import xml.etree.ElementTree as ET
+
+from PIL import Image
 
 PACKAGE = "com.fluvi.app"
 WA = "tk.zwander.lockscreenwidgets"
@@ -85,12 +88,40 @@ class Device:
         self.shell("input", "keyevent", "KEYCODE_BACK")
 
     def crop(self, name):
-        self.save(name + ".png", self.adb("exec-out", "screencap", "-p"))
+        begin = self.shell("cat", "/proc/uptime").split()[0]
+        png = self.adb("exec-out", "screencap", "-p")
+        end = self.shell("cat", "/proc/uptime").split()[0]
+        self.save(name + ".png", png)
         self.save(name + "-windows.txt", self.adb("shell", "dumpsys", "window", "windows"))
         self.save(name + "-widgets.txt", self.adb("shell", "dumpsys", "appwidget"))
+        with Image.open(io.BytesIO(png)) as image:
+            rgb = image.convert("RGB")
+            # Unique saturated marker from the separate real AppWidget.
+            matches = sum(1 for r, g, b in rgb.getdata() if r < 15 and 223 <= g <= 237 and 122 <= b <= 142)
+        self.note(f"{name} markerPixels={matches} readBracketSec={begin}..{end}")
+        return matches
+
+    def tutorial(self):
+        for fingers in (2, 2, 3):
+            raw = self.screen()
+            self.save(f"tutorial-{fingers}.xml", raw)
+            root = ET.fromstring(raw)
+            hint = next((node for node in root.iter("node")
+                         if "Tap the widget frame with" in node.get("text", "") or
+                         "Tap with two fingers" in node.get("text", "")), None)
+            if hint is None:
+                raise AssertionError("WA first-view tutorial did not appear during normal lockscreen display")
+            x1, y1, x2, y2 = map(int, re.findall(r"\d+", hint.attrib["bounds"]))
+            result = self.shell(
+                "am", "instrument", "-w", "-e", "x", (x1 + x2) // 2,
+                "-e", "y", (y1 + y2) // 2, "-e", "fingers", fingers,
+                "com.fluvi.r49.control.test/com.fluvi.r49.control.FrameTutorialTouch",
+            )
+            assert "gesture=accepted" in result, result
+            self.note(f"Tutorial gesture with {fingers} fingers")
 
 
-def exercise(device, apk, system, control_apk):
+def exercise(device, apk, system, control_apk, control_test):
     expected_api = system.split(".")[0]
     actual = device.shell("getprop", "ro.build.version.sdk")
     assert actual == expected_api, (actual, expected_api)
@@ -98,8 +129,8 @@ def exercise(device, apk, system, control_apk):
     assert "package:" not in device.shell("pm", "path", PACKAGE), "Expected a fresh emulator profile"
     device.note(f"STOCK API {actual} {device.shell('getprop', 'ro.build.fingerprint')}")
     device.note(device.adb("install", apk, timeout=90).decode().strip())
-    if control_apk:
-        device.note(device.adb("install", control_apk, timeout=30).decode().strip())
+    device.note(device.adb("install", control_apk, timeout=30).decode().strip())
+    device.note(device.adb("install", control_test, timeout=30).decode().strip())
     device.shell("wm", "dismiss-keyguard")
     device.shell("am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
     device.click("Beállítások", "Settings")
@@ -121,25 +152,33 @@ def exercise(device, apk, system, control_apk):
     assert SERVICE in enabled.split(":"), "Ordinary accessibility onboarding did not finish"
     assert device.service_connected()
     device.click("Frame Enabled", "Enable Frame")
-    for label in (["R49 Test Marker", ORB] if control_apk else [ORB]):
+    for label in ("R49 Test Marker", ORB):
         device.click("Add Widget")
         device.click(label)
         device.click("Create", "Allow", "Add widget")
     device.crop("bound")
     bindings = (device.output / "bound-widgets.txt").read_text()
-    assert re.search(r"(?:hostId=|:)(?:1003)\b", bindings), "Real WA host ID absent"
+    assert re.search(r"hostId[=:]\s*1003\b", bindings), "Real WA host ID absent"
     assert "FluviHeaderOrbWidgetProvider" in bindings, "Current-header provider was not bound"
     device.note("Normal OS binding and host registration observed")
+    # Leave setup so its preview buttons and window cannot satisfy the main witness.
     device.shell("input", "keyevent", "KEYCODE_HOME")
+    assert device.crop("unlocked-control") < 100, "Marker already visible on unlocked control"
     device.shell("input", "keyevent", "KEYCODE_SLEEP")
     device.shell("input", "keyevent", "KEYCODE_WAKEUP")
-    device.crop("main-0")
-    time.sleep(0.5)
-    device.crop("main-500")
-    # The presence of a host registration is intentionally insufficient to
-    # pass the visual gate. Keep the images even when the first-view fixture
-    # or the inspection cannot establish a matching independent witness.
-    raise AssertionError("Optical qualification pending for the recorded normal MAIN samples")
+    device.tutorial()
+    # A new physical wake clears the last tutorial gesture's temporary hide.
+    for wake in range(1, 4):
+        device.shell("input", "keyevent", "KEYCODE_SLEEP")
+        device.shell("input", "keyevent", "KEYCODE_WAKEUP")
+        time.sleep(0.6)
+        assert device.crop(f"main-{wake}") >= 650, "No independent marker pixels under the real host"
+        device.shell("cmd", "statusbar", "expand-notifications")
+        early = device.crop(f"shade-{wake}-first-sample")
+        settled = device.crop(f"shade-{wake}-settled")
+        assert early < 100 and settled < 100, f"Marker persists under shade: {early}, {settled}"
+        device.shell("cmd", "statusbar", "collapse")
+    device.note("Three real marker wake/shade controls passed. Frame identity and ORB parity remain separate.")
 
 
 def main():
@@ -147,11 +186,12 @@ def main():
     parser.add_argument("apk", type=Path)
     parser.add_argument("system")
     parser.add_argument("output", type=Path)
-    parser.add_argument("--control-apk", type=Path)
+    parser.add_argument("--control-apk", type=Path, required=True)
+    parser.add_argument("--control-test", type=Path, required=True)
     args = parser.parse_args()
     device = Device(args.output)
     try:
-        exercise(device, args.apk, args.system, args.control_apk)
+        exercise(device, args.apk, args.system, args.control_apk, args.control_test)
     except (AssertionError, subprocess.SubprocessError, OSError, ET.ParseError) as error:
         device.note(f"FAILED: {error}")
         raise

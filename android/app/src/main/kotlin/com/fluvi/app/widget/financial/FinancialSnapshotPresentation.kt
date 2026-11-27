@@ -3,7 +3,7 @@ package com.fluvi.app.widget.financial
 import android.graphics.Bitmap
 import android.graphics.Color
 
-/** Presentation shared by the financial snapshot widget and its preview. */
+/** Financial snapshot widget presentation and its existing app-local painter. */
 internal data class FluviFinancialCardPresentation(
     val focus: String,
     val primary: String,
@@ -12,6 +12,8 @@ internal data class FluviFinancialCardPresentation(
     val eventLabel: String?,
     val contentDescription: String,
     val orbAccentColor: Int,
+    val showToggle: Boolean,
+    val toggleLabel: String,
     val full: Boolean,
     /** Stable rendered-input identity. Bitmap allocation identity is not a
      * visual change and must never trigger an accessibility-window update. */
@@ -47,6 +49,8 @@ internal object FluviFinancialCardPresenter {
         eventLabel = null,
         contentDescription = "Fluvi · Pénzügyi pillanatkép",
         orbAccentColor = neutral.accentColor,
+        showToggle = false,
+        toggleLabel = "",
         full = false,
         visualKey = "discreet:v1",
     )
@@ -59,6 +63,8 @@ internal object FluviFinancialCardPresenter {
         eventLabel = null,
         contentDescription = "Fluvi pénzügyi pillanatkép",
         orbAccentColor = neutral.accentColor,
+        showToggle = false,
+        toggleLabel = "",
         full = true,
         visualKey = "loading:v1",
     )
@@ -73,6 +79,8 @@ internal object FluviFinancialCardPresenter {
             eventLabel = if (eventIsPrimary) null else content.eventLabel,
             contentDescription = content.focus,
             orbAccentColor = content.accentColor,
+            showToggle = content.event != null,
+            toggleLabel = if (eventIsPrimary) "Fő érték" else "Utolsó tétel",
             full = true,
             visualKey = listOf(
                 "full:v1",

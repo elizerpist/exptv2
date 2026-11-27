@@ -75,7 +75,7 @@ python3 "$root/android/wa-integration/prepare-host.py" "$stage/host"
     cd "$stage/host"
     tasks=(":app:assemble${mode^}")
     if [[ "${FLUVI_R49_INCLUDE_FIXTURE:-false}" = true ]]; then
-        tasks+=(":r49-control:assembleDebug")
+        tasks+=(":r49-control:assembleDebug" ":r49-control:assembleDebugAndroidTest")
     fi
     bash ./gradlew "${tasks[@]}" --no-daemon --max-workers=3 --console=plain
 )
@@ -86,6 +86,7 @@ test "${#outputs[@]}" = 1
 cp "${outputs[0]}" "$out"
 if [[ "${FLUVI_R49_INCLUDE_FIXTURE:-false}" = true ]]; then
     cp "$stage/host/r49-control/build/outputs/apk/debug/r49-control-debug.apk" "$(dirname "$out")/r49-control.apk"
+    cp "$stage/host/r49-control/build/outputs/apk/androidTest/debug/r49-control-debug-androidTest.apk" "$(dirname "$out")/r49-control-test.apk"
 fi
 python3 scripts/verify-r49-host.py --apk "$out"
 sha256sum "$out"

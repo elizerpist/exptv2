@@ -311,7 +311,7 @@ void main() {
       profileWorkflow,
       contains(
         "run-dashboard-profile:\n"
-        "    if: \${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true') }}\n"
+        "    if: \${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true') }}\n"
         "    needs: [test-core, test-flutter, dashboard-paths]\n"
         "    runs-on: ubuntu-latest",
       ),
@@ -323,7 +323,7 @@ void main() {
       profileWorkflow,
       contains(
         "run-dashboard-profile-baseline:\n"
-        "    if: \${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)) }}\n"
+        "    if: \${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)) }}\n"
         "    needs: [test-core, test-flutter]\n"
         "    runs-on: ubuntu-latest",
       ),
@@ -627,7 +627,7 @@ void main() {
     final noDiagnosticGuard = workflow.replaceFirst(
       job,
       job.replaceFirst(
-        r"!(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic)",
+        r"!(github.event_name == 'workflow_dispatch' && inputs.r49_build_only)",
         'true',
       ),
     );
@@ -646,7 +646,7 @@ void main() {
     final noDiagnosticGuard = workflow.replaceFirst(
       job,
       job.replaceFirst(
-        r"!(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic)",
+        r"!(github.event_name == 'workflow_dispatch' && inputs.r49_build_only)",
         'true',
       ),
     );
@@ -700,8 +700,8 @@ bool _hasProfileContract(String workflow, {required bool baseline}) {
   if (headers.length != 1) return false;
   final job = _workflowJob(workflow, name);
   final condition = baseline
-      ? r"if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)) }}"
-      : r"if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.native_diagnostic) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true') }}";
+      ? r"if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_baseline_profile)) }}"
+      : r"if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.r49_build_only) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.dashboard-paths.outputs.profile == 'true') }}";
   final needs = baseline
       ? 'needs: [test-core, test-flutter]'
       : 'needs: [test-core, test-flutter, dashboard-paths]';

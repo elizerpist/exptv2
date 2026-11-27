@@ -39,7 +39,8 @@ def stage_application(destination):
     text = target.read_text()
     text = replace_once(text, 'applicationId = "tk.zwander.lockscreenwidgets"', 'applicationId = "com.fluvi.app"')
     text = replace_once(text, 'versionCode = 222', 'versionCode = 2')
-    text = replace_once(text, 'versionName = "4.7.5"', 'versionName = "0.1.0"')
+    text = replace_once(text, 'versionName = "4.7.5"', '''versionName = "0.1.0"
+        ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64") }''')
     text = replace_once(text, '    alias(libs.plugins.bugsnag)\n', '')
     start = text.index("bugsnag {\n")
     end = text.index("dependencies {", start)
