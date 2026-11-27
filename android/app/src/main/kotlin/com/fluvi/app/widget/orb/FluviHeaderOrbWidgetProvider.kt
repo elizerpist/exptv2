@@ -76,11 +76,16 @@ internal object HeaderOrbWidgetContent {
         if (read(context, owner)?.key == key) return mapOf("cached" to true)
         val request = Preparation(owner, UUID.randomUUID().toString(), key)
         preparation = request
+        Log.i("FluviBalanceOrb", "stage=material-prepare id=${owner.id}")
         return mapOf("token" to request.token)
     }
 
-    fun unavailable(token: String?) {
-        if (preparation?.token == token) preparation = null
+    fun unavailable(token: String?, reason: String?) {
+        val request = preparation ?: return
+        if (request.token != token) return
+        preparation = null
+        val outcome = reason?.takeIf { it.matches(Regex("[a-zA-Z]{1,32}")) } ?: "unknown"
+        Log.i("FluviBalanceOrb", "stage=material-unavailable id=${request.owner.id} reason=$outcome")
     }
 
     fun publish(
@@ -152,7 +157,12 @@ internal object HeaderOrbWidgetContent {
             val parcel = Parcel.obtain()
             try {
                 views.writeToParcel(parcel, 0)
-                require(parcel.dataSize() + packet.plan.estimatedRawBytes <= MAX_DELIVERY_BYTES)
+                val wireBytes = parcel.dataSize()
+                val rawBytes = packet.plan.estimatedRawBytes
+                if (wireBytes + rawBytes > MAX_DELIVERY_BYTES) {
+                    Log.w("FluviBalanceOrb", "stage=material-envelope-rejected parcel=$wireBytes decoded=$rawBytes")
+                    throw IllegalArgumentException("AppWidget payload exceeds its envelope")
+                }
             } finally {
                 parcel.recycle()
             }

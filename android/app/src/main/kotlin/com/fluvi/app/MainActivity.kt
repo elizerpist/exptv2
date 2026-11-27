@@ -1125,7 +1125,7 @@ class MainActivity : FlutterActivity() {
                                         application, binding, requireNotNull(call.argument("signature")),
                                     )
                                     "unavailable" -> {
-                                        HeaderOrbWidgetContent.unavailable(call.argument("token"))
+                                        HeaderOrbWidgetContent.unavailable(call.argument("token"), call.argument("reason"))
                                         null
                                     }
                                     else -> HeaderOrbWidgetContent.publish(
@@ -1136,7 +1136,10 @@ class MainActivity : FlutterActivity() {
                                     )
                                 }
                             }.onSuccess(result::success)
-                                .onFailure { result.error("balance_orb_material", it.javaClass.simpleName, null) }
+                                .onFailure {
+                                    Log.w("FluviBalanceOrb", "stage=material-${call.method} failure=${it.javaClass.simpleName}")
+                                    result.error("balance_orb_material", it.javaClass.simpleName, null)
+                                }
                         }
                         else -> result.notImplemented()
                     }

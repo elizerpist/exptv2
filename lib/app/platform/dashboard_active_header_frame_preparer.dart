@@ -98,11 +98,13 @@ final class ActiveHeaderPreparedFrames {
     required this.status,
     this.playback,
     this.frames,
+    this.phaseOffsetMs = 0,
   });
 
   final ActiveHeaderPreparationStatus status;
   final DashboardOrbMaterialPlaybackProfile? playback;
   final List<Uint8List>? frames;
+  final int phaseOffsetMs;
 
   bool get ready => status == ActiveHeaderPreparationStatus.ready;
 }
@@ -168,33 +170,66 @@ Future<ActiveHeaderPreparedFrames> prepareActiveHeaderFrames({
     if (animated) samples.add(Uint8List.fromList(frame.rgba));
   }
 
+  var first = 0;
   var resultPlayback = playback;
   if (animated) {
-    final validation = const DashboardOrbLoopVerifier().validate(
+    const verifier = DashboardOrbLoopVerifier();
+    final validation = verifier.validate(
       frames: samples,
       candidateFrameCounts: candidates,
     );
-    if (!validation.accepted || validation.frameCount == null) {
-      return outcome(ActiveHeaderPreparationStatus.unverifiedLoop);
+    final count = validation.frameCount;
+    if (validation.accepted && count != null) {
+      if (!_hasInteriorMotion(samples.take(count), playback.frameSizePx)) {
+        return outcome(ActiveHeaderPreparationStatus.animatedButStationary);
+      }
+      resultPlayback = playback.withLoopDurationMs(count * playback.intervalMs);
+    } else {
+      final loop = _findVerifiedSampleWindow(samples, playback, isCurrent);
+      if (!isCurrent()) return outcome(ActiveHeaderPreparationStatus.stale);
+      if (loop == null)
+        return outcome(ActiveHeaderPreparationStatus.unverifiedLoop);
+      first = loop.start;
+      resultPlayback = playback.withLoopDurationMs(
+        loop.count * playback.intervalMs,
+      );
     }
-    if (!_hasInteriorMotion(
-      samples.take(validation.frameCount!).toList(growable: false),
-      playback.frameSizePx,
-    )) {
-      return outcome(ActiveHeaderPreparationStatus.animatedButStationary);
-    }
-    resultPlayback = playback.withLoopDurationMs(
-      validation.frameCount! * playback.intervalMs,
-    );
   }
   if (!isCurrent()) return outcome(ActiveHeaderPreparationStatus.stale);
   return ActiveHeaderPreparedFrames._(
     status: ActiveHeaderPreparationStatus.ready,
     playback: resultPlayback,
+    phaseOffsetMs: first * playback.intervalMs,
     frames: List<Uint8List>.unmodifiable(
-      encoded.take(resultPlayback.frameCount),
+      encoded.skip(first).take(resultPlayback.frameCount),
     ),
   );
+}
+
+/// Portal and main shader clocks need not return together at a single nominal
+/// main-phase turn. Use a measured window of the already rendered source.
+({int start, int count})? _findVerifiedSampleWindow(
+  List<Uint8List> samples,
+  DashboardOrbMaterialPlaybackProfile playback,
+  bool Function() isCurrent,
+) {
+  const verifier = DashboardOrbLoopVerifier();
+  final second = (1000 / playback.intervalMs).ceil().clamp(3, samples.length);
+  final stride = (second ~/ 2).clamp(1, samples.length);
+  for (final seconds in [4, 3, 2, 1]) {
+    final count = seconds * second;
+    for (var start = 0; start + count <= samples.length; start += stride) {
+      if (!isCurrent()) return null;
+      final frames = samples.sublist(start, start + count);
+      if (!_hasInteriorMotion(frames, playback.frameSizePx)) continue;
+      if (verifier
+          .validate(frames: frames, candidateFrameCounts: [count])
+          .accepted) {
+        return (start: start, count: count);
+      }
+    }
+  }
+  return null;
 }
 
 List<int> _candidateFrameCounts(DashboardOrbMaterialPlaybackProfile playback) {
@@ -207,7 +242,7 @@ List<int> _candidateFrameCounts(DashboardOrbMaterialPlaybackProfile playback) {
   return List<int>.generate(maximum - minimum + 1, (index) => minimum + index);
 }
 
-bool _hasInteriorMotion(List<Uint8List> frames, int size) {
+bool _hasInteriorMotion(Iterable<Uint8List> frames, int size) {
   if (frames.length < 3) return false;
   final first = frames.first;
   // An animated source must show a measurable change in real samples, not

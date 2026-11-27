@@ -175,7 +175,8 @@ final class DashboardHeaderWidgetPublisher {
           final accepted = await _channel.invokeMethod<bool>('publish', {
             'token': request.token,
             'motion': request.motionEnabled && request.snapshot.isAnimated,
-            'phaseOriginUtcMs': request.phaseOriginUtcMs,
+            'phaseOriginUtcMs':
+                request.phaseOriginUtcMs + prepared.phaseOffsetMs,
             'size': playback.frameSizePx,
             'intervalMs': playback.intervalMs,
             'frames': frames,

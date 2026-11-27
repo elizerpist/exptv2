@@ -1086,8 +1086,9 @@ class _CoreDashboardState extends State<CoreDashboard>
     _budgetDistributionPageController.dispose();
     _budgetAvatarRailController.dispose();
     _budgetRhythm.dispose();
-    if (widget.balanceHeaderColorPolicy == null)
+    if (widget.balanceHeaderColorPolicy == null) {
       _balanceHeaderColorPolicy.dispose();
+    }
     _budgetHeaderColorPolicy.dispose();
     _mindHeaderColorPolicy.dispose();
     _headerOrbMaterialExporter.dispose();

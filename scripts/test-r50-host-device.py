@@ -101,14 +101,30 @@ class Device:
         if not self.click(self.host_label, package=settings, optional=True, limit=5):
             self.click("Downloaded apps", "Installed apps", package=settings)
             self.click(self.host_label, package=settings)
-        self.click(f"Use {self.host_label}", self.host_label, package=settings)
-        self.click("Allow", "OK", package=settings)
+        raw = self.screen()
+        self.save("service-switch.xml", raw)
+        nodes = list(ET.fromstring(raw).iter("node"))
+        title, = [node for node in nodes if node.get("text") == f"Use {self.host_label}"]
+        _, top, right, bottom = map(int, re.findall(r"-?\d+", title.attrib["bounds"]))
+        y = (top + bottom) / 2
+        targets = set()
+        for node in nodes:
+            if node.get("package") != settings or node.get("visible") != "true":
+                continue
+            left, a, b, c = map(int, re.findall(r"-?\d+", node.attrib["bounds"]))
+            if left >= right and a <= y <= c and b - left >= 32 and c - a >= 32:
+                targets.add((left, a, b, c))
+        assert targets, "No toggle bounds near the measured service row"
+        left, top, right, bottom = min(targets, key=lambda p: (p[2] - p[0]) * (p[3] - p[1]))
+        self.shell("input", "tap", (left + right) // 2, (top + bottom) // 2)
+        self.note(f"Tapped the measured Android service toggle at {left},{top}..{right},{bottom}")
+        self.click("Allow", "OK", optional=True, limit=6)
         assert self.service_connected(), "Exact lockscreen service did not connect"
         for _ in range(3):
             screen = self.screen()
-            if "Android kisegítő lehetőségek".encode() in screen:
+            if SETTINGS_ROWS[0] in visible_labels(screen, PACKAGE):
                 break
-            if b"Create widget" in screen:
+            if any(label in ("Create", "Create widget") for label in visible_labels(screen, "com.android.settings")):
                 break
             self.shell("input", "keyevent", "KEYCODE_BACK")
 
@@ -182,13 +198,38 @@ def pixel_change(a, b, bounds):
     return inside, outside
 
 
+def visible_labels(raw, package=None):
+    return [
+        part.strip()
+        for node in ET.fromstring(raw).iter("node")
+        if node.get("visible") == "true" and (package is None or node.get("package") == package)
+        for key in ("text", "content-desc")
+        for part in node.get(key, "").splitlines()
+        if part.strip()
+    ]
+
+
+SETTINGS_ROWS = ["Android kisegítő lehetőségek", "1×1 ORB", "2×2 ORB"]
+
+
 def settings_rows(device):
-    raw = device.screen()
-    device.save("three-settings-rows.xml", raw)
-    labels = {node.get("text") for node in ET.fromstring(raw).iter("node")}
-    assert {"Android kisegítő lehetőségek", "1×1 ORB", "2×2 ORB"} <= labels, labels
-    assert "Aktuális fejléc megosztása" not in labels
-    assert "Zárképernyős widget elhelyezése" not in labels
+    until = time.monotonic() + 12
+    sample = 0
+    while time.monotonic() < until:
+        raw = device.screen()
+        device.save(f"three-settings-rows-{sample:02d}.xml", raw)
+        labels = visible_labels(raw, PACKAGE)
+        if all(row in labels for row in SETTINGS_ROWS):
+            indices = [labels.index(row) for row in SETTINGS_ROWS]
+            assert indices == sorted(indices)
+            assert labels.count("Android kisegítő lehetőségek") == 1
+            assert "Aktuális fejléc megosztása" not in labels
+            assert "Zárképernyős widget elhelyezése" not in labels
+            device.note("Three Fluvi setting rows observed in order")
+            return
+        sample += 1
+        time.sleep(.3)
+    raise AssertionError("The three settings rows were not identified")
 
 
 def enter_settings(device):
@@ -287,7 +328,7 @@ def exercise(device, apk, system, observer):
     device.shell("input", "keyevent", "KEYCODE_ENTER")
     hide_sample(device, "unlocked")
     device.shell("am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
-    if "Android kisegítő lehetőségek".encode() not in device.screen():
+    if SETTINGS_ROWS[0] not in visible_labels(device.screen(), PACKAGE):
         enter_settings(device)
     device.click("2×2 ORB", package=PACKAGE)
     device.shell("input", "keyevent", "KEYCODE_HOME")
