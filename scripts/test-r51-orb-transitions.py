@@ -124,8 +124,11 @@ def clipboard(device, name, expected_sha):
         "am", "start", "-S", "-W", "-n", WITNESS + "/.ClipboardWitness", "--ez", "paste", "true")
     end = time.monotonic() + 5
     while time.monotonic() < end:
-        output = device.shell("run-as", WITNESS, "ls", "files", timeout=4)
-        if "paste.txt" in output.splitlines():
+        ready = subprocess.run(
+            ["adb", "shell", "run-as", WITNESS, "test", "-s", "files/paste.txt"],
+            timeout=4, check=False, capture_output=True,
+        )
+        if ready.returncode == 0:
             break
         time.sleep(.15)
     text = device.adb("exec-out", "run-as", WITNESS, "cat", "files/paste.txt")
@@ -145,7 +148,7 @@ def visible_orb(device, name):
     center_x, center_y = crop.width / 2, crop.height / 2
     def painted():
         return sum(
-            max(rgb) - min(rgb) >= 28 and max(rgb) >= 92
+            max(rgb) - min(rgb) >= 65 and max(rgb) >= 92
             for index, rgb in enumerate(crop.getdata())
             if ((index % crop.width - center_x) / center_x) ** 2
             + ((index // crop.width - center_y) / center_y) ** 2 < .55
@@ -205,19 +208,23 @@ def locked_sleep(device, name):
     return before_sleep
 
 
-def direct_unlock(device, name, previous):
+def direct_unlock(device, name, previous, framework):
     device.shell("input", "keyevent", "KEYCODE_SLEEP")
     poll_state(device, name + "-pre-unlock", "OFF", True)
     image, before_unlock = wake(device, name + "-unlock-start")
     assert previous is None or before_unlock == previous, (previous, before_unlock)
     # Ordinary swipe-only keyguard. Move outside the ORB's touch region.
     x = image.width // 5
-    device.note(f"{name} genuine swipe unlock directly from painted root {before_unlock}")
-    device.shell("input", "swipe", x, int(image.height * .91), x, int(image.height * .34), 290)
+    if framework:
+        device.note(f"{name} framework dismiss of swipe-only keyguard from painted root {before_unlock}")
+        device.shell("wm", "dismiss-keyguard")
+    else:
+        device.note(f"{name} genuine swipe unlock directly from painted root {before_unlock}")
+        device.shell("input", "swipe", x, int(image.height * .91), x, int(image.height * .34), 290)
     unlocked_first = held_absence(device, name + "-unlock", "ON", False)
-    focused = device.adb("shell", "dumpsys window windows")
+    focused = device.adb("shell", "dumpsys window; dumpsys activity activities")
     device.save(name + "-launcher.txt", focused)
-    assert re.search(rb"mCurrentFocus=.*(?:launcher|com\.fluvi\.app)", focused, re.I), (
+    assert re.search(rb"(mCurrentFocus|topResumedActivity|mResumedActivity)=.*(?:launcher|com\.fluvi\.app)", focused, re.I), (
         "Dismissed keyguard had no witnessed launcher or Fluvi focus"
     )
     device.note(f"PASS {name} direct unlock, first requested root {unlocked_first}")
@@ -236,6 +243,11 @@ def exercise(device, args):
     device.shell("locksettings", "set-disabled", "false")
     device.shell("settings", "put", "secure", "lock_screen_lock_after_timeout", "0")
     assert "Status: ok" in device.shell("am", "start", "-W", "-n", ACTIVITY)
+    baseline_labels = stock.visible_labels(device.screen())
+    if "Quickstep isn't responding" in baseline_labels:
+        device.note("Disposable launcher ANR witnessed before the Fluvi settings entrance")
+        device.click("Close app", limit=6)
+        device.shell("am", "start", "-W", "-n", ACTIVITY)
     stock.enter_settings(device)
     widget = stock.prepare_binding(device)
     panel(device)
@@ -249,7 +261,7 @@ def exercise(device, args):
         assert "Leállítás" in label_screen(device), "Native capture did not acknowledge start"
     device.shell("input", "keyevent", "KEYCODE_HOME")
     failures = []
-    for index in range(args.repetitions):
+    for index in range(0 if args.effects_only else args.repetitions):
         name = f"warm-{index + 1:02d}"
         previous = None
         try:
@@ -258,7 +270,7 @@ def exercise(device, args):
             device.note(f"FAIL {name} sleep: {error}")
             failures.append(name + "-sleep")
         try:
-            direct_unlock(device, name, previous)
+            direct_unlock(device, name, previous, args.framework_dismiss)
         except (AssertionError, subprocess.SubprocessError, OSError) as error:
             device.note(f"FAIL {name} unlock: {error}")
             failures.append(name + "-unlock")
@@ -292,6 +304,15 @@ def exercise(device, args):
         except (AssertionError, subprocess.SubprocessError, OSError) as error:
             device.note(f"FAIL entrance samples: {error}")
             failures.append("entrance")
+        if not args.baseline:
+            # This is the same app-private artifact the player copied. Keep it
+            # separately when a clipboard witness did not reach its precondition.
+            frozen = subprocess.run(
+                ["adb", "exec-out", "cat", "/data/user/0/com.fluvi.app/no_backup/wa-lockscreen-frozen.txt"],
+                capture_output=True, timeout=6,
+            )
+            if frozen.returncode == 0 and frozen.stdout.startswith(b"FLUVI_WA_LOCKSCREEN_CAPTURE_V1"):
+                device.save("native-frozen-snapshot.txt", frozen.stdout)
     assert not failures, f"Preserved failing trials: {failures}"
 
 
@@ -304,6 +325,8 @@ def main():
     parser.add_argument("--app-sha", required=True)
     parser.add_argument("--baseline", action="store_true")
     parser.add_argument("--effects", action="store_true")
+    parser.add_argument("--effects-only", action="store_true")
+    parser.add_argument("--framework-dismiss", action="store_true")
     parser.add_argument("--repetitions", type=int, choices=(1, 3), required=True)
     args = parser.parse_args()
     device = Device(args.output)

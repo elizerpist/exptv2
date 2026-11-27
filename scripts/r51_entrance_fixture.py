@@ -67,10 +67,10 @@ def sample_video(device, path, bounds, size, name):
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-i", str(path), "-vf", crop,
         "-fps_mode", "passthrough", "-pix_fmt", "rgb24", "-f", "rawvideo", "-",
     ], timeout=30)
-    stamps = subprocess.check_output([
+    stamps = [line.strip().split(",")[0] for line in subprocess.check_output([
         "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
         "frame=best_effort_timestamp_time", "-of", "csv=p=0", str(path),
-    ], text=True).strip().splitlines()
+    ], text=True).splitlines() if line.strip() and line.split(",")[0].strip()]
     frames = [Image.frombytes("RGB", (w, h), frame_bytes[i:i+3*w*h])
               for i in range(0, len(frame_bytes), 3*w*h)]
     assert len(frames) == len(stamps) and len(frames) >= 5, (len(frames), len(stamps))
@@ -82,8 +82,13 @@ def sample_video(device, path, bounds, size, name):
         f"{n},{stamps[n]},{v[0]:.2f},{v[1]}\n" for n,v in enumerate(values)
     )
     device.save(name + "-pixels.csv", text.encode())
-    first = next(i for i,(p,_) in enumerate(values) if p > 14)
-    full = next(i for i,(p,_) in enumerate(values) if p >= end * .94)
+    # The recorder starts on an assigned ON display. Identify the absence
+    # interval before the subsequent wake rather than scoring pre-roll.
+    idle = next((i for i, (p,_) in enumerate(values) if p < 8), None)
+    assert idle is not None, "No pre-entrance absence in the recorded strip"
+    first = next((i for i, (p,_) in enumerate(values) if i > idle and p > 14), None)
+    assert first is not None, "No post-absence ORB frame"
+    full = next(i for i,(p,_) in enumerate(values) if i >= first and p >= end * .94)
     for i in range(max(0, first - 1), min(full + 2, len(frames))):
         frames[i].save(device.output / f"{name}-orb-{i:03d}.png")
     device.note(f"{name} video frames={len(values)} first={first} full={full} samples={values[first:full+1]}")
@@ -93,15 +98,21 @@ def sample_video(device, path, bounds, size, name):
 
 def collect(device, r51, mode, name, work, bounds, size):
     device.shell("settings", "put", "global", "animator_duration_scale", mode)
-    device.shell("input", "keyevent", "KEYCODE_SLEEP")
-    r51.poll_state(device, name + "-sleep", "OFF", True)
     device.shell("rm", "-f", REMOTE)
-    process = subprocess.Popen(["adb", "shell", "screenrecord", "--time-limit", "8",
+    process = subprocess.Popen(["adb", "shell", "screenrecord", "--time-limit", "20",
                                 "--size", "720x1600", "--bit-rate", "6000000", REMOTE],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     try:
+        end = time.monotonic() + 4
+        while time.monotonic() < end and process.poll() is None:
+            if device.shell(f"test -s {REMOTE} && echo ready") == "ready":
+                break
+            time.sleep(.1)
+        assert process.poll() is None, process.communicate()[0].decode(errors="replace")
+        device.shell("input", "keyevent", "KEYCODE_SLEEP")
+        r51.poll_state(device, name + "-sleep", "OFF", True)
         r51.wake(device, name + "-wake")
-        raw, _ = process.communicate(timeout=14)
+        raw, _ = process.communicate(timeout=24)
         assert process.returncode == 0, raw.decode(errors="replace")
     finally:
         if process.poll() is None:
