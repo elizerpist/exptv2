@@ -13,7 +13,6 @@ from PIL import Image
 
 PACKAGE = "com.fluvi.app"
 WA = "tk.zwander.lockscreenwidgets"
-ORB = "Fluvi · Aktuális header ORB"
 
 
 class Device:
@@ -74,6 +73,33 @@ class Device:
         if not optional:
             raise AssertionError(f"UI did not reach {label!r} within {limit}s")
         return False
+
+    def choose_widget(self, app_label, query, evidence):
+        self.click("Search", package=self.host_package)
+        self.shell("input", "text", query)
+        end = time.monotonic() + 10
+        while time.monotonic() < end:
+            raw = self.screen()
+            self.save(evidence + "-picker.xml", raw)
+            root = ET.fromstring(raw)
+            nodes = [node for node in root.iter("node") if node.get("package") == self.host_package]
+            if not any(node.get("text") == query for node in nodes):
+                continue
+            headings = [node for node in nodes if node.get("text") == app_label]
+            if len(headings) != 1:
+                continue
+            bounds = lambda node: tuple(map(int, re.findall(r"-?\d+", node.attrib["bounds"])))
+            heading_bottom = bounds(headings[0])[3]
+            cards = {bounds(node) for node in nodes if node.get("clickable") == "true"
+                     and node.get("visible") == "true" and bounds(node)[1] >= heading_bottom}
+            cards = {(a, b, c, d) for a, b, c, d in cards if c-a > 100 and c-a == d-b}
+            if len(cards) == 1:
+                a, b, c, d = cards.pop()
+                self.save(evidence + "-picker.png", self.adb("exec-out", "screencap", "-p"))
+                self.shell("input", "tap", (a+c)//2, (b+d)//2)
+                self.note(f"Selected filtered {app_label} card at {a},{b},{c},{d}")
+                return
+        raise AssertionError(f"Unique visible widget card missing for {app_label} and {query}")
 
     def service_connected(self):
         end = time.monotonic() + 30
@@ -201,12 +227,9 @@ def exercise(device, apk, system, control_apk, control_test, observer, external_
     assert device.service_connected()
     # WA renders the first feature card's enabled state as a clickable label.
     device.click("Disabled", "Frame Enabled", "Enable Frame")
-    for label, search in (("R49 Test Marker", "R49"), (ORB, "ORB")):
+    for app_label, query, evidence in (("R49 Test Marker", "R49", "marker"), ("Fluvi", "Aktu", "orb")):
         device.click("Add Widget", package=device.host_package)
-        if not device.click(label, optional=True, limit=3, package=device.host_package):
-            device.click("Search", package=device.host_package)
-            device.shell("input", "text", search)
-            device.click(label, package=device.host_package)
+        device.choose_widget(app_label, query, evidence)
         device.click("Create", "Allow", optional=True, limit=5)
     device.crop("bound")
     bindings = (device.output / "bound-widgets.txt").read_text()
