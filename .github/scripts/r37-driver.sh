@@ -271,6 +271,10 @@ case "${1:-}" in
       class=com.fluvi.app.lockscreen.KeyguardR47PreparedFrameInstrumentationTest
       methods=(waPlaysPreparedHeaderAndWithdraws)
       ;;
+    r47_diagnostic_pressure)
+      class=com.fluvi.app.lockscreen.KeyguardCardDiagnosticsInstrumentationTest
+      methods=(r448BoundaryAndVetoSurviveLightPressure r448BoundaryAndVetoSurviveFullPressure)
+      ;;
     r446_composition)
       class=com.fluvi.app.lockscreen.KeyguardR446WindowPresenterInstrumentationTest
       methods=(actualAttachedSurfaceStaysBelowIndependentUpperWindow)
