@@ -3,6 +3,4 @@
     <application android:label="R49 fixture observer" android:hasCode="true" />
     <instrumentation android:name=".ReadVisibleHierarchy"
         android:targetPackage="com.fluvi.r49.fixture" />
-    <instrumentation android:name=".FrameTutorialTouch"
-        android:targetPackage="com.fluvi.r49.fixture" />
 </manifest>
