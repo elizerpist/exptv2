@@ -135,6 +135,14 @@ jobs:
           done
           tail -100 "$RUNNER_TEMP/r37-evidence/unit.log"
           exit "$rc"
+      - name: Set up image-analysis Python
+        if: ${{ inputs.test_scope == 'r47_frame_correlation' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install synthetic-frame analysis dependency
+        if: ${{ inputs.test_scope == 'r47_frame_correlation' }}
+        run: python3 -m pip install 'Pillow==11.3.0'
       - name: Enable KVM
         if: ${{ inputs.test_scope != 'units' }}
         run: |

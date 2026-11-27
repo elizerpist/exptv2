@@ -216,13 +216,16 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
         fun crop(name: String, bounds: Rect): Bitmap {
             val before = SystemClock.uptimeMillis(); val beforeElapsed = SystemClock.elapsedRealtimeNanos()
             val screen = checkNotNull(ui.takeScreenshot())
+            val captureReturn = SystemClock.uptimeMillis()
+            val captureReturnElapsed = SystemClock.elapsedRealtimeNanos()
             try {
                 check(bounds.left >= 0 && bounds.top >= 0 && bounds.right <= screen.width && bounds.bottom <= screen.height)
                 val result = Bitmap.createBitmap(screen, bounds.left, bounds.top, bounds.width(), bounds.height())
                 File(out, "$name-full.png").outputStream().use { check(screen.compress(Bitmap.CompressFormat.PNG, 100, it)) }
                 File(out, "$name.png").outputStream().use { check(result.compress(Bitmap.CompressFormat.PNG, 100, it)) }
                 log.append("sample=$name before=$before after=${SystemClock.uptimeMillis()} " +
-                    "beforeElapsedNs=$beforeElapsed afterElapsedNs=${SystemClock.elapsedRealtimeNanos()} bounds=$bounds\n")
+                    "captureReturn=$captureReturn beforeElapsedNs=$beforeElapsed " +
+                    "captureReturnElapsedNs=$captureReturnElapsed afterElapsedNs=${SystemClock.elapsedRealtimeNanos()} bounds=$bounds\n")
                 held.add(result); return result
             } finally { screen.recycle() }
         }
