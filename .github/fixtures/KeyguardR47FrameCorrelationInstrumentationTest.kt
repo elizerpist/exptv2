@@ -309,8 +309,8 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
             }
             val markerLoc = IntArray(2)
             main { checkNotNull(marker).getLocationOnScreen(markerLoc) }
-            log.append("markerScreen=${markerLoc[0]},${markerLoc[1]} ownerWindow=$hostId attachment=1 " +
-                "orbGeneration=1 route=${if (direct) "DIRECT" else "WA"}\n")
+            log.append("markerScreen=${markerLoc[0]},${markerLoc[1]} targetWindow=$hostId attachment=1 " +
+                "orbGeneration=1 generationScope=syntheticHarness route=${if (direct) "DIRECT" else "WA"}\n")
             val nominalBounds = Rect(bounds)
             val calibration = checkNotNull(ui.takeScreenshot()).also { held.add(it) }
             val search = Rect((bounds.left - size / 2).coerceAtLeast(0), (bounds.top - size / 2).coerceAtLeast(0),
@@ -366,6 +366,18 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
                     assertTrue(checkNotNull(frame).requestShow(owner, geometry) { allowed.get() }) }
             }
             waitFor("current prepared frame draw") { draws.get() > 0 && frameDraws.get() > 0 }
+            main {
+                val actualPresenter: Any = if (direct) checkNotNull(presenter) else checkNotNull(frame)
+                val materialField = actualPresenter.javaClass.getDeclaredField("view").apply { isAccessible = true }
+                val material = materialField.get(actualPresenter) as View
+                val overlayId = if (direct) "UNOBSERVED_DIRECT_CHILD" else
+                    checkNotNull(frame).ownIdentity(checkNotNull(frameOwner))?.windowId?.toString() ?: "UNOBSERVED"
+                log.append("OWNER targetWindow=$hostId overlayWindow=$overlayId " +
+                    "routeOwner=${if (direct) System.identityHashCode(token).toString() else checkNotNull(frameOwner).toString()} " +
+                    "materialView=${System.identityHashCode(material)} settingsGeneration=${snapshot.settingsGeneration} " +
+                    "publisherRevision=${snapshot.profile.publisherRevision} " +
+                    "elapsedNs=${SystemClock.elapsedRealtimeNanos()}\n")
+            }
             var minX = search.right; var minY = search.bottom; var maxX = -1; var maxY = -1
             var discoveryBefore = 0L; var discoveryAfter = 0L; var discoveryAttempt = 0
             waitFor("full orb compositor bounds") {
@@ -432,7 +444,8 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
                         "elapsedNs=${SystemClock.elapsedRealtimeNanos()} evidence=INVALIDATE_ONLY\n")
                 }
                 log.append("RESTRICTION elapsedNs=${SystemClock.elapsedRealtimeNanos()} uptimeMs=${SystemClock.uptimeMillis()} " +
-                    "ownerWindow=$hostId token=${System.identityHashCode(token)} attachment=1 orbGeneration=1\n")
+                    "targetWindow=$hostId token=${System.identityHashCode(token)} attachment=1 orbGeneration=1 " +
+                    "generationScope=syntheticHarness\n")
                 Trace.beginSection("R47_CORRELATION_RESTRICTION")
                 checkNotNull(marker).forbidden = true; checkNotNull(marker).invalidate()
                 allowed.set(false)
@@ -450,6 +463,23 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
                 val newToken = Any()
                 val oldOwner = frameOwner
                 var oldCallback: ((Boolean) -> Unit)? = null
+                val nextInput = input.toMutableMap().apply { put("publisherRevision", 2L) }
+                val nextReceipt = FluviActiveHeaderMaterialStore.publish(app, nextInput, epoch, true)
+                assertTrue(nextReceipt.reason, nextReceipt.accepted)
+                val nextFrameInput = frameInput.toMutableMap().apply {
+                    put("token", requireNotNull(nextReceipt.token)); put("publisherRevision", 2L)
+                    put("frames", listOf(bytes("braided-0"), bytes("braided-1900"), bytes("braided-0")))
+                }
+                val nextRequest = requireNotNull(FluviActiveHeaderMaterialStore.admitFrames(app, nextFrameInput, epoch).request)
+                val nextDecoded = requireNotNull(FluviActiveHeaderMaterialStore.decodeFrames(nextRequest))
+                assertTrue(FluviActiveHeaderMaterialStore.commitFrames(app, nextRequest, nextDecoded))
+                val nextSnapshot = checkNotNull(FluviActiveHeaderMaterialStore.applicable(app))
+                val nextReference = image("braided-0", size)
+                val nextReferenceDelta = difference(referenceA, nextReference)
+                log.append("RELOCK_REFERENCE_DELTA=$nextReferenceDelta\n")
+                check(nextReferenceDelta.second >= 64 && nextReferenceDelta.first > 5.0) {
+                    "NOT REACHED: old and replacement reference are insufficiently distinct"
+                }
                 main {
                     if (!direct) {
                         checkNotNull(frame).resumeChecked(checkNotNull(oldOwner), { true }) { oldCallback = it }
@@ -462,12 +492,12 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
                         "newToken=${System.identityHashCode(newToken)} oldAttachment=1 newAttachment=2 oldGeneration=1 newGeneration=2\n")
                     if (direct) {
                         presenter = KeyguardR446WindowPresenter(service)
-                        check(checkNotNull(presenter).prepareActiveHeader(checkNotNull(host.display), snapshot, artifact))
+                        check(checkNotNull(presenter).prepareActiveHeader(checkNotNull(host.display), nextSnapshot, artifact))
                     } else {
                         val nextOwner = KeyguardR448WidgetsAnywhereFrame.Owner(2,2,2)
                         frameOwner = nextOwner
                         frame = KeyguardR448WidgetsAnywhereFrame(service)
-                        check(checkNotNull(frame).prepareActiveHeader(nextOwner, snapshot, artifact) {})
+                        check(checkNotNull(frame).prepareActiveHeader(nextOwner, nextSnapshot, artifact) {})
                     }
                 }
                 if (direct) {
@@ -486,10 +516,33 @@ class KeyguardR47FrameCorrelationInstrumentationTest {
                     val stale = checkNotNull(frame).resumeChecked(checkNotNull(oldOwner), { true }) {}
                     log.append("RELOCK_SHOW requested=$requested staleResume=$stale retainedCallback=${oldCallback != null} elapsedNs=${SystemClock.elapsedRealtimeNanos()}\n")
                     assertTrue(requested); assertFalse(stale)
-                    oldCallback?.invoke(true)
                 }
-                SystemClock.sleep(150)
-                crop("relock-immediate", bounds)
+                var replacementSeen = false
+                repeat(12) { i ->
+                    if (!replacementSeen) {
+                        SystemClock.sleep(200)
+                        val sample = crop("relock-$i", bounds)
+                        val replacementDelta = difference(nextReference, sample)
+                        val oldDelta = difference(referenceA, sample)
+                        val exterior = exteriorMatches(checkNotNull(underlay), sample)
+                        log.append("RELOCK_SAMPLE=$i new=$replacementDelta old=$oldDelta exterior=$exterior\n")
+                        replacementSeen = replacementDelta.first <= 5.0 && oldDelta.first > 5.0 && exterior
+                    }
+                }
+                if (!replacementSeen) failures += "NOT REACHED: calibrated replacement B pixels"
+                main {
+                    if (direct) {
+                        val stale = checkNotNull(presenter).resume(token, { true }, { true }, {})
+                        log.append("RELOCK_OLD_RESUME_AFTER_B=$stale elapsedNs=${SystemClock.elapsedRealtimeNanos()}\n")
+                        assertFalse(stale)
+                    } else {
+                        log.append("RELOCK_OLD_RECEIPT_AFTER_B=${oldCallback != null} elapsedNs=${SystemClock.elapsedRealtimeNanos()}\n")
+                        oldCallback?.invoke(true)
+                    }
+                }
+                SystemClock.sleep(100)
+                val afterOld = crop("relock-after-old-callback", bounds)
+                log.append("RELOCK_AFTER_OLD new=${difference(nextReference, afterOld)} old=${difference(referenceA, afterOld)}\n")
             }
             repeat(2) { i -> SystemClock.sleep(50); val later = crop("after-hide-${i + 1}", bounds)
                 log.append("laterAfterHide=${i + 1} delta=${difference(checkNotNull(underlay), later)}\n") }

@@ -159,6 +159,21 @@ jobs:
             else
               bash "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r37-driver.sh" run
             fi
+      - name: Retain compact synthetic frame summaries
+        if: always() && inputs.test_scope == 'r47_frame_correlation'
+        uses: actions/upload-artifact@v4
+        with:
+          name: r47-correlation-summary-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/r37-evidence/*.txt
+            ${{ runner.temp }}/r37-evidence/*.log
+            ${{ runner.temp }}/r37-evidence/correlation/*.txt
+            ${{ runner.temp }}/r37-evidence/correlation/*.json
+            ${{ runner.temp }}/r37-evidence/correlation/*.log
+            ${{ runner.temp }}/r37-evidence/correlation/**/*.txt
+            ${{ runner.temp }}/r37-evidence/correlation/**/frame-extract-summary.json
+          if-no-files-found: warn
+          retention-days: 30
       - name: Retain controls and screenshots
         if: always()
         uses: actions/upload-artifact@v4

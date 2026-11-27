@@ -84,5 +84,21 @@ report={'clock':'VALIDATED' if validated else 'UNOBSERVED','frames':len(rows),'m
         'orb_bounds':bounds,'transitions':transitions,'compositor_frame_id':'UNOBSERVED',
         'screenshot_frame_id':'UNOBSERVED','actual_first_forbidden_frame':'NOT_DECIDABLE',
         'physical_presentation':'UNOBSERVED','note':'Host producer marker and screenrecord sample are not SurfaceFlinger display identity.'}
+shot = log_path.parent / 'after-hide-first-full.png'
+if shot.exists():
+    with Image.open(shot).convert('RGB') as image:
+        if x+292 < image.width and y+48 < image.height:
+            red, green, blue = image.getpixel((x+24,y+24))
+            shot_state = 'FORBIDDEN' if red > 160 and green < 100 and blue < 100 else 'ALLOWED' if blue > 160 and red < 100 and green < 100 else 'UNKNOWN'
+            shot_sequence = 0
+            for bit in range(12):
+                mean = sum(image.getpixel((x+61+bit*20,y+20)))/3
+                if mean > 190: shot_sequence |= 1 << bit
+                elif mean > 65:
+                    shot_sequence = None
+                    break
+            matches = [row['capture_index'] for row in rows if row['state']==shot_state and row['marker_seq']==shot_sequence]
+            report['screenshot_host_marker']={'state':shot_state,'sequence':shot_sequence,'video_sample_indices':matches,
+                'identity_meaning':'host producer buffer only; not exact compositor or screenshot presentation frame'}
 (case/'frame-extract-summary.json').write_text(json.dumps(report,indent=2,sort_keys=True)+'\n')
 print(json.dumps(report,sort_keys=True))

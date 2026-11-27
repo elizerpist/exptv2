@@ -30,6 +30,7 @@ if ! timeout -k 2s 60s bash scripts/prepare-keyguard-lower-environment.sh "$out/
  exit 1
 fi
 python3 -B "$GITHUB_WORKSPACE/orchestrator/.github/scripts/test-r47-frame-verdict.py" > "$out/correlation/verdict-selftest.txt" 2>&1 || exit 1
+python3 -B "$GITHUB_WORKSPACE/orchestrator/.github/scripts/test-r47-frame-extract.py" > "$out/correlation/extract-selftest.txt" 2>&1 || exit 1
 trace_processor="$out/correlation/trace_processor"
 if curl -fsSL --retry 2 https://get.perfetto.dev/trace_processor -o "$trace_processor"; then
  chmod +x "$trace_processor"
@@ -117,5 +118,6 @@ for method in controlClean controlOneFrame directFirstSample waFirstSample direc
  python3 -B "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r47-frame-extract.py" "$dir" > "$dir/frame-extract.log" 2>&1 || true
  adb shell rm -f "$remote_video" "$remote_pid" "$remote_trace" >/dev/null 2>&1 || true
 done
+python3 -B "$GITHUB_WORKSPACE/orchestrator/.github/scripts/r47-frame-summary.py" "$out/correlation" > "$out/correlation/summary.log" 2>&1 || true
 printf 'aggregate_instrumentation_exit=%s\nframes_are_not_physical_presentation=true\n' "$result" > "$out/correlation/status.txt"
 exit "$result"
