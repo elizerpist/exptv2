@@ -24990,3 +24990,453 @@ and SHA-256
 **D52.1 · EVIDENCE_COLLECTION.** Use the same signed R52 Human APK for two manually armed capture settings, 50/0 ms, plus separately identified system-transition/layer/pixel witnesses on the stock fixture. Preserve the working WA surface, entrance and Balance material. Keep ordered per-operation summaries even under event storms. Run direct unlock and sleep from a visibly confirmed, still-locked ORB separately. Report uncertainty and raw evidence before any product policy decision. The reviewer delivered the diagnostic design and 21-part handoff. The coding agent owns implementation, qualification, graph and a new signed downloadable APK. [Review, per-episode measurements and decision](diagnostics/FLUVI_R52_ORB_WITHDRAWAL_REVIEW.md) · [Coding-agent handoff](diagnostics/FLUVI_R52_ORB_WITHDRAWAL_HANDOFF.md)
 
 **R51 physical status.** Wake entrance accepted. Withdrawal rejected by the owner. **R52 physical status: PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+## 2026-11-28 — R52 withdrawal experiment and Fluvi lockscreen mask
+
+The owner requested D52.1 evidence collection and then added the per-size
+Fluvi mask before the final build. The phone-tested R51 parent is
+`e7542639d22d78d10e7b123e836ee9bc9758c91a`. The final combined application
+on `implement/r52-orb-withdrawal` is
+`7705f87c0c8f2bdf930a528b5bc6f87d276676a5`. The diagnostic commit is
+`65f42fc67c0899b40a4dcb32f1a86f13df9ecdd2`. The final build uses version
+0.1.4 (6), package `com.fluvi.app`. The normal workflow contains the one
+combined Human profile build. The pre-addendum binary remains a distinct
+evidence artifact and was never handed over as the combined APK.
+[Exact source](https://github.com/elizerpist/exptv2/commit/7705f87c0c8f2bdf930a528b5bc6f87d276676a5) · [Handoff](https://github.com/elizerpist/exptv2/blob/4aa71d50a5e64e5e7b404bc2755f3c359bb41bf9/docs/diagnostics/FLUVI_R52_ORB_WITHDRAWAL_HANDOFF.md) · [Application diff](https://github.com/elizerpist/exptv2/compare/e7542639d22d78d10e7b123e836ee9bc9758c91a...7705f87c0c8f2bdf930a528b5bc6f87d276676a5)
+
+**Scope and identity.** The active WA service owns the runtime timeout.
+Both Human capture choices acknowledge the actual Android service value.
+Stop, copy, elapsed limit and disconnection close the capture lease.
+Fresh connections normalize the ordinary 50 ms value. The native source
+keeps up to six withdrawal summaries ahead of raw rings and renders an
+immutable, hashed V2 report within 128 KiB. Legacy V1 bytes use the
+existing frozen storage and copy route. Field names distinguish uptime
+milliseconds, elapsed nanoseconds and prior scene, with numeric aliases
+for accessibility windows. The phone export leaves optical endpoints
+UNOBSERVED.
+
+**Per-size mask.** The status map reports separate 56 dp and 112 dp
+styles. The dedicated `selectStyle` command only edits the relevant
+preference. A size selection still owns activation and widget binding.
+The native wrapper leaves the same live AppWidgetHostView below a
+static, non-interactive matte layer. Both children share the WA entry
+alpha, drag and withdrawal. The mask is applied before adding the
+window and through the equal-size update path. The file is pre-rendered
+from all four paths in `assets/fluvi/brand/fluvi_mark.svg` and loaded at
+service connection. The alpha union gives two centered openings, about
+59.84% of the disc height after rasterization. Drawable SHA-256
+`4a05c9d1909aade1d84984a9df8bdcf8a01af18397bc16db294a364f399f156f`.
+The canonical SVG hash is
+`f5c7c5c7e53dc61d3c49046fa5929c627eceddbcc3c2d51a59acf1b811aa93f4`.
+[Generator](https://github.com/elizerpist/exptv2/blob/7705f87c0c8f2bdf930a528b5bc6f87d276676a5/scripts/generate-fluvi-lock-mask.py)
+
+### Baseline and retained pre-addendum evidence
+
+The reviewer’s supplied handset capture
+`b40ad57d-4f30-4f91-8318-ccbcd1d653d2` contains five owned unlock
+withdrawals. The event ages were 563/52/553/51/51 ms. Receipt to local
+hide was 1/1/2/1/2 ms in uptime. One independent negative preceded
+local hide by 22.176 ms. The owner accepted R51's entrance and rejected
+the visible tail. The supplied body digest is
+`4e6a19bf402910ac709e8b57ff917f0b8f3795c6a69fe784a111a9e5f286ab45`.
+No byte-original handset file accompanied the handoff. The separate
+stock R51 V1 was independently rehashed at 81,826 bytes with body digest
+`c15522152b1ea06e7aba2b05c97f538d372a7a6cf8d7d1dd53cc1196829201d9`.
+Its first independent negative led local hide by 45.728 ms for unlock
+and 72.350 ms for locked sleep on the stock fixture.
+[Reviewer evidence](https://github.com/elizerpist/exptv2/blob/4aa71d50a5e64e5e7b404bc2755f3c359bb41bf9/docs/diagnostics/FLUVI_R52_ORB_WITHDRAWAL_REVIEW.md) · [R51 stock V1](https://github.com/elizerpist/exptv2/actions/runs/46078181594/artifacts/15234919562)
+
+The standalone calibration `46082726080` hit a decoder-package 404.
+Its recovery `46083247537` booted the correct API 37 image and enumerated
+the requested Perfetto data sources. The unconfirmed OFF power-text probe
+stopped the shell before video collection. In the pre-addendum exact APK
+run, the `50, 0, 0, 50` sequence on API 37 and `50, 0` on API 35 reached
+both software routes in each block, with separate OFF controls on API 37.
+All measured episodes started on independently painted 112 dp ORB,
+widget 4. The actual service readbacks matched the chosen arm and returned
+to 50 ms. Per-case CSV and exact V2 exports preserve the mixed directions
+of event-age changes. Video distinguishes calibration colors and
+settled scenes. Its clock alignment and gaps prevented a first-forbidden
+frame judgment. Perfetto could not open the file configuration in
+`/data/local/tmp` (errno 13). The final fixture feeds it via stdin.
+[Initial calibration](https://github.com/elizerpist/exptv2/actions/runs/46082726080) · [Recovery](https://github.com/elizerpist/exptv2/actions/runs/46083247537/artifacts/15237991840) · [API 37](https://github.com/elizerpist/exptv2/actions/runs/46084613979/artifacts/15238754563) · [API 35](https://github.com/elizerpist/exptv2/actions/runs/46084613979/artifacts/15238827393)
+
+The pre-addendum signed updater succeeded through real R51 bind, edge
+drag, `adb install -r`, and painted recovery of the displaced bounds.
+It stopped immediately after tapping the debug console entry. A
+test-only retry waited for the dialog but stopped one level earlier on
+the R51 settings subpage, where that entry is unavailable. The final
+fixture follows the dashboard navigation before looking for the actual
+dialog. Both earlier failures and screenshots remain in the record.
+The pre-addendum formal CI failed full Flutter with the same 115 failing
+test identities as R51. Both WA host lanes and dashboard A–K also failed.
+[Original update](https://github.com/elizerpist/exptv2/actions/runs/46084613979/artifacts/15237939325) · [Update recovery](https://github.com/elizerpist/exptv2/actions/runs/46085153988/artifacts/15238838727) · [Pre-addendum CI](https://github.com/elizerpist/exptv2/actions/runs/46084187181)
+
+### Entry to exact combined CI
+
+| Gate | Result |
+| --- | --- |
+| Scope | Clean combined source at the exact R51 descendant. Twenty-one changed files, including the diagnostic bridge, mask resource and two exact-UI fixture labels. No dashboard or launcher rendering code changed. |
+| `git diff --check` and `bash scripts/verify-fluvi-boundaries.sh` | PASS. |
+| Local native | PASS, 17 tests after compiling the actual drawable with AAPT2, then Kotlin and JUnit using Java 17. Original full local Gradle attempt on pre-addendum source stopped in Gradle transform cache creation after exhausting the overlay. |
+| Local Flutter | PASS, 53 tests on Flutter 3.41.4. Console capture and restore, per-size style selection, R50/active header packet material and frame preparation, renderer and material distribution, and lockscreen host boundary. The first older local invocation hit ENOSPC in Flutter's temporary directory, recovered in tmpfs. |
+| Artwork recurrence | PASS, generator verified the committed raster against the canonical SVG. Two disconnected cutouts. Both 56 and 112 px scale controls show two source colors through both cutouts with a #F0F0F0 gap and transparent corners. |
+| Native risks before formal CI | R1 policy/bridge and R2 bounded retention passed focused tests. R3 offline invalid controls rejected missing paint, unlocked sleep, shifted alignment and incomplete frames. The pre-addendum fixture measured both software transitions. R3 optical alignment and R4 shade witness remained open. R5 new combined source required its own signed install and actual mask cases. |
+| Analyzer | Focused older invocation emitted the existing brace and redundant import information messages. The normal workflow declares its analyzer result separately. |
+| Exact-source graph | `d2442ea5ef2a67531f89ad4398108fd8edb65e76`, SCIP Dart 1.6.2, 814 documents, 20,140 repository symbols, 135,921 references, 42,011 edges. SHA-256 `528640328715a38f2ea49c174adb7905de79b07db05c2d9d077e3fdfc9a7bb2a`. Index and shard hashes verified. Dart coverage and Kotlin source navigation are separate. |
+[Graph](https://github.com/elizerpist/exptv2/blob/d2442ea5ef2a67531f89ad4398108fd8edb65e76/docs/codegraph/manifest.json) · [Normal exact-source run](https://github.com/elizerpist/exptv2/actions/runs/46086211987)
+
+### Signed combined delivery and update
+
+The independent anonymous full GET returned HTTP 200 and 114,027,163
+bytes. SHA-256
+`4ca98594dc1e764b5ec1c9e2a93dd0dd212b7fcd7ca88f8e55db89d677ba9f7d`.
+The Android v2 and v3 signer digest is
+`faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`.
+ZIP integrity, 16 KiB alignment, package `com.fluvi.app`, version
+0.1.4 (6), HUMAN_DIAGNOSTIC profile and source
+`7705f87c0c8f2bdf930a528b5bc6f87d276676a5` were verified. Full source and
+purpose are embedded for arm64-v8a, armeabi-v7a and x86_64. The packaged
+drawable matched the source pixels, including alpha. The verified link
+was shared with the owner before the optical qualification finished.
+[Signed APK](https://media.githubusercontent.com/media/elizerpist/exptv2/8f7fc51e91d8ab2f65aae1565ed803e6fea9f3a1/Fluvi_R52_HUMAN_7705f87c0c8f.apk) · [Signed asset ref](https://github.com/elizerpist/exptv2/tree/8f7fc51e91d8ab2f65aae1565ed803e6fea9f3a1) · [Builder job](https://github.com/elizerpist/exptv2/actions/runs/46086211987/job/140796267641) · [Builder artifact](https://github.com/elizerpist/exptv2/actions/runs/46086211987/artifacts/15239621758)
+
+**In-place update PASS.** The original signed R51 was installed with
+demo data. The fixture enabled the real accessibility service, bound
+widget 4 to host 1003 and moved the 112 dp ORB from
+`(393,1058,687,1352)` to `(0,1058,294,1352)`. The exact signed
+combined APK installed with `adb install -r` and retained the seeded
+ledger, foreign key, grant, host ID, widget ID and painted placement.
+The original combined update fixture lost the adb transport during adb
+root and stopped before install. Its replacement completed the update.
+Its following old V1 Copy action failed to reach the UI acknowledgement
+within 8 s. The old V1 body digest from that install was
+`909e2d56049f2499285da88b8c181daf43d95dc70df0d59671833f8b9812560b`,
+1,071 bytes total. The independent native replay checks the exact
+retained V1 bytes against the combined binary.
+[Transport failure](https://github.com/elizerpist/exptv2/actions/runs/46087027467/artifacts/15239143682) · [Installed update and subsequent Copy failure](https://github.com/elizerpist/exptv2/actions/runs/46087424400/artifacts/15239429101)
+
+### Combined mask on the stock API 37 device
+
+The initial signed run positively matched the same live packet to the
+56 dp mask and both plain ORBs. Its fixed palette animation did not
+clear the initial 0.35 mean absolute delta on both cutouts. Its
+force-stop restart also disabled the service, leaving the 112 dp
+mask unobserved in that run. The focused recovery retained those results.
+It used the exact same APK and compared pixel changes to the actual
+distinct source packet frames. Both cutouts matched on both sizes,
+while the matte and outer corners remained fixed. The 56 dp second plain
+state proves that switching back removes the mask. Editing the inactive
+112 dp style while 56 dp was active left the active size and widget ID
+in place. The two distinct choices survived real app and service
+process restart and reconnect with the same widget ID.
+
+| Exact stock combination | Matched source indices | Screen-to-source stroke MAE at the two samples | Center gap |
+| --- | --- | --- | --- |
+| 56 dp Fluvi mask | 4 / 7 | 0.0504 / 0.0660 and 0.0446 / 0.0590 | RGB 240/240/240 |
+| 56 dp ORB, restored | 16 / 18 | 0.0504 / 0.0382 and 0.0659 / 0.0556 | Live RGB 185/135/252 at sampled points |
+| 112 dp ORB | 12 / 19 | 0.0640 / 0.0660 and 0.0659 / 0.0486 | Live RGB 185/135/252 at sampled points |
+| 112 dp Fluvi mask | 11 / 12 | 0.0601 / 0.0590 and 0.0640 / 0.0660 | RGB 240/240/240 |
+
+The mask's transparent corners were verified from the prepared alpha
+and from unchanged background crops. The separate palette control
+initially failed before applying a new palette because the fixture
+parsed missing preferences as XML. Its correction reused the signed
+APK. The stock R50 host motion stress at the original threshold is
+reported separately below. [Initial mask run](https://github.com/elizerpist/exptv2/actions/runs/46087027467/artifacts/15239552897) · [Four exact routes and persistence](https://github.com/elizerpist/exptv2/actions/runs/46087739524/artifacts/15240301321)
+
+### Final combined normal CI
+
+| Job or check | Result | Evidence |
+| --- | --- | --- |
+| Curated Flutter and analyzer | PASS, 1,038 ordinary, 3 focused and 4 additional selector entries passed. Analyzer reported 14 advisory findings. | [Job](https://github.com/elizerpist/exptv2/actions/runs/46086211987/job/140796267440) |
+| Native core, app and WA | PASS. Exact workflow compiled and ran native tests. XML includes Room 150 and app 32. The focused local native count is 17. | [Job](https://github.com/elizerpist/exptv2/actions/runs/46086211987/job/140796267619) · [XML](https://github.com/elizerpist/exptv2/actions/runs/46086211987/artifacts/15239491961) |
+| Full Flutter | FAIL, 2,772 passed, 3 skipped, 115 failed. Every failure identity matched both the tested R51 baseline and the pre-addendum R52 run. | [Job](https://github.com/elizerpist/exptv2/actions/runs/46086211987/job/140796267677) · [Golden diffs](https://github.com/elizerpist/exptv2/actions/runs/46086211987/artifacts/15238869381) |
+| Stock host API 35 | FAIL, the exact service did not connect. Independently recovered settings navigation reached the service on the signed-device fixture. | [Job](https://github.com/elizerpist/exptv2/actions/runs/46086211987/job/140798685738) · [Evidence](https://github.com/elizerpist/exptv2/actions/runs/46086211987/artifacts/15239213209) |
+| Stock host API 37 | FAIL, the original changing-circle check with stable corners observed the same `(11881,2720)` six times. The separate four-style fixture measured true current packet motion. | [Job](https://github.com/elizerpist/exptv2/actions/runs/46086211987/job/140798685760) · [Evidence](https://github.com/elizerpist/exptv2/actions/runs/46086211987/artifacts/15239248347) |
+| Dashboard paths | PASS, selections resolved. | [Job](https://github.com/elizerpist/exptv2/actions/runs/46086211987/job/140796267661) |
+| Dashboard profile A–K | FAIL. A–K stopped with a year RangeError, 2026 outside 2027..2051, followed by multiple unexpected exceptions. One independent test passed. | [Job](https://github.com/elizerpist/exptv2/actions/runs/46086211987/job/140798302844) · [Evidence](https://github.com/elizerpist/exptv2/actions/runs/46086211987/artifacts/15239957273) |
+| Nightly Flutter, native nightly, dashboard baseline profile | NOT RUN, intentionally skipped by dispatch inputs. | [Workflow](https://github.com/elizerpist/exptv2/actions/runs/46086211987) |
+| Qualified Human delivery marker | Skipped because the stock host gates failed. The build-wa-profile builder passed and supplied the single tested, signed combined APK. | [Marker](https://github.com/elizerpist/exptv2/actions/runs/46086211987/job/140799864804) |
+
+The older pre-addendum failures included the API 35 shade-retained
+overlay, API 37 second edge-drag handoff and a failed dashboard
+prepared-vector asset check with incomplete `B_year_month_rail_populated`.
+Those remain in the older run. [Pre-addendum CI](https://github.com/elizerpist/exptv2/actions/runs/46084187181)
+
+### Independent sleep, AOD and Home observations
+
+The separate AOD fixture set the Android preference to 1. Its
+independent power state after a known painted 112 dp ORB was
+`OFF,true,false`, so it supplies a locked OFF observation. AOD
+remains NOT RUN. Arm A read back 50 ms and restored 50 ms. Capture body
+SHA-256 `46649143e7f692dcd1addc49d57fbbf3f35f244e886e2178b765d2ac00c537c2`.
+For matched owner `48131145243/1/1/1/4`, event age was 97 ms (uptime),
+first independent negative end to gate decision 30.165 ms, decision to
+local hide 0.185 ms, local to detach 4.933 ms and local to remove return
+362.405 ms (elapsed). The app trace marker edges and summary use
+separate observation calls.
+
+Perfetto 59.1 decoded typed input, power, WM Shell transitions and
+SurfaceFlinger layers/transactions from 18,935,667-byte trace
+`919f3dd38df04137ca03fc37932a5a25913cecd24bfe43520412778dbf4bdccb`.
+No nonzero drop, loss or overrun counter was present. A correction
+to the offline query selected `surfaceflinger_layer.layer_name`. The
+root was layer 282 under parent 148, and its VRI child was layer 283.
+The last reported visible snapshot of child 283 at 105072345756 ns
+followed the LOCAL_HIDE trace marker by 366.936 ms and the remove-return
+marker by 4.503 ms. Those are layer snapshots. The independent composed
+pixel endpoint is UNOBSERVED. The case documents post-local layer
+state and the separately earlier public negative, with no physical
+duration or complete endpoint attribution.
+[Stock OFF trace and summary](https://github.com/elizerpist/exptv2/actions/runs/46087124246/artifacts/15239268570)
+
+The independent launcher fixture reached `Fluvi · Élő orb` in the
+launcher widget search. It did not reach placement or the native
+`Orb beállításai Balance` screen. W-HOME-ANIM therefore remains open.
+The launcher provider code matches R51. [Launcher attempt](https://github.com/elizerpist/exptv2/actions/runs/46087124246/artifacts/15238889914)
+
+### Final signed paired experiment, API 35 regression
+
+Both initial combined lanes stopped before A/B due to UI fixture
+navigation. API 35 touched the service switch while its surface still
+rejected input. API 37 returned from a widget-grant dialog one level
+above the expected settings. The sole focused recovery retained both
+failures, the source and the exact APK. Its API 35 build was
+`Android/sdk_phone64_x86_64/emu64x:15/AE3A.240806.019/12368160:userdebug/test-keys`.
+Default display 0, 1080 × 2400, 112 dp plain ORB, bounds
+`(393,1058,687,1352)`, widget 4, host 1003, swipe-only keyguard,
+window/transition scale 1.0 and unset animator-duration override.
+
+| Row | Case | Independent control | Software evidence |
+| --- | --- | --- | --- |
+| block1-50-unlock | Direct swipe | INCONCLUSIVE, state remained ON and locked. ORB independently painted. | No qualifying unlock. |
+| block1-50-sleep | Redark, still locked | VALID_SOFTWARE, ON/locked/interactive → OFF/locked/noninteractive, settled without the root. | Owner `70151373674/2/2/2/4` (service/episode/owner/hide/widget). Event age 330 ms. Decision → local 5.114 ms, local → detach 0.395 ms, local → remove return 279.611 ms. |
+| block2-0-unlock | Direct swipe | INCONCLUSIVE, state remained ON and locked. ORB independently painted. | No qualifying unlock. |
+| block2-0-sleep | Redark, still locked | VALID_SOFTWARE, identical power and lock states to A. | Framework read back 0 ms before the actions. Copy sequence tried Stop after the active control expired. Missing frozen V2 row, so B endpoints are UNOBSERVED. |
+
+The A capture `735084ad-03bf-4e2d-89df-fb3050ceec14` was restored to
+50 ms and re-copied byte for byte, 105,380 bytes, body SHA-256
+`5d067b69f5fd940df53f1eec5933f53bb4ad60142ddfdad19e20604fcbcbba3c`.
+The B capture restore/readout at fixture exit is unverified in this run.
+Video decoded the calibrated colors and settled scenes. It lacked
+bounded common-clock alignment, with maximum video gaps about 6.81 s.
+The API 35 Perfetto parser rejected the `windowmanager_config` field
+before capturing a trace. The four first-forbidden outcomes are
+INCONCLUSIVE. There is no complete 50/0 pair on either endpoint.
+[Original API 35](https://github.com/elizerpist/exptv2/actions/runs/46087027467/artifacts/15239019881) · [Original API 37](https://github.com/elizerpist/exptv2/actions/runs/46087027467/artifacts/15238904821) · [API 35 recovery](https://github.com/elizerpist/exptv2/actions/runs/46087595700/artifacts/15240137530)
+
+### Final signed paired experiment, API 37 primary
+
+Recovery fixture `575acc0c4f0faded67de08cbff84cb69a1ab4edd` used the one
+verified signed combined binary. Stock build
+`Android/sdk_phone64_x86_64/emu64x:17/CE2A.260420.051.A3/16571990:userdebug/test-keys`,
+display 0 at 1080 × 2400, swipe-only keyguard, widget 4 in host 1003 and
+112 dp plain ORB at `(393,1058,687,1352)`. Window and transition scales
+were 1.0 with no animator-duration override. The same installed app and
+service session `74662701293` covered all four primary blocks and the
+separate capture-OFF control. The sequence was A/B/B/A with route order
+reversed for blocks 3 and 4. Both actions were witnessed from a painted
+ORB within the fixture window. The unlocked condition remained
+ON/unlocked/interactive. Locked redark remained OFF/locked/noninteractive.
+The two capture-OFF software controls reached the same respective held
+states with ordinary framework 50 ms. There were no additional paired
+attempts after this recovery.
+
+| Block and route | Independent state | Owner, hide (s/e/w/h/widget) | Event age in uptime ms | Probe end → decision (elapsed ms) | Decision → local (elapsed ms, trace) | Local → detach / remove return (elapsed ms, trace) | Root/child layer ID | Last snapshot marked visible relative to local (elapsed ms) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 A unlock | VALID_SOFTWARE | 74662701293/1/1/1/4 | 1119, own/32 | UNOBSERVED | 0.172 | 0.257 / 639.723 | 304/305 | +461.982 |
+| 1 A locked redark | VALID_SOFTWARE | 74662701293/2/2/2/4 | 127, own/2048 | UNOBSERVED | 0.111 | 14.612 / 426.844 | 324/325 | +215.043 |
+| 2 B unlock | VALID_SOFTWARE, V2 missing | 74662701293/4/4/4/4 | UNOBSERVED | UNOBSERVED | 1.883 | 0.837 / 20.940 | 532/533 | −110.452 |
+| 2 B locked redark | VALID_SOFTWARE, V2 missing | 74662701293/5/5/5/4 | UNOBSERVED | UNOBSERVED | 0.241 | 7.789 / 362.217 | 552/553 | +90.744 |
+| 3 B locked redark | VALID_SOFTWARE | 74662701293/7/6/6/4 | 91, SystemUI/2048 | UNOBSERVED | 0.180 | 0.221 / 583.490 | 700/701 | +473.352 |
+| 3 B unlock | VALID_SOFTWARE | 74662701293/8/7/7/4 | 1847, own/2048 | UNOBSERVED | 0.102 | 0.200 / 155.291 | 705/706 | +2.747 |
+| 4 A locked redark | VALID_SOFTWARE | 74662701293/9/8/8/4 | 385, own/2048 | 356.157 | 0.082 | 2.386 / 249.429 | 860/861 | +206.680 |
+| 4 A unlock | VALID_SOFTWARE | 74662701293/10/9/9/4 | 1914, own/2048 | UNOBSERVED | 2.188 | 0.200 / 138.679 | 865/866 | +112.219 |
+| 5 capture OFF unlock | VALID_SOFTWARE | UNOBSERVED | UNOBSERVED | UNOBSERVED | UNOBSERVED | UNOBSERVED | 1000/1001 | UNOBSERVED |
+| 5 capture OFF locked redark | VALID_SOFTWARE | UNOBSERVED | UNOBSERVED | UNOBSERVED | UNOBSERVED | UNOBSERVED | 1012/1013 | UNOBSERVED |
+
+Each table operation was joined to the exact owner using the app trace
+counters. The trace slices are calls after the protected app receipt
+timestamps, so the separately retained V2 figures differ slightly.
+The session's root parent in those snapshots was layer 152. For block 2
+the trace retains the operations, and authoritative event uptime and
+independent passive-probe samples are UNOBSERVED. Its framework arm
+read back 0 ms. Its Stop action missed
+the still-active control after the actions. The next block independently
+read back 50 ms before arming. Across the three copied primary blocks,
+framework start and restoration matched the selected arm and 50 ms.
+Block 1 re-copy was byte exact. All durations below are measured capture
+lengths. Body SHA-256 covers each V2 body.
+
+| Block | Capture ID | Bytes | Duration ms | Callback count | Scan offer/start/cancel/apply | Peak outstanding | Probe reads / maximum observed gap ms | Ring loss / text loss | Body SHA-256 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 A | 53adc10a-b75c-47c6-87f7-cf240a64b162 | 124216 | 90000 | 390 | 30/30/26/4 | 6 | 347 / 261.025 | 882 / 0 | f0de5ed30b190e2265c4af2d20e32ffc518d36bf27b7af5283b88c82d675dd87 |
+| 3 B | e9e490c7-c3a9-40c7-80d8-8063f9c438d4 | 126947 | 87596 | 329 | 13/13/10/3 | 3 | 303 / 274.288 | 679 / 0 | c1059668ecc5590146e2a8a945e9c0aeeeb6207afce9c7bfe142328278c7634e |
+| 4 A | d4152c68-2be1-460a-a83b-72467d25f1dc | 125964 | 84704 | 276 | 17/17/14/4 | 3 | 314 / 290.210 | 544 / 0 | 133d008fcc6e6ec0fbc91126239bcbb72c411df8bb0d8fcc88e639d9c5dd87c6 |
+
+**Comparisons.** Event age A4 − B3 was +67 ms on unlock, both with
+own type-2048. It was +294 ms on locked redark, with different event
+classes. A1 − B2 event ages are incomplete on both routes. On the
+elapsed clock, bracketed command → app decision intervals for unlock
+were 1141–2511 ms (A1), 1343–2053 ms (B2), 1521–2571 ms (B3) and
+1692–2102 ms (A4). Both pairs overlap. Locked redark intervals were
+73–323 ms (A1), 526–606 ms (B2), 95–135 ms (B3), and 355–765 ms (A4).
+This endpoint favors opposite arms in the two pairs. These brackets
+start around shell input. Physical button and display timelines
+remain independent. For comparison, the older diagnostic-only R52
+run had A1 − B2 / A4 − B3 event-age differences of −1147/+832 ms
+for unlock and −67/+80 ms for locked redark. Pre-addendum API 35
+was −464 ms unlock and +324 ms locked redark. Preserve the runtime
+source distinction between those older outcomes and the final APK.
+
+**Composition and uncertainty.** Perfetto 59.1 imported the four
+ABBA traces and the capture-OFF control. The raw archive is
+106,529,489 bytes, archive SHA-256
+`f1a008b1dc1bf47138a0cdc6df411368443b2f251a44cf558c2d2b7dd917832c`.
+The traces and counters preserve power, window and layer state. The
+declared typed input source supplied zero dispatch rows in the four
+primary traces. The command brackets supply the earliest observable
+input intervals for this reduction. FrameTimeline supplied
+1,084 / 1,043 / 961 / 935 actual rows before any owner or pixel join.
+The initial SQL `name` failed on the layer schema. The offline query
+used `layer_name` and recovered the live child IDs above. All eight
+child IDs were absent in the next three layer snapshots. The first of
+those snapshots was 79.183–314.460 ms after the respective last marked
+visible snapshot. The physical pixel endpoint remains UNOBSERVED.
+No nonzero drop, loss or overrun statistics matched the loss query.
+App owner/trace clocks and screenshot clocks are distinct. The recorded
+video decoded 528 / 498 / 477 / 454 frames over the four blocks and
+481 in capture OFF. The maximum gaps were 6.192 / 6.175 / 6.412 /
+6.264 / 6.001 s. Color positive/absence calibration passed. Common
+alignment remained unbounded, and the initial separate calibration
+decoded only six frames. The retained video JSON has all gap intervals
+and anchor uncertainty. The first-forbidden frame is INCONCLUSIVE for
+8/8 paired actions and both capture-OFF controls. The last compositor
+layer state provides a separate observed endpoint. For block 2 unlock
+the last marked-visible snapshot preceded the app local call by
+110.452 ms and the first snapshot without that child followed it by
+48.630 ms.
+[API 37 trace and all rows](https://github.com/elizerpist/exptv2/actions/runs/46087595700/artifacts/15239833367) · [Runner job](https://github.com/elizerpist/exptv2/actions/runs/46087595700/job/140800731537)
+
+### Safety, capture lifecycle and entrance
+
+The formal and measurement fixtures serve different checks. The exact
+paired device independently witnessed a still-painted MAIN at the
+same bounds after clock-format refresh, then shade and PIN restrictions
+with no settled root, with a newly painted MAIN between them. Both arms
+preserved types 32 and 2048 in export. A arm recorded 360 callbacks,
+179/179/158/21 scan offer/start/cancel/apply, peak 108 in 46.988 s.
+B arm recorded 304 callbacks, 92/92/83/9 scans, peak 31 in 42.114 s.
+Maximum observed passive probe gaps were 121.221 and 138.282 ms.
+These are observed activity counts and gaps. No matched CPU-time
+attribution to the recorder or first restricted frame is claimed.
+The first requested restriction images are in the raw artifact.
+
+In the six matching primary V2 rows the existing fade began and ended
+with no entrance cancellation on those completed episodes. Root
+attachment → first nonzero software mark ranged from 31.856 to
+499.104 ms on this AVD. Entrance callback spans were 364.559 to
+836.560 ms on the loaded fixture. The configured WA entrance animator
+remains 300 ms, and the callback spans include scheduling. The videos
+verify a painted ORB while the stock first visible entrance frame
+and the ≤10 ms physical target remain UNOBSERVED.
+
+An independent installed panel probe on the exact signed APK replayed
+the imported R51 V1 twice with the original 1,071 bytes and digest.
+A/copy and B/stop were read back from the actual 50 ms and 0 ms service
+arm before the captures, and each restored the framework to 50 ms.
+The previous V2 bytes also survived interruption of a later B recording
+by real SIGKILL. The new app displayed that interrupted record and
+reconnect restoration. A discrepancy remains: immediately before its
+next B start, the panel indicated 50 ms, but the independent bound
+service dump showed 0 ms. The next native capture reported baseline
+50 ms; the fixture logged the independent discrepancy without asserting
+the pre-arm dump. Reconnect qualification is therefore incomplete.
+After that capture’s 90 s limit, both the independent dump and V2
+returned 50 ms, with `stop=LIMIT`, 39,218 bytes and body SHA-256
+`e01d81ebe80e7f29f3b360324d53ded9e60b4eff25a5d76ab446615ad6c74dec`.
+The archive keeps the screenshots and all service snapshots for
+this finding. [Control run](https://github.com/elizerpist/exptv2/actions/runs/46088101050/job/140802356881) · [V1, V2 and service snapshots](https://github.com/elizerpist/exptv2/actions/runs/46088101050/artifacts/15240012269)
+
+### Gate disposition and reviewer handback
+
+| Handoff gate | Result |
+| --- | --- |
+| R1 arm/lifecycle | PASS for two setter/readback arms, copy, stop, re-copy and 90 s expiry, with the old interrupted record retained. INCONCLUSIVE for the independent reconnect value due to the 0 ms service dump. The setter failures, stale lease and failed restore paths were exercised in `WaCaptureTimeoutTest`. |
+| R2 retained ownership and privacy | PASS for the six-slot bounds, previous-service/owner guards, digest, overflow, five phone-pattern and old type-32 controls in `WaWithdrawalEvidenceTest`. Real V1 replay and signed V2 ceiling/identity passed. Missing primary B copy and lost raw detail remain explicit. |
+| R3 witnessed transitions | Offline oracle controls pass for one intentional forbidden frame, no paint, unlocked sleep, shifted sync and stalled recording. Final API 37 witnessed 8/8 configured software transitions and 2/2 OFF controls. API 35 confirmed both locked redarks and no valid direct swipe. First-forbidden optics are INCONCLUSIVE in all cases. |
+| R4 restricted scenes and overhead | PASS for stable sampled MAIN and settled shade and PIN in both API 37 arms. First restricted pixels and a deliberately held scan/fade overlapping the privacy transition were not established. Formal host failures and quantitative cost limits are separate. |
+| R5 installed product checks | PASS for in-place update, data/grant/ID/geometry, four lockscreen modes and persistence, and matched live frames through both openings. Separate launcher placement gate failed. Real palette outcome retained below. |
+
+**H52.1** stays open. The one strongly matched event-age pair for
+unlock favors B by 67 ms. That is one dispatch observation. Neither
+route has two order-balanced improvements and verified optical
+follow-through. **H52.2** remains open because a first independently
+forbidden frame was not timed. The 356.157 ms lead from the independent
+public negative on A4 locked redark proves a predecision gap for that
+row. **H52.3** gains evidence for post-local layer state, including
+four locked-redark rows and three unlock rows at positive elapsed
+offsets. The frames and actual displayed pixel endpoint were not
+joined. **H52.4** remains open for causal Main or reader delay.
+Decision to local hide was short on the sampled exact-APK primary
+operations, and scan counts did not provide a matched stress
+comparison. **H52.5** has a valid stock locked-OFF precondition and
+bounded software and layer times. The phone and always-on-display
+timelines remain open. D52.1 supplies software evidence with mixed
+directions. The next decision remains with the reviewer, with the
+ordinary 50 ms configuration as the product default.
+
+### Separate palette-change control and handset card
+
+The default live palette passed two actual source-frame matches at both
+mask sizes. The offline high-contrast control applied two independently
+colored frames and tracked both cutouts and the matte gap. The first
+separate palette-change attempt had a missing preferences file and
+stopped before writing a new input. The external-preference recovery
+verified an actual `material-prepare` under the new app process after
+installing test palette index 4, but no distinct `material-ready`
+packet arrived within 40 s. The independent foreground-control
+attempt reached the real 112 dp mask, matching source indices 7 and 12.
+It then found the launcher hierarchy where it expected the Flutter
+header tuner and stopped before selection. A real changed-palette
+handoff through both cutouts therefore remains unverified on the
+installed APK. These limits do not change the four size/style and
+restart outcomes. The two independent witnesses used the same APK and
+the retained evidence contains no phone recordings.
+[External-palette recovery](https://github.com/elizerpist/exptv2/actions/runs/46088311854/artifacts/15239748247) · [Foreground palette attempt](https://github.com/elizerpist/exptv2/actions/runs/46089165500/artifacts/15240806674)
+
+The combined stock and validation harnesses are pinned at
+`885f7bf3ca281add0710afd78d4a8d874667dbc4` and
+`575acc0c4f0faded67de08cbff84cb69a1ab4edd`, with focused signed checks
+at `9ca53e395cbe036685834cc936fa98991389f43b` (capture replay),
+`c5214acf198b26aeae0bbaa1bb017091ac067e50` and
+`755f75fb51877c0fb1f781f31551088cc379ca76` (palette controls).
+The five offline oracle checks ran using
+`python -m unittest -v test_r52_oracle`. Focused Flutter used
+`flutter test --no-pub --reporter expanded` with the setup-page and
+debug-capture tests, R50 Balance material, dashboard material playback,
+distribution and lockscreen boundary tests. Formal native used
+`./gradlew :fluvi-core:testDebugUnitTest --no-daemon` and
+`./gradlew :app:testDebugUnitTest :wa-lockscreen:testDebugUnitTest --no-daemon`.
+The separate native inventory maps the Dart-to-Android authority,
+the WA visual wrapper and trace correlations for the exact delivered
+source. [Source inventory](https://github.com/elizerpist/exptv2/blob/d2442ea5ef2a67531f89ad4398108fd8edb65e76/docs/codegraph-r52-orb-withdrawal.md) · [Impact](https://github.com/elizerpist/exptv2/blob/d2442ea5ef2a67531f89ad4398108fd8edb65e76/docs/codegraph/changed-impact.json)
+
+Telefonos próba. A visszavonási méréshez válaszd a sima 2×2 ORB-ot.
+A Debug log → Zárképernyő panelen indíts egy friss **A · 50 ms**
+felvételt. Ébreszd a telefont, várd meg a látható ORB-ot, majd
+feloldás nélkül sötétítsd vissza és várj legalább öt másodpercet.
+Újra ébreszd a telefont, várd meg az ORB-ot, oldd fel a szokásos módon,
+majd másold a riportot a vágólapra. Ismételd meg külön **B · 0 ms**
+felvétellel, ugyanazzal a mérettel, AOD-beállítással és feloldási
+móddal. A két riport mellé külön írd meg, mit láttál visszasötétítéskor
+és feloldáskor. A telefonos határidő 90 másodperc felvételenként.
+
+**Implementation — COMPLETE, exact combined app SHA above**
+
+**Automated qualification — PARTIAL, independent failures retained**
+
+**APK delivery — COMPLETE, anonymous byte and signature checks passed**
+
+**PHYSICAL VALIDATION — PENDING, USER ONLY**
