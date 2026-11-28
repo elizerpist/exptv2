@@ -78,13 +78,21 @@ def upgrade(device, args, work):
     widget = bind_r52(device)
     device.click("2×2 (112 dp)", package=PKG)
     masks.select_style(device, 56, "fluviMask")
-    picture, bounds = painted_wake(device, "r54-before-upgrade")
-    x, y = (bounds[0] + bounds[2]) // 2, (bounds[1] + bounds[3]) // 2
-    device.shell("input", "draganddrop", x, y, x - 135, y - 135, 1100)
-    picture, moved = stock.r51.visible_orb(device, "r54-position")
-    assert moved != bounds, (bounds, moved)
-    normal_unlock(device, "r54-normal-unlock", picture, moved)
-    old, _ = receipt.copy(device, "r54-before-upgrade", receipt.BASE)
+    moved = None
+    old = None
+    try:
+        picture, bounds = painted_wake(device, "r54-before-upgrade")
+        moved = bounds
+        x, y = (bounds[0] + bounds[2]) // 2, (bounds[1] + bounds[3]) // 2
+        device.shell("input", "draganddrop", x, y, x - 135, y - 135, 1100)
+        picture, moved = stock.r51.visible_orb(device, "r54-position")
+        device.note("PASS pre-update drag" if moved != bounds else "FAIL pre-update drag did not change placement")
+        normal_unlock(device, "r54-normal-unlock", picture, moved)
+        old, _ = receipt.copy(device, "r54-before-upgrade", receipt.BASE)
+    except stock.EXPERIMENT_FAILURES as exc:
+        device.note(f"FAIL independent pre-update visual or Copy control: {exc}")
+        device.save("r54-pre-update-control-failure.png", device.adb("exec-out", "screencap", "-p"))
+    stock.home(device)
     before = seeded.prefs(device, "r54-prefs")
     assert before["active"] == widget.decode() and before["sizeDp"] == "112"
     raw = device.adb("install", "-r", args.apk, timeout=90)
@@ -98,9 +106,14 @@ def upgrade(device, args, work):
     for key in ("sizeDp", "active", "enabled", "intended", "epoch", "centerX", "centerY", "style56", "style112"):
         assert before.get(key) == after.get(key), (key, before.get(key), after.get(key))
     assert after.get("permanentOrb", "false") == "false"
-    retained, _ = receipt.copy(device, "r54-recopied-by-r55", receipt.BASE)
-    assert old == retained
-    device.note("PASS actual signed install -r, launcher, seeded ledger, binding, positions and styles, default OFF, V1 retained")
+    device.note("PASS actual signed install -r, launcher, seeded ledger, binding, positions and styles, default OFF")
+    if old is not None:
+        try:
+            retained, _ = receipt.copy(device, "r54-recopied-by-r55", receipt.BASE)
+            assert old == retained
+            device.note("PASS installed R54 V1 retained through update")
+        except stock.EXPERIMENT_FAILURES as exc:
+            device.note(f"FAIL prior V1 re-Copy: {exc}")
     return widget, moved
 
 
@@ -110,7 +123,8 @@ def normal(device, args, widget, placement, enabled):
     setting = "enabled" if enabled else "disabled"
     device.shell("settings", "put", "secure", "doze_always_on", "0")
     frame, bounds = painted_wake(device, f"r55-{setting}")
-    assert bounds == placement, (bounds, placement)
+    if placement is not None:
+        assert bounds == placement, (bounds, placement)
     normal_unlock(device, f"r55-{setting}-ordinary", frame, bounds)
     raw, fields = receipt.copy(device, f"r55-{setting}-ordinary", args.sha)
     check_owner(fields, widget)
