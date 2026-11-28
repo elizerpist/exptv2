@@ -1,6 +1,5 @@
 """Verify the installed lockscreen mask against the exact live Balance packet."""
 import argparse
-import base64
 import hashlib
 from io import BytesIO
 import json
@@ -168,34 +167,53 @@ def inspect_case(device, dp, expected, name, asset, palette_reference=None):
 
 
 def change_palette(device, old):
-    # Only this disposable test phone is rooted. Change the ordinary saved
-    # Balance palette input, then let the actual dashboard publish new frames.
-    assert device.shell("getprop", "ro.kernel.qemu") == "1"
-    assert device.shell("id", "-u") == "0"
-    pids = device.shell("pidof", PKG).split()
-    assert len(pids) == 1 and pids[0].isdigit()
-    pid = pids[0]
-    saved = device.shell(f"if [ -s {PALETTES} ]; then base64 {PALETTES}; fi")
-    root = ET.fromstring(base64.b64decode(saved)) if saved else ET.Element("map")
-    before = next((node for node in root if node.get("name") == "balanceHeaderPalette"), None)
-    old_palette = int(before.get("value")) if before is not None else 0
-    new_palette = 4 if old_palette != 4 else 8
-    if before is not None:
-        root.remove(before)
-    ET.SubElement(root, "int", {"name": "balanceHeaderPalette", "value": str(new_palette)})
-    file = device.output / "palette-fixture.xml"
-    file.write_bytes(ET.tostring(root, encoding="utf-8"))
-    owner = device.shell("stat", "-c", "%u:%g", DATA)
-    assert re.fullmatch(r"\d+:\d+", owner)
-    device.adb("push", file, "/data/local/tmp/r52-palette.xml")
-    device.shell(
-        f"kill -STOP {pid} && (cat /data/local/tmp/r52-palette.xml > {PALETTES} && "
-        f"chown {owner} {PALETTES} && chmod 660 {PALETTES} && restorecon {PALETTES}); "
-        f"rc=$?; kill -KILL {pid}; exit $rc"
-    )
+    # Exercise the installed app's actual foreground control. A preferences
+    # edit and process death do not drive the Flutter tuning listener.
     device.shell("am", "start", "-W", "-n", measure.r51.ACTIVITY)
-    assert device.service_connected()
-    until = time.monotonic() + 40
+    tuner = "Header látványhangoló"
+    for step in range(4):
+        if device.click(tuner, optional=True, limit=5, package=PKG):
+            break
+        visible = measure.r51.stock.visible_labels(device.screen(), PKG)
+        assert any(label in visible for label in (
+            "1×1 (56 dp)", "Zárképernyő", "Beállítások", "Settings",
+        )), visible
+        device.shell("input", "keyevent", "KEYCODE_BACK")
+        time.sleep(.35)
+    else:
+        raise AssertionError("The header tuner was absent on the dashboard")
+
+    def expose(label):
+        for index in range(12):
+            raw = device.screen()
+            device.save(f"tuner-{label.split()[0]}-{index:02d}.xml", raw)
+            nodes = list(ET.fromstring(raw).iter("node"))
+            if label in measure.r51.stock.visible_labels(raw, PKG):
+                return
+            bounds = [
+                tuple(map(int, re.findall(r"-?\d+", n.get("bounds", ""))))
+                for n in nodes
+                if n.get("scrollable") == "true" and n.get("visible") == "true"
+                and n.get("package") == PKG
+            ]
+            panels = [(a, b, c, d) for a, b, c, d in bounds if c - a > 150 and d - b > 215]
+            assert panels, f"No scroll viewport in the foreground tuner for {label}"
+            a, b, c, d = max(panels, key=lambda p: (p[3], p[2] - p[0]))
+            x = (a + c) // 2
+            device.shell("input", "swipe", x, b + (d - b)*4//5, x, b + (d - b)//5, 380)
+            time.sleep(.3)
+        raise AssertionError(f"Did not expose {label!r} in the foreground tuner")
+
+    expose("Header animáció")
+    device.click("Header animáció", package=PKG)
+    expose("Soft rainbow")
+    device.click("Soft rainbow", package=PKG)
+    device.save("palette-options.xml", device.screen())
+    device.click("Balance diverging", package=PKG, limit=10)
+    device.save("palette-selected.xml", device.screen())
+    visible = measure.r51.stock.visible_labels(device.screen(), PKG)
+    assert "Balance diverging" in visible, visible
+    until = time.monotonic() + 45
     while time.monotonic() < until:
         try:
             header, _ = packet(device)
@@ -203,10 +221,14 @@ def change_palette(device, old):
             time.sleep(.5)
             continue
         if header["key"] != old["key"]:
-            device.note(f"Balance palette {old_palette} -> {new_palette} published generation {header['generation']}")
+            picked = ET.fromstring(device.adb("exec-out", "cat", PALETTES))
+            assert any(e.get("name") == "balanceHeaderPalette" and e.get("value") == "4"
+                       for e in picked), "Selector change was not persisted"
+            device.note(f"Balance palette 0 → 4 published generation {header['generation']}")
             return
         time.sleep(.5)
-    raise AssertionError("New saved palette never produced a new real Balance packet")
+    raise AssertionError("Foreground palette selection produced no new Balance packet")
+
 
 
 def exercise(device, args):

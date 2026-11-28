@@ -1,4 +1,4 @@
-name: R52 signed stock withdrawal
+name: R52 stock mask foreground palette
 on:
   workflow_dispatch:
     inputs:
@@ -17,7 +17,7 @@ on:
 permissions:
   contents: read
 jobs:
-  four-lockscreen-styles:
+  foreground-palette:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -62,6 +62,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r52-four-styles-${{ inputs.app_sha }}
+          name: r52-mask-foreground-palette-${{ inputs.app_sha }}
           path: evidence/
           if-no-files-found: warn
