@@ -70,12 +70,7 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: |
-            if [[ "$LANE" == upgrade ]]; then
-              python3 .github/r55/upgrade_ambient.py --sha "$APP_SHA" --baseline "$RUNNER_TEMP/r54.apk" --apk "$RUNNER_TEMP/fluvi.apk" --observer "$RUNNER_TEMP/observer.apk" --output evidence/upgrade
-            else
-              python3 .github/r53-unlock/run_unlock.py --app-sha "$APP_SHA" --apk "$RUNNER_TEMP/fluvi.apk" --observer "$RUNNER_TEMP/observer.apk" --reference "$RUNNER_TEMP/reference.apk" --reference-sha "$REFERENCE_SHA" --output evidence/unlock
-            fi
+          script: bash .github/r55/run.sh
       - if: always()
         run: bash .github/r53-unlock/export_trace.sh evidence/unlock
       - if: always()

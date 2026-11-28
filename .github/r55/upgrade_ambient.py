@@ -78,6 +78,11 @@ def upgrade(device, args, work):
     widget = bind_r52(device)
     device.click("2×2 (112 dp)", package=PKG)
     masks.select_style(device, 56, "fluviMask")
+    for _ in range(3):
+        assert SWITCH not in stock.labels(device)
+        device.shell("input", "swipe", "460", "1800", "460", "820", "300")
+    device.save("r54-settings-bottom.xml", device.screen())
+    device.note("RED control installed R54 has no Permanens ORB selector")
     moved = None
     old = None
     try:
