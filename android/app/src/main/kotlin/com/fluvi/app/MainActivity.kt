@@ -70,6 +70,7 @@ import com.fluvi.app.widget.orb.OrbMaterialFrameStore
 import com.fluvi.app.widget.orb.FluviOrbWidgetProvider
 import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
 import com.fluvi.app.widget.orb.HeaderOrbBinding
+import com.fluvi.wa.WaLastUnlock
 import com.fluvi.wa.WaLockscreenCapture
 import com.fluvi.wa.WaOrbStyle
 import com.fluvi.app.widget.orb.HeaderOrbWidgetContent
@@ -143,6 +144,7 @@ class MainActivity : FlutterActivity() {
         waCaptureChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "fluvi/wa_lockscreen_capture")
         waCaptureChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
+                "getLastUnlock" -> WaLastUnlock.request(applicationContext) { result.success(it) }
                 "start", "status", "stop", "getFrozen" -> WaLockscreenCapture.request(
                     applicationContext, call.method, call.argument<String>("source"), call.argument<String>("purpose"),
                     arm = call.argument<Int>("armMs"),

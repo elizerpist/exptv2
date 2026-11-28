@@ -18,6 +18,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import android.view.Display
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -36,12 +37,14 @@ class WaOrbWindow(
     private val savePlacement: (OrbPlacement) -> Unit,
 ) {
     private val wm = context.getSystemService(WindowManager::class.java)
+    private val product by lazy(LazyThreadSafetyMode.NONE) { WaUnlockProduct.read(context) }
     private val fluviMask by lazy(LazyThreadSafetyMode.NONE) {
         requireNotNull(BitmapFactory.decodeResource(context.resources, R.drawable.wa_fluvi_logo_mask))
     }
 
     fun prepareStyles() {
         fluviMask
+        product
     }
     private val manager = AppWidgetManager.getInstance(context)
     private var root: OrbRoot? = null
@@ -108,6 +111,13 @@ class WaOrbWindow(
         placement = center
         val shouldAnimate = animate && animatorsEnabled()
         val frame = OrbRoot(context, WaAttachment(session, episode, ++window, widgetId, dp))
+        frame.entry = {
+            if (shouldAnimate) startEntrance(frame)
+            else {
+                frame.mark(if (animate) WaStage.ENTRANCE_DISABLED else WaStage.ENTRANCE_REUSED)
+                frame.visual.alpha = 1f
+            }
+        }
         if (shouldAnimate) {
             frame.visual.alpha = 0f
             frame.visual.scaleX = 0.95f
@@ -137,17 +147,30 @@ class WaOrbWindow(
             val content = host.createView(context, widgetId, info)
             frame.visual.addView(content, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
             frame.applyStyle(style)
+            frame.canEnter = canEnter
+            if (Build.VERSION.SDK_INT >= 34) {
+                val child = WaSurfaceChild(context, handler, { bindChild(frame, it) }, {
+                    embeddingFailed(frame, it, "SURFACE_LOST")
+                })
+                frame.child = child
+                frame.presenter = WaPresenter.SURFACE_CHILD
+                frame.visual.alpha = 0f
+                frame.addView(child.surface, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+            } else frame.addVisual()
             if (!canEnter() || root !== frame || frame.revoked) {
                 if (root === frame) hide(WaHideReason.UNKNOWN)
                 return false
             }
             frame.mark(WaStage.MATERIAL_READY)
             wm.addView(frame, params)
+            if (root !== frame || frame.revoked) return false
             frame.mark(WaStage.ATTACH)
             frame.listening = true
             host.startListening()
-            if (shouldAnimate) waitForDraw(frame, canEnter)
-            else frame.mark(if (animate) WaStage.ENTRANCE_DISABLED else WaStage.ENTRANCE_REUSED)
+            if (frame.child == null) {
+                if (shouldAnimate) waitForDraw(frame)
+                else frame.mark(if (animate) WaStage.ENTRANCE_DISABLED else WaStage.ENTRANCE_REUSED)
+            }
             log(frame, "attach", "dp=$dp diameter=$diameter x=${params.x} y=${params.y}")
             return true
         } catch (error: RuntimeException) {
@@ -161,23 +184,71 @@ class WaOrbWindow(
         if (Build.VERSION.SDK_INT >= 26) ValueAnimator.areAnimatorsEnabled()
         else Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
 
-    private fun waitForDraw(frame: OrbRoot, allowed: () -> Boolean) {
-        val observer = frame.viewTreeObserver
+    private fun bindChild(frame: OrbRoot, child: WaSurfaceChild) {
+        if (!live(frame) || frame.child !== child) return
+        try {
+            child.attach(frame.visual, checkNotNull(layout).width)
+            check(child.ready)
+            log(frame, "child-bound", "presenter=${frame.presenter}")
+            waitForDraw(frame)
+        } catch (error: RuntimeException) {
+            embeddingFailed(frame, child, error.javaClass.simpleName)
+        }
+    }
+
+    private fun embeddingFailed(frame: OrbRoot, child: WaSurfaceChild, reason: String) {
+        if (!live(frame) || frame.child !== child) return
+        frame.presenterFailure = reason
+        log(frame, "child-unavailable", "reason=$reason")
+        if (frame.hasPublished || frame.canEnter?.invoke() != true) {
+            if (live(frame)) hide(WaHideReason.ATTACH_FAILED)
+            return
+        }
+        if (!live(frame) || frame.child !== child) return
+        frame.clearDrawWait?.invoke()
+        frame.entrance?.removeAllListeners()
+        frame.entrance?.cancel()
+        frame.entrance = null
+        frame.child = null
+        try {
+            child.dispose()
+            frame.removeView(child.surface)
+            frame.presenter = WaPresenter.LEGACY_FALLBACK
+            frame.addVisual()
+            waitForDraw(frame)
+        } catch (error: RuntimeException) {
+            if (live(frame)) hide(WaHideReason.ATTACH_FAILED)
+            Log.w(TAG, "fallback attach failed: ${error.javaClass.simpleName}")
+        }
+    }
+
+    private fun waitForDraw(frame: OrbRoot) {
+        val view = frame.visual
+        val observer = view.viewTreeObserver
+        lateinit var clear: () -> Unit
         val start = Runnable {
-            val clear = frame.clearDrawWait ?: return@Runnable
+            if (frame.clearDrawWait !== clear || !view.isAttachedToWindow) return@Runnable
             clear()
-            if (live(frame) && allowed() && live(frame)) startEntrance(frame)
+            val child = frame.child
+            if (child != null && !child.ready) {
+                embeddingFailed(frame, child, "INVALID_SURFACE")
+                return@Runnable
+            }
+            if (live(frame) && frame.canEnter?.invoke() == true && live(frame) && frame.child === child) {
+                frame.entry?.invoke()
+            }
         }
         val listener = ViewTreeObserver.OnPreDrawListener {
             start.run()
             true
         }
-        frame.clearDrawWait = {
+        clear = {
             frame.clearDrawWait = null
             if (observer.isAlive) observer.removeOnPreDrawListener(listener)
-            else frame.viewTreeObserver.removeOnPreDrawListener(listener)
+            else view.viewTreeObserver.removeOnPreDrawListener(listener)
             handler.removeCallbacks(start)
         }
+        frame.clearDrawWait = clear
         observer.addOnPreDrawListener(listener)
         handler.postDelayed(start, 50)
     }
@@ -232,17 +303,31 @@ class WaOrbWindow(
         }
         if (!safeUpdate(dimensions.usable.position(placement), dimensions)) hide(WaHideReason.RESIZE_FAILED)
         else {
+            val child = frame.child
+            try {
+                child?.resize(current.width)
+            } catch (error: RuntimeException) {
+                if (child != null) embeddingFailed(frame, child, error.javaClass.simpleName)
+                if (!live(frame)) return
+            }
             frame.applyStyle(style)
             frame.mark(WaStage.RESIZE, detail = dp.toLong())
         }
     }
 
-    fun hide(reason: WaHideReason): Long {
+    fun hide(reason: WaHideReason, trigger: WaUnlockTrigger? = null): Long {
         val frame = root ?: return 0
         if (frame.revoked) return 0
         frame.revoked = true
         frame.hide = ++hideId
         frame.hideReason = reason
+        val unlock = trigger?.takeIf {
+            it.owner == frame.owner && it.reason == reason && frame.isAttachedToWindow &&
+                (reason == WaHideReason.UNLOCKED || reason == WaHideReason.USER_PRESENT)
+        }
+        val child = frame.child
+        val draft = unlock?.let { WaUnlockDraft(context.applicationContext) }
+        val childHide = child?.withdraw(draft?.let { it::committed })
         frame.mark(WaStage.REVOKE)
         val motion = frame.entrance
         frame.entrance = null
@@ -250,11 +335,24 @@ class WaOrbWindow(
         frame.visual.alpha = 0f
         frame.alpha = 0f
         frame.visibility = View.INVISIBLE
-        frame.localHideAt = SystemClock.uptimeMillis()
+        val localHide = WaTime.now()
+        frame.localHideAt = localHide.uptimeMs
+        if (draft != null) {
+            draft.record = WaUnlockRecord(
+                product, unlock, frame.displayId, frame.presenter, frame.presenterFailure, sizeDp, frame.style,
+                frame.hide, frame.attachedAt, childHide ?: WaChildHide(
+                    if (frame.presenter == WaPresenter.LEGACY_API) "UNSUPPORTED" else "FALLBACK",
+                ), localHide = localHide,
+            )
+            frame.unlock = draft
+        }
+        if (childHide != null) log(frame, "child-hide", "status=${childHide.status}", localHide.uptimeMs)
         WaLockscreenCapture.hidden(frame.owner)
         frame.mark(WaStage.LOCAL_HIDE)
         cancelDrag(restore = false)
         frame.clearDrawWait?.invoke()
+        frame.canEnter = null
+        frame.entry = null
         if (motion != null) {
             motion.cancel()
             frame.mark(WaStage.ENTRANCE_CANCEL)
@@ -265,6 +363,7 @@ class WaOrbWindow(
 
     private fun remove(frame: OrbRoot, retry: Boolean) {
         if (root !== frame) return
+        val began = WaTime.now()
         frame.mark(WaStage.REMOVE_BEGIN, detail = if (retry) 1 else 0)
         var removeError: RuntimeException? = null
         try {
@@ -272,21 +371,40 @@ class WaOrbWindow(
         } catch (error: RuntimeException) {
             removeError = error
         }
+        val returned = WaTime.now()
         val removed = frame.parent == null && !frame.isAttachedToWindow
+        val removal = WaRemoval(began, returned, removed, removeError?.javaClass?.simpleName)
         frame.mark(
             if (removeError == null) WaStage.REMOVE_RETURN else WaStage.REMOVE_ERROR,
             detail = if (removed) 1 else 0,
         )
+        val child = frame.child
+        frame.child = null
+        try {
+            child?.dispose()
+        } catch (error: RuntimeException) {
+            Log.w(TAG, "child release failed: ${error.javaClass.simpleName}")
+        }
+        var hostStop: WaTime? = null
+        var stopStatus = "UNOBSERVED"
         if (frame.listening) {
             frame.listening = false
             frame.mark(WaStage.HOST_STOP_BEGIN)
             try {
                 host.stopOrbListening()
+                hostStop = WaTime.now()
+                stopStatus = "STOPPED"
                 frame.mark(WaStage.HOST_STOP_END)
             } catch (error: RuntimeException) {
+                hostStop = WaTime.now()
+                stopStatus = "ERROR"
                 frame.mark(WaStage.HOST_STOP_ERROR)
                 Log.w(TAG, "stop listening failed: ${error.javaClass.simpleName}")
             }
+        }
+        frame.unlock?.update {
+            if (retry) it.copy(retry = removal)
+            else it.copy(firstRemove = removal, hostStop = hostStop, hostStopStatus = stopStatus)
         }
         if (removed) {
             root = null
@@ -388,8 +506,19 @@ class WaOrbWindow(
         var nodeWindowId = -1
         var entrance: AnimatorSet? = null
         var clearDrawWait: (() -> Unit)? = null
+        var canEnter: (() -> Boolean)? = null
+        var entry: (() -> Unit)? = null
+        var child: WaSurfaceChild? = null
+        var presenter = WaPresenter.LEGACY_API
+        var presenterFailure: String? = null
+        var style = WaOrbStyle.ORB
+            private set
+        var attachedAt: WaTime? = null
+        var displayId = Display.DEFAULT_DISPLAY
+        var unlock: WaUnlockDraft? = null
         private var drawLogged = false
-        private var nonzero = false
+        var hasPublished = false
+            private set
         private var maskView: ImageView? = null
         val visual = object : FrameLayout(context) {
             override fun setAlpha(alpha: Float) {
@@ -397,13 +526,26 @@ class WaOrbWindow(
                 super.setAlpha(alpha)
                 if (alpha > 0f) publishNonzero()
             }
+
+            override fun dispatchDraw(canvas: android.graphics.Canvas) {
+                super.dispatchDraw(canvas)
+                if (live(this@OrbRoot) && !drawLogged) {
+                    drawLogged = true
+                    mark(WaStage.ROOT_DRAW)
+                    if (alpha > 0f) publishNonzero()
+                    log(this@OrbRoot, "root-draw", "width=$width height=$height")
+                }
+            }
+
+            override fun dispatchTouchEvent(event: MotionEvent): Boolean = dragEvent(event)
         }
 
-        init {
+        fun addVisual() {
             addView(visual, LayoutParams(-1, -1, Gravity.CENTER))
         }
 
         fun applyStyle(style: WaOrbStyle) {
+            this.style = style
             if (style == WaOrbStyle.ORB) {
                 maskView?.visibility = View.GONE
                 return
@@ -419,8 +561,8 @@ class WaOrbWindow(
         }
 
         private fun publishNonzero() {
-            if (!nonzero && live(this)) {
-                nonzero = true
+            if (!hasPublished && live(this)) {
+                hasPublished = true
                 WaLockscreenCapture.visible(owner)
                 mark(WaStage.FIRST_NONZERO)
             }
@@ -431,17 +573,7 @@ class WaOrbWindow(
             reason = hideReason, hide = hide, detail = detail,
         )
 
-        override fun dispatchDraw(canvas: android.graphics.Canvas) {
-            super.dispatchDraw(canvas)
-            if (live(this) && !drawLogged) {
-                drawLogged = true
-                mark(WaStage.ROOT_DRAW)
-                if (visual.alpha > 0f) publishNonzero()
-                log(this, "root-draw", "width=$width height=$height")
-            }
-        }
-
-        override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        private fun dragEvent(event: MotionEvent): Boolean {
             if (!live(this)) return false
             val dimensions = geometry ?: return false
             if (event.actionMasked == MotionEvent.ACTION_DOWN) {
@@ -481,10 +613,13 @@ class WaOrbWindow(
 
         override fun onAttachedToWindow() {
             super.onAttachedToWindow()
+            attachedAt = WaTime.now()
+            displayId = display?.displayId ?: Display.DEFAULT_DISPLAY
             mark(WaStage.ROOT_ATTACHED)
         }
 
         override fun onDetachedFromWindow() {
+            unlock?.update { it.copy(detached = it.detached ?: WaTime.now()) }
             WaLockscreenCapture.hidden(owner)
             mark(WaStage.DETACHED)
             clearDrawWait?.invoke()

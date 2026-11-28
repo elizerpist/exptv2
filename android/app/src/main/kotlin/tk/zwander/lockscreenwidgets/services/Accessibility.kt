@@ -5,6 +5,7 @@ import com.fluvi.app.widget.orb.HeaderOrbBinding
 import com.fluvi.wa.WaHideReason
 import com.fluvi.wa.WaLockscreenService
 import com.fluvi.wa.WaOrbWindow
+import com.fluvi.wa.WaUnlockTrigger
 
 /** Stable component name so an R49 update preserves the system's service setting. */
 class Accessibility : WaLockscreenService() {
@@ -43,7 +44,7 @@ class Accessibility : WaLockscreenService() {
         }
     }
 
-    override fun hideOrb(reason: WaHideReason) = orb.hide(reason)
+    override fun hideOrb(reason: WaHideReason, unlock: WaUnlockTrigger?) = orb.hide(reason, unlock)
 
     override fun geometryChanged() {
         val dp = binding.sizeDp()

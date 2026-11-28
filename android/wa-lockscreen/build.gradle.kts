@@ -8,7 +8,14 @@ plugins {
 android {
     namespace = "com.fluvi.wa"
     compileSdk = 36
-    defaultConfig { minSdk = 24 }
+    defaultConfig {
+        minSdk = 24
+        val source = providers.environmentVariable("FLUVI_BUILD_COMMIT").orNull
+        resValue(
+            "string", "fluvi_wa_source_commit",
+            source?.takeIf { it.matches(Regex("[a-f0-9]{40}")) } ?: "UNOBSERVED",
+        )
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

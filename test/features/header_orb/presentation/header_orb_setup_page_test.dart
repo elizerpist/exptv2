@@ -8,6 +8,80 @@ void main() {
   const states = MethodChannel('fluvi/header_orb_state');
   const app = MaterialApp(home: HeaderOrbSetupPage());
 
+  testWidgets(
+    'last unlock copy handles waiting, storage and clipboard retries',
+    (tester) async {
+      const capture = MethodChannel('fluvi/wa_lockscreen_capture');
+      const report = 'FLUVI_WA_LAST_UNLOCK_V1\nbodySha256=fixture\n';
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      var status = 'INACTIVE';
+      var value = '';
+      var clipboardFails = true;
+      final copied = <String>[];
+      messenger.setMockMethodCallHandler(
+        methods,
+        (_) async => {'state': 'ready', 'sizeDp': 112},
+      );
+      messenger.setMockMethodCallHandler(states, (_) async => null);
+      messenger.setMockMethodCallHandler(capture, (call) async {
+        expect(call.method, 'getLastUnlock');
+        return {'status': status, 'text': value};
+      });
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          if (clipboardFails) throw PlatformException(code: 'clipboard');
+          copied.add(call.arguments['text'] as String);
+        }
+        return null;
+      });
+      addTearDown(() {
+        for (final channel in [
+          methods,
+          states,
+          capture,
+          SystemChannels.platform,
+        ]) {
+          messenger.setMockMethodCallHandler(channel, null);
+        }
+      });
+      await tester.pumpWidget(app);
+      await tester.pumpAndSettle();
+      Future<void> press() async {
+        final button = find.text('Legutóbbi feloldás másolása');
+        await tester.ensureVisible(button);
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+      }
+
+      await press();
+      expect(find.text('Az ORB-szolgáltatásra várunk.'), findsOneWidget);
+      status = 'EMPTY';
+      await press();
+      expect(
+        find.text('Még nincs napló. Oldd fel a telefont látható ORB mellett.'),
+        findsOneWidget,
+      );
+      status = 'STORAGE_ERROR';
+      await press();
+      expect(
+        find.text('A feloldási napló nem olvasható. Próbáld újra.'),
+        findsOneWidget,
+      );
+      status = 'READY';
+      await press();
+      expect(copied, isEmpty);
+      value = report;
+      await press();
+      expect(find.text('A másolás sikertelen. Próbáld újra.'), findsOneWidget);
+      expect(copied, isEmpty);
+      clipboardFails = false;
+      await press();
+      expect(find.text('A feloldási napló a vágólapon van.'), findsOneWidget);
+      expect(copied, [report]);
+    },
+  );
+
   testWidgets('styles are independent of active size and restore on reopen', (
     tester,
   ) async {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../diagnostics/copy_last_unlock.dart';
 import '../diagnostics/fluvi_build_identity.dart';
 
 /// The native process owns recording and the immutable frozen text.
@@ -172,6 +173,7 @@ class _DebugLockscreenCaptureState extends State<DebugLockscreenCapture>
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
+        const CopyLastUnlock(feedbackStyle: _text),
         Text(state, style: _text, key: const ValueKey('wa-capture-state')),
         if (service.isNotEmpty) Text(service, style: _text),
         if (_status?['armAvailable'] == true) ...[

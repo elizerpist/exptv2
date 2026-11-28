@@ -11,6 +11,7 @@ void main() {
   const tab = ValueKey('debug-console-lockscreen-tab');
   const toggle = ValueKey('wa-capture-toggle');
   const copy = ValueKey('wa-capture-copy');
+  const lastCopy = ValueKey('wa-last-unlock-copy');
   const frozen = 'FLUVI_WA_LOCKSCREEN_CAPTURE_V1\nfixture=ő\nsha256=fixture\n';
 
   testWidgets(
@@ -55,7 +56,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('ORB-szolgáltatás kikapcsolva'), findsOneWidget);
       expect(tester.widget<OutlinedButton>(find.byKey(copy)).onPressed, isNull);
-      expect(find.byType(OutlinedButton), findsNWidgets(2));
+      expect(
+        tester.widget<OutlinedButton>(find.byKey(lastCopy)).onPressed,
+        isNotNull,
+      );
+      expect(find.byType(OutlinedButton), findsNWidgets(3));
 
       await tester.tap(find.byKey(toggle));
       await tester.pumpAndSettle();
@@ -82,6 +87,44 @@ void main() {
         expect(find.text('Felvétel a vágólapon.'), findsOneWidget);
       }
       expect(clipboard, [frozen, frozen]);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  testWidgets(
+    'debug panel reads the last unlock without starting or stopping recording',
+    (tester) async {
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final calls = <String>[];
+      final clipboard = <String>[];
+      const report = 'FLUVI_WA_LAST_UNLOCK_V1\nexample=ő\nbodySha256=sample\n';
+      messenger.setMockMethodCallHandler(capture, (call) async {
+        calls.add(call.method);
+        if (call.method == 'getLastUnlock') {
+          return {'status': 'READY', 'text': report};
+        }
+        return {'state': 'FROZEN', 'hasCapture': true};
+      });
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          clipboard.add(call.arguments['text'] as String);
+        }
+        return null;
+      });
+      addTearDown(() {
+        messenger.setMockMethodCallHandler(capture, null);
+        messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+      });
+      await tester.pumpWidget(const MaterialApp(home: DebugConsoleDialog()));
+      await tester.tap(find.byKey(tab));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(lastCopy));
+      await tester.pumpAndSettle();
+      expect(calls, ['status', 'getLastUnlock']);
+      expect(clipboard, [report]);
+      expect(find.text('Lezárt felvétel'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),

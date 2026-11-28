@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/platform/header_orb_settings_channel.dart';
+import '../../../core/diagnostics/copy_last_unlock.dart';
 
 class HeaderOrbSetupPage extends StatefulWidget {
   const HeaderOrbSetupPage({super.key});
@@ -150,6 +151,10 @@ class _HeaderOrbSetupPageState extends State<HeaderOrbSetupPage>
             ),
             _styleSelector(dp),
           ],
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: CopyLastUnlock(),
+          ),
         ],
       ),
     );
