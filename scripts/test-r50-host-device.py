@@ -241,28 +241,22 @@ def enter_settings(device):
 
 
 def prepare_binding(device):
-    device.click("Android kisegítő lehetőségek")
+    device.click("Android kisegítő lehetőségek", package=PACKAGE)
     device.settings_consent()
-    device.click("Cancel", "Don't allow", package="com.android.settings", limit=8)
-    device.save("cancelled-widgets.txt", device.adb("shell", "dumpsys", "appwidget"))
-    time.sleep(.5)
-    current = visible_labels(device.screen(), PACKAGE)
-    if SETTINGS_ROWS[0] not in current and "Zárképernyő" in current:
-        device.click("Zárképernyő", package=PACKAGE)
-    settings_rows(device)
-    device.click("1×1 (56 dp)", "1×1 ORB", package=PACKAGE)
-    device.save("single-use-grant.xml", device.screen())
-    device.click("Create", "Allow", package="com.android.settings", limit=8)
-    device.save("after-grant-widgets.txt", device.adb("shell", "dumpsys", "appwidget"))
-    end = time.monotonic() + 30
-    while time.monotonic() < end:
-        logs = device.adb("logcat", "-d", "-s", "FluviBalanceOrb")
-        match = re.search(rb"bound host=1003 id=(\d+)", logs)
-        if match and re.search(rb"stage=material-ready id=" + match[1] + rb"\b", logs):
-            device.note(f"Real host ID 1003, material ready under widget {match[1].decode()}")
+    # Some boots return directly to the setup page without an automatic prompt.
+    # In either initial state complete the genuine Android widget consent.
+    if not device.click("Create", "Allow", package="com.android.settings", optional=True, limit=4):
+        device.click("1×1 (56 dp)", package=PACKAGE)
+        device.click("Create", "Allow", package="com.android.settings", limit=12)
+    deadline = time.monotonic() + 35
+    while time.monotonic() < deadline:
+        raw = device.adb("logcat", "-d", "-s", "FluviBalanceOrb")
+        match = re.search(rb"bound host=1003 id=(\d+)", raw)
+        if match and b"material-ready id=" + match[1] in raw:
+            device.save("r52-appwidget.txt", device.adb("shell", "dumpsys", "appwidget"))
             return match[1]
-        time.sleep(.55)
-    raise AssertionError("Normal single-use bind or offstage Balance frame preparation was not observed")
+        time.sleep(.6)
+    raise AssertionError("R52's real WA binding did not receive the header packet")
 
 
 def hide_sample(device, name):
