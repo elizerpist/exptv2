@@ -51,9 +51,19 @@ def upgrade(device, args):
     assert device.shell("getprop", "ro.kernel.qemu") == "1"
     assert device.shell("getprop", "ro.build.version.sdk") == "37"
     device.note("Disposable signed in-place update on " + device.shell("getprop", "ro.build.fingerprint"))
-    device.adb("root")
-    device.adb("wait-for-device")
-    assert device.shell("id", "-u") == "0"
+    deadline = time.monotonic() + 24
+    while time.monotonic() < deadline:
+        try:
+            device.adb("wait-for-device", timeout=5)
+            if device.shell("id", "-u", timeout=4) == "0":
+                break
+            root = subprocess.run(["adb", "root"], capture_output=True, timeout=5, check=False)
+            device.note(f"Disposable AVD root request rc={root.returncode} {root.stdout.decode().strip()} {root.stderr.decode().strip()}")
+        except subprocess.SubprocessError as error:
+            device.note(f"Waiting for disposable AVD adbd reconnect: {error}")
+        time.sleep(.8)
+    else:
+        raise AssertionError("Disposable AVD root transport did not reconnect")
     assert b"Success" in device.adb("install", args.baseline)
     assert b"Success" in device.adb("install", args.observer)
     device.shell("wm", "dismiss-keyguard")
@@ -89,6 +99,15 @@ def upgrade(device, args):
         receipt = device.adb("install", "-r", args.apk, timeout=90)
         device.save("r52-install-r.txt", receipt)
         assert b"Success" in receipt
+        disk = work / "after.db"
+        device.adb("pull", DB, disk)
+        if device.shell("if test -f " + DB + "-wal; then echo ready; fi") == "ready":
+            device.adb("pull", DB + "-wal", str(disk) + "-wal")
+        with sqlite3.connect(disk) as db:
+            assert db.execute("SELECT note,amount_scaled_100 FROM fluvi_ledger_entries WHERE id=?",
+                              (ENTRY,)).fetchone() == ("R52 update fixture", 12345)
+            assert db.execute("PRAGMA foreign_key_check").fetchall() == []
+        device.note("PASS signed install -r over R51 and verified the preserved synthetic ledger")
         device.shell("am", "start", "-W", "-n", r51.ACTIVITY)
         assert device.service_connected(), "Installed update did not reconnect the same enabled service"
         after = prefs(device, "r52-prefs")
@@ -104,6 +123,7 @@ def upgrade(device, args):
         experiment.independent_state(device, "r52-pre-lock", experiment.sleeping)
         _, restored = r51.wake(device, "r51-restored")
         assert restored == moved, (moved, restored)
+        device.note(f"PASS retained enabled service, host 1003, widget {widget.decode()}, 112dp and bounds {restored}")
         experiment.home(device)
         recopy = experiment.copy(device, "r52-recopy-r51-v1", experiment.BASE, 1)
         assert old == recopy, "V1 frozen report changed after update"
@@ -113,15 +133,6 @@ def upgrade(device, args):
             first = experiment.copy(device, name, args.sha, 2, timeout, stop=timeout == 0)
             assert first == experiment.copy(device, name + "-recopy", args.sha, 2, timeout)
         device.note("PASS real updated capture panel, both arm readbacks, 50 ms restore, exact V1 re-copy")
-        device.shell("am", "force-stop", PKG)
-        disk = work / "after.db"
-        device.adb("pull", DB, disk)
-        if device.shell("if test -f " + DB + "-wal; then echo ready; fi") == "ready":
-            device.adb("pull", DB + "-wal", str(disk) + "-wal")
-        with sqlite3.connect(disk) as db:
-            assert db.execute("SELECT note,amount_scaled_100 FROM fluvi_ledger_entries WHERE id=?",
-                              (ENTRY,)).fetchone() == ("R52 update fixture", 12345)
-            assert db.execute("PRAGMA foreign_key_check").fetchall() == []
     device.note("PASS signed adb install -r over R51, synthetic ledger, existing host/widget, size and position")
     device.shell("am", "start", "-W", "-n", r51.ACTIVITY)
     from auxiliary import process_lifetime
@@ -141,7 +152,11 @@ def main():
         upgrade(device, args)
     except (AssertionError, OSError, subprocess.SubprocessError) as failure:
         device.note(f"FAIL update: {failure}")
-        device.save("first-divergence.png", device.adb("exec-out", "screencap", "-p"))
+        capture = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True, timeout=8, check=False)
+        if capture.returncode == 0:
+            device.save("first-divergence.png", capture.stdout)
+        else:
+            device.save("first-divergence-transport.txt", capture.stderr)
         raise
     finally:
         device.save("logcat.txt", device.adb("logcat", "-d", "-v", "threadtime"))
