@@ -84,8 +84,12 @@ def lifecycle(device):
     old_after_pids = device.shell(f"pidof {OBSERVER} || true").split()
     source = device.adb("shell", "dumpsys", "activity", "activities")
     device.save("shared-after-activities.txt", source)
-    old_after = device.adb("exec-out", "screencap", "-p")
-    device.save("shared-after.png", old_after)
+    for sample in range(3):
+        old_after = device.adb("exec-out", "screencap", "-p")
+        device.save(f"shared-after-{sample}.png", old_after)
+        if color_at(image(old_after)) != 0:
+            break
+        time.sleep(.15)
     assert str(old["pid"]) not in old_after_pids and color_at(image(old_after)) != 0, (
         "R1 RED not reproduced", old, old_after_pids
     )

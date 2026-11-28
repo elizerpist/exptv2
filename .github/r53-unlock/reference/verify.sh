@@ -23,6 +23,13 @@ if printf '%s\n' "$badging" | grep -qE '^uses-permission:'; then
   exit 1
 fi
 unzip -tq "$apk" >/dev/null
-unzip -p "$apk" classes.dex | strings | grep -Fx "$sha"
+python3 - "$apk" "$sha" <<'PY'
+import sys
+import zipfile
+
+with zipfile.ZipFile(sys.argv[1]) as apk:
+    assert b"source=" + sys.argv[2].encode() + b" phase=" in apk.read("classes.dex")
+print(sys.argv[2])
+PY
 "$tools/zipalign" -c 4 "$apk"
 printf 'url=%s\nhttp=%s\nbytes=%s\nsha256=%s\nsource=%s\ncertificate=%s\n' "$url" "$http" "$size" "$hash" "$sha" "$cert"
