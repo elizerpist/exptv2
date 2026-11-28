@@ -254,6 +254,7 @@ def exercise(device, args):
 
     settings(device)
     device.click("1×1 (56 dp)", package=PKG)
+    select_style(device, 56, "fluviMask")
     select_style(device, 56, "orb")
     select_style(device, 112, "fluviMask")
     old = prefs(device)
