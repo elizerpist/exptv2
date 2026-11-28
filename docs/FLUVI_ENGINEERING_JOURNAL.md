@@ -26233,3 +26233,116 @@ bodySha256=66abf460a2377f76b9ab719b48b760df4e4a82e99c483fcbf9fc053bc0a3009f
 The Cloud agent can read the [complete 21-part handoff](diagnostics/FLUVI_R55_PERMANENS_ORB_ADDENDUM.md) alongside the original R55 instructions above. The immutable [prompt at 02d0a765](https://github.com/elizerpist/exptv2/blob/02d0a765c8f961be82c13e11bb255865f40dea98/docs/diagnostics/FLUVI_R55_PERMANENS_ORB_ADDENDUM.md) has SHA-256 `199ed7bb3e23691fecdc37833e7406d4b12576161e2ffc15efde16ba65449a1c`. A fresh sparse checkout reproduced all 13,749 bytes and sections 1–21. The anonymous raw download returned HTTP 200 with the same bytes.
 
 E-A1 and E-A2 identify the interactive withdrawal contract and public display states. The earlier few seconds of ORB visibility remain a physical observation with no matched steady-AOD trace. Both transient persistence and genuine ambient presentation remain open on the A142. This publication adds handoff evidence only. D-A1 prescribes the default-off preference and separate ambient owner. D-A2 distinguishes those explanations on the combined R55 HUMAN APK using matched OFF/ON/AOD controls, the real ORB and the surrounding panel. Continue product work from the verified R55 implementation `8ddf2946` on the tested `41add67b` lineage. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+## 2026-11-28 — R55 combined Human build and Permanens ORB qualification
+
+The product branch `implement/r55-wa-early-withdrawal` is at `1e15c448de5344825c4560b51d0f48e1204f3c46`. Its parent `8ddf2946ea3918a55f73330640edb3536d2fffc2` implements the R55 window-metadata ordering and same-owner ordinary Copy. The phone-tested R54 upgrade baseline is `41add67b7f4d4ecdf7a0a48abff64ca85364ac9e`, version 0.1.5 (7). The original handoff came from `ba17b72fb69b0e9c97c955e6c79e22dcfbd8941e`. The full addendum recovered from the coordination branch has SHA-256 `199ed7bb3e23691fecdc37833e7406d4b12576161e2ffc15efde16ba65449a1c`. [Product source](https://github.com/elizerpist/exptv2/compare/41add67b7f4d4ecdf7a0a48abff64ca85364ac9e...1e15c448de5344825c4560b51d0f48e1204f3c46) · [Addendum](https://github.com/elizerpist/exptv2/blob/f4029dfdd8bd7db7541ef7c01276916d3f88e86a/docs/diagnostics/FLUVI_R55_PERMANENS_ORB_ADDENDUM.md)
+
+The single full `com.fluvi.app` HUMAN_DIAGNOSTIC profile is version 0.1.6 (8). The anonymous full HTTPS GET returned 200 and 114,092,699 bytes. SHA-256 `5f9c3bafd22491b4e8db925f12a1e8e7ef9ab1186f1e6c4529bc057fbac26b4c`. The original v2/v3 update certificate is `faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`. Verified launcher, integrity and alignment, exact embedded source and Human purpose in all three packaged ABIs, real WA host, V1/V2 reports, ambient channel and native markers, packaged canonical mask, and both upstream notices. The exact-source builder artifact was signed locally and every non-signature ZIP entry was compared before publishing. [Public full APK](https://media.githubusercontent.com/media/elizerpist/exptv2/e426d35c7da5361d0f85b0d4e36548ce0e16d8aa/Fluvi_R55_HUMAN_1e15c448de53.apk) · [Build job](https://github.com/elizerpist/exptv2/actions/runs/46137602312/job/140956303889) · [Builder archive](https://github.com/elizerpist/exptv2/actions/runs/46137602312/artifacts/15260244017)
+
+### E55 and E-A results
+
+- E55.8 — Expected RED on exact R54 for the mixed-list zero-traversal assertion. The same RESTRICTED answer cost one root and eight child reads. R55 returns RESTRICTED with APP_WINDOW_PRESENT and zero plus zero. Reversed list RESTRICTED at zero plus zero on both. SystemUI-only MAIN at one plus eight on both. Overlay-only UNKNOWN at zero plus zero. This is the real classifier with counting node doubles and one list per read. Device callback age and pixels are separate endpoints.
+- E55.9 — The inherited R55 production scan-result checks retain exact service, episode and attachment. A qualifying application-window withdrawal can be linked to the later normal public negative only for that owner. The 3 s pending observation is bounded and an unconfirmed record leaves the last confirmed ordinary report available.
+- E-A4 — The persisted control defaults to OFF. The existing header-frame queue reuses one decoded generation from the actual verified widget packet before sleep. The separate, ORB-sized, transparent, non-touchable ambient owner consumes current widget, packet, size, style and placement. Main rechecks actual drawable DOZE, locked and noninteractive plus the exact owner before submission. DOZE_SUSPEND can retain a submitted generation. A late callback, wake, unlock, loss of binding, TRUE OFF or a disabled option revokes authority. The interactive entrance and native withdrawal continue through the live WA host. One bounded ambient Copy retains transition receipts and observed gaps, with physicalVisibility explicitly UNOBSERVED.
+- E-A5 — Kotlin controls exercised true OFF, first-observed suspended DOZE, valid drawable DOZE, locked and interactive uncertainty, duplicate denial and stale callbacks after revocation and replacement. Both styles and 56/112 dp are part of the identity, along with the binding ID, packet generation and position. The packaged alpha and painted pixels matched the existing Fluvi mask. Runtime visibility depends on the observed system state and the compositor.
+
+### Automated qualification
+
+- PASS — `git diff --check`, `bash scripts/verify-fluvi-boundaries.sh`, `android/gradlew -p android :wa-lockscreen:testDebugUnitTest` (33 tests, 56 s), direct Kotlin/JUnit compilation and 33 tests, and the two targeted Flutter Copy/settings suites (8 tests). The initial Flutter run failed a fixed count of buttons after adding ambient Copy. The test now verifies that button and the existing actions. Targeted analysis reported two existing informational diagnostics in the debug widget and its test. The optional local R54 Flutter selector replay stopped at the test runner timeout during setup. The actual installed R54 selector check is in the upgrade lane.
+- PASS — CI native Room core (150), native app (32) and WA (33), curated Flutter, and exact-source Human builder. [Full run](https://github.com/elizerpist/exptv2/actions/runs/46137602312) · [Native test archive](https://github.com/elizerpist/exptv2/actions/runs/46137602312/artifacts/15260527324)
+- FAIL — Full Flutter candidate 2,776 PASS, 3 skipped, 115 FAIL. All 115 failing test names match exact R54 (2,774 PASS, 3 skipped, 115 FAIL). [Full results](https://github.com/elizerpist/exptv2/actions/runs/46137602312/job/140956304131) · [Candidate golden failures](https://github.com/elizerpist/exptv2/actions/runs/46137602312/artifacts/15260527285) · [R54 comparison](https://github.com/elizerpist/exptv2/actions/runs/46126838748)
+- FAIL — Formal API 35 host. Both files named shade-first and shade-settled still show the large main keyguard clock with the notification panel closed. The recorded bounds and visible ORB belong to that state. The formal assertion remains failed and the shade precondition was unreached. The run observed actual binding, motion, five drags and a visible relock before this failure. [Raw API 35 samples](https://github.com/elizerpist/exptv2/actions/runs/46137602312/artifacts/15260850759)
+- FAIL — Formal API 37 host at the first drag. The root stayed at `(467, 1132, 614, 1279)`. Motion reached and subsequent gates were unreached in this lane. The predecessor failed its fourth drag. [Raw API 37 samples](https://github.com/elizerpist/exptv2/actions/runs/46137602312/artifacts/15261235185)
+- NOT RUN — Optional scheduled Flutter/native jobs and dashboard baseline profile. The formal qualified-Human marker skipped after failed host jobs. The builder completed once and its exact source is the downloadable test candidate.
+- FAIL — The first signed upgrade and masked collection workflow split a multiline shell conditional into individual commands. The actual error was `expecting "fi"` at runner startup. Both products were verified in the upgrade lane. No device trial reached that script. Replaced the conditional with one shell entrypoint while preserving the per-product masked limit and the application bytes. [Original failed fixture run](https://github.com/elizerpist/exptv2/actions/runs/46138261297) · [Fixture correction](https://github.com/elizerpist/exptv2/commit/94df0a1f4873375f8fcd0a5e310a505b81152b71)
+
+### Exact-source graph
+
+Tooling commit `9587ab905ca76735a6c7f0efd8520e2c24dc37bc` indexes `1e15c448de5344825c4560b51d0f48e1204f3c46` with SCIP Dart 1.6.2. Raw index SHA-256 `9c976fb355994ca82294a4e4e6546f9c4bd900368ce1bfa9263ad7101e4ae3f8`. 815 documents, 20,147 repository symbols, 135,943 references and 42,017 edges. Verified 101 shard hashes, ran five symbol queries, and passed tooling analysis and 16 tests. The separate Kotlin navigation follows the setter, binding, packet, platform gate, exact ambient owner, main interactive owner and both Copy paths. [Manifest](https://github.com/elizerpist/exptv2/blob/9587ab905ca76735a6c7f0efd8520e2c24dc37bc/docs/codegraph/manifest.json) · [Native inventory](https://github.com/elizerpist/exptv2/blob/9587ab905ca76735a6c7f0efd8520e2c24dc37bc/docs/codegraph-r55-orb-withdrawal.md)
+### Installed signer and ordinary withdrawal
+
+Signed in-place update PASS on stock API 37. Both exact public packages were downloaded and verified. `adb install -r` returned Success from R54 0.1.5 (7) to R55 0.1.6 (8). The real dashboard, seeded ledger and foreign-key check, existing service consent, widget ID 3, saved drag position, 112 dp active size, independent styles and old V1 clipboard bytes survived. The installed R54 control showed no Permanens ORB selector. R55 defaulted to OFF. The real selector persisted through an application and service process restart. [Upgrade job](https://github.com/elizerpist/exptv2/actions/runs/46138514339/job/140959077054) · [Raw signed upgrade and clipboard archive](https://github.com/elizerpist/exptv2/actions/runs/46138514339/artifacts/15260464962)
+
+The following rows are ordinary 112 dp plain-ORB swipes in the upgrade lane. The event-age column uses uptime. Decision-to-child application and decision-to-local withdrawal use elapsed realtime. These operations provide app-side receipts.
+
+| Installed route | Owner | Winning cause | Event age at callback (ms) | Decision to child apply-return (ms) | Decision to local hide (ms) | Physical endpoint |
+| --- | --- | --- | ---: | ---: | ---: | --- |
+| R54 baseline | 74941261133/1 | UNLOCKED | 209 | 0.269 | 0.537 | UNOBSERVED |
+| R55 option OFF | 132269500003/1 | PUBLIC_NEGATIVE | 94 | 12.736 | 13.069 | UNOBSERVED |
+| R55 option ON | 132269500003/2 | PUBLIC_NEGATIVE | 271 | 0.173 | 0.995 | UNOBSERVED |
+
+All three child transactions were APPLIED. The settled ORB was absent in the two R55 destination samples. Both R55 winners were PUBLIC_NEGATIVE with firstApp=UNOBSERVED. The APP_WINDOW_PRESENT winner and later same-owner confirmation were exercised by deterministic tests. These three stock rows leave a physical speed comparison open. [Raw captures and normal receipt bytes](https://github.com/elizerpist/exptv2/actions/runs/46138514339/artifacts/15260464962)
+
+### Ambient product controls
+
+The exact installed APK exported the AOD receipt in both switch states. Both stock AOD-enabled setting trials reached display OFF in the recorded 3 s and 10 s samples. The emulator did not produce an eligible DOZE or DOZE_SUSPEND observation. No static submission was recorded in either trial. OFF suppression and clean normal return PASS. Steady ambient ORB, ambient-origin fingerprint unlock and the ORB-only appearance remain NOT RUN without an eligible ambient interval. [Raw AOD receipts and captures](https://github.com/elizerpist/exptv2/actions/runs/46138514339/artifacts/15260464962)
+
+The actual R55 product clipboard for the ordinary ON control and the subsequent AOD-on platform-state sample follows. Both digests were verified.
+
+```text
+FLUVI_WA_LAST_UNLOCK_V1
+package=com.fluvi.app build=1e15c448de5344825c4560b51d0f48e1204f3c46 version=0.1.6 code=8
+model=Android_SDK_built_for_x86_64 api=37 presenter=SURFACE_CHILD presenterError=UNOBSERVED
+display=0 serviceElapsedNs=132269500003 episode=2 window=2 attachment=132269500003/2 widget=3 sizeDp=112 style=ORB hide=2
+source=ACCESSIBILITY reason=UNLOCKED eventType=2048 eventUptimeMs=201797 callbackUptimeMs=202068
+gateDisplay=2 interactive=true locked=false
+gateReadBeginUptimeMs=202068 gateReadBeginElapsedNs=202068308039
+gateReadEndUptimeMs=202068 gateReadEndElapsedNs=202068397262
+decisionUptimeMs=202068 decisionElapsedNs=202068411283
+attachUptimeMs=196409 attachElapsedNs=196409733670
+winner=PUBLIC_NEGATIVE confirmation=UNOBSERVED confirmSource=UNOBSERVED
+confirmUptimeMs=UNOBSERVED confirmElapsedNs=UNOBSERVED
+confirmReadBeginNs=UNOBSERVED confirmReadEndNs=UNOBSERVED
+observationGeneration=2 scanAttempted=5 metadataCompleted=3 canceled=4 stale=0
+previousGateLocked=false previousGateBeginNs=202068308039 previousGateEndNs=202068397262 previousGateAgeNs=14021
+firstApp=UNOBSERVED
+priorNoApp=216 app=false fetchBeginNs=201687178462 fetchEndNs=201692298657 metadataEndNs=201692313188 previousMetadataGateLocked=true previousMetadataGateEndNs=201673532083 disposition=CANCELED dispositionNs=202931577812
+lastScan=216
+childHide=APPLIED childError=UNOBSERVED childCommitListener=OBSERVED
+childHideRequestUptimeMs=202068 childHideRequestElapsedNs=202068450201
+childApplyReturnUptimeMs=202068 childApplyReturnElapsedNs=202068584772
+childCommitMainReceiptUptimeMs=202332 childCommitMainReceiptElapsedNs=202332155898
+localHideUptimeMs=202069 localHideElapsedNs=202069405786
+detachUptimeMs=202103 detachElapsedNs=202103035303
+removeBeginUptimeMs=202075 removeBeginElapsedNs=202075157342
+removeReturnUptimeMs=202197 removeReturnElapsedNs=202197578922
+removeDetached=true removeError=NONE
+retryBeginUptimeMs=UNOBSERVED retryBeginElapsedNs=UNOBSERVED
+retryReturnUptimeMs=UNOBSERVED retryReturnElapsedNs=UNOBSERVED
+retryDetached=UNOBSERVED retryError=UNOBSERVED
+hostStopUptimeMs=202331 hostStopElapsedNs=202331585157
+hostStopStatus=STOPPED
+physicalLastOrbPixel=UNOBSERVED physicalFirstRestrictedFrame=UNOBSERVED
+bodySha256=4c0d1adb68029973299b3019c7449002497ddfdefb7e57f3df00dd44628876cd
+```
+
+```text
+FLUVI_WA_AMBIENT_V1
+build=1e15c448de5344825c4560b51d0f48e1204f3c46 package=com.fluvi.app api=37 display=0
+serviceElapsedNs=229165493899 startedElapsedNs=287173518875 requested=true
+transitionSampling=true repeatedStates=0 droppedTransitions=0 physicalVisibility=UNOBSERVED outsideOrbPixels=UNOBSERVED
+STATE source=SCREEN_OFF elapsedNs=287173527859 uptimeMs=287173 displayState=1 locked=UNOBSERVED interactive=UNOBSERVED gate=SCREEN_OFF
+SIGNAL source=SCREEN_ON elapsedNs=295596246041 uptimeMs=295596
+STATE source=DISPLAY elapsedNs=295628975435 uptimeMs=295628 displayState=2 locked=true interactive=true gate=AWAKE
+bodySha256=cd7479069056a8d5db154f8b772809129882ff391b57117666dcae9ed8ef3b08
+```
+
+
+### Matched 56 dp FLUVI_MASK stock recording
+
+Both lanes used API 37 Pixel 7 default x86_64, display 0, 50 ms service timeout, recording initially off, settled moving mask and an independent unlocked destination. The R54 run used all three allowed attempts. Attempts 1 and 3 never reached two distinct live phases and action was withheld. Attempt 2 reached a real swipe, destination and ordinary Copy. PTS and first absent output were incomplete, so the first frame could not be assigned. A separate lab comparison of all three plain 112 dp ordinary swipes is above.
+
+R55 attempt 1 delivered the swipe, with the independent public state still locked at the expected negative. Attempts 2 and 3 reached the destination and qualified as usable software acquisitions. Neither had adequate same-display present coverage and clock join for a first-display-frame verdict. The first **identified** destination frame was ORB-free in both samples. Each run retained the unknown preceding interval and original PTS, MP4, crops, trace, and owner association.
+
+| Product and attempt | App owner | Event age (ms) | Decision to child apply-return (ms) | Decision to local hide (ms) | Last sample with ORB | First identified destination sample | First-forbidden-frame verdict |
+| --- | --- | ---: | ---: | ---: | --- | --- | --- |
+| R54 carryover 2 | 100560588149/2 | 372 | 3.176 | 11.854 | 209 at relative PTS 62.269967 s, MAIN | UNOBSERVED | INCONCLUSIVE |
+| R55 2 | 77129016958/2 | 376 | 4.310 | 4.526 | 222 at mapped 263.560622 s, scene unknown | 223 at mapped 264.127385 s, clear | INCONCLUSIVE |
+| R55 3 | 77129016958/3 | 277 | 6.653 | 6.969 | 254 at mapped 348.897408 s, scene unknown | 255 at mapped 350.597275 s, clear | INCONCLUSIVE |
+
+The R54 frame-map uses relative recorder time. The R55 maps use elapsed-aligned recorder evidence where available. The unknown scene before each identified destination stays unknown. The covered intervals are wider than 10 ms and the physical endpoint is still open. Candidate acquisition gate PASS with two usable acquisitions and one incomplete attempt. R54 acquisition gate FAIL with one usable acquisition and two incomplete attempts. Raw archive SHA-256 values are R54 `b056bf97c72a880fa92c43fa8add6982277e8ba7e34ca0aa44245f0a69ab0f9b` and R55 `406ee4da1624f76ebeac3d244a28a49b613dd01d810dd33e788b03ca1cc31f2a`. [R54 masked archive](https://github.com/elizerpist/exptv2/actions/runs/46133236863/artifacts/15259031093) · [R55 masked archive](https://github.com/elizerpist/exptv2/actions/runs/46138514339/artifacts/15261375997) · [R55 job](https://github.com/elizerpist/exptv2/actions/runs/46138514339/job/140959077281)
+
+Settled independent shade and PIN PASS on API 35 and API 37 with the signed APK and an explicit witnessed panel or PIN precondition. The selected panel controls do not measure the first forbidden frame. The pre-34 compatibility path PASS on API 33 with visible interactive rendering, ordinary unlock, `LEGACY_API`, the expected `childHide=UNSUPPORTED` and actual clipboard. [API 35 raw](https://github.com/elizerpist/exptv2/actions/runs/46138818781/artifacts/15260558758) · [API 37 raw](https://github.com/elizerpist/exptv2/actions/runs/46138263267/artifacts/15260612532) · [API 33 raw](https://github.com/elizerpist/exptv2/actions/runs/46138307546/artifacts/15261250276)
+
+Implementation complete. Automated qualification mixed with failures retained. APK delivery and signed update PASS. **PHYSICAL VALIDATION — PENDING, USER ONLY.** The exact Nothing A142 test remains the default OFF control and the option ON with system AOD enabled, 56 dp Fluvi mask and the same palette and position. Sample 10, 60 and 180 seconds without touching, note all content outside the ORB, then verify normal wake and separate direct fingerprint unlock. Repeat with system AOD disabled or suppressed and confirm a truly dark display. Copy the normal unlock and AOD receipts from Zárképernyő. First-forbidden-frame and cold wake ≤10 ms need their own optical measurements.
