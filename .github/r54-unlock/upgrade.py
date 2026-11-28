@@ -136,6 +136,25 @@ def open_dashboard(device, name):
     raise AssertionError("The real Flutter dashboard did not finish opening within 32 s")
 
 
+def bind_r52(device):
+    device.click("Android kisegítő lehetőségek", package=PKG)
+    device.settings_consent()
+    # Some boots return directly to the setup page without an automatic prompt.
+    # In either initial state complete the genuine Android widget consent.
+    if not device.click("Create", "Allow", package="com.android.settings", optional=True, limit=4):
+        device.click("1×1 (56 dp)", package=PKG)
+        device.click("Create", "Allow", package="com.android.settings", limit=12)
+    deadline = time.monotonic() + 35
+    while time.monotonic() < deadline:
+        raw = device.adb("logcat", "-d", "-s", "FluviBalanceOrb")
+        match = re.search(rb"bound host=1003 id=(\d+)", raw)
+        if match and b"material-ready id=" + match[1] in raw:
+            device.save("r52-appwidget.txt", device.adb("shell", "dumpsys", "appwidget"))
+            return match[1]
+        time.sleep(.6)
+    raise AssertionError("R52's real WA binding did not receive the header packet")
+
+
 def run(device, args, work):
     assert device.shell("getprop", "ro.kernel.qemu") == "1"
     assert device.shell("getprop", "ro.build.version.sdk") == "37"
@@ -149,7 +168,7 @@ def run(device, args, work):
     device.shell("am", "start", "-W", "-n", stock.r51.ACTIVITY)
     prior.seed(device, work)
     masks.settings(device)
-    widget = stock.r51.stock.prepare_binding(device)
+    widget = bind_r52(device)
     device.click("2×2 (112 dp)", package=PKG)
     masks.select_style(device, 56, "fluviMask")
     _, original = painted_wake(device, "r52-original")

@@ -1,4 +1,4 @@
-name: R54 measured upgraded dashboard and clipboard
+name: R54 data-preserving upgrade and ordinary unlock
 on:
   workflow_dispatch:
     inputs:
