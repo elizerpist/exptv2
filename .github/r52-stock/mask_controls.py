@@ -192,6 +192,8 @@ def change_palette(device, old):
 
 
 def exercise(device, args):
+    assert device.shell("getprop", "ro.kernel.qemu") == "1"
+    assert device.shell("getprop", "ro.build.version.sdk") == "37"
     device.adb("root")
     device.adb("wait-for-device")
     args.api = "37.0"
