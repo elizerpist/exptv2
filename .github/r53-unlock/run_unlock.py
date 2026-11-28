@@ -1,4 +1,4 @@
-"""R53 fixture. One direct swipe unlock on the pinned signed R52 installation."""
+"""Matched direct-swipe optical witness for the pinned signed Fluvi products."""
 
 import argparse
 from contextlib import contextmanager
@@ -230,7 +230,7 @@ def summary(device, trial, reference, args):
     identity = {}
     if trial["action_issued"]:
         try:
-            document = stock.copy(device, "unlock", APP_SOURCE, 2, 50)
+            document = stock.copy(device, "unlock", args.sha, 2, 50)
             row = stock.match_windows(document, [trial])[0]
             save_json(device, "owned-software-row.json", row)
             if (row.get("match"), row.get("dp"), row.get("displayId"), row.get("reason")) == (
@@ -244,6 +244,13 @@ def summary(device, trial, reference, args):
                         identity[name] = [int(v) for v in row[field].split(",")[3:5]]
         except FAILURES as error:
             device.save("copy-error.txt", (str(error) + "\n").encode())
+        if args.sha != APP_SOURCE:
+            try:
+                from upgrade import last_copy
+                _, endpoints = last_copy(device, "owned-child", args.sha)
+                save_json(device, "owned-child-row.json", endpoints)
+            except FAILURES as error:
+                device.save("child-copy-error.txt", (str(error) + "\n").encode())
     if reference and "recording_bracket_ns" in trial and "bounds" in trial:
         try:
             draws = draw_records(device, trial["recording_bracket_ns"][0], args.reference_sha, reference["task"])
@@ -286,12 +293,15 @@ def main():
     parser.add_argument("--observer", type=Path, required=True)
     parser.add_argument("--reference", type=Path, required=True)
     parser.add_argument("--reference-sha", required=True)
+    parser.add_argument("--app-sha", default=APP_SOURCE)
+    parser.add_argument("--repeat-valid", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    args.api, args.sha = "37.0", APP_SOURCE
+    args.api, args.sha = "37.0", args.app_sha
     device = stock.r51.Device(args.output)
     try:
         extent = prepare(device, args)
+        first_valid = False
         for attempt in (1, 2):
             step = stock.r51.Device(device.output / f"attempt-{attempt}")
             trial = {}
@@ -300,7 +310,11 @@ def main():
             if trial["action_issued"]:
                 assert trial["fixture"] == "VALID_SOFTWARE", trial
                 assert (step.output / "frame-report.json").is_file(), "frames were retained with an analysis error"
-                break
+                first_valid = True
+                if not args.repeat_valid or attempt == 2:
+                    break
+                stock.home(step)
+                continue
             assert attempt == 1, "no qualified pre-action setup in the two allowed attempts"
             # Restore unlocked state for the single permitted pre-action replacement.
             step.shell("input", "keyevent", "KEYCODE_WAKEUP")
@@ -308,6 +322,7 @@ def main():
             stock.panel(step)
             if "Leállítás" in stock.labels(step):
                 step.click("Leállítás", package=APP)
+        assert first_valid
     finally:
         device.save("logcat.txt", device.adb("logcat", "-d", "-v", "threadtime"))
 

@@ -31,13 +31,16 @@ SQL
 SELECT * FROM clock_snapshot ORDER BY ts;
 SQL
   query layers <<'SQL'
-WITH owned AS (
-    SELECT DISTINCT layer_id FROM surfaceflinger_layer
+WITH RECURSIVE owned(snapshot_id, layer_id) AS (
+    SELECT snapshot_id, layer_id FROM surfaceflinger_layer
     WHERE layer_name LIKE '%Fluvi Balance ORB%' OR layer_name LIKE '%com.fluvi.r53.reference%'
+    UNION
+    SELECT l.snapshot_id, l.layer_id FROM surfaceflinger_layer l
+    JOIN owned o ON l.snapshot_id=o.snapshot_id AND l.parent=o.layer_id
 )
 SELECT s.ts, l.layer_id, l.parent AS parent_layer_id, l.layer_name, l.is_visible, l.arg_set_id
 FROM surfaceflinger_layer l JOIN surfaceflinger_layers_snapshot s ON l.snapshot_id=s.id
-WHERE l.layer_id IN owned OR l.parent IN owned
+JOIN owned o ON l.snapshot_id=o.snapshot_id AND l.layer_id=o.layer_id
 ORDER BY s.ts,l.layer_id;
 SQL
   query snapshots <<'SQL'

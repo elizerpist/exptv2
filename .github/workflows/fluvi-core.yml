@@ -1,36 +1,40 @@
-name: R53 direct unlock witness on exact R52
+name: R54 signed update and stock unlock
 on:
   workflow_dispatch:
     inputs:
-      reference_sha:
+      app_sha:
         required: true
         type: string
-      reference_url:
+      apk:
         required: true
         type: string
-      reference_hash:
+      sha256:
         required: true
         type: string
-      reference_cert:
-        required: true
-        type: string
-      reference_size:
+      size:
         required: true
         type: string
 permissions:
   contents: read
+
 jobs:
-  unlock:
+  stock:
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [upgrade, optical-r52, optical-r54, material]
     runs-on: ubuntu-latest
-    timeout-minutes: 24
+    timeout-minutes: 25
     env:
-      REFERENCE_SHA: ${{ inputs.reference_sha }}
-      REFERENCE_URL: ${{ inputs.reference_url }}
-      REFERENCE_HASH: ${{ inputs.reference_hash }}
-      REFERENCE_CERT: ${{ inputs.reference_cert }}
-      REFERENCE_SIZE: ${{ inputs.reference_size }}
+      APP_SHA: ${{ inputs.app_sha }}
+      APK_URL: ${{ inputs.apk }}
+      APK_HASH: ${{ inputs.sha256 }}
+      APK_SIZE: ${{ inputs.size }}
+      CASE: ${{ matrix.case }}
+      R52_SHA: 7705f87c0c8f2bdf930a528b5bc6f87d276676a5
+      REFERENCE_SHA: b3c6fe33267fa19e4853fe03b551ef27fec7dbd6
       PYTHONDONTWRITEBYTECODE: '1'
-      PYTHONPATH: .github/r52-stock:.github/r53-unlock
+      PYTHONPATH: .github/r52-stock:.github/r53-unlock:.github/r54-unlock
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -43,16 +47,26 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Verify both APKs and run the independent offline controls
+      - name: Verify full products, reference and offline controls
         run: |
           mkdir -p evidence
-          bash .github/r52-stock/verify-apk.sh \
-            https://media.githubusercontent.com/media/elizerpist/exptv2/8f7fc51e91d8ab2f65aae1565ed803e6fea9f3a1/Fluvi_R52_HUMAN_7705f87c0c8f.apk \
-            4ca98594dc1e764b5ec1c9e2a93dd0dd212b7fcd7ca88f8e55db89d677ba9f7d \
-            114027163 7705f87c0c8f2bdf930a528b5bc6f87d276676a5 "$RUNNER_TEMP/human.apk"
-          bash .github/r53-unlock/reference/verify.sh "$REFERENCE_URL" "$REFERENCE_HASH" \
-            "$REFERENCE_SIZE" "$REFERENCE_SHA" "$REFERENCE_CERT" "$RUNNER_TEMP/reference.apk" \
-            | tee evidence/reference-apk.txt
+          if [[ "$CASE" != optical-r52 ]]; then
+            bash .github/r52-stock/verify-apk.sh "$APK_URL" "$APK_HASH" "$APK_SIZE" \
+              "$APP_SHA" "$RUNNER_TEMP/r54.apk"
+          fi
+          if [[ "$CASE" == upgrade || "$CASE" == optical-r52 ]]; then
+            bash .github/r52-stock/verify-apk.sh \
+              https://media.githubusercontent.com/media/elizerpist/exptv2/8f7fc51e91d8ab2f65aae1565ed803e6fea9f3a1/Fluvi_R52_HUMAN_7705f87c0c8f.apk \
+              4ca98594dc1e764b5ec1c9e2a93dd0dd212b7fcd7ca88f8e55db89d677ba9f7d \
+              114027163 "$R52_SHA" "$RUNNER_TEMP/r52.apk"
+          fi
+          if [[ "$CASE" == optical-* ]]; then
+            bash .github/r53-unlock/reference/verify.sh \
+              https://media.githubusercontent.com/media/elizerpist/exptv2/ac3c7adeb9d90e69b01ed670e5c06d6911367cd2/Fluvi_R53_Reference_b3c6fe33267f.apk \
+              3bbeda3c9555a56c3bf194c00844164f0bcf93c24e11099fec7f7e7da6dacb54 \
+              16811 "$REFERENCE_SHA" 9260dbbf7fcbe03f1f0bf4218a3c3ddc892dba1ae86f50b88434719f7daf6d54 \
+              "$RUNNER_TEMP/reference.apk" | tee evidence/reference-apk.txt
+          fi
           bash .github/r52-stock/prepare-runner.sh
           python -m unittest discover -s .github/r53-unlock -v 2>&1 | tee evidence/offline-controls.txt
       - uses: reactivecircus/android-emulator-runner@v2
@@ -65,15 +79,12 @@ jobs:
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: >-
-            python3 .github/r53-unlock/run_unlock.py --apk "$RUNNER_TEMP/human.apk"
-            --observer "$RUNNER_TEMP/observer.apk" --reference "$RUNNER_TEMP/reference.apk"
-            --reference-sha "$REFERENCE_SHA" --output evidence/unlock
+          script: bash .github/r54-unlock/run.sh
       - if: always()
         run: bash .github/r53-unlock/export_trace.sh evidence/unlock
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r53-unlock-${{ github.sha }}
+          name: r54-${{ matrix.case }}-${{ github.sha }}
           path: evidence/
           if-no-files-found: error
