@@ -60,8 +60,20 @@ class Device(stock.Device):
                 targets.add((left, a, b, c))
         assert targets, "No actual service toggle by the measured title"
         left, top, right, bottom = min(targets, key=lambda p: (p[2] - p[0]) * (p[3] - p[1]))
+        # The title can enter the accessibility tree before the detail
+        # activity owns a touchable Android window. Allow one retap only if
+        # the same service is still disabled and the same detail is visible.
+        time.sleep(.6)
         self.shell("input", "tap", (left + right) // 2, (top + bottom) // 2)
         self.click("Allow", "OK", optional=True, limit=6)
+        enabled = self.shell("settings", "get", "secure", "enabled_accessibility_services")
+        if self.service not in enabled.split(":"):
+            detail = self.screen()
+            self.save("service-switch-after-first-tap.xml", detail)
+            if title in stock.visible_labels(detail, settings):
+                self.note("Retap measured service switch after the first tap left it disabled")
+                self.shell("input", "tap", (left + right) // 2, (top + bottom) // 2)
+                self.click("Allow", "OK", optional=True, limit=6)
         assert self.service_connected(), "Exact accessibility service never bound"
         for _ in range(3):
             raw = self.screen()
