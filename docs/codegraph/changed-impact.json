@@ -1,174 +1,108 @@
 {
   "schema_version": 1,
-  "source_head": "e7542639d22d78d10e7b123e836ee9bc9758c91a",
-  "base_head": "c1e674b2bcf31feab2ce5f5143b5032a109215ba",
+  "source_head": "7705f87c0c8f2bdf930a528b5bc6f87d276676a5",
+  "base_head": "65f42fc67c0899b40a4dcb32f1a86f13df9ecdd2",
   "changed_files": [
     "android/app/src/main/kotlin/com/fluvi/app/MainActivity.kt",
+    "android/app/src/main/kotlin/com/fluvi/app/widget/orb/HeaderOrbBinding.kt",
     "android/app/src/main/kotlin/tk/zwander/lockscreenwidgets/services/Accessibility.kt",
-    "android/r50-product/app/build.gradle.kts",
-    "android/wa-lockscreen/src/main/kotlin/com/fluvi/wa/WaCaptureTrace.kt",
-    "android/wa-lockscreen/src/main/kotlin/com/fluvi/wa/WaLockscreenCapture.kt",
-    "android/wa-lockscreen/src/main/kotlin/com/fluvi/wa/WaLockscreenService.kt",
+    "android/wa-lockscreen/src/main/kotlin/com/fluvi/wa/WaOrbStyle.kt",
     "android/wa-lockscreen/src/main/kotlin/com/fluvi/wa/WaOrbWindow.kt",
-    "android/wa-lockscreen/src/main/kotlin/com/fluvi/wa/WaWakeEpisode.kt",
-    "android/wa-lockscreen/src/test/kotlin/com/fluvi/wa/WaCaptureTraceTest.kt",
-    "android/wa-lockscreen/src/test/kotlin/com/fluvi/wa/WaWakeEpisodeTest.kt",
-    "lib/core/debug/debug_console.dart",
-    "lib/core/debug/debug_lockscreen_capture.dart",
-    "scripts/r49-fixture/AndroidManifest.xml",
-    "scripts/r49-fixture/ClipboardWitness.java",
-    "scripts/r49-fixture/build-observer.sh",
-    "scripts/test-r51-orb-transitions.py",
-    "test/core/debug/debug_lockscreen_capture_test.dart"
+    "android/wa-lockscreen/src/main/res/drawable-nodpi/wa_fluvi_logo_mask.png",
+    "lib/features/header_orb/presentation/header_orb_setup_page.dart",
+    "scripts/generate-fluvi-lock-mask.py",
+    "scripts/test-r50-host-device.py",
+    "test/features/header_orb/presentation/header_orb_setup_page_test.dart"
   ],
   "candidate_changed_symbols": [
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`().",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#automationPermissions.",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#createState().",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#diagnosticStatusProvider.",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#physicalReportProvider.",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugDiagnosticStatusProvider#",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleDialogState#build().",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleDialogState#dispose().",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleDialogState#initState().",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#all.",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#balanceWave.",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#ghost.",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#mindHeatmap.",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#lockscreen.",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#logs.",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#push.",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#report.",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#`<constructor>`().",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#createState().",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/_DebugLockscreenCaptureState#build().",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/_DebugLockscreenCaptureState#didChangeAppLifecycleState().",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/_DebugLockscreenCaptureState#dispose().",
-    "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/_DebugLockscreenCaptureState#initState().",
-    "scip-dart pub fluvi 0.1.0+1 test/core/debug/`debug_lockscreen_capture_test.dart`/main()."
+    "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#`<constructor>`().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#createState().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/_HeaderOrbSetupPageState#build().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/_HeaderOrbSetupPageState#didChangeAppLifecycleState().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/_HeaderOrbSetupPageState#dispose().",
+    "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/_HeaderOrbSetupPageState#initState().",
+    "scip-dart pub fluvi 0.1.0+1 test/features/header_orb/presentation/`header_orb_setup_page_test.dart`/choose().",
+    "scip-dart pub fluvi 0.1.0+1 test/features/header_orb/presentation/`header_orb_setup_page_test.dart`/isSelected().",
+    "scip-dart pub fluvi 0.1.0+1 test/features/header_orb/presentation/`header_orb_setup_page_test.dart`/main().",
+    "scip-dart pub fluvi 0.1.0+1 test/features/header_orb/presentation/`header_orb_setup_page_test.dart`/style()."
   ],
   "candidate_changed_symbols_basis": "repository definitions whose definition_file is in changed_files; symbol bodies are not range-diffed",
   "direct_reference_consumers": [
     {
-      "file": "lib/core/debug/debug_console.dart",
+      "file": "lib/features/header_orb/presentation/header_orb_setup_page.dart",
       "is_test": false,
       "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#automationPermissions.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#diagnosticStatusProvider.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#physicalReportProvider.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugDiagnosticStatusProvider#",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#all.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#balanceWave.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#ghost.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#mindHeatmap.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#lockscreen.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#logs.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#push.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#report.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#`<constructor>`()."
-      ],
-      "reference_count": 43,
-      "first_line": 18,
-      "first_column": 9,
-      "basis": "scip_reference"
-    },
-    {
-      "file": "lib/core/debug/debug_floating_button.dart",
-      "is_test": false,
-      "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`().",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugDiagnosticStatusProvider#"
+        "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#"
       ],
       "reference_count": 2,
-      "first_line": 19,
+      "first_line": 11,
       "first_column": 8,
       "basis": "scip_reference"
     },
     {
-      "file": "lib/core/debug/debug_lockscreen_capture.dart",
+      "file": "lib/features/settings/presentation/settings_page.dart",
       "is_test": false,
       "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#"
+        "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#`<constructor>`()."
       ],
-      "reference_count": 2,
-      "first_line": 12,
-      "first_column": 8,
+      "reference_count": 1,
+      "first_line": 197,
+      "first_column": 46,
       "basis": "scip_reference"
     },
     {
-      "file": "test/core/debug/debug_lockscreen_capture_test.dart",
+      "file": "test/features/header_orb/presentation/header_orb_setup_page_test.dart",
       "is_test": true,
       "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`()."
+        "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 test/features/header_orb/presentation/`header_orb_setup_page_test.dart`/choose().",
+        "scip-dart pub fluvi 0.1.0+1 test/features/header_orb/presentation/`header_orb_setup_page_test.dart`/isSelected().",
+        "scip-dart pub fluvi 0.1.0+1 test/features/header_orb/presentation/`header_orb_setup_page_test.dart`/style()."
       ],
-      "reference_count": 3,
-      "first_line": 52,
-      "first_column": 54,
+      "reference_count": 16,
+      "first_line": 8,
+      "first_column": 32,
       "basis": "scip_reference"
     }
   ],
   "affected_test_locations": [
     {
-      "file": "test/core/debug/debug_lockscreen_capture_test.dart",
+      "file": "test/features/header_orb/presentation/header_orb_setup_page_test.dart",
       "is_test": true,
       "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`()."
+        "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#`<constructor>`().",
+        "scip-dart pub fluvi 0.1.0+1 test/features/header_orb/presentation/`header_orb_setup_page_test.dart`/choose().",
+        "scip-dart pub fluvi 0.1.0+1 test/features/header_orb/presentation/`header_orb_setup_page_test.dart`/isSelected().",
+        "scip-dart pub fluvi 0.1.0+1 test/features/header_orb/presentation/`header_orb_setup_page_test.dart`/style()."
       ],
-      "reference_count": 3,
-      "first_line": 52,
-      "first_column": 54,
+      "reference_count": 16,
+      "first_line": 8,
+      "first_column": 32,
       "basis": "scip_reference"
     }
   ],
   "affected_production_locations": [
     {
-      "file": "lib/core/debug/debug_console.dart",
+      "file": "lib/features/header_orb/presentation/header_orb_setup_page.dart",
       "is_test": false,
       "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#automationPermissions.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#diagnosticStatusProvider.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#physicalReportProvider.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugDiagnosticStatusProvider#",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#all.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#balanceWave.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#ghost.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleLogFilter#mindHeatmap.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#lockscreen.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#logs.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#push.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/_DebugConsoleSection#report.",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#`<constructor>`()."
-      ],
-      "reference_count": 43,
-      "first_line": 18,
-      "first_column": 9,
-      "basis": "scip_reference"
-    },
-    {
-      "file": "lib/core/debug/debug_floating_button.dart",
-      "is_test": false,
-      "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`().",
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugDiagnosticStatusProvider#"
+        "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#"
       ],
       "reference_count": 2,
-      "first_line": 19,
+      "first_line": 11,
       "first_column": 8,
       "basis": "scip_reference"
     },
     {
-      "file": "lib/core/debug/debug_lockscreen_capture.dart",
+      "file": "lib/features/settings/presentation/settings_page.dart",
       "is_test": false,
       "target_symbols": [
-        "scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#"
+        "scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#`<constructor>`()."
       ],
-      "reference_count": 2,
-      "first_line": 12,
-      "first_column": 8,
+      "reference_count": 1,
+      "first_line": 197,
+      "first_column": 46,
       "basis": "scip_reference"
     }
   ]

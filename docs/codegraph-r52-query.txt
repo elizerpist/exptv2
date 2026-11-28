@@ -1,0 +1,105 @@
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_floating_button.dart`/DebugFloatingButton#
+DEFINITION
+lib/core/debug/debug_floating_button.dart:10
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_floating_button.dart`/DebugFloatingButton#
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_floating_button.dart`/DebugFloatingButton#`<constructor>`().
+REFERENCES
+total=16 production=1 tests=15
+CONSUMER FILES
+lib/app/shell/fluvi_app_shell.dart
+test/core/debug/debug_floating_button_test.dart
+PRODUCTION REFERENCES
+lib/app/shell/fluvi_app_shell.dart:1489:32 reference
+TEST REFERENCES
+test/core/debug/debug_floating_button_test.dart:13:46 reference
+test/core/debug/debug_floating_button_test.dart:36:46 reference
+test/core/debug/debug_floating_button_test.dart:58:46 reference
+test/core/debug/debug_floating_button_test.dart:95:48 reference
+test/core/debug/debug_floating_button_test.dart:179:48 reference
+test/core/debug/debug_floating_button_test.dart:258:48 reference
+test/core/debug/debug_floating_button_test.dart:320:14 reference
+test/core/debug/debug_floating_button_test.dart:363:46 reference
+test/core/debug/debug_floating_button_test.dart:397:14 reference
+test/core/debug/debug_floating_button_test.dart:426:48 reference
+test/core/debug/debug_floating_button_test.dart:458:48 reference
+test/core/debug/debug_floating_button_test.dart:480:48 reference
+test/core/debug/debug_floating_button_test.dart:509:46 reference
+test/core/debug/debug_floating_button_test.dart:550:14 reference
+test/core/debug/debug_floating_button_test.dart:591:14 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#
+DEFINITION
+lib/core/debug/debug_console.dart:15
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`().
+REFERENCES
+total=7 production=3 tests=4
+CONSUMER FILES
+lib/core/debug/debug_console.dart
+lib/core/debug/debug_floating_button.dart
+test/core/debug/debug_lockscreen_capture_test.dart
+PRODUCTION REFERENCES
+lib/core/debug/debug_console.dart:28:8 reference
+lib/core/debug/debug_console.dart:37:45 reference
+lib/core/debug/debug_floating_button.dart:39:30 reference
+TEST REFERENCES
+test/core/debug/debug_lockscreen_capture_test.dart:52:54 reference
+test/core/debug/debug_lockscreen_capture_test.dart:64:54 reference
+test/core/debug/debug_lockscreen_capture_test.dart:123:54 reference
+test/core/debug/debug_lockscreen_capture_test.dart:176:54 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#
+DEFINITION
+lib/core/debug/debug_lockscreen_capture.dart:8
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#`<constructor>`().
+REFERENCES
+total=3 production=3 tests=0
+CONSUMER FILES
+lib/core/debug/debug_console.dart
+lib/core/debug/debug_lockscreen_capture.dart
+PRODUCTION REFERENCES
+lib/core/debug/debug_console.dart:683:19 reference
+lib/core/debug/debug_lockscreen_capture.dart:12:8 reference
+lib/core/debug/debug_lockscreen_capture.dart:15:49 reference
+TEST REFERENCES
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#
+DEFINITION
+lib/features/header_orb/presentation/header_orb_setup_page.dart:7
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#
+scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#`<constructor>`().
+REFERENCES
+total=4 production=3 tests=1
+CONSUMER FILES
+lib/features/header_orb/presentation/header_orb_setup_page.dart
+lib/features/settings/presentation/settings_page.dart
+test/features/header_orb/presentation/header_orb_setup_page_test.dart
+PRODUCTION REFERENCES
+lib/features/header_orb/presentation/header_orb_setup_page.dart:11:8 reference
+lib/features/header_orb/presentation/header_orb_setup_page.dart:14:45 reference
+lib/features/settings/presentation/settings_page.dart:197:46 reference
+TEST REFERENCES
+test/features/header_orb/presentation/header_orb_setup_page_test.dart:8:32 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#
+DEFINITION
+lib/app/platform/dashboard_header_widget_publisher.dart:11
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#`<constructor>`().
+REFERENCES
+total=3 production=2 tests=1
+CONSUMER FILES
+lib/app/shell/fluvi_app_shell.dart
+test/app/platform/header_widget_publisher_test.dart
+PRODUCTION REFERENCES
+lib/app/shell/fluvi_app_shell.dart:268:13 reference
+lib/app/shell/fluvi_app_shell.dart:307:29 reference
+TEST REFERENCES
+test/app/platform/header_widget_publisher_test.dart:54:24 reference

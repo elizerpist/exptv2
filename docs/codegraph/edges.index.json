@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "record_count": 42007,
+  "record_count": 42011,
   "shards": [
     {
       "path": "edges/part-000.jsonl",
@@ -133,28 +133,28 @@
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/dashboard/time_navigation/domain/`ledger_time_scope.dart`/LedgerTimeScope#",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/features/manual_transactions/application/`manual_transaction_editor_preferences.dart`/ManualTransactionEditorPreferencesStore#",
-      "sha256": "3b427f21ab688ed92556c48e22b5f6e27488d195d99237aa471bf2dba6b7560e"
+      "sha256": "3120f2ea2d8809d07b8437ced4af8068c740ed670af021c9ebfbf4acc87f3257"
     },
     {
       "path": "edges/part-019.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/features/manual_transactions/application/`manual_transaction_editor_preferences.dart`/ManualTransactionEditorPreferencesStore#",
       "last_key": "scip-dart pub fluvi 0.1.0+1 lib/shared/motion/centered_carousel/`centered_carousel_controller.dart`/CenteredCarouselController#`<get>hasActiveScrollActivity`.",
-      "sha256": "95003de19babf314004fe9646fd0dc489d6323237dd16da15939bf7c5df4ca4d"
+      "sha256": "1b3e232372e0e99ea7cb2f9e4633bdf7a6efa81277f7aea5647849e7444a0e70"
     },
     {
       "path": "edges/part-020.jsonl",
       "record_count": 2000,
       "first_key": "scip-dart pub fluvi 0.1.0+1 lib/shared/motion/centered_carousel/`centered_carousel_controller.dart`/CenteredCarouselController#`<get>hasActiveScrollActivity`.",
-      "last_key": "scip-dart pub fluvi 0.1.0+1 test/support/`test_pump.dart`/pumpDashboardSurface().",
-      "sha256": "a3f9dddc3aac45385dbf5fb0c9847f8dc155ee2d1d82b0a32a110d290f1c5499"
+      "last_key": "scip-dart pub fluvi 0.1.0+1 test/support/`test_category_collection.dart`/emptyTestCategoryCollection.",
+      "sha256": "e91ea53481b3bf2109dffe72b8011fba7df162bfa3314afd690841957e9027ce"
     },
     {
       "path": "edges/part-021.jsonl",
-      "record_count": 7,
-      "first_key": "scip-dart pub fluvi 0.1.0+1 test/support/`test_pump.dart`/pumpDashboardSurface().",
+      "record_count": 11,
+      "first_key": "scip-dart pub fluvi 0.1.0+1 test/support/`test_pump.dart`/dashboardTestDevicePixelRatio.",
       "last_key": "scip-dart pub fluvi 0.1.0+1 test/support/`test_pump.dart`/pumpDashboardSurface().",
-      "sha256": "5f1e6061f53727c13877ecf373af508edd77264bab88842d498e4766506982af"
+      "sha256": "00fe4380f23ac2ffd6203c7a73563230d6c9039ce787c09fc50ba7c5252ad878"
     }
   ]
 }
