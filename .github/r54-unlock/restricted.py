@@ -10,7 +10,7 @@ from upgrade import painted_wake, screenshot
 
 def run(device, args):
     assert device.shell("getprop", "ro.kernel.qemu") == "1"
-    assert device.shell("getprop", "ro.build.version.sdk") == "37"
+    assert device.shell("getprop", "ro.build.version.sdk") == "35"
     for apk in (args.apk, args.observer):
         assert b"Success" in device.adb("install", apk, timeout=90)
     device.shell("wm", "dismiss-keyguard")

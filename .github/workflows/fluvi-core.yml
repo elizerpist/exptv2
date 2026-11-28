@@ -1,4 +1,4 @@
-name: R54 independent shade and credential controls
+name: R55 independently witnessed API 35 shade and PIN controls
 on:
   workflow_dispatch:
     inputs:
@@ -71,8 +71,8 @@ jobs:
           python -m unittest discover -s .github/r53-unlock -v 2>&1 | tee evidence/offline-controls.txt
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ matrix.case == 'legacy' && 33 || 36 }}
-          system-image-api-level: ${{ matrix.case == 'legacy' && '33' || '37.0' }}
+          api-level: 35
+          system-image-api-level: '35'
           target: default
           arch: x86_64
           profile: pixel_7
