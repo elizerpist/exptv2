@@ -23,4 +23,8 @@ case "$CASE" in
         python3 .github/r54-unlock/legacy.py --apk "$RUNNER_TEMP/r54.apk" \
           --observer "$observer" --sha "$APP_SHA" --output evidence/legacy
         ;;
+    restricted)
+        python3 .github/r54-unlock/restricted.py --apk "$RUNNER_TEMP/r54.apk" \
+          --observer "$observer" --output evidence/restricted
+        ;;
 esac

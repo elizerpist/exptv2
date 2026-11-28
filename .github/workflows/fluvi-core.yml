@@ -1,4 +1,4 @@
-name: R54 signed update and ordinary unlock clipboard
+name: R54 independent shade and credential controls
 on:
   workflow_dispatch:
     inputs:
@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        case: [upgrade]
+        case: [restricted]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
