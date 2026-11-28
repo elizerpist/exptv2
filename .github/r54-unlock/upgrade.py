@@ -97,13 +97,33 @@ def check_owner(fields, widget):
     assert times == sorted(times), (stages, times)
 
 
+def wait_for_root(device):
+    """A successful adb root can close the existing transport before replying."""
+    deadline = time.monotonic() + 32
+    while time.monotonic() < deadline:
+        try:
+            device.adb("wait-for-device", timeout=6)
+            if device.shell("id", "-u", timeout=4) == "0":
+                device.note("ADB ready after the userdebug adbd restart")
+                return
+        except (OSError, subprocess.SubprocessError) as error:
+            device.note(f"Awaiting emulator transport {error}")
+            time.sleep(.5)
+            continue
+        try:
+            reply = device.adb("root", timeout=5)
+            device.note(reply.decode(errors="replace").strip())
+        except (OSError, subprocess.SubprocessError) as error:
+            device.note(f"adbd restart interrupted the transport {error}")
+        time.sleep(1)
+    raise AssertionError("The API 37 userdebug adbd did not become root")
+
+
 def run(device, args, work):
     assert device.shell("getprop", "ro.kernel.qemu") == "1"
     assert device.shell("getprop", "ro.build.version.sdk") == "37"
     device.note("Stock fingerprint " + device.shell("getprop", "ro.build.fingerprint"))
-    device.adb("root")
-    device.adb("wait-for-device")
-    assert device.shell("id", "-u") == "0"
+    wait_for_root(device)
     for apk in (args.baseline, args.observer):
         assert b"Success" in device.adb("install", apk, timeout=90)
     device.shell("wm", "dismiss-keyguard")
@@ -203,10 +223,16 @@ def main():
             run(device, args, Path(work))
     except stock.EXPERIMENT_FAILURES as error:
         device.note(f"FAIL {error}")
-        screenshot(device, "first-divergence")
+        try:
+            screenshot(device, "first-divergence")
+        except stock.EXPERIMENT_FAILURES as capture_error:
+            device.note(f"Could not capture the failure {capture_error}")
         raise
     finally:
-        device.save("logcat.txt", device.adb("logcat", "-d", "-v", "threadtime"))
+        try:
+            device.save("logcat.txt", device.adb("logcat", "-d", "-v", "threadtime"))
+        except stock.EXPERIMENT_FAILURES as log_error:
+            device.note(f"Could not retrieve logcat {log_error}")
 
 
 if __name__ == "__main__":

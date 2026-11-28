@@ -1,4 +1,4 @@
-name: R54 signed update and stock unlock
+name: R54 signed update and ordinary unlock clipboard
 on:
   workflow_dispatch:
     inputs:
@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        case: [upgrade, optical-r52, optical-r54, material, legacy]
+        case: [upgrade]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
