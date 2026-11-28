@@ -42,6 +42,8 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
     private var scene = WaLockscreenScene.UNKNOWN
     private var connected = false
     private var scanId = 0L
+    private val tracking get() = WaLastUnlock.tracking
+    private val expireUnlockObservation = Runnable { tracking.hasPending(session, SystemClock.elapsedRealtimeNanos()) }
     private var powerMenuSource: AccessibilityNodeInfo? = null
     protected var session: Long = 0
         private set
@@ -110,7 +112,8 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
         val received = WaLockscreenCapture.callbackTime()
         val receivedElapsed = if (received != 0L) SystemClock.elapsedRealtimeNanos() else 0L
         val type = event.eventType
-        val callback = if (received != 0L || orbOwner() == null) received else SystemClock.uptimeMillis()
+        val callback = if (received != 0L || (orbOwner() == null && !tracking.awaiting(session)))
+            received else SystemClock.uptimeMillis()
         val eventTime = event.eventTime.takeIf { it in 1..callback } ?: 0L
         val otherDisplay = Build.VERSION.SDK_INT >= 33 && event.displayId >= 0 && event.displayId != Display.DEFAULT_DISPLAY
         if (received != 0L) {
@@ -144,7 +147,7 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
             }
             source?.recycle()
         }
-        offerScan(WaSource.ACCESSIBILITY, type)
+        offerScan(WaSource.ACCESSIBILITY, type, callback, eventTime)
     }
 
     private fun isPowerMenuHint(event: AccessibilityEvent, source: AccessibilityNodeInfo): Boolean {
@@ -172,23 +175,24 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
     private fun refreshScene(source: WaSource, received: Long = WaLockscreenCapture.callbackTime(), geometry: Boolean = false) {
         if (!checkState(source, received)) return
         if (geometry) geometryChanged()
-        offerScan(source)
+        offerScan(source, received = received)
     }
 
     private fun checkState(
         source: WaSource, received: Long = WaLockscreenCapture.callbackTime(), type: Int = 0, eventTime: Long = 0,
     ): Boolean {
         if (!connected) return false
-        val observeRead = received != 0L || orbOwner() != null
+        val tracked = tracking.history(orbOwner())
+        val observeRead = received != 0L || tracked != null || tracking.awaiting(session)
         val readUp = if (observeRead) SystemClock.uptimeMillis() else 0L
         val readBegin = if (observeRead) SystemClock.elapsedRealtimeNanos() else 0L
         lastState = platform.read()
         val negative = lastState.terminal
         val recording = WaLockscreenCapture.captureId() != null
-        val readEnd = if (observeRead && (recording || negative == WaHideReason.UNLOCKED)) {
+        val readEnd = if (observeRead && (tracked != null || recording || negative == WaHideReason.UNLOCKED)) {
             SystemClock.elapsedRealtimeNanos()
         } else 0L
-        val unlockRead = if (negative == WaHideReason.UNLOCKED && readEnd != 0L) {
+        val gate = if (readEnd != 0L && (tracked != null || negative == WaHideReason.UNLOCKED)) {
             WaGateRead(WaTime(readUp, readBegin), WaTime(SystemClock.uptimeMillis(), readEnd), lastState)
         } else null
         if (recording && readEnd != 0L) {
@@ -198,14 +202,18 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
                 detail = readBegin, detailEnd = readEnd, atElapsed = readEnd,
             )
         }
+        if (tracked != null && gate != null) tracked.previousRead = gate
         if (negative != null) {
             terminalSignal(source, negative, received, observed = true, type = type, eventTime = eventTime,
-                read = unlockRead)
+                read = gate)
             return false
         }
         val previous = episode.id
         val admitted = episode.admit(lastState)
-        if (episode.id != previous) record(WaStage.EPISODE_OPEN, source)
+        if (episode.id != previous) {
+            tracking.invalidate(session)
+            record(WaStage.EPISODE_OPEN, source)
+        }
         if (!admitted || !contentAvailable()) {
             val reason = if (admitted) WaHideReason.CONTENT else WaHideReason.UNKNOWN
             withdraw(reason, source, received, type, eventTime)
@@ -215,7 +223,7 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
         return true
     }
 
-    private fun offerScan(source: WaSource, type: Int = 0) {
+    private fun offerScan(source: WaSource, type: Int = 0, received: Long = 0, eventTime: Long = 0) {
         val id = ++scanId
         val owner = episode.id
         scan?.cancel()
@@ -225,21 +233,36 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
             val start = SystemClock.uptimeMillis()
             val sessionId = session
             val window = orbOwner()
+            val generation = tracking.generation
+            val history = tracking.history(window)
+            var attempt = history?.begin(id)
+            fun finish(disposition: WaScanDisposition, atNs: Long = SystemClock.elapsedRealtimeNanos()) {
+                val current = attempt ?: return
+                attempt = null
+                history?.finish(current.finish(disposition, atNs))
+            }
             val capture = WaLockscreenCapture.captureId()
             record(WaStage.SCAN_START, source, type = type, scan = id)
             try {
                 val result = withContext(reader) {
                     val begin = SystemClock.uptimeMillis()
+                    val observation = attempt
                     val observed = try {
+                        if (observation != null) observation.fetchBeginNs = SystemClock.elapsedRealtimeNanos()
                         val windows = if (Build.VERSION.SDK_INT >= 30) {
                             windowsOnAllDisplays[Display.DEFAULT_DISPLAY]
                         } else this@WaLockscreenService.windows
-                        WaLockscreenScene.inspect(windows.orEmpty(), powerNode)
+                        if (observation != null) observation.fetchEndNs = SystemClock.elapsedRealtimeNanos()
+                        WaLockscreenScene.inspect(windows, powerNode, observation?.let { row ->
+                            { app ->
+                                row.metadata(app, SystemClock.elapsedRealtimeNanos())
+                            }
+                        })
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: RuntimeException) {
                         Log.w(TAG, "scan failed: ${error.javaClass.simpleName}")
-                        WaLockscreenScene.UNKNOWN
+                        WaSceneReading.UNKNOWN
                     }
                     ScanResult(observed, begin, SystemClock.uptimeMillis())
                 }
@@ -249,7 +272,9 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
                         type = type, scene = result.scene, detail = result.begin, detailEnd = result.end,
                     )
                 }
-                if (id != scanId || !episode.owns(owner) || sessionId != session) {
+                if (id != scanId || !episode.owns(owner) || sessionId != session ||
+                    generation != tracking.generation || window != orbOwner()) {
+                    finish(WaScanDisposition.STALE)
                     if (capture != null && capture == WaLockscreenCapture.captureId()) {
                         WaLockscreenCapture.record(WaStage.STALE, source, sessionId, owner, window, id)
                     }
@@ -257,11 +282,28 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
                 }
                 if (result.scene == WaLockscreenScene.RESTRICTED) {
                     scene = result.scene
-                    hideOrb(WaHideReason.RESTRICTED)
+                    val appWindow = result.reading == WaSceneReading.APP_WINDOW_PRESENT
+                    val decision = if (appWindow && window != null) WaTime.now() else null
+                    finish(WaScanDisposition.APPLIED, decision?.elapsedNs ?: SystemClock.elapsedRealtimeNanos())
+                    val trigger = if (decision != null && window != null) WaUnlockTrigger(
+                        window, WaHideReason.RESTRICTED, source, type, eventTime, received, decision, null,
+                        WaWithdrawalCause.APP_WINDOW_PRESENT,
+                    ) else null
+                    if (!appWindow) tracking.discardPending(session)
+                    hideOrb(WaHideReason.RESTRICTED, trigger)
+                    // Only discard an expired diagnostic draft. The view has already been withdrawn.
+                    if (trigger != null) {
+                        main.removeCallbacks(expireUnlockObservation)
+                        main.postDelayed(expireUnlockObservation, WaUnlockTracking.CONFIRM_NS / 1_000_000L + 1)
+                    }
                     record(WaStage.SCAN_APPLY, source, type = type, scan = id)
                     return@launch
                 }
-                if (!checkState(WaSource.SCAN_APPLY)) return@launch
+                if (!checkState(WaSource.SCAN_APPLY)) {
+                    finish(WaScanDisposition.GATE_DENIED)
+                    return@launch
+                }
+                finish(WaScanDisposition.APPLIED)
                 scene = result.scene
                 record(WaStage.SCAN_APPLY, source, type = type, scan = id)
                 if (scene != WaLockscreenScene.MAIN) {
@@ -273,11 +315,13 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
                     record(WaStage.ADD_WAIT, source, scan = id)
                     delay(50)
                 }
-                if (id == scanId && episode.owns(owner) && scene == WaLockscreenScene.MAIN &&
+                if (id == scanId && episode.owns(owner) && generation == tracking.generation &&
+                    window == orbOwner() && scene == WaLockscreenScene.MAIN &&
                     checkState(WaSource.ADD_RECHECK) && episode.owns(owner)) {
                     if (showOrb(owner, !episode.entranceAdmitted)) episode.attached(owner)
                 }
             } catch (cancelled: CancellationException) {
+                finish(WaScanDisposition.CANCELED)
                 if (capture != null && capture == WaLockscreenCapture.captureId()) {
                     WaLockscreenCapture.record(WaStage.SCAN_CANCEL, source, sessionId, owner, window, id, type = type)
                 }
@@ -289,7 +333,9 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
         }
     }
 
-    private data class ScanResult(val scene: WaLockscreenScene, val begin: Long, val end: Long)
+    private data class ScanResult(val reading: WaSceneReading, val begin: Long, val end: Long) {
+        val scene get() = reading.scene
+    }
 
     private fun terminalSignal(
         source: WaSource, reason: WaHideReason, received: Long, observed: Boolean = false,
@@ -301,9 +347,15 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
             WaHideReason.DISCONNECT -> WaBarrier.DISCONNECTED
             else -> WaBarrier.SLEEP
         }
+        if (reason == WaHideReason.USER_PRESENT || reason == WaHideReason.UNLOCKED) {
+            if (tracking.awaiting(session)) {
+                tracking.confirm(session, episode.id, orbOwner(), reason, source, WaTime.now(), read)
+            }
+        }
         episode.close(barrier, observed, newSleepSignal = reason == WaHideReason.SCREEN_OFF)
         withdraw(reason, source, received, type, eventTime, terminal = true,
             state = lastState.takeIf { observed }, read = read)
+        tracking.invalidate(session)
         powerMenuSource?.recycle()
         powerMenuSource = null
     }
@@ -314,6 +366,7 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
         state: WaSystemState? = lastState,
         read: WaGateRead? = null,
     ) {
+        if (reason == WaHideReason.POWER_MENU) tracking.discardPending(session)
         val revokedScan = scanId++
         val revoked = scan
         val owner = orbOwner()
@@ -398,6 +451,7 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
         if (!connected) return
         terminalSignal(WaSource.DISCONNECT, WaHideReason.DISCONNECT, WaLockscreenCapture.callbackTime())
         connected = false
+        main.removeCallbacks(expireUnlockObservation)
         WaLastUnlock.disconnected(session)
         WaLockscreenCapture.serviceDisconnected(session)
         scope.coroutineContext.cancelChildren()
@@ -408,6 +462,13 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
     private companion object {
         const val TAG = "FluviBalanceOrb"
     }
+}
+
+internal enum class WaSceneReading(val scene: WaLockscreenScene) {
+    UNKNOWN(WaLockscreenScene.UNKNOWN),
+    MAIN(WaLockscreenScene.MAIN),
+    NODE_RESTRICTION(WaLockscreenScene.RESTRICTED),
+    APP_WINDOW_PRESENT(WaLockscreenScene.RESTRICTED),
 }
 
 internal enum class WaLockscreenScene {
@@ -438,22 +499,34 @@ internal enum class WaLockscreenScene {
         )
 
         @Suppress("DEPRECATION")
-        suspend fun inspect(windows: List<AccessibilityWindowInfo>, powerNode: AccessibilityNodeInfo?): WaLockscreenScene {
+        suspend fun inspect(
+            windows: List<AccessibilityWindowInfo>?, powerNode: AccessibilityNodeInfo?,
+            metadataComplete: ((Boolean) -> Unit)? = null,
+        ): WaSceneReading {
+            if (windows == null) return WaSceneReading.UNKNOWN
             var systemUiSeen = false
             try {
                 for (window in windows) {
                     coroutineContext.ensureActive()
-                    if (window.type == AccessibilityWindowInfo.TYPE_APPLICATION) return RESTRICTED
+                    if (window.type == AccessibilityWindowInfo.TYPE_APPLICATION) {
+                        metadataComplete?.invoke(true)
+                        return WaSceneReading.APP_WINDOW_PRESENT
+                    }
+                }
+                coroutineContext.ensureActive()
+                metadataComplete?.invoke(false)
+                for (window in windows) {
+                    coroutineContext.ensureActive()
                     if (window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) continue
                     val root = window.root ?: continue
                     try {
                         val pkg = root.packageName?.toString()
-                        if (window.type == -1 && pkg == "com.google.android.googlequicksearchbox") return RESTRICTED
+                        if (window.type == -1 && pkg == "com.google.android.googlequicksearchbox") return WaSceneReading.NODE_RESTRICTION
                         if (root.isVisibleToUser && (pkg == "com.samsung.android.app.cocktailbarservice" ||
-                                pkg == "com.samsung.android.app.notes")) return RESTRICTED
+                                pkg == "com.samsung.android.app.notes")) return WaSceneReading.NODE_RESTRICTION
                         if (pkg in systemUiPackages) {
                             systemUiSeen = true
-                            if (restricted(root, powerNode)) return RESTRICTED
+                            if (restricted(root, powerNode)) return WaSceneReading.NODE_RESTRICTION
                         }
                     } finally {
                         root.recycle()
@@ -462,7 +535,7 @@ internal enum class WaLockscreenScene {
             } finally {
                 windows.forEach { it.recycle() }
             }
-            return if (systemUiSeen) MAIN else UNKNOWN
+            return if (systemUiSeen) WaSceneReading.MAIN else WaSceneReading.UNKNOWN
         }
 
         @Suppress("DEPRECATION")

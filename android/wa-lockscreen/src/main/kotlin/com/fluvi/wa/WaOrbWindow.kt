@@ -323,7 +323,8 @@ class WaOrbWindow(
         frame.hideReason = reason
         val unlock = trigger?.takeIf {
             it.owner == frame.owner && it.reason == reason && frame.isAttachedToWindow &&
-                (reason == WaHideReason.UNLOCKED || reason == WaHideReason.USER_PRESENT)
+                (reason == WaHideReason.UNLOCKED || reason == WaHideReason.USER_PRESENT ||
+                    (reason == WaHideReason.RESTRICTED && it.cause == WaWithdrawalCause.APP_WINDOW_PRESENT))
         }
         val child = frame.child
         val draft = unlock?.let { WaUnlockDraft(context.applicationContext) }
@@ -342,9 +343,10 @@ class WaOrbWindow(
                 product, unlock, frame.displayId, frame.presenter, frame.presenterFailure, sizeDp, frame.style,
                 frame.hide, frame.attachedAt, childHide ?: WaChildHide(
                     if (frame.presenter == WaPresenter.LEGACY_API) "UNSUPPORTED" else "FALLBACK",
-                ), localHide = localHide,
+                ), localHide = localHide, scans = WaLastUnlock.tracking.history(unlock.owner)?.snapshot(),
             )
             frame.unlock = draft
+            WaLastUnlock.tracking.withdrew(draft)
         }
         if (childHide != null) log(frame, "child-hide", "status=${childHide.status}", localHide.uptimeMs)
         WaLockscreenCapture.hidden(frame.owner)
@@ -615,6 +617,7 @@ class WaOrbWindow(
             super.onAttachedToWindow()
             attachedAt = WaTime.now()
             displayId = display?.displayId ?: Display.DEFAULT_DISPLAY
+            WaLastUnlock.tracking.attached(owner, displayId)
             mark(WaStage.ROOT_ATTACHED)
         }
 

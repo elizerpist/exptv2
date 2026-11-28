@@ -27,6 +27,8 @@ class WaUnlockTrigger internal constructor(
     internal val callbackUptimeMs: Long,
     internal val decision: WaTime,
     internal val read: WaGateRead?,
+    internal val cause: WaWithdrawalCause = if (reason == WaHideReason.USER_PRESENT)
+        WaWithdrawalCause.USER_PRESENT else WaWithdrawalCause.PUBLIC_NEGATIVE,
 )
 
 internal data class WaGateRead(val begin: WaTime, val end: WaTime, val state: WaSystemState)
@@ -89,6 +91,8 @@ internal data class WaUnlockRecord(
     val retry: WaRemoval? = null,
     val hostStop: WaTime? = null,
     val hostStopStatus: String = "UNOBSERVED",
+    val scans: WaWindowSummary? = null,
+    val confirmation: WaUnlockConfirmation? = null,
 ) {
     fun text(): String {
         val body = buildString {
@@ -104,6 +108,20 @@ internal data class WaUnlockRecord(
             stamp("gateReadEnd", trigger.read?.end)
             stamp("decision", trigger.decision)
             stamp("attach", attached)
+            appendLine("winner=${trigger.cause} confirmation=${confirmation?.reason ?: MISSING} confirmSource=${confirmation?.source ?: MISSING}")
+            stamp("confirm", confirmation?.at)
+            appendLine("confirmReadBeginNs=${time(confirmation?.read?.begin?.elapsedNs)} confirmReadEndNs=${time(confirmation?.read?.end?.elapsedNs)}")
+            scans?.let { summary ->
+                appendLine("observationGeneration=${summary.generation} scanAttempted=${summary.attempted} metadataCompleted=${summary.completed} canceled=${summary.canceled} stale=${summary.stale}")
+                val read = summary.previousRead
+                appendLine("previousGateLocked=${read?.state?.locked ?: MISSING} previousGateBeginNs=${time(read?.begin?.elapsedNs)} previousGateEndNs=${time(read?.end?.elapsedNs)} previousGateAgeNs=${read?.let { trigger.decision.elapsedNs - it.end.elapsedNs } ?: MISSING}")
+                observation("firstApp", summary.firstPositive)
+                observation("priorNoApp", summary.lastPriorNegative)
+                val last = summary.last
+                if (last == null || last == summary.firstPositive || last == summary.lastPriorNegative) {
+                    appendLine("lastScan=${last?.scan ?: MISSING}")
+                } else observation("last", last)
+            }
             appendLine("childHide=${child.status} childError=${field(child.error)} childCommitListener=${if (childCommit == null) child.commitListener else "OBSERVED"}")
             stamp("childHideRequest", child.request)
             stamp("childApplyReturn", child.returned)
@@ -117,6 +135,14 @@ internal data class WaUnlockRecord(
             appendLine("physicalLastOrbPixel=UNOBSERVED physicalFirstRestrictedFrame=UNOBSERVED")
         }
         return "${body}bodySha256=${waCaptureDigest(body)}\n"
+    }
+
+    private fun StringBuilder.observation(label: String, row: WaWindowObservation?) {
+        if (row == null) {
+            appendLine("$label=$MISSING")
+            return
+        }
+        appendLine("$label=${row.scan} app=${row.appWindow ?: MISSING} fetchBeginNs=${time(row.fetchBeginNs)} fetchEndNs=${time(row.fetchEndNs)} metadataEndNs=${time(row.metadataEndNs)} previousMetadataGateLocked=${row.gateAtMetadata?.state?.locked ?: MISSING} previousMetadataGateEndNs=${time(row.gateAtMetadata?.end?.elapsedNs)} disposition=${row.disposition} dispositionNs=${time(row.dispositionNs)}")
     }
 
     private fun StringBuilder.stamp(label: String, value: WaTime?) {
@@ -143,6 +169,7 @@ internal class WaUnlockHead {
     fun accept(record: WaUnlockRecord): Boolean {
         val before = latest
         if (record.firstRemove == null || before == record ||
+            (record.trigger.cause == WaWithdrawalCause.APP_WINDOW_PRESENT && record.confirmation == null) ||
             (before != null && record.trigger.decision.elapsedNs <= before.trigger.decision.elapsedNs &&
                 record.trigger !== before.trigger)
         ) return false
@@ -152,13 +179,21 @@ internal class WaUnlockHead {
 }
 
 /** Receipt delivery can outlive the view. Keep only the report and application context. */
-internal class WaUnlockDraft(private val app: Context) {
+internal class WaUnlockDraft(private val publish: (WaUnlockRecord) -> Unit) {
+    constructor(app: Context) : this({ WaLastUnlock.publish(app, it) })
     var record: WaUnlockRecord? = null
 
     fun update(change: (WaUnlockRecord) -> WaUnlockRecord) {
         val next = change(record ?: return)
         record = next
-        WaLastUnlock.publish(app, next)
+        publish(next)
+    }
+
+    fun refreshScans(scans: WaWindowSummary, publish: Boolean) {
+        val previous = record ?: return
+        val next = previous.copy(scans = scans)
+        record = next
+        if (publish) this.publish(next)
     }
 
     fun committed(at: WaTime) = update { it.copy(childCommit = it.childCommit ?: at) }
@@ -171,14 +206,20 @@ object WaLastUnlock {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor { task -> Thread(task, "FluviLastUnlock") }
     private val head = WaUnlockHead()
+    internal val tracking = WaUnlockTracking()
     private var connected = 0L
     // Accessed only on the serial IO thread. A failed write leaves the old file intact.
     private var pendingWrite: WaUnlockRecord? = null
 
-    internal fun connected(session: Long) { connected = session }
+    internal fun connected(session: Long) {
+        if (tracking.connect(session)) connected = session
+    }
 
     internal fun disconnected(session: Long) {
-        if (connected == session) connected = 0
+        if (connected == session) {
+            tracking.disconnect(session)
+            connected = 0
+        }
     }
 
     internal fun publish(context: Context, record: WaUnlockRecord) {
@@ -253,10 +294,15 @@ object WaLastUnlock {
             if (storage.baseFile.exists()) throw error
             return null
         }
-        val bodyEnd = text.lastIndexOf("bodySha256=")
-        if (!text.startsWith("$MAGIC\n") || bodyEnd < 0 ||
-            text.substring(bodyEnd) != "bodySha256=${waCaptureDigest(text.substring(0, bodyEnd))}\n"
-        ) throw IOException("Last unlock digest")
-        return text
+        return verifyWaUnlockText(text)
     }
+}
+
+/** The ordinary V1 format permits additive rows and keeps the original exact UTF-8 digest. */
+internal fun verifyWaUnlockText(text: String): String {
+    val bodyEnd = text.lastIndexOf("bodySha256=")
+    if (!text.startsWith("${WaLastUnlock.MAGIC}\n") || bodyEnd < 0 ||
+        text.substring(bodyEnd) != "bodySha256=${waCaptureDigest(text.substring(0, bodyEnd))}\n"
+    ) throw IOException("Last unlock digest")
+    return text
 }
