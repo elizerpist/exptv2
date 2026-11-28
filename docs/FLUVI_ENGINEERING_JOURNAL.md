@@ -25619,3 +25619,279 @@ D53.1 is complete when the independent reference survives, the reproduced false 
 ```
 
 **Round close.** The owner has rejected the perceived outcome of the tested 0 ms setting. Both measurable delivery time and the local-hide path have been quantified. There is now a concrete stock cause for loss of the optical reference and a reproducible false-PASS condition in its analyzer. No Fluvi product implementation or new product build is part of this journal change. The published R52 APK is available, its prior automated qualification remains partial, and R53 fixture implementation and measurement are pending. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+## 2026-11-28 — R53 independent unlock reference and exact R52 measurement
+
+### Pinned inputs and scope
+
+R53 executes D53.1 and D53.2 from
+`731da0580618e78650f71aa201183a63d736b7ce`.
+The application branch `implement/r52-orb-withdrawal` carries
+`7705f87c0c8f2bdf930a528b5bc6f87d276676a5`, parent
+`65f42fc67c0899b40a4dcb32f1a86f13df9ecdd2`, with the R51 ancestor
+`e7542639d22d78d10e7b123e836ee9bc9758c91a`. Independent download and
+inspection reverified the exact R52 `com.fluvi.app` HUMAN_DIAGNOSTIC
+0.1.4 (6), 114,027,163 bytes, SHA-256
+`4ca98594dc1e764b5ec1c9e2a93dd0dd212b7fcd7ca88f8e55db89d677ba9f7d`.
+Certificate SHA-256
+`faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb`.
+The test ref `test/r53-unlock-witness` descends from
+`575acc0c4f0faded67de08cbff84cb69a1ab4edd`. Work was isolated in
+`/workspace/r53-test`. The journal, project instruction 1.0, prompt
+writer rules 2.2, widget addendum 1.3, senior workflow 1.0 and R51/R41/
+R29.1/R22.4 milestones are pinned to the coordination ref. The two
+handset body digests and eight exact owner rows are E52.10–18. The
+original files from the handset were unavailable for a fresh byte
+verification. A's duplicate is one capture.
+[Handoff](https://github.com/elizerpist/exptv2/blob/731da0580618e78650f71aa201183a63d736b7ce/docs/FLUVI_ENGINEERING_JOURNAL.md#L25548) · [Exact R52 APK](https://media.githubusercontent.com/media/elizerpist/exptv2/8f7fc51e91d8ab2f65aae1565ed803e6fea9f3a1/Fluvi_R52_HUMAN_7705f87c0c8f.apk)
+
+The existing graph at `d2442ea5ef2a67531f89ad4398108fd8edb65e76` has
+source_head equal to the tested R52 source. SCIP Dart 1.6.2 indexed
+814 documents, 20,140 repository symbols, 135,921 references and
+42,011 edges. Index SHA-256
+`528640328715a38f2ea49c174adb7905de79b07db05c2d9d077e3fdfc9a7bb2a`.
+Native ingress, decision, local-hide and removal were followed in
+`WaLockscreenService.kt`, `WaOrbWindow.kt` and
+`WaLockscreenCapture.kt`. The fixture, Java companion, Android
+system components and Python classifier have no Dart-index coverage.
+The R53 diff contains fixture paths and the test-branch workflow.
+Product build, broad product requalification and graph regeneration
+are N/A for this measurement round.
+[Graph manifest](https://github.com/elizerpist/exptv2/blob/d2442ea5ef2a67531f89ad4398108fd8edb65e76/docs/codegraph/manifest.json) · [Fixture diff](https://github.com/elizerpist/exptv2/compare/575acc0c4f0faded67de08cbff84cb69a1ab4edd...51e95b05f16a254364d5e0a29153b88a2423d502)
+
+### Independent reference APK
+
+The launchable `com.fluvi.r53.reference` version **1.0 (1)** is
+signed, **16,811 bytes**. It uses an ordinary opaque Activity with two
+asymmetric fiducials. The Activity has no permissions declared and
+one MAIN/LAUNCHER entry. Its phase defaults to neutral. The bundled
+companion source is `b3c6fe33267fa19e4853fe03b551ef27fec7dbd6`.
+The downloaded file was byte-for-byte equal to the local signed APK,
+via anonymous HTTP 200. Manifest, ZIP integrity, DEX source marker,
+alignment and signatures were checked. Certificate SHA-256
+`9260dbbf7fcbe03f1f0bf4218a3c3ddc892dba1ae86f50b88434719f7daf6d54`.
+APK SHA-256
+`3bbeda3c9555a56c3bf194c00844164f0bcf93c24e11099fec7f7e7da6dacb54`.
+The artifact commit is `ac3c7adeb9d90e69b01ed670e5c06d6911367cd2`.
+The first local verifier looked for the SHA as a standalone DEX string.
+The actual compiled diagnostic string contains `source=<SHA> phase=`.
+The corrected verifier checked this encoding and retained the same
+signed file. The runner-only correction was pushed separately as
+`51e95b05f16a254364d5e0a29153b88a2423d502`.
+[Verified reference APK](https://media.githubusercontent.com/media/elizerpist/exptv2/ac3c7adeb9d90e69b01ed670e5c06d6911367cd2/Fluvi_R53_Reference_b3c6fe33267f.apk) · [Reference source](https://github.com/elizerpist/exptv2/tree/b3c6fe33267fa19e4853fe03b551ef27fec7dbd6/.github/r53-unlock/reference)
+
+### Archived R52 evidence and synthetic controls
+
+| ID | Reproduction or replay | Outcome |
+| --- | --- | --- |
+| E53.1 | Original fixture's state instrumentation targeted `com.fluvi.r49.fixture`, which also owned the cyan return Activity. | Reviewer retained four primary ActivityManager kill/removal pairs and the OFF repeat. The new fixture uses a different package and checks task, PID and both marks. |
+| E53.2 | Replayed original archive SHA-256 `f1a008b1dc1bf47138a0cdc6df411368443b2f251a44cf558c2d2b7dd917832c`. Extracted actual V2 and legacy `mett` samples with `stsd/stsc/stsz/stco` or `co64`. | All 528/498/477/454/481 frame counts match decoded order. Relative PTS agree within 6 µs and the legacy absolute samples within 100 ns of V2. Gaps reach 6.412 s. Absolute recorder timestamp agreement and physical source-image age remain separate. |
+| E53.3 / R2 | `test_adjacent_indices_500ms_gap_reproduces_old_false_pass` | Old oracle returned PASS. New oracle is INCONCLUSIVE with the exact same 500 ms gap, even when passed synthetic adjacent display identities. |
+| R3 | `test_proof_passes_clean_and_positive_during_swipe_fails_even_if_sparse` | A complete matched synthetic display proof passes. A definite restricted image with ORB during the bracket fails even with missing adjacent samples. |
+| R4 | `test_reference_absence_and_shape_matched_forbidden_positive` plus four historical painted MAIN regions | Opaque negative, round palette-matched positive, thin colored patch, bars/black and ROI overlap controls passed. The four measured historical crops separately met the calibrated painted positive. |
+| R5 | `test_invalid_join_wrong_package_display_next_wake_and_other_routes` | Wrong package, window, episode, display and non-unlock routes cannot close the operation. Unknown scene, repeated token, no buffer-age evidence or incomplete coverage cannot PASS. |
+| R6 | Three `MetadataControls` tests | Valid V2/legacy/count/order passed. Unsupported version, truncated or malformed sample table, duplicate/nonmonotonic time, PTS mismatch, and incompatible or missing clock edges rejected for absolute use. Relative frame evidence remains available. |
+
+Recovered R52 recorder timestamps relative to the owned local-hide
+trace slice, in ms. These are the retained baseline images and their
+declared timestamp layer.
+
+| R52 block | ORB-positive sample | Next ORB-absent sample | First forbidden displayed frame |
+| --- | --- | --- | --- |
+| A1 | #201 +674.181 | #202 +921.109 | INCONCLUSIVE |
+| B2 | #207 −232.885 | #208 +739.702 | INCONCLUSIVE |
+| B3 | #359 +119.631 | #360 +256.954 | INCONCLUSIVE |
+| A4 | #335 +190.155 | #336 +194.518 | INCONCLUSIVE |
+
+The four retained positive images independently matched the same
+painted ORB shape and palette. Their next samples did not match that
+template. The eight samples lacked the old cyan destination signature.
+The local full-count decode used ffmpeg passthrough with
+`-enc_time_base 1/1000000`. An earlier optional bounded decode stopped
+its pipe while the legacy ffmpeg helper still held its writer. It
+returned a wait timeout. The full decode completed at the same indices
+and counts, with no metric or threshold changes.
+
+`PYTHONPATH=.github/r52-stock:.github/r53-unlock python -m unittest discover -s .github/r53-unlock -v`
+passed eight offline controls. Python AST, Bash syntax and staged
+`git diff --check` passed. The auxiliary APK compiled with Java 17,
+Android platform 35 and Android build tools 36.0.0. The checked R52
+archive replay used `replay_r52.py` before dispatch.
+[Baseline stock archive](https://github.com/elizerpist/exptv2/actions/runs/46087595700/artifacts/15239833367) · [Offline controls](https://github.com/elizerpist/exptv2/blob/51e95b05f16a254364d5e0a29153b88a2423d502/.github/r53-unlock/test_r53_controls.py)
+
+### Fresh API 37 direct unlock
+
+The only nominal stock action ran in Actions `46115526076`, job
+`140888375971`, exact fixture
+`51e95b05f16a254364d5e0a29153b88a2423d502`. Runner conclusion SUCCESS
+records successful acquisition and analysis, with an observed
+restricted-image failure. Time 4 min 54 s. It was a disposable stock
+x86_64 Pixel 7 AVD, API 37, fingerprint
+`Android/sdk_phone64_x86_64/emu64x:17/CE2A.260420.051.A3/16571990:userdebug/test-keys`.
+Display 0, physical display ID `4619827259835644672`, portrait
+1080 × 2400, window/transition scales 1.0, animator override unset,
+112 dp plain WA ORB, widget 4 at `(393,1058,687,1352)`. The action
+was an ordinary off-ORB swipe. Its command bracket on the boot clock
+was [142910000000,143590000000] ns. The independent read observed
+ON/locked/interactive before and ON/unlocked/interactive afterward.
+The same target was present and painted after the held observation.
+Action count 1, setup replacements 0. Hooked profiling, wake,
+locked-redark, AOD, shade and a second timeout arm were outside this
+single trial.
+[Job](https://github.com/elizerpist/exptv2/actions/runs/46115526076/job/140888375971) · [Original evidence](https://github.com/elizerpist/exptv2/actions/runs/46115526076/artifacts/15251507341)
+
+**R1 / E53.1 reproduction and control.** Installing all three packages
+side by side yielded UIDs 10156 (Fluvi), 10157 (observer), and 10158
+(reference). The historical cyan Activity, PID 2550 task 9, lost its
+PID and recognizable pixels when the original observer ran. The new
+reference remained PID 2750, task 10, and both marks persisted across
+the same independent state read. The experiment returned to that same
+reference task on the natural swipe. The tested companion installed
+and launched normally. The APK declares no permission, uses a single
+MAIN/LAUNCHER Activity, and delegates visibility during keyguard to
+Android. The runner used ordinary 50 ms and read back 50 ms both
+while armed and after copying the frozen export.
+
+**R4 / E53.4 actual pixels.** Both asymmetric marks and the matched
+ORB are visible together in decoded frame **108**. This fails the
+restricted-image assay on the mirrored recorder output. The calibrated
+ORB matched all four color quadrants with clean corners. #109–#111
+show both marks with the expected bare reference patch in the same
+ROI. The images were visually checked at the boundary in addition to
+the classifier. The clock is visible in #103. #104–#107 still contain
+the matching ORB, and the scene remains UNKNOWN under the independent
+target classifier. Their classification is carried into the verdict.
+
+The table gives decoded order at original raster extent. Time is the
+Winscope V2 recorder elapsed timestamp minus the protected local-hide
+receipt, `146196518787` ns. The recorder clock check uses a ±20 ms
+guard for ordering. Source-image age is UNOBSERVED.
+
+| Video index | Recorder elapsed (ns) | Scene | ORB crop | Relative to local hide (ms) |
+| --- | ---: | --- | --- | ---: |
+| 102 | 142759575940 | MAIN, definitely before swipe bracket | Present | −3436.943 |
+| 103 | 142933570940 | Last definite MAIN, within swipe bracket | Present | −3262.948 |
+| 104 | 143960443940 | UNKNOWN | Present | −2236.075 |
+| 105 | 144396553940 | UNKNOWN | Present | −1799.965 |
+| 106 | 144865508940 | UNKNOWN | Present | −1331.010 |
+| 107 | 145451543940 | UNKNOWN | Present | −744.975 |
+| 108 | 146228649940 | First definite reference target | Present | +32.131 |
+| 109 | 147575155940 | Reference target | First subsequent and first sustained sampled absence | +1378.637 |
+| 110 | 148081685940 | Reference target | Absent | +1885.167 |
+| 111 | 148147343940 | Reference target | Absent | +1950.825 |
+| 112 | 154908225940 | End calibration edge, outside unlock verdict | UNCLASSIFIED | +8711.707 |
+
+The archive's `unlock/attempt-1/frames.csv` lists all 113 decoded
+samples, with relative PTS, V2 elapsed, legacy time, scene, quadrant
+matches, absent fraction and the unavailable present/source-age fields.
+Both phase edges survived, #19 and #112. The observed draw → encoded
+edge offsets were 811.270 and 93.490 ms. The V2 sample `[1166696,936]`
+and legacy `[1167632,924]` locations are byte offset and length.
+Max relative PTS discrepancy 6 µs, max legacy/V2 difference 60 ns.
+The clock agrees, and source-image age and terminal presentation
+remain separate observations. Median encoded gap 191.039 ms,
+maximum 6760.878 ms, and #108 → #109 1346.506 ms. First physical
+forbidden frame and duration of continuous visible tail are
+**INCONCLUSIVE**. Choosing the first clear sample as a disappearance
+timestamp would introduce an unmeasured interval.
+
+### Owned app, public-read and system timeline
+
+V2 `2287d255-19a2-4c79-b0b6-7cf61e6ef2f4`, process
+`2856-78804593898`, service/episode/window/hide/widget
+`78804498837/1/1/1/4`. Route WA_BALANCE, matched UNLOCKED, default
+display. 43.489 s, COPY. The distinct earlier probe had no completed
+negative on this attachment. Last true production read occupied
+[145660656902,145660820675] elapsed ns. First false production read
+occupied [146194733880,146196095359] ns. The independent witness read
+before action was [142278024794,142290650379] (locked), and after action
+[148903509492,148905356972] (unlocked). Its hold confirmation was
+[154459435067,154462086719] with the same painted return task.
+
+| Matched software point | V2 sequence | Elapsed ns | From local hide (ms) |
+| --- | ---: | ---: | ---: |
+| SystemUI type-2048 callback, content mask 1 | 1061 | 146194659499 | −1.859 |
+| First production public negative completes | 1062 | 146196095359 | −0.423 |
+| Decision | 1063 | 146196121768 | −0.397 |
+| Local hide | 1065 | 146196518787 | 0 |
+| View detach | 1067 | 146197899945 | +1.381 |
+| First removal returns detached | 1068 | 147092423067 | +895.904 |
+| AppWidget host stop ends | 1070 | 147106430681 | +909.912 |
+
+The event age was 587 ms on uptime. Decision came 0.026 ms after
+the negative read ended. Capture kept one owned summary, 471 retained
+rows after 519 raw-ring drops and zero additional text drops. 203
+callbacks, 92/92/91/1 scan offer/start/cancel/apply, outstanding peak 77
+and final zero. Max measured probe gap 294.976 ms, 157 reads and no
+crossed probe. The counts and gap describe the loaded evidence run.
+Recorder and tracing overhead have no matched uninstrumented baseline.
+
+WindowManager identified the ORB as `a87877e` with notify/view root
+`VRI-Fluvi Balance ORB#286` on display 0. SurfaceFlinger carried the
+path `20 → token 200 (type 2032) → root 285 → VRI 286`.
+The reference was task 10, activity record layer 132, window 137,
+and returning leaf 292. At SF snapshot `146229980483` ns, both leaves
+286 and 292 were marked visible, **1.331 ms** after the recorder
+timestamp of frame 108. The captured layer tree and image are separate
+observations with no exact present-token join. The last marked-visible
+286 snapshot was `146913568396` ns (+717.050 ms relative to local
+hide). The first subsequent snapshot at `147096825801` ns
+(+900.307 ms) lacked both 285 and 286 and retained leaf 292.
+The available snapshots give the original ORB parent path. A cloned
+or cached image identity remains UNOBSERVED. Trace local-hide slice
+`146196540930` ns and V2 local timestamp are different calls.
+
+Perfetto 59.1 parsed 41 WM snapshots, 1173 SF transactions,
+9 Shell transitions and 356 actual FrameTimeline rows. Transition
+31 was dispatched at `143244432255` ns, with the keyguard TO_BACK
+slice at `143244488739` ns and transition finish at `146480325834`
+ns. Typed input has zero dispatch rows. Trace clock snapshots include
+BOOTTIME, MONOTONIC and REALTIME. No nonzero loss/drop/overrun was found
+in the exported trace stats. Actual frame rows do not associate the
+mirrored recorder images with one-to-one display presents. The
+reviewer receives the raw frame and layer evidence for H52.3 at this
+output layer. H52.2 remains open with the earlier scene inconclusive.
+H52.5 and the Nothing A142 optical timeline remain open.
+
+### Immutable evidence and handover
+
+The run used
+`python3 .github/r53-unlock/run_unlock.py --apk human.apk --observer observer.apk --reference reference.apk --reference-sha b3c6fe33267fa19e4853fe03b551ef27fec7dbd6 --output evidence/unlock`.
+The install and R1 control, readiness, both start/end reference edges,
+R1–R6 comparisons, frame ledger, V2 export and held destination
+completed. The observed restricted image is FAIL. First-display
+continuity, physical duration and typed input dispatch join are
+unavailable. An earlier local test import had a malformed continuation
+and was corrected before staging. The existing broad R52 qualification
+remains partial. No second nominal trial was run.
+
+| Evidence | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Complete artifact 15251507341 | 11720234 | `f553ba92668a658bb0a2288bdf80de3650d46d7f445542e0dab47d15df909450` |
+| Frozen Clipboard V2 | 97752 | `9242af3aec462274321a5a725df0f6ad85c71fc7ef2f26087c4112c5b5e3d9dc` |
+| Frozen V2 body | — | `03a0c135c3a6853978d52ee593c49fe98241db04478bbef65cdaaaf7b02fa8cd` |
+| Original MP4 | 1171875 | `b9f52d41a5c31c8bc8f0fdd8e4d5bbcd47949d434b1b6b27c317d84bff6497ec` |
+| Raw Perfetto | 9551642 | `c7f680c9ad96789da111f3cb245c250bca440a05c6ffafd467ae1bb76cbafe01` |
+
+The bundle contains the unedited V2, trial JSON, MP4, CSV sample
+mapping, full-size boundary stills, configuration, clock/WM/SF exports
+and raw state/Activity readings. The standalone APK is public.
+The evidence bundle concerns only the disposable stock AVD.
+[All raw stock artifacts](https://github.com/elizerpist/exptv2/actions/runs/46115526076/artifacts/15251507341)
+
+**Telefonos próba.** Telepítsd az R53 referenciát a meglévő R52 mellé.
+A Fluvi **Debug log → Zárképernyő** paneljén indíts egy **A · 50 ms**
+felvételt. Feloldott állapotban nyisd meg a **Fluvi feloldási referencia**
+appot. Zárd le a telefont, ébreszd fel, várd meg a látható ORB-ot, és
+oldj fel egyszer a szokásos módon. Figyeld meg, hogy az ORB rálóg-e
+a sárga és türkiz jellel azonosítható képernyőre. A Fluvi riportja
+kimásolható a vágólapra. Ez a telefonos megfigyelés vizuális visszajelzés,
+amelyhez képernyőfelvétel nem szükséges.
+
+**D53.1 measurement-tool implementation — COMPLETE**
+
+**D53.2 automated stock acquisition — COMPLETE. Restricted-image overlap FAIL. First display frame INCONCLUSIVE.**
+
+**Reference APK delivery — COMPLETE, signed anonymous download and side-by-side install verified**
+
+**PHYSICAL VALIDATION — PENDING, USER ONLY**
