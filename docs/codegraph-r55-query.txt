@@ -1,0 +1,97 @@
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#
+DEFINITION
+lib/core/debug/debug_console.dart:15
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_console.dart`/DebugConsoleDialog#`<constructor>`().
+REFERENCES
+total=8 production=3 tests=5
+CONSUMER FILES
+lib/core/debug/debug_console.dart
+lib/core/debug/debug_floating_button.dart
+test/core/debug/debug_lockscreen_capture_test.dart
+PRODUCTION REFERENCES
+lib/core/debug/debug_console.dart:28:8 reference
+lib/core/debug/debug_console.dart:37:45 reference
+lib/core/debug/debug_floating_button.dart:39:30 reference
+TEST REFERENCES
+test/core/debug/debug_lockscreen_capture_test.dart:53:54 reference
+test/core/debug/debug_lockscreen_capture_test.dart:73:54 reference
+test/core/debug/debug_lockscreen_capture_test.dart:123:54 reference
+test/core/debug/debug_lockscreen_capture_test.dart:170:54 reference
+test/core/debug/debug_lockscreen_capture_test.dart:223:54 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`copy_last_unlock.dart`/CopyLastUnlock#
+DEFINITION
+lib/core/diagnostics/copy_last_unlock.dart:4
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`copy_last_unlock.dart`/CopyLastUnlock#
+scip-dart pub fluvi 0.1.0+1 lib/core/diagnostics/`copy_last_unlock.dart`/CopyLastUnlock#`<constructor>`().
+REFERENCES
+total=6 production=6 tests=0
+CONSUMER FILES
+lib/core/debug/debug_lockscreen_capture.dart
+lib/core/diagnostics/copy_last_unlock.dart
+lib/features/header_orb/presentation/header_orb_setup_page.dart
+PRODUCTION REFERENCES
+lib/core/debug/debug_lockscreen_capture.dart:175:14 reference
+lib/core/debug/debug_lockscreen_capture.dart:176:14 reference
+lib/core/diagnostics/copy_last_unlock.dart:11:8 reference
+lib/core/diagnostics/copy_last_unlock.dart:14:41 reference
+lib/features/header_orb/presentation/header_orb_setup_page.dart:179:25 reference
+lib/features/header_orb/presentation/header_orb_setup_page.dart:179:43 reference
+TEST REFERENCES
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#
+DEFINITION
+lib/features/header_orb/presentation/header_orb_setup_page.dart:8
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#
+scip-dart pub fluvi 0.1.0+1 lib/features/header_orb/presentation/`header_orb_setup_page.dart`/HeaderOrbSetupPage#`<constructor>`().
+REFERENCES
+total=4 production=3 tests=1
+CONSUMER FILES
+lib/features/header_orb/presentation/header_orb_setup_page.dart
+lib/features/settings/presentation/settings_page.dart
+test/features/header_orb/presentation/header_orb_setup_page_test.dart
+PRODUCTION REFERENCES
+lib/features/header_orb/presentation/header_orb_setup_page.dart:12:8 reference
+lib/features/header_orb/presentation/header_orb_setup_page.dart:15:45 reference
+lib/features/settings/presentation/settings_page.dart:197:46 reference
+TEST REFERENCES
+test/features/header_orb/presentation/header_orb_setup_page_test.dart:8:32 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#
+DEFINITION
+lib/app/platform/dashboard_header_widget_publisher.dart:11
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#
+scip-dart pub fluvi 0.1.0+1 lib/app/platform/`dashboard_header_widget_publisher.dart`/DashboardHeaderWidgetPublisher#`<constructor>`().
+REFERENCES
+total=3 production=2 tests=1
+CONSUMER FILES
+lib/app/shell/fluvi_app_shell.dart
+test/app/platform/header_widget_publisher_test.dart
+PRODUCTION REFERENCES
+lib/app/shell/fluvi_app_shell.dart:268:13 reference
+lib/app/shell/fluvi_app_shell.dart:307:29 reference
+TEST REFERENCES
+test/app/platform/header_widget_publisher_test.dart:54:24 reference
+SYMBOL
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#
+DEFINITION
+lib/core/debug/debug_lockscreen_capture.dart:9
+FAMILY MEMBERS
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#
+scip-dart pub fluvi 0.1.0+1 lib/core/debug/`debug_lockscreen_capture.dart`/DebugLockscreenCapture#`<constructor>`().
+REFERENCES
+total=3 production=3 tests=0
+CONSUMER FILES
+lib/core/debug/debug_console.dart
+lib/core/debug/debug_lockscreen_capture.dart
+PRODUCTION REFERENCES
+lib/core/debug/debug_console.dart:683:19 reference
+lib/core/debug/debug_lockscreen_capture.dart:13:8 reference
+lib/core/debug/debug_lockscreen_capture.dart:16:49 reference
+TEST REFERENCES
