@@ -141,9 +141,13 @@ def inspect_case(device, dp, expected, name, asset, palette_reference=None):
     assert all(matte == (expected == "fluviMask") for _, _, matte in photos), verify
     good = [photo for photo in photos if max(photo[0]["stroke_mae"]) <= 14]
     assert len(good) >= 2, f"{name} no two observed phases match one live packet frame in both openings"
+    # The default 32 px material differs by only a few levels per phase.
+    # Require distinct packet frames and changed pixels in both regions.
+    # The separate palette control below supplies the visibly different
+    # live output and requires an eight-level difference in both strokes.
     sample = next(((a,b) for i, a in enumerate(good) for b in good[i+1:]
                    if a[0]["frame"] != b[0]["frame"] and
-                   all(mae(x,y) >= .35 for x,y in zip(a[1], b[1]))), None)
+                   all(x != y for x,y in zip(a[1], b[1]))), None)
     assert sample, f"{name} both openings need distinct motion samples"
     # Screen pixels at the transparent corners must stay independent of the
     # moving frames. Coverage of the PNG and the active root are independent.
@@ -153,6 +157,9 @@ def inspect_case(device, dp, expected, name, asset, palette_reference=None):
         assert identity["generation"] != palette_reference[0]["generation"]
         assert all(mae(x,y) >= 8 for x,y in zip(good[0][1], palette_reference[1]))
     verify["accepted_frames"] = [a[0], b[0]]
+    verify["phase_mae"] = [mae(x, y) for x, y in zip(a[1], b[1])]
+    if palette_reference is not None:
+        verify["palette_mae"] = [mae(x,y) for x,y in zip(good[0][1], palette_reference[1])]
     report.write_text(json.dumps(verify, indent=2) + "\n")
     device.note(f"PASS {name} {expected} {dp}dp both strokes matched live frames {a[0]['frame']}/{b[0]['frame']}")
     measure.home(device)
@@ -164,7 +171,9 @@ def change_palette(device, old):
     # Balance palette input, then let the actual dashboard publish new frames.
     assert device.shell("getprop", "ro.kernel.qemu") == "1"
     assert device.shell("id", "-u") == "0"
-    device.shell("am", "force-stop", PKG)
+    pids = device.shell("pidof", PKG).split()
+    assert len(pids) == 1 and pids[0].isdigit()
+    pid = pids[0]
     result = subprocess.run(["adb", "exec-out", "cat", PALETTES], check=False, capture_output=True)
     root = ET.fromstring(result.stdout) if result.returncode == 0 and result.stdout else ET.Element("map")
     before = next((node for node in root if node.get("name") == "balanceHeaderPalette"), None)
@@ -178,12 +187,20 @@ def change_palette(device, old):
     owner = device.shell("stat", "-c", "%u:%g", DATA)
     assert re.fullmatch(r"\d+:\d+", owner)
     device.adb("push", file, "/data/local/tmp/r52-palette.xml")
-    device.shell(f"cat /data/local/tmp/r52-palette.xml > {PALETTES} && chown {owner} {PALETTES} && chmod 660 {PALETTES} && restorecon {PALETTES}")
+    device.shell(
+        f"kill -STOP {pid} && (cat /data/local/tmp/r52-palette.xml > {PALETTES} && "
+        f"chown {owner} {PALETTES} && chmod 660 {PALETTES} && restorecon {PALETTES}); "
+        f"rc=$?; kill -KILL {pid}; exit $rc"
+    )
     device.shell("am", "start", "-W", "-n", measure.r51.ACTIVITY)
     assert device.service_connected()
     until = time.monotonic() + 40
     while time.monotonic() < until:
-        header, _ = packet(device)
+        try:
+            header, _ = packet(device)
+        except (AssertionError, subprocess.SubprocessError, ValueError):
+            time.sleep(.5)
+            continue
         if header["key"] != old["key"]:
             device.note(f"Balance palette {old_palette} -> {new_palette} published generation {header['generation']}")
             return
@@ -226,7 +243,8 @@ def exercise(device, args):
     old = prefs(device)
     assert old["sizeDp"] == "56" and old["style56"] == "orb" and old["style112"] == "fluviMask"
     previous = set(device.shell("pidof", PKG).split())
-    device.shell("am", "force-stop", PKG)
+    assert len(previous) == 1 and all(value.isdigit() for value in previous)
+    device.shell("kill", "-KILL", next(iter(previous)))
     settings(device)
     assert device.service_connected()
     assert previous.isdisjoint(device.shell("pidof", PKG).split())

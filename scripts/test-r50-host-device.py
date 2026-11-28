@@ -246,6 +246,9 @@ def prepare_binding(device):
     device.click("Cancel", "Don't allow", package="com.android.settings", limit=8)
     device.save("cancelled-widgets.txt", device.adb("shell", "dumpsys", "appwidget"))
     time.sleep(.5)
+    current = visible_labels(device.screen(), PACKAGE)
+    if SETTINGS_ROWS[0] not in current and "Zárképernyő" in current:
+        device.click("Zárképernyő", package=PACKAGE)
     settings_rows(device)
     device.click("1×1 (56 dp)", "1×1 ORB", package=PACKAGE)
     device.save("single-use-grant.xml", device.screen())
