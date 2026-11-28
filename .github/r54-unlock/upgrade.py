@@ -50,8 +50,10 @@ def last_copy(device, name, sha, debug=False):
     assert digest == hashlib.sha256(body).hexdigest().encode() + b"\n"
     fields = dict(re.findall(r"(\w+)=([^\s]+)", body.decode()))
     assert fields["build"] == sha and fields["package"] == PKG
-    assert fields["code"] == "7" and fields["version"] == "0.1.5"
-    assert fields["reason"] in ("UNLOCKED", "USER_PRESENT")
+    assert fields["code"] == "8" and fields["version"] == "0.1.6"
+    assert fields["reason"] in ("UNLOCKED", "USER_PRESENT", "RESTRICTED")
+    if fields["reason"] == "RESTRICTED":
+        assert "APP_WINDOW_PRESENT" in body.decode() and "confirmation" in body.decode()
     device.note(f"COPY {name} bytes={len(data)} SHA-256={hashlib.sha256(data).hexdigest()}")
     return data, fields
 

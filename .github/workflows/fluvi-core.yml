@@ -1,4 +1,4 @@
-name: R54 pre-34 presenter on the signed product
+name: R55 pre-34 presenter on the signed product
 on:
   workflow_dispatch:
     inputs:
@@ -85,6 +85,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r54-${{ matrix.case }}-${{ github.sha }}
+          name: r55-${{ matrix.case }}-${{ github.sha }}
           path: evidence/
           if-no-files-found: error
