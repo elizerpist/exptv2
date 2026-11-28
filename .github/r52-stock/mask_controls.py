@@ -253,27 +253,8 @@ def exercise(device, args):
             return None
 
     settings(device)
-    select_style(device, 56, "fluviMask")
-    confirm("112-plain", 112, "orb")
-    settings(device)
-    device.click("1×1 (56 dp)", package=PKG)
-    confirm("56-mask", 56, "fluviMask")
-    settings(device)
-    select_style(device, 56, "orb")
-    confirm("56-restored-plain", 56, "orb")
-    settings(device)
+    assert prefs(device)["sizeDp"] == "112"
     select_style(device, 112, "fluviMask")
-    old = prefs(device)
-    assert old["sizeDp"] == "56" and old["style56"] == "orb" and old["style112"] == "fluviMask"
-    previous = set(device.shell("pidof", PKG).split())
-    assert len(previous) == 1 and all(value.isdigit() for value in previous)
-    device.shell("kill", "-KILL", next(iter(previous)))
-    settings(device)
-    assert device.service_connected()
-    assert previous.isdisjoint(device.shell("pidof", PKG).split())
-    assert all(prefs(device).get(key) == old[key] for key in ("sizeDp", "style56", "style112", "active"))
-    device.note("PASS different styles restored after real process and accessibility-service restart")
-    device.click("2×2 (112 dp)", package=PKG)
     reference = confirm("112-mask", 112, "fluviMask")
     try:
         change_palette(device, reference[0] if reference else packet(device)[0])

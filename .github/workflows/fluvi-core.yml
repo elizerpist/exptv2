@@ -1,4 +1,4 @@
-name: R54 four styles with the R52 source-match control
+name: R55 independent 112 dp mask and live palette
 on:
   workflow_dispatch:
     inputs:
