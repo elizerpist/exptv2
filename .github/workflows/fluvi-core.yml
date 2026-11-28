@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        case: [upgrade, optical-r52, optical-r54, material]
+        case: [upgrade, optical-r52, optical-r54, material, legacy]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -71,8 +71,8 @@ jobs:
           python -m unittest discover -s .github/r53-unlock -v 2>&1 | tee evidence/offline-controls.txt
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 36
-          system-image-api-level: '37.0'
+          api-level: ${{ matrix.case == 'legacy' && 33 || 36 }}
+          system-image-api-level: ${{ matrix.case == 'legacy' && '33' || '37.0' }}
           target: default
           arch: x86_64
           profile: pixel_7

@@ -19,4 +19,8 @@ case "$CASE" in
           --observer "$observer" --sha "$APP_SHA" --mask .github/r52-stock/expected-lock-mask.png \
           --output evidence/material
         ;;
+    legacy)
+        python3 .github/r54-unlock/legacy.py --apk "$RUNNER_TEMP/r54.apk" \
+          --observer "$observer" --sha "$APP_SHA" --output evidence/legacy
+        ;;
 esac
