@@ -201,15 +201,26 @@ def exercise(device, args):
     with Image.open(args.mask) as png:
         asset = png.convert("RGBA")
     assert asset.size == (640, 640)
+    failures = []
+
+    def confirm(name, dp, style, palette=None):
+        try:
+            return inspect_case(device, dp, style, name, asset, palette)
+        except measure.EXPERIMENT_FAILURES as error:
+            failures.append(f"{name}: {error}")
+            device.note(f"FAIL {name}: {error}")
+            measure.home(device)
+            return None
+
     settings(device)
     select_style(device, 56, "fluviMask")
-    inspect_case(device, 112, "orb", "112-plain", asset)
+    confirm("112-plain", 112, "orb")
     settings(device)
     device.click("1×1 (56 dp)", package=PKG)
-    inspect_case(device, 56, "fluviMask", "56-mask", asset)
+    confirm("56-mask", 56, "fluviMask")
     settings(device)
     select_style(device, 56, "orb")
-    inspect_case(device, 56, "orb", "56-restored-plain", asset)
+    confirm("56-restored-plain", 56, "orb")
     settings(device)
     select_style(device, 112, "fluviMask")
     old = prefs(device)
@@ -222,12 +233,17 @@ def exercise(device, args):
     assert all(prefs(device).get(key) == old[key] for key in ("sizeDp", "style56", "style112", "active"))
     device.note("PASS different styles restored after real process and accessibility-service restart")
     device.click("2×2 (112 dp)", package=PKG)
-    reference = inspect_case(device, 112, "fluviMask", "112-mask", asset)
-    change_palette(device, reference[0])
-    inspect_case(device, 112, "fluviMask", "112-mask-second-palette", asset, reference)
+    reference = confirm("112-mask", 112, "fluviMask")
+    try:
+        change_palette(device, reference[0] if reference else packet(device)[0])
+        confirm("112-mask-second-palette", 112, "fluviMask", reference)
+    except measure.EXPERIMENT_FAILURES as error:
+        failures.append(f"saved palette change: {error}")
+        device.note(f"FAIL saved palette change: {error}")
     settings(device)
     select_style(device, 112, "orb")
-    inspect_case(device, 112, "orb", "112-restored-full", asset)
+    confirm("112-restored-full", 112, "orb")
+    assert not failures, failures
 
 
 def main():
