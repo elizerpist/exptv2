@@ -119,6 +119,23 @@ def wait_for_root(device):
     raise AssertionError("The API 37 userdebug adbd did not become root")
 
 
+def open_dashboard(device, name):
+    launch = device.shell("am", "start", "-W", "-n", stock.r51.ACTIVITY)
+    device.save(name + "-launch.txt", launch.encode())
+    assert "Status: ok" in launch, launch
+    # Report the actual Flutter tree instead of sampling the cold splash once.
+    deadline = time.monotonic() + 32
+    while time.monotonic() < deadline:
+        raw = device.screen()
+        device.save(name + "-dashboard.xml", raw)
+        labels = stock.r51.stock.visible_labels(raw, PKG)
+        if {"Beállítások", "Settings"}.intersection(labels):
+            screenshot(device, name + "-dashboard")
+            return
+        time.sleep(.4)
+    raise AssertionError("The real Flutter dashboard did not finish opening within 32 s")
+
+
 def run(device, args, work):
     assert device.shell("getprop", "ro.kernel.qemu") == "1"
     assert device.shell("getprop", "ro.build.version.sdk") == "37"
@@ -155,11 +172,8 @@ def run(device, args, work):
     device.save("r54-install-r.txt", installed)
     assert b"Success" in installed
     device.save("r54-package.txt", device.adb("shell", "dumpsys", "package", PKG))
-    device.shell("am", "start", "-W", "-n", stock.r51.ACTIVITY)
-    assert device.service_connected()
-    assert {"Beállítások", "Settings"}.intersection(stock.labels(device))
-    screenshot(device, "r54-launcher-dashboard")
-    device.save("r54-dashboard.xml", device.screen())
+    open_dashboard(device, "r54-launcher")
+    assert device.service_connected(), "The enabled R52 service did not reconnect after update"
     check_sentinel(device, work)
     after = prior.prefs(device, "r54-prefs")
     for key in ("sizeDp", "active", "enabled", "intended", "epoch", "centerX", "centerY", "style56", "style112"):
@@ -185,7 +199,9 @@ def run(device, args, work):
     device.note("PASS ordinary swipe, product settings and debug clipboard match")
 
     previous_pid = device.shell("pidof", PKG).split()
-    device.shell("am", "force-stop", PKG)
+    assert previous_pid and all(pid.isdecimal() for pid in previous_pid)
+    device.shell("kill", "-9", *previous_pid)
+    open_dashboard(device, "r54-restarted")
     masks.settings(device)
     assert device.service_connected()
     assert set(previous_pid).isdisjoint(device.shell("pidof", PKG).split())

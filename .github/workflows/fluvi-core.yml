@@ -1,4 +1,4 @@
-name: R54 signed update and ordinary unlock clipboard
+name: R54 measured upgraded dashboard and clipboard
 on:
   workflow_dispatch:
     inputs:
