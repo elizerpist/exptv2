@@ -8,6 +8,102 @@ void main() {
   const states = MethodChannel('fluvi/header_orb_state');
   const app = MaterialApp(home: HeaderOrbSetupPage());
 
+  testWidgets('permanent ORB uses its own persisted lockscreen setting', (
+    tester,
+  ) async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final actions = <MethodCall>[];
+    final saved = <String, Object?>{
+      'state': 'ready',
+      'sizeDp': 112,
+      'style56': 'fluviMask',
+      'style112': 'orb',
+    };
+    messenger.setMockMethodCallHandler(states, (_) async => null);
+    messenger.setMockMethodCallHandler(methods, (call) async {
+      actions.add(call);
+      if (call.method == 'setPermanentOrb') {
+        saved['permanentOrb'] = call.arguments['enabled'];
+      }
+      return Map<String, Object?>.of(saved);
+    });
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(methods, null);
+      messenger.setMockMethodCallHandler(states, null);
+    });
+    final toggle = find.byKey(const ValueKey('balance-orb-permanent'));
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(actions.last.method, 'setPermanentOrb');
+    expect(actions.last.arguments, {'enabled': true});
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    expect(
+      find.text('A telefon AOD-támogatása még nincs megállapítva.'),
+      findsOneWidget,
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    expect(saved['sizeDp'], 112);
+    expect(saved['style56'], 'fluviMask');
+    expect(saved['style112'], 'orb');
+    expect(
+      actions.map((call) => call.method),
+      everyElement(isIn(['settingsResumed', 'setPermanentOrb'])),
+    );
+  });
+
+  testWidgets('AOD copy calls its own receipt without starting a capture', (
+    tester,
+  ) async {
+    const capture = MethodChannel('fluvi/wa_lockscreen_capture');
+    const report = 'FLUVI_WA_AMBIENT_V1\nphysicalVisibility=UNOBSERVED\n';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final actions = <String>[];
+    String? copied;
+    messenger.setMockMethodCallHandler(
+      methods,
+      (_) async => {'state': 'ready', 'sizeDp': 56, 'permanentOrb': true},
+    );
+    messenger.setMockMethodCallHandler(states, (_) async => null);
+    messenger.setMockMethodCallHandler(capture, (call) async {
+      actions.add(call.method);
+      return {'status': 'READY', 'text': report};
+    });
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = call.arguments['text'] as String;
+      }
+      return null;
+    });
+    addTearDown(() {
+      for (final channel in [
+        methods,
+        states,
+        capture,
+        SystemChannels.platform,
+      ]) {
+        messenger.setMockMethodCallHandler(channel, null);
+      }
+    });
+    await tester.pumpWidget(app);
+    await tester.pumpAndSettle();
+    final button = find.text('Legutóbbi AOD-próba másolása');
+    await tester.scrollUntilVisible(button, 160);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(actions, ['getLastAmbient']);
+    expect(copied, report);
+    expect(find.text('Az AOD-napló a vágólapon van.'), findsOneWidget);
+  });
+
   testWidgets(
     'last unlock copy handles waiting, storage and clipboard retries',
     (tester) async {

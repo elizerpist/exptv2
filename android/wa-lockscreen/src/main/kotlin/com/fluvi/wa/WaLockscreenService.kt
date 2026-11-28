@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
+import android.graphics.Bitmap
 import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Handler
@@ -13,6 +14,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.Display
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
@@ -45,6 +47,10 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
     private val tracking get() = WaLastUnlock.tracking
     private val expireUnlockObservation = Runnable { tracking.hasPending(session, SystemClock.elapsedRealtimeNanos()) }
     private var powerMenuSource: AccessibilityNodeInfo? = null
+    private lateinit var ambientProduct: WaUnlockProduct
+    private var ambient: WaAmbientOrbWindow? = null
+    private var ambientFenced = false
+    private var ambientSleepRecorded = false
     protected var session: Long = 0
         private set
 
@@ -54,23 +60,34 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
     protected abstract fun orbOwner(): WaAttachment?
     protected abstract fun hasOrbAttachment(): Boolean
     protected abstract fun ownsOrbEvent(windowId: Int): Boolean
+    protected abstract fun permanentOrbRequested(): Boolean
+    protected abstract fun ambientMaterial(): WaAmbientMaterial?
+    protected abstract fun ambientLayout(material: WaAmbientMaterial): WindowManager.LayoutParams?
+    protected abstract fun ambientMask(): Bitmap
     protected open fun geometryChanged() = Unit
 
     private val screenEvents = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            if (!connected) return
             val received = WaLockscreenCapture.callbackTime()
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> {
                     markCallback(WaSource.SCREEN_OFF, received)
                     terminalSignal(WaSource.SCREEN_OFF, WaHideReason.SCREEN_OFF, received)
+                    ambientFenced = false
+                    val enabled = permanentOrbRequested()
+                    if (!ambientSleepRecorded) startAmbientObservation(enabled)
+                    reconcileAmbient(WaSource.SCREEN_OFF, platform.read(includeAmbient = enabled), enabled)
                 }
                 Intent.ACTION_USER_PRESENT -> {
                     markCallback(WaSource.USER_PRESENT, received)
                     val callback = received.takeIf { it != 0L } ?: SystemClock.uptimeMillis()
+                    fenceAmbient("USER_PRESENT")
                     terminalSignal(WaSource.USER_PRESENT, WaHideReason.USER_PRESENT, callback)
                 }
                 Intent.ACTION_SCREEN_ON -> {
                     markCallback(WaSource.SCREEN_ON, received)
+                    fenceAmbient("SCREEN_ON")
                     episode.wakeSignal()
                     refreshScene(WaSource.SCREEN_ON, received)
                 }
@@ -83,6 +100,9 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
         if (connected) return
         connected = true
         session = SystemClock.elapsedRealtimeNanos()
+        ambientProduct = WaUnlockProduct.read(applicationContext)
+        ambientFenced = false
+        ambientSleepRecorded = false
         episode.connect()
         WaLastUnlock.connected(session)
         WaLockscreenCapture.serviceConnected(
@@ -140,6 +160,7 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
         ) {
             val source = event.source
             if (source != null && isPowerMenuHint(event, source)) {
+                fenceAmbient("POWER_MENU")
                 withdraw(WaHideReason.POWER_MENU, WaSource.ACCESSIBILITY, received, type, eventTime)
                 powerMenuSource?.recycle()
                 powerMenuSource = source
@@ -170,7 +191,48 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
     }
 
     protected fun entranceAllowed(expectedEpisode: Long): Boolean =
-        episode.owns(expectedEpisode) && scene == WaLockscreenScene.MAIN && checkState(WaSource.ENTRANCE)
+        episode.owns(expectedEpisode) && scene == WaLockscreenScene.MAIN &&
+            checkState(WaSource.ENTRANCE) && ambient?.hasWindow != true
+
+    private fun startAmbientObservation(enabled: Boolean) {
+        WaAmbientCapture.start(ambientProduct, session, enabled)
+        ambientSleepRecorded = true
+    }
+
+    private fun fenceAmbient(reason: String) {
+        ambientFenced = true
+        if (ambientSleepRecorded) WaAmbientCapture.edge(session, "SIGNAL", reason)
+        ambient?.revoke(reason)
+    }
+
+    private fun reconcileAmbient(source: WaSource, state: WaSystemState, enabled: Boolean) {
+        if (state.isDozing && !ambientSleepRecorded && !ambientFenced) startAmbientObservation(enabled)
+        val material = if (enabled && state.isDozing) ambientMaterial() else null
+        val gate = WaAmbientGate.read(enabled, ambientFenced, state, material != null, hasOrbAttachment())
+        WaAmbientCapture.observe(session, source.name, state, gate)
+        ambient?.observe(gate, material?.identity)
+        if (gate != WaAmbientGate.DOZE || material == null) return
+        if (ambient?.session != session) {
+            if (ambient?.hasWindow == true) return
+            ambient = null
+        }
+        val expectedSession = session
+        val presenter = ambient ?: WaAmbientOrbWindow(
+            this, main, expectedSession, ::ambientLayout, ::ambientMask,
+            { canDrawAmbient(expectedSession, it) },
+        ).also { ambient = it }
+        presenter.show(material)
+    }
+
+    private fun canDrawAmbient(expectedSession: Long, identity: WaAmbientIdentity): Boolean {
+        if (!connected || session != expectedSession || ambientFenced || !permanentOrbRequested() || hasOrbAttachment() ||
+            ambientMaterial()?.identity != identity
+        ) return false
+        val state = platform.read(includeAmbient = true)
+        val gate = WaAmbientGate.read(true, false, state, material = true, interactiveOwner = false)
+        WaAmbientCapture.observe(session, "PUBLISH_RECHECK", state, gate)
+        return gate == WaAmbientGate.DOZE
+    }
 
     private fun refreshScene(source: WaSource, received: Long = WaLockscreenCapture.callbackTime(), geometry: Boolean = false) {
         if (!checkState(source, received)) return
@@ -186,7 +248,12 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
         val observeRead = received != 0L || tracked != null || tracking.awaiting(session)
         val readUp = if (observeRead) SystemClock.uptimeMillis() else 0L
         val readBegin = if (observeRead) SystemClock.elapsedRealtimeNanos() else 0L
-        lastState = platform.read()
+        val ambientEnabled = permanentOrbRequested()
+        lastState = platform.read(includeAmbient = ambientEnabled)
+        if (!lastState.isDozing && ambient?.hasWindow == true) {
+            if (lastState.displayState == Display.STATE_ON || lastState.locked == false) fenceAmbient("AWAKE")
+            else ambient?.revoke("DISPLAY")
+        }
         val negative = lastState.terminal
         val recording = WaLockscreenCapture.captureId() != null
         val readEnd = if (observeRead && (tracked != null || recording || negative == WaHideReason.UNLOCKED)) {
@@ -206,8 +273,18 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
         if (negative != null) {
             terminalSignal(source, negative, received, observed = true, type = type, eventTime = eventTime,
                 read = gate)
+            if (lastState.locked == false) fenceAmbient("UNLOCKED")
+            if (lastState.displayState == Display.STATE_ON) ambientSleepRecorded = false
+            if (lastState.isDozing || source == WaSource.DISPLAY || ambient?.hasWindow == true) {
+                reconcileAmbient(source, lastState, ambientEnabled)
+            }
             return false
         }
+        if (lastState.displayState == Display.STATE_ON && ambientSleepRecorded) {
+            reconcileAmbient(source, lastState, ambientEnabled)
+            ambientSleepRecorded = false
+        }
+        if (lastState.ready) ambientFenced = false
         val previous = episode.id
         val admitted = episode.admit(lastState)
         if (episode.id != previous) {
@@ -281,6 +358,7 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
                     return@launch
                 }
                 if (result.scene == WaLockscreenScene.RESTRICTED) {
+                    ambient?.revoke("RESTRICTED")
                     scene = result.scene
                     val appWindow = result.reading == WaSceneReading.APP_WINDOW_PRESENT
                     val decision = if (appWindow && window != null) WaTime.now() else null
@@ -317,7 +395,7 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
                 }
                 if (id == scanId && episode.owns(owner) && generation == tracking.generation &&
                     window == orbOwner() && scene == WaLockscreenScene.MAIN &&
-                    checkState(WaSource.ADD_RECHECK) && episode.owns(owner)) {
+                    checkState(WaSource.ADD_RECHECK) && episode.owns(owner) && ambient?.hasWindow != true) {
                     if (showOrb(owner, !episode.entranceAdmitted)) episode.attached(owner)
                 }
             } catch (cancelled: CancellationException) {
@@ -419,7 +497,9 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
             val received = WaLockscreenCapture.callbackTime()
             markCallback(WaSource.DISPLAY, received)
             lastState = WaSystemState(WaSystemState.DISPLAY_MISSING)
+            ambient?.revoke("DISPLAY_REMOVED")
             terminalSignal(WaSource.DISPLAY, WaHideReason.DISPLAY, received, observed = true)
+            reconcileAmbient(WaSource.DISPLAY, lastState, permanentOrbRequested())
         }
     }
 
@@ -435,7 +515,10 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
         refreshScene(WaSource.CONFIGURATION, geometry = true)
     }
 
-    override fun onInterrupt() = withdraw(WaHideReason.INTERRUPT, WaSource.INTERRUPT)
+    override fun onInterrupt() {
+        fenceAmbient("INTERRUPT")
+        withdraw(WaHideReason.INTERRUPT, WaSource.INTERRUPT)
+    }
 
     override fun onUnbind(intent: Intent?): Boolean {
         disconnect()
@@ -449,6 +532,8 @@ abstract class WaLockscreenService : AccessibilityService(), DisplayManager.Disp
 
     private fun disconnect() {
         if (!connected) return
+        fenceAmbient("DISCONNECT")
+        if (ambient?.hasWindow == false) ambient = null
         terminalSignal(WaSource.DISCONNECT, WaHideReason.DISCONNECT, WaLockscreenCapture.callbackTime())
         connected = false
         main.removeCallbacks(expireUnlockObservation)

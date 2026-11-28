@@ -11,6 +11,7 @@ import android.util.AtomicFile
 import android.util.Log
 import android.widget.RemoteViews
 import com.fluvi.app.R
+import com.fluvi.wa.WaAmbientFrame
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -73,9 +74,14 @@ internal object HeaderOrbWidgetContent {
         require(signature.length in 1..8192)
         val key = digest(signature.toByteArray()).joinToString("") { "%02x".format(it) }
         preparation = null
-        if (read(context, owner)?.key == key) return mapOf("cached" to true)
+        val cached = read(context, owner)
+        if (cached?.key == key) {
+            binding.restoreAmbient(owner, cached.generation)
+            return mapOf("cached" to true)
+        }
         val request = Preparation(owner, UUID.randomUUID().toString(), key)
         preparation = request
+        binding.invalidateAmbient(owner)
         Log.i("FluviBalanceOrb", "stage=material-prepare id=${owner.id}")
         return mapOf("token" to request.token)
     }
@@ -112,20 +118,20 @@ internal object HeaderOrbWidgetContent {
             ),
             requireNotNull(motion), frames,
         )
-        val views = playback(context, owner.id, packet)
+        val prepared = playback(context, owner.id, packet)
         val previous = read(context, owner)
         if (binding.authority != owner) return false
         write(context, packet)
         if (binding.authority != owner) return false
         try {
-            AppWidgetManager.getInstance(context).updateAppWidget(owner.id, views)
+            AppWidgetManager.getInstance(context).updateAppWidget(owner.id, prepared.views)
         } catch (error: RuntimeException) {
             if (binding.authority == owner) {
                 if (previous == null) store(context).delete() else write(context, previous)
             }
             throw error
         }
-        binding.markReady(owner, true)
+        binding.markReady(owner, true, prepared.ambient)
         Log.i("FluviBalanceOrb", "stage=material-ready id=${owner.id} frames=${packet.plan.frameCount}")
         return true
     }
@@ -141,19 +147,21 @@ internal object HeaderOrbWidgetContent {
     fun refresh(context: Context, binding: HeaderOrbBinding) {
         val owner = binding.authority ?: return
         val packet = read(context, owner)
-        val views = if (packet != null) playback(context, owner.id, packet) else empty(context)
+        val prepared = packet?.let { playback(context, owner.id, it) }
         if (owner != binding.authority) return
-        AppWidgetManager.getInstance(context).updateAppWidget(owner.id, views)
-        binding.markReady(owner, packet != null)
+        AppWidgetManager.getInstance(context).updateAppWidget(owner.id, prepared?.views ?: empty(context))
+        binding.markReady(owner, packet != null, prepared?.ambient?.takeIf { preparation?.owner != owner })
     }
 
     private fun empty(context: Context) = RemoteViews(context.packageName, R.layout.fluvi_header_orb_empty)
 
-    private fun playback(context: Context, id: Int, packet: HeaderOrbPackage): RemoteViews {
+    private data class WidgetFrames(val views: RemoteViews, val ambient: WaAmbientFrame)
+
+    private fun playback(context: Context, id: Int, packet: HeaderOrbPackage): WidgetFrames {
         val manager = AppWidgetManager.getInstance(context)
         val size = OrbWidgetDisplayDimensions.shortSidePx(context, manager.getAppWidgetOptions(id))
         val frames = packet.decode()
-        return orbPlaybackViews(context, packet.plan, frames, size).also { views ->
+        val views = orbPlaybackViews(context, packet.plan, frames, size).also { views ->
             val parcel = Parcel.obtain()
             try {
                 views.writeToParcel(parcel, 0)
@@ -167,6 +175,7 @@ internal object HeaderOrbWidgetContent {
                 parcel.recycle()
             }
         }
+        return WidgetFrames(views, WaAmbientFrame(packet.generation, frames[packet.plan.initialFrameIndex()]))
     }
 
     private fun store(context: Context) = AtomicFile(File(context.noBackupFilesDir, "balance-orb-frames-v2"))

@@ -174,6 +174,7 @@ class _DebugLockscreenCaptureState extends State<DebugLockscreenCapture>
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       children: [
         const CopyLastUnlock(feedbackStyle: _text),
+        const CopyLastUnlock(feedbackStyle: _text, ambient: true),
         Text(state, style: _text, key: const ValueKey('wa-capture-state')),
         if (service.isNotEmpty) Text(service, style: _text),
         if (_status?['armAvailable'] == true) ...[

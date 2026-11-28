@@ -2,6 +2,7 @@ package tk.zwander.lockscreenwidgets.services
 
 import android.content.Intent
 import com.fluvi.app.widget.orb.HeaderOrbBinding
+import com.fluvi.wa.WaAmbientMaterial
 import com.fluvi.wa.WaHideReason
 import com.fluvi.wa.WaLockscreenService
 import com.fluvi.wa.WaOrbWindow
@@ -23,7 +24,7 @@ class Accessibility : WaLockscreenService() {
             val id = binding.readyId()
             val changed = id != observedId
             observedId = id
-            if (changed || id != null) orbContentChanged(changed)
+            orbContentChanged(changed)
         }
     }
 
@@ -34,6 +35,14 @@ class Accessibility : WaLockscreenService() {
     override fun hasOrbAttachment() = orb.hasAttachment
 
     override fun ownsOrbEvent(windowId: Int) = orb.ownsEvent(windowId)
+
+    override fun permanentOrbRequested() = binding.permanentOrbEnabled
+
+    override fun ambientMaterial() = binding.ambientMaterial()
+
+    override fun ambientLayout(material: WaAmbientMaterial) = orb.ambientLayout(material)
+
+    override fun ambientMask() = orb.ambientMask()
 
     override fun showOrb(episode: Long, animate: Boolean): Boolean {
         val id = binding.readyId() ?: return false

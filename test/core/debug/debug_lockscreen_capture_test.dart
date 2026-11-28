@@ -60,7 +60,11 @@ void main() {
         tester.widget<OutlinedButton>(find.byKey(lastCopy)).onPressed,
         isNotNull,
       );
-      expect(find.byType(OutlinedButton), findsNWidgets(3));
+      expect(find.byType(OutlinedButton), findsNWidgets(4));
+      expect(
+        find.byKey(const ValueKey('wa-last-ambient-copy')),
+        findsOneWidget,
+      );
 
       await tester.tap(find.byKey(toggle));
       await tester.pumpAndSettle();

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Copies the ordinary unlock receipt without opening or changing the recorder.
+/// Copies the requested lockscreen receipt without opening or changing the recorder.
 class CopyLastUnlock extends StatefulWidget {
-  const CopyLastUnlock({super.key, this.feedbackStyle});
+  const CopyLastUnlock({super.key, this.feedbackStyle, this.ambient = false});
 
   final TextStyle? feedbackStyle;
+  final bool ambient;
 
   @override
   State<CopyLastUnlock> createState() => _CopyLastUnlockState();
@@ -15,6 +16,11 @@ class _CopyLastUnlockState extends State<CopyLastUnlock> {
   static const _channel = MethodChannel('fluvi/wa_lockscreen_capture');
   bool _copying = false;
   String? _feedback;
+  String get _receiptKey =>
+      widget.ambient ? 'wa-last-ambient' : 'wa-last-unlock';
+  String get _readFailed => widget.ambient
+      ? 'Az AOD-napló nem olvasható. Próbáld újra.'
+      : 'A feloldási napló nem olvasható. Próbáld újra.';
 
   Future<void> _copy() async {
     if (_copying) return;
@@ -25,13 +31,16 @@ class _CopyLastUnlockState extends State<CopyLastUnlock> {
     String message;
     try {
       final snapshot = await _channel.invokeMapMethod<String, Object?>(
-        'getLastUnlock',
+        widget.ambient ? 'getLastAmbient' : 'getLastUnlock',
       );
       final text = snapshot?['text'];
       message = switch (snapshot?['status']) {
-        'EMPTY' => 'Még nincs napló. Oldd fel a telefont látható ORB mellett.',
+        'EMPTY' =>
+          widget.ambient
+              ? 'Még nincs AOD-napló. Sötétítsd vissza a lezárt kijelzőt.'
+              : 'Még nincs napló. Oldd fel a telefont látható ORB mellett.',
         'INACTIVE' => 'Az ORB-szolgáltatásra várunk.',
-        _ => 'A feloldási napló nem olvasható. Próbáld újra.',
+        _ => _readFailed,
       };
       if (snapshot?['status'] == 'READY' &&
           text is String &&
@@ -40,7 +49,9 @@ class _CopyLastUnlockState extends State<CopyLastUnlock> {
         try {
           if (!mounted) return;
           await Clipboard.setData(ClipboardData(text: text));
-          message = 'A feloldási napló a vágólapon van.';
+          message = widget.ambient
+              ? 'Az AOD-napló a vágólapon van.'
+              : 'A feloldási napló a vágólapon van.';
         } on PlatformException {
           // A stored report is available for another attempt.
         } on MissingPluginException {
@@ -48,9 +59,9 @@ class _CopyLastUnlockState extends State<CopyLastUnlock> {
         }
       }
     } on PlatformException {
-      message = 'A feloldási napló nem olvasható. Próbáld újra.';
+      message = _readFailed;
     } on MissingPluginException {
-      message = 'A feloldási napló nem olvasható. Próbáld újra.';
+      message = _readFailed;
     }
     if (mounted) {
       setState(() {
@@ -65,15 +76,19 @@ class _CopyLastUnlockState extends State<CopyLastUnlock> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       OutlinedButton(
-        key: const ValueKey('wa-last-unlock-copy'),
+        key: ValueKey('$_receiptKey-copy'),
         onPressed: _copying ? null : _copy,
-        child: const Text('Legutóbbi feloldás másolása'),
+        child: Text(
+          widget.ambient
+              ? 'Legutóbbi AOD-próba másolása'
+              : 'Legutóbbi feloldás másolása',
+        ),
       ),
       if (_feedback case final feedback?)
         Text(
           feedback,
           style: widget.feedbackStyle,
-          key: const ValueKey('wa-last-unlock-feedback'),
+          key: ValueKey('$_receiptKey-feedback'),
         ),
     ],
   );

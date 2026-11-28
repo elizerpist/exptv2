@@ -14,6 +14,9 @@ internal data class WaSystemState(
     val ready: Boolean
         get() = displayState == Display.STATE_ON && interactive == true && locked == true
 
+    val isDozing: Boolean
+        get() = displayState == Display.STATE_DOZE || displayState == Display.STATE_DOZE_SUSPEND
+
     val terminal: WaHideReason?
         get() = when {
             displayState != Display.STATE_UNKNOWN && displayState != Display.STATE_ON -> WaHideReason.DISPLAY
@@ -33,12 +36,13 @@ internal class WaSystemReader(context: Context) {
     private val power = context.getSystemService(PowerManager::class.java)
     private val keyguard = context.getSystemService(KeyguardManager::class.java)
 
-    fun read(complete: Boolean = false): WaSystemState {
+    fun read(complete: Boolean = false, includeAmbient: Boolean = false): WaSystemState {
         val display = seen { displays.getDisplay(Display.DEFAULT_DISPLAY)?.state ?: WaSystemState.DISPLAY_MISSING }
             ?: Display.STATE_UNKNOWN
-        if (!complete && display != Display.STATE_ON) return WaSystemState(display)
+        val ambient = includeAmbient && (display == Display.STATE_DOZE || display == Display.STATE_DOZE_SUSPEND)
+        if (!complete && !ambient && display != Display.STATE_ON) return WaSystemState(display)
         val interactive = seen { power.isInteractive }
-        if (!complete && interactive != true) return WaSystemState(display, interactive)
+        if (!complete && !ambient && interactive != true) return WaSystemState(display, interactive)
         return WaSystemState(display, interactive, seen { keyguard.isKeyguardLocked })
     }
 

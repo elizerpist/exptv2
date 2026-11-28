@@ -18,6 +18,9 @@ import android.util.Log
 import com.fluvi.wa.OrbPlacement
 import com.fluvi.wa.WaOrbHost
 import com.fluvi.wa.WaOrbStyle
+import com.fluvi.wa.WaAmbientCapture
+import com.fluvi.wa.WaAmbientFrame
+import com.fluvi.wa.WaAmbientMaterial
 import org.json.JSONArray
 import java.io.File
 import java.util.UUID
@@ -38,8 +41,12 @@ internal class HeaderOrbBinding private constructor(private val context: Context
     private var pending = prefs.getInt("pending", INVALID)
     private var pendingCode = prefs.getInt("pendingCode", 0)
     private var autoBind = prefs.getBoolean("autoBind", true)
+    var permanentOrbEnabled = prefs.getBoolean("permanentOrb", false)
+        private set
     private var epoch = prefs.getString("epoch", null) ?: UUID.randomUUID().toString()
     private var ready = false
+    private var ambientFrame: WaAmbientFrame? = null
+    private var ambientCurrent = false
     private var connection = 0L
 
     data class Authority(val epoch: String, val id: Int)
@@ -127,6 +134,8 @@ internal class HeaderOrbBinding private constructor(private val context: Context
         // Immediately close authority before invalidating queued frame work.
         authority = null
         ready = false
+        ambientFrame = null
+        ambientCurrent = false
         epoch = UUID.randomUUID().toString()
         if (pending != INVALID) abandonPending()
         autoBind = true
@@ -149,6 +158,8 @@ internal class HeaderOrbBinding private constructor(private val context: Context
         authority = current
         if (previous != current) {
             ready = false
+            ambientFrame = null
+            ambientCurrent = false
             if (current != null) {
                 HeaderOrbWidgetContent.execute { HeaderOrbWidgetContent.refresh(context, this) }
             }
@@ -156,13 +167,42 @@ internal class HeaderOrbBinding private constructor(private val context: Context
         notifyChanged()
     }
 
-    fun markReady(owner: Authority, value: Boolean) {
+    fun markReady(owner: Authority, value: Boolean, frame: WaAmbientFrame?) {
         main.post {
-            if (authority == owner && value != ready) {
-                ready = value
-                notifyChanged()
+            if (authority != owner) return@post
+            val readinessChanged = value != ready
+            val ambientChanged = ambientCurrent != (value && frame != null) ||
+                (frame != null && ambientFrame?.packet != frame.packet)
+            ready = value
+            if (!value || frame != null) ambientFrame = frame.takeIf { value }
+            ambientCurrent = value && frame != null
+            if (readinessChanged || (permanentOrbEnabled && ambientChanged)) notifyChanged()
+        }
+    }
+
+    fun invalidateAmbient(owner: Authority) {
+        main.post {
+            if (authority == owner && ambientCurrent) {
+                ambientCurrent = false
+                if (permanentOrbEnabled) notifyChanged()
             }
         }
+    }
+
+    fun restoreAmbient(owner: Authority, packet: String) {
+        main.post {
+            if (authority == owner && ready && !ambientCurrent && ambientFrame?.packet == packet) {
+                ambientCurrent = true
+                if (permanentOrbEnabled) notifyChanged()
+            }
+        }
+    }
+
+    fun ambientMaterial(): WaAmbientMaterial? {
+        if (!ambientCurrent) return null
+        val id = readyId() ?: return null
+        val frame = ambientFrame ?: return null
+        return WaAmbientMaterial(id, frame, sizeDp, style(sizeDp), placement())
     }
 
     fun readyId(): Int? = authority?.id?.takeIf { ready }
@@ -177,6 +217,13 @@ internal class HeaderOrbBinding private constructor(private val context: Context
         val key = styleKey(dp)
         if (style(dp) == style) return
         check(prefs.edit().putString(key, style.value).commit())
+        notifyChanged()
+    }
+
+    fun setPermanentOrb(enabled: Boolean) {
+        if (permanentOrbEnabled == enabled) return
+        permanentOrbEnabled = enabled
+        prefs.edit().putBoolean("permanentOrb", enabled).apply()
         notifyChanged()
     }
 
@@ -198,6 +245,11 @@ internal class HeaderOrbBinding private constructor(private val context: Context
         "sizeDp" to sizeDp,
         "style56" to style(56).value,
         "style112" to style(112).value,
+        "permanentOrb" to permanentOrbEnabled,
+        "ambientState" to when {
+            !ambientCurrent -> "WAIT_MATERIAL"
+            else -> WaAmbientCapture.observedStatus()
+        },
         "state" to when {
             !enabled -> "disabled"
             !intended -> "dormant"

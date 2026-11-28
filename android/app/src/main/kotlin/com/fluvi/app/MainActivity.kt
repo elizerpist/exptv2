@@ -71,6 +71,7 @@ import com.fluvi.app.widget.orb.FluviOrbWidgetProvider
 import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
 import com.fluvi.app.widget.orb.HeaderOrbBinding
 import com.fluvi.wa.WaLastUnlock
+import com.fluvi.wa.WaAmbientCapture
 import com.fluvi.wa.WaLockscreenCapture
 import com.fluvi.wa.WaOrbStyle
 import com.fluvi.app.widget.orb.HeaderOrbWidgetContent
@@ -145,6 +146,7 @@ class MainActivity : FlutterActivity() {
         waCaptureChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
                 "getLastUnlock" -> WaLastUnlock.request(applicationContext) { result.success(it) }
+                "getLastAmbient" -> result.success(WaAmbientCapture.latest())
                 "start", "status", "stop", "getFrozen" -> WaLockscreenCapture.request(
                     applicationContext, call.method, call.argument<String>("source"), call.argument<String>("purpose"),
                     arm = call.argument<Int>("armMs"),
@@ -1125,7 +1127,7 @@ class MainActivity : FlutterActivity() {
                     val application = applicationContext
                     val binding = HeaderOrbBinding.get(application)
                     when (call.method) {
-                        "status", "openAccessibility", "settingsResumed", "selectSize", "selectStyle" -> {
+                        "status", "openAccessibility", "settingsResumed", "selectSize", "selectStyle", "setPermanentOrb" -> {
                             runCatching {
                                 when (call.method) {
                                     "openAccessibility" -> binding.openAccessibility(this)
@@ -1135,6 +1137,7 @@ class MainActivity : FlutterActivity() {
                                         requireNotNull(call.argument("dp")),
                                         WaOrbStyle.entries.single { it.value == call.argument<String>("style") },
                                     )
+                                    "setPermanentOrb" -> binding.setPermanentOrb(requireNotNull(call.argument("enabled")))
                                     else -> binding.syncService()
                                 }
                                 binding.status()

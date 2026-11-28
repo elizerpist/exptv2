@@ -151,9 +151,34 @@ class _HeaderOrbSetupPageState extends State<HeaderOrbSetupPage>
             ),
             _styleSelector(dp),
           ],
+          SwitchListTile(
+            key: const ValueKey('balance-orb-permanent'),
+            title: const Text('Permanens ORB'),
+            subtitle: const Text(
+              'Lezárás után is látható, amíg a telefon Always-On Display módja aktív.',
+            ),
+            value: _status?['permanentOrb'] == true,
+            onChanged: _status == null || _busy
+                ? null
+                : (enabled) => _invoke('setPermanentOrb', {'enabled': enabled}),
+          ),
+          if (_status?['permanentOrb'] == true)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(switch (_status?['ambientState']) {
+                'WAIT_MATERIAL' =>
+                  'Az AOD-hoz szükséges ORB-kép még nem áll rendelkezésre.',
+                'AOD_OBSERVED' =>
+                  'A rendszer AOD-állapotot jelzett. Az ORB tényleges láthatósága még nem igazolt.',
+                _ => 'A telefon AOD-támogatása még nincs megállapítva.',
+              }),
+            ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: CopyLastUnlock(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [CopyLastUnlock(), CopyLastUnlock(ambient: true)],
+            ),
           ),
         ],
       ),

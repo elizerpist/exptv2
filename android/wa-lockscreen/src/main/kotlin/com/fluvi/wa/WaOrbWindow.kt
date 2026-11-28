@@ -8,6 +8,7 @@ import android.animation.ValueAnimator
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
 import android.graphics.Point
@@ -45,6 +46,16 @@ class WaOrbWindow(
     fun prepareStyles() {
         fluviMask
         product
+    }
+
+    fun ambientMask(): Bitmap = fluviMask
+
+    fun ambientLayout(material: WaAmbientMaterial): WindowManager.LayoutParams? {
+        val dimensions = measure(material.sizeDp)
+        if (!dimensions.usable.fits) return null
+        return overlayLayout(
+            dimensions, material.placement, "Fluvi Ambient ORB", WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+        )
     }
     private val manager = AppWidgetManager.getInstance(context)
     private var root: OrbRoot? = null
@@ -124,22 +135,7 @@ class WaOrbWindow(
             frame.visual.scaleY = 0.95f
         }
         val diameter = dimensions.usable.diameter
-        val params = WindowManager.LayoutParams(
-            diameter, diameter, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.CENTER
-            title = "Fluvi Balance ORB"
-            if (Build.VERSION.SDK_INT >= 30) {
-                setFitInsetsTypes(0)
-                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-            }
-        }
-        updateOffsets(params, dimensions.usable.position(center), dimensions)
+        val params = overlayLayout(dimensions, center, "Fluvi Balance ORB")
         root = frame
         layout = params
         try {
@@ -445,6 +441,25 @@ class WaOrbWindow(
             size.y - maxOf(insets?.stableInsetBottom ?: 0, cutout?.safeInsetBottom ?: 0),
             diameter,
         ))
+    }
+
+    private fun overlayLayout(
+        dimensions: Geometry, center: OrbPlacement, windowTitle: String, extraFlags: Int = 0,
+    ) = WindowManager.LayoutParams(
+        dimensions.usable.diameter, dimensions.usable.diameter, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or extraFlags,
+        PixelFormat.TRANSLUCENT,
+    ).apply {
+        gravity = Gravity.CENTER
+        title = windowTitle
+        if (Build.VERSION.SDK_INT >= 30) {
+            setFitInsetsTypes(0)
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        }
+        updateOffsets(this, dimensions.usable.position(center), dimensions)
     }
 
     private fun updateOffsets(
