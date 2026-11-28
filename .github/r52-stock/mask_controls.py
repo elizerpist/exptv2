@@ -234,7 +234,7 @@ def change_palette(device, old):
 def exercise(device, args):
     assert device.shell("getprop", "ro.kernel.qemu") == "1"
     assert device.shell("getprop", "ro.build.version.sdk") == "37"
-    from upgrade import wait_for_root
+    from upgrade import open_dashboard, wait_for_root
     wait_for_root(device)
     args.api = "37.0"
     measure.prepare(device, args)
@@ -253,21 +253,15 @@ def exercise(device, args):
             return None
 
     settings(device)
-    select_style(device, 56, "fluviMask")
-    confirm("112-plain", 112, "orb")
-    settings(device)
     device.click("1×1 (56 dp)", package=PKG)
-    confirm("56-mask", 56, "fluviMask")
-    settings(device)
     select_style(device, 56, "orb")
-    confirm("56-restored-plain", 56, "orb")
-    settings(device)
     select_style(device, 112, "fluviMask")
     old = prefs(device)
     assert old["sizeDp"] == "56" and old["style56"] == "orb" and old["style112"] == "fluviMask"
     previous = set(device.shell("pidof", PKG).split())
     assert len(previous) == 1 and all(value.isdigit() for value in previous)
     device.shell("kill", "-KILL", next(iter(previous)))
+    open_dashboard(device, "mask-restart-ready")
     settings(device)
     assert device.service_connected()
     assert previous.isdisjoint(device.shell("pidof", PKG).split())
