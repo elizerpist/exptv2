@@ -99,7 +99,11 @@ def copy(device, name, sha, version, timeout=None, stop=False):
         device.click("Leállítás", package=PKG)
         device.click("Lezárt felvétel", package=PKG, limit=8)
     device.click("Vágólapra másolás", package=PKG)
-    device.click("Felvétel a vágólapon.", package=PKG, limit=8)
+    if not device.click("Felvétel a vágólapon.", package=PKG, optional=True, limit=4):
+        device.save(name + "-copy-after-first-tap.xml", device.screen())
+        device.note(f"{name} first copy tap had no acknowledgement")
+        device.click("Vágólapra másolás", package=PKG, limit=5)
+        device.click("Felvétel a vágólapon.", package=PKG, limit=8)
     if timeout is not None:
         assert "Visszaállítva: 50 ms" in labels(device)
         last = readback(device, name + "-restored", 50)

@@ -17,19 +17,15 @@ on:
 permissions:
   contents: read
 jobs:
-  withdrawal:
+  native-capture-replay:
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    strategy:
-      fail-fast: false
-      matrix:
-        system: ['37.0', '35']
     env:
       APP_SHA: ${{ inputs.app_sha }}
       APK_URL: ${{ inputs.apk }}
       APK_HASH: ${{ inputs.sha256 }}
       APK_SIZE: ${{ inputs.size }}
-      STOCK_API: ${{ matrix.system }}
+      STOCK_API: "37.0"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -50,20 +46,20 @@ jobs:
           (cd .github/r52-stock && python -m unittest -v test_r52_oracle)
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ matrix.system == '37.0' && 36 || 35 }}
-          system-image-api-level: ${{ matrix.system }}
+          api-level: 36
+          system-image-api-level: '37.0'
           target: default
           arch: x86_64
           profile: pixel_7
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: bash .github/r52-stock/run-stock.sh
-      - if: always()
-        run: bash .github/r52-stock/analyze-traces.sh evidence/experiment
+          script: >-
+            python3 .github/r52-stock/capture_replay.py --apk "$RUNNER_TEMP/human.apk"
+            --observer "$RUNNER_TEMP/observer.apk" --output evidence/replay --sha "$APP_SHA"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r52-withdrawal-${{ matrix.system }}-${{ inputs.app_sha }}
+          name: r52-native-capture-replay-${{ inputs.app_sha }}
           path: evidence/
           if-no-files-found: warn

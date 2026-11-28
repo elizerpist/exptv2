@@ -1,0 +1,10 @@
+FLUVI_WA_LOCKSCREEN_CAPTURE_V1
+build=e7542639d22d78d10e7b123e836ee9bc9758c91a purpose=HUMAN_DIAGNOSTIC version=0.1.3 code=5 api=37 model=Android_SDK_built_for_x86_64
+capture=65a2e0b6-476d-4e14-88d5-51d70abe7bf8 state=FROZEN stop=COPY route=WA_BALANCE process=2679-96785040782 initialService=96784950954 sizeDp=112
+startUp=166617 startEl=166617329876 endUp=170727 endEl=170727207951 durationMs=4109
+physicalFirstOrb=UNOBSERVED firstForbiddenFrame=UNOBSERVED physicalLastOrb=UNOBSERVED
+up=uptimeMillis el=elapsedRealtimeNanos eventUp=accessibilityEventTime receipts=software_only
+observed=4 coalesced=3 ringDrops=0 ringTruncated=false probeRead=0 probeSkipped=124 probeBusy=0
+retained=1 textDropped=0 truncated=false
+1 TERMINAL src=ACCESSIBILITY up=166981 el=166981484019 s=96784950954 e=1 scan=193 why=UNLOCKED recvUp=166981 event=2048 eventUp=166927 display=2 interactive=true locked=false scene=UNKNOWN gate=UNLOCKED decideUp=166981 decideEl=166981479751 repeat=4 lastUp=170092 lastEl=170092176167
+sha256=909e2d56049f2499285da88b8c181daf43d95dc70df0d59671833f8b9812560b
