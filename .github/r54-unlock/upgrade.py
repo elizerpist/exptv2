@@ -237,3 +237,20 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def open_dashboard(device, name):
+    launch = device.shell("am", "start", "-W", "-n", stock.r51.ACTIVITY)
+    device.save(name + "-launch.txt", launch.encode())
+    assert "Status: ok" in launch, launch
+    # Report the actual Flutter tree instead of sampling the cold splash once.
+    deadline = time.monotonic() + 32
+    while time.monotonic() < deadline:
+        raw = device.screen()
+        device.save(name + "-dashboard.xml", raw)
+        labels = stock.r51.stock.visible_labels(raw, PKG)
+        if {"Beállítások", "Settings"}.intersection(labels):
+            screenshot(device, name + "-dashboard")
+            return
+        time.sleep(.4)
+    raise AssertionError("The real Flutter dashboard did not finish opening within 32 s")
