@@ -1,35 +1,36 @@
-name: R52 signed stock withdrawal
+name: R53 direct unlock witness on exact R52
 on:
   workflow_dispatch:
     inputs:
-      app_sha:
+      reference_sha:
         required: true
         type: string
-      apk:
+      reference_url:
         required: true
         type: string
-      sha256:
+      reference_hash:
         required: true
         type: string
-      size:
+      reference_cert:
+        required: true
+        type: string
+      reference_size:
         required: true
         type: string
 permissions:
   contents: read
 jobs:
-  withdrawal:
+  unlock:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-    strategy:
-      fail-fast: false
-      matrix:
-        system: ['37.0', '35']
+    timeout-minutes: 24
     env:
-      APP_SHA: ${{ inputs.app_sha }}
-      APK_URL: ${{ inputs.apk }}
-      APK_HASH: ${{ inputs.sha256 }}
-      APK_SIZE: ${{ inputs.size }}
-      STOCK_API: ${{ matrix.system }}
+      REFERENCE_SHA: ${{ inputs.reference_sha }}
+      REFERENCE_URL: ${{ inputs.reference_url }}
+      REFERENCE_HASH: ${{ inputs.reference_hash }}
+      REFERENCE_CERT: ${{ inputs.reference_cert }}
+      REFERENCE_SIZE: ${{ inputs.reference_size }}
+      PYTHONDONTWRITEBYTECODE: '1'
+      PYTHONPATH: .github/r52-stock:.github/r53-unlock
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -42,28 +43,37 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Verify exact signed binary and calibrate the decoder
+      - name: Verify both APKs and run the independent offline controls
         run: |
           mkdir -p evidence
-          bash .github/r52-stock/verify-apk.sh "$APK_URL" "$APK_HASH" "$APK_SIZE" "$APP_SHA" "$RUNNER_TEMP/human.apk"
+          bash .github/r52-stock/verify-apk.sh \
+            https://media.githubusercontent.com/media/elizerpist/exptv2/8f7fc51e91d8ab2f65aae1565ed803e6fea9f3a1/Fluvi_R52_HUMAN_7705f87c0c8f.apk \
+            4ca98594dc1e764b5ec1c9e2a93dd0dd212b7fcd7ca88f8e55db89d677ba9f7d \
+            114027163 7705f87c0c8f2bdf930a528b5bc6f87d276676a5 "$RUNNER_TEMP/human.apk"
+          bash .github/r53-unlock/reference/verify.sh "$REFERENCE_URL" "$REFERENCE_HASH" \
+            "$REFERENCE_SIZE" "$REFERENCE_SHA" "$REFERENCE_CERT" "$RUNNER_TEMP/reference.apk" \
+            | tee evidence/reference-apk.txt
           bash .github/r52-stock/prepare-runner.sh
-          (cd .github/r52-stock && python -m unittest -v test_r52_oracle)
+          python -m unittest discover -s .github/r53-unlock -v 2>&1 | tee evidence/offline-controls.txt
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ matrix.system == '37.0' && 36 || 35 }}
-          system-image-api-level: ${{ matrix.system }}
+          api-level: 36
+          system-image-api-level: '37.0'
           target: default
           arch: x86_64
           profile: pixel_7
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: bash .github/r52-stock/run-stock.sh
+          script: >-
+            python3 .github/r53-unlock/run_unlock.py --apk "$RUNNER_TEMP/human.apk"
+            --observer "$RUNNER_TEMP/observer.apk" --reference "$RUNNER_TEMP/reference.apk"
+            --reference-sha "$REFERENCE_SHA" --output evidence/unlock
       - if: always()
-        run: bash .github/r52-stock/analyze-traces.sh evidence/experiment
+        run: bash .github/r53-unlock/export_trace.sh evidence/unlock
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: r52-withdrawal-${{ matrix.system }}-${{ inputs.app_sha }}
+          name: r53-unlock-${{ github.sha }}
           path: evidence/
-          if-no-files-found: warn
+          if-no-files-found: error

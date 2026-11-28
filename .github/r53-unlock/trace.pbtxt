@@ -1,0 +1,23 @@
+buffers { size_kb: 65536 fill_policy: RING_BUFFER }
+data_sources {
+  config {
+    name: "linux.ftrace"
+    ftrace_config {
+      atrace_apps: "com.fluvi.app"
+      atrace_apps: "com.fluvi.r53.reference"
+      atrace_categories: "wm"
+      atrace_categories: "input"
+      atrace_categories: "power"
+      ftrace_events: "sched/sched_switch"
+      ftrace_events: "sched/sched_waking"
+    }
+  }
+}
+data_sources { config { name: "android.windowmanager" windowmanager_config { log_frequency: LOG_FREQUENCY_FRAME } } }
+data_sources { config { name: "android.surfaceflinger.layers" surfaceflinger_layers_config { mode: MODE_ACTIVE trace_flags: TRACE_FLAG_COMPOSITION trace_flags: TRACE_FLAG_BUFFERS } } }
+data_sources { config { name: "android.surfaceflinger.transactions" surfaceflinger_transactions_config { mode: MODE_ACTIVE } } }
+data_sources { config { name: "android.surfaceflinger.frametimeline" } }
+data_sources { config { name: "android.input.inputevent" } }
+data_sources { config { name: "com.android.wm.shell.transition" } }
+flush_period_ms: 1000
+duration_ms: 75000
