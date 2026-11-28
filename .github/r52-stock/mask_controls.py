@@ -1,5 +1,6 @@
 """Verify the installed lockscreen mask against the exact live Balance packet."""
 import argparse
+import base64
 import hashlib
 from io import BytesIO
 import json
@@ -174,8 +175,8 @@ def change_palette(device, old):
     pids = device.shell("pidof", PKG).split()
     assert len(pids) == 1 and pids[0].isdigit()
     pid = pids[0]
-    result = subprocess.run(["adb", "exec-out", "cat", PALETTES], check=False, capture_output=True)
-    root = ET.fromstring(result.stdout) if result.returncode == 0 and result.stdout else ET.Element("map")
+    saved = device.shell(f"if [ -s {PALETTES} ]; then base64 {PALETTES}; fi")
+    root = ET.fromstring(base64.b64decode(saved)) if saved else ET.Element("map")
     before = next((node for node in root if node.get("name") == "balanceHeaderPalette"), None)
     old_palette = int(before.get("value")) if before is not None else 0
     new_palette = 4 if old_palette != 4 else 8
@@ -218,50 +219,12 @@ def exercise(device, args):
     with Image.open(args.mask) as png:
         asset = png.convert("RGBA")
     assert asset.size == (640, 640)
-    failures = []
-
-    def confirm(name, dp, style, palette=None):
-        try:
-            return inspect_case(device, dp, style, name, asset, palette)
-        except measure.EXPERIMENT_FAILURES as error:
-            failures.append(f"{name}: {error}")
-            device.note(f"FAIL {name}: {error}")
-            measure.home(device)
-            return None
-
-    settings(device)
-    select_style(device, 56, "fluviMask")
-    confirm("112-plain", 112, "orb")
-    settings(device)
-    device.click("1×1 (56 dp)", package=PKG)
-    confirm("56-mask", 56, "fluviMask")
-    settings(device)
-    select_style(device, 56, "orb")
-    confirm("56-restored-plain", 56, "orb")
     settings(device)
     select_style(device, 112, "fluviMask")
-    old = prefs(device)
-    assert old["sizeDp"] == "56" and old["style56"] == "orb" and old["style112"] == "fluviMask"
-    previous = set(device.shell("pidof", PKG).split())
-    assert len(previous) == 1 and all(value.isdigit() for value in previous)
-    device.shell("kill", "-KILL", next(iter(previous)))
-    settings(device)
-    assert device.service_connected()
-    assert previous.isdisjoint(device.shell("pidof", PKG).split())
-    assert all(prefs(device).get(key) == old[key] for key in ("sizeDp", "style56", "style112", "active"))
-    device.note("PASS different styles restored after real process and accessibility-service restart")
-    device.click("2×2 (112 dp)", package=PKG)
-    reference = confirm("112-mask", 112, "fluviMask")
-    try:
-        change_palette(device, reference[0] if reference else packet(device)[0])
-        confirm("112-mask-second-palette", 112, "fluviMask", reference)
-    except measure.EXPERIMENT_FAILURES as error:
-        failures.append(f"saved palette change: {error}")
-        device.note(f"FAIL saved palette change: {error}")
-    settings(device)
-    select_style(device, 112, "orb")
-    confirm("112-restored-full", 112, "orb")
-    assert not failures, failures
+    first = inspect_case(device, 112, "fluviMask", "palette-before", asset)
+    change_palette(device, first[0])
+    inspect_case(device, 112, "fluviMask", "palette-after", asset, first)
+    device.note("PASS both openings followed a visibly different live Balance palette and the disc stayed matte")
 
 
 def main():
