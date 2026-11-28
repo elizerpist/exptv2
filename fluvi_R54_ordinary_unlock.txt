@@ -1,0 +1,26 @@
+FLUVI_WA_LAST_UNLOCK_V1
+package=com.fluvi.app build=41add67b7f4d4ecdf7a0a48abff64ca85364ac9e version=0.1.5 code=7
+model=Android_SDK_built_for_x86_64 api=37 presenter=SURFACE_CHILD presenterError=UNOBSERVED
+display=0 serviceElapsedNs=208230493970 episode=1 window=1 attachment=208230493970/1 widget=3 sizeDp=112 style=ORB hide=1
+source=ACCESSIBILITY reason=UNLOCKED eventType=2048 eventUptimeMs=293638 callbackUptimeMs=293768
+gateDisplay=2 interactive=true locked=false
+gateReadBeginUptimeMs=293768 gateReadBeginElapsedNs=293768146731
+gateReadEndUptimeMs=293800 gateReadEndElapsedNs=293800831445
+decisionUptimeMs=293800 decisionElapsedNs=293800961708
+attachUptimeMs=283241 attachElapsedNs=283241183370
+childHide=APPLIED childError=UNOBSERVED childCommitListener=OBSERVED
+childHideRequestUptimeMs=293801 childHideRequestElapsedNs=293801056265
+childApplyReturnUptimeMs=293818 childApplyReturnElapsedNs=293818418314
+childCommitMainReceiptUptimeMs=294306 childCommitMainReceiptElapsedNs=294306503018
+localHideUptimeMs=293818 localHideElapsedNs=293818629628
+detachUptimeMs=293819 detachElapsedNs=293819367125
+removeBeginUptimeMs=293818 removeBeginElapsedNs=293818772505
+removeReturnUptimeMs=293957 removeReturnElapsedNs=293957515886
+removeDetached=true removeError=NONE
+retryBeginUptimeMs=UNOBSERVED retryBeginElapsedNs=UNOBSERVED
+retryReturnUptimeMs=UNOBSERVED retryReturnElapsedNs=UNOBSERVED
+retryDetached=UNOBSERVED retryError=UNOBSERVED
+hostStopUptimeMs=294293 hostStopElapsedNs=294293442536
+hostStopStatus=STOPPED
+physicalLastOrbPixel=UNOBSERVED physicalFirstRestrictedFrame=UNOBSERVED
+bodySha256=2d26ff9a9131c7806f44154c3de05b1c0836c2a1335c6785eed9c16cd122e0fe
