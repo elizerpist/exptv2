@@ -71,6 +71,7 @@ import com.fluvi.app.widget.orb.FluviOrbWidgetProvider
 import com.fluvi.app.widget.orb.FluviOrbUpdateCoordinator
 import com.fluvi.app.widget.orb.HeaderOrbBinding
 import com.fluvi.wa.WaLockscreenCapture
+import com.fluvi.wa.WaOrbStyle
 import com.fluvi.app.widget.orb.HeaderOrbWidgetContent
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.BinaryMessenger
@@ -1122,12 +1123,16 @@ class MainActivity : FlutterActivity() {
                     val application = applicationContext
                     val binding = HeaderOrbBinding.get(application)
                     when (call.method) {
-                        "status", "openAccessibility", "settingsResumed", "selectSize" -> {
+                        "status", "openAccessibility", "settingsResumed", "selectSize", "selectStyle" -> {
                             runCatching {
                                 when (call.method) {
                                     "openAccessibility" -> binding.openAccessibility(this)
                                     "settingsResumed" -> binding.settingsResumed(this, activityResumed)
                                     "selectSize" -> binding.selectSize(this, activityResumed, requireNotNull(call.argument("dp")))
+                                    "selectStyle" -> binding.selectStyle(
+                                        requireNotNull(call.argument("dp")),
+                                        WaOrbStyle.entries.single { it.value == call.argument<String>("style") },
+                                    )
                                     else -> binding.syncService()
                                 }
                                 binding.status()

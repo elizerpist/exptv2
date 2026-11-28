@@ -8,6 +8,7 @@ import android.animation.ValueAnimator
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
 import android.graphics.Point
 import android.graphics.Rect
@@ -25,6 +26,7 @@ import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
 import kotlin.math.roundToInt
 
 /** WA accessibility overlay hosting one real AppWidget, at a root-owned position. */
@@ -34,6 +36,13 @@ class WaOrbWindow(
     private val savePlacement: (OrbPlacement) -> Unit,
 ) {
     private val wm = context.getSystemService(WindowManager::class.java)
+    private val fluviMask by lazy(LazyThreadSafetyMode.NONE) {
+        requireNotNull(BitmapFactory.decodeResource(context.resources, R.drawable.wa_fluvi_logo_mask))
+    }
+
+    fun prepareStyles() {
+        fluviMask
+    }
     private val manager = AppWidgetManager.getInstance(context)
     private var root: OrbRoot? = null
     private var layout: WindowManager.LayoutParams? = null
@@ -83,10 +92,10 @@ class WaOrbWindow(
 
     fun show(
         session: Long, episode: Long, widgetId: Int, info: AppWidgetProviderInfo, dp: Int,
-        center: OrbPlacement, animate: Boolean, canEnter: () -> Boolean,
+        center: OrbPlacement, animate: Boolean, style: WaOrbStyle, canEnter: () -> Boolean,
     ): Boolean {
         if (attached && owner?.service == session && owner?.episode == episode && id == widgetId) {
-            if (sizeDp != dp || geometry != measure(dp)) resize(dp)
+            resize(dp, style)
             return attached
         }
         hide(WaHideReason.REPLACE)
@@ -127,6 +136,7 @@ class WaOrbWindow(
             manager.updateAppWidgetOptions(widgetId, WaOrbHost.options(dp))
             val content = host.createView(context, widgetId, info)
             frame.visual.addView(content, FrameLayout.LayoutParams(-1, -1, Gravity.CENTER))
+            frame.applyStyle(style)
             if (!canEnter() || root !== frame || frame.revoked) {
                 if (root === frame) hide(WaHideReason.UNKNOWN)
                 return false
@@ -195,10 +205,13 @@ class WaOrbWindow(
         motion.start()
     }
 
-    fun resize(dp: Int = sizeDp) {
-        if (!attached) return
+    fun resize(dp: Int, style: WaOrbStyle) {
+        val frame = root?.takeIf(::live) ?: return
         val dimensions = measure(dp)
-        if (sizeDp == dp && geometry == dimensions) return
+        if (sizeDp == dp && geometry == dimensions) {
+            frame.applyStyle(style)
+            return
+        }
         cancelDrag(restore = false)
         if (!dimensions.usable.fits) {
             hide(WaHideReason.NO_FIT)
@@ -218,7 +231,10 @@ class WaOrbWindow(
             sizeDp = dp
         }
         if (!safeUpdate(dimensions.usable.position(placement), dimensions)) hide(WaHideReason.RESIZE_FAILED)
-        else root?.mark(WaStage.RESIZE, detail = dp.toLong())
+        else {
+            frame.applyStyle(style)
+            frame.mark(WaStage.RESIZE, detail = dp.toLong())
+        }
     }
 
     fun hide(reason: WaHideReason): Long {
@@ -374,6 +390,7 @@ class WaOrbWindow(
         var clearDrawWait: (() -> Unit)? = null
         private var drawLogged = false
         private var nonzero = false
+        private var maskView: ImageView? = null
         val visual = object : FrameLayout(context) {
             override fun setAlpha(alpha: Float) {
                 if (revoked && alpha > 0f) return
@@ -384,6 +401,21 @@ class WaOrbWindow(
 
         init {
             addView(visual, LayoutParams(-1, -1, Gravity.CENTER))
+        }
+
+        fun applyStyle(style: WaOrbStyle) {
+            if (style == WaOrbStyle.ORB) {
+                maskView?.visibility = View.GONE
+                return
+            }
+            val mask = maskView ?: ImageView(context).apply {
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                scaleType = ImageView.ScaleType.FIT_XY
+                setImageBitmap(fluviMask)
+                visual.addView(this, LayoutParams(-1, -1))
+                maskView = this
+            }
+            mask.visibility = View.VISIBLE
         }
 
         private fun publishNonzero() {

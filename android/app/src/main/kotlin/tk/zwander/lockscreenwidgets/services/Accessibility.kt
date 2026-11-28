@@ -15,6 +15,7 @@ class Accessibility : WaLockscreenService() {
 
     override fun onServiceConnected() {
         binding.connected()
+        orb.prepareStyles()
         super.onServiceConnected()
         stopObserving?.invoke()
         stopObserving = binding.observe {
@@ -36,14 +37,18 @@ class Accessibility : WaLockscreenService() {
     override fun showOrb(episode: Long, animate: Boolean): Boolean {
         val id = binding.readyId() ?: return false
         val info = binding.binding(id) ?: return false
-        return orb.show(session, episode, id, info, binding.sizeDp(), binding.placement(), animate) {
+        val dp = binding.sizeDp()
+        return orb.show(session, episode, id, info, dp, binding.placement(), animate, binding.style(dp)) {
             entranceAllowed(episode)
         }
     }
 
     override fun hideOrb(reason: WaHideReason) = orb.hide(reason)
 
-    override fun geometryChanged() = orb.resize(binding.sizeDp())
+    override fun geometryChanged() {
+        val dp = binding.sizeDp()
+        orb.resize(dp, binding.style(dp))
+    }
 
     override fun onUnbind(intent: Intent?): Boolean {
         stopObserving?.invoke()

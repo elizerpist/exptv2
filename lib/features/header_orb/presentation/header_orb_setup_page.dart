@@ -77,6 +77,41 @@ class _HeaderOrbSetupPageState extends State<HeaderOrbSetupPage>
     if (mounted) setState(() => _error = true);
   }
 
+  Widget _styleSelector(int dp) {
+    final selected = _status?['style$dp'] as String? ?? 'orb';
+    final name = dp == 56 ? '1×1' : '2×2';
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: 56, end: 16, bottom: 8),
+      child: Wrap(
+        spacing: 8,
+        children: [
+          for (final (style, label) in [
+            ('orb', 'ORB'),
+            ('fluviMask', 'Fluvi maszk'),
+          ])
+            Semantics(
+              label: '$name · $label',
+              excludeSemantics: true,
+              button: true,
+              selected: selected == style,
+              enabled: !_busy,
+              onTap: selected == style
+                  ? null
+                  : () => _invoke('selectStyle', {'dp': dp, 'style': style}),
+              child: ChoiceChip(
+                key: ValueKey('balance-orb-style-$dp-$style'),
+                label: Text(label),
+                selected: selected == style,
+                onSelected: (value) {
+                  if (value) _invoke('selectStyle', {'dp': dp, 'style': style});
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = _status?['sizeDp'] as int? ?? 56;
@@ -101,10 +136,10 @@ class _HeaderOrbSetupPageState extends State<HeaderOrbSetupPage>
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _invoke('openAccessibility'),
           ),
-          for (final dp in [56, 112])
+          for (final dp in [56, 112]) ...[
             ListTile(
               key: ValueKey('balance-orb-size-$dp'),
-              title: Text(dp == 56 ? '1×1 ORB' : '2×2 ORB'),
+              title: Text(dp == 56 ? '1×1 (56 dp)' : '2×2 (112 dp)'),
               leading: Icon(
                 size == dp
                     ? Icons.radio_button_checked
@@ -113,6 +148,8 @@ class _HeaderOrbSetupPageState extends State<HeaderOrbSetupPage>
               selected: size == dp,
               onTap: () => _invoke('selectSize', {'dp': dp}),
             ),
+            _styleSelector(dp),
+          ],
         ],
       ),
     );

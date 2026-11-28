@@ -17,6 +17,7 @@ import android.util.AtomicFile
 import android.util.Log
 import com.fluvi.wa.OrbPlacement
 import com.fluvi.wa.WaOrbHost
+import com.fluvi.wa.WaOrbStyle
 import org.json.JSONArray
 import java.io.File
 import java.util.UUID
@@ -167,6 +168,23 @@ internal class HeaderOrbBinding private constructor(private val context: Context
     fun readyId(): Int? = authority?.id?.takeIf { ready }
     fun sizeDp(): Int = sizeDp
 
+    fun style(dp: Int): WaOrbStyle {
+        val stored = prefs.getString(styleKey(dp), null)
+        return WaOrbStyle.entries.firstOrNull { it.value == stored } ?: WaOrbStyle.ORB
+    }
+
+    fun selectStyle(dp: Int, style: WaOrbStyle) {
+        val key = styleKey(dp)
+        if (style(dp) == style) return
+        check(prefs.edit().putString(key, style.value).commit())
+        notifyChanged()
+    }
+
+    private fun styleKey(dp: Int): String {
+        require(dp == 56 || dp == 112)
+        return "style$dp"
+    }
+
     fun placement(): OrbPlacement = OrbPlacement(
         prefs.getFloat("centerX", 0.5f), prefs.getFloat("centerY", 0.5f),
     )
@@ -178,6 +196,8 @@ internal class HeaderOrbBinding private constructor(private val context: Context
     fun status(): Map<String, Any> = mapOf(
         "accessibilityEnabled" to enabled,
         "sizeDp" to sizeDp,
+        "style56" to style(56).value,
+        "style112" to style(112).value,
         "state" to when {
             !enabled -> "disabled"
             !intended -> "dormant"
