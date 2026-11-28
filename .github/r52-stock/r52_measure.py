@@ -46,8 +46,26 @@ def labels(device):
 
 
 def panel(device):
-    r51.panel(device)
-    if "Felvétel indítása" not in labels(device) and "Leállítás" not in labels(device):
+    assert "Status: ok" in device.shell("am", "start", "-W", "-n", r51.ACTIVITY)
+    for attempt in range(4):
+        if "Debug Console" in labels(device):
+            break
+        if device.click("Debug log", package=PKG, optional=True, limit=3):
+            deadline = time.monotonic() + 4
+            while time.monotonic() < deadline:
+                witnessed = device.screen()
+                device.save("debug-panel-open.xml", witnessed)
+                if "Debug Console" in r51.stock.visible_labels(witnessed, PKG):
+                    break
+                time.sleep(.15)
+            else:
+                continue
+            break
+        # The debug entry is on the dashboard, not on the setup subpage.
+        device.shell("input", "keyevent", "KEYCODE_BACK")
+        device.shell("am", "start", "-W", "-n", r51.ACTIVITY)
+    assert "Debug Console" in labels(device), "Real debug console did not open after the measured entry"
+    if not {"Felvétel indítása", "Leállítás"}.intersection(labels(device)):
         device.click(r51.PANEL, package=PKG)
 
 
@@ -145,8 +163,12 @@ def witnesses(device, name):
     tracer = None
     try:
         try:
-            device.adb("push", config, "/data/local/tmp/r52.pbtxt")
-            device.shell("perfetto", "--txt", "-c", "/data/local/tmp/r52.pbtxt", "--background", "-o", trace)
+            go = subprocess.run(
+                ["adb", "shell", "perfetto", "--txt", "-c", "-", "--background", "-o", trace],
+                input=config.read_bytes(), capture_output=True, timeout=15,
+            )
+            device.save(name + "-trace-start.txt", go.stdout + b"\n" + go.stderr)
+            go.check_returncode()
             tracer = trace
         except subprocess.SubprocessError as error:
             device.note(f"{name} TRACE start unavailable: {error}")
@@ -171,8 +193,9 @@ def witnesses(device, name):
             subprocess.run(["adb", "shell", "pkill", "-INT", "-x", "perfetto"],
                            timeout=5, capture_output=True, check=False)
             time.sleep(.5)
-            subprocess.run(["adb", "pull", trace, str(device.output / (name + ".pftrace"))],
-                           timeout=25, capture_output=True, check=False)
+            pull = subprocess.run(["adb", "pull", trace, str(device.output / (name + ".pftrace"))],
+                                  timeout=25, capture_output=True, check=False)
+            device.save(name + "-trace-pull.txt", pull.stdout + b"\n" + pull.stderr)
             subprocess.run(["adb", "shell", "rm", "-f", trace, video], timeout=5, check=False)
         device.save(name + "-witness-logcat.txt", device.adb("logcat", "-d", "-v", "monotonic",
                                                             "-s", "FluviR52Witness:I"))
@@ -264,6 +287,16 @@ def save_run(device, name, arm_ms, rows, anchors, software):
             writer = csv.DictWriter(out, fieldnames=headers)
             writer.writeheader()
             writer.writerows(compare)
+    witness = device.output / (name + "-witness-logcat.txt")
+    if witness.is_file():
+        for which, code in (("start", 1), ("end", 2)):
+            bound = anchors.get(which)
+            if bound is None:
+                continue
+            times = [int(value) for value in re.findall(rf"sync={code} drawUp=\d+ drawEl=(\d+)", witness.read_text())]
+            candidates = [value for value in times if bound[0] <= value <= bound[1]]
+            if candidates:
+                anchors[which] = [min(candidates), bound[1]]
     try:
         analyze_video(device.output, name, rows, anchors)
     except EXPERIMENT_FAILURES as error:
@@ -363,7 +396,7 @@ def prepare(device, args):
         device.shell("am", "start", "-W", "-n", r51.ACTIVITY)
     r51.stock.enter_settings(device)
     widget = r51.stock.prepare_binding(device)
-    device.click("2×2 ORB", package=PKG)
+    device.click("2×2 (112 dp)", "2×2 ORB", package=PKG)
     device.save("widgets.txt", device.adb("shell", "dumpsys", "appwidget"))
     device.note(f"Preset saved, 112 dp widget={widget.decode()} swipe-only lock mode")
     # Dedicated blank synthetic launcher provides an independent pixel reference.

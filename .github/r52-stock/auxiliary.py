@@ -57,9 +57,13 @@ def restrictive_controls(device, sha):
             _, fresh = experiment.r51.visible_orb(device, prefix + "-same-main")
             assert fresh == bounds
             assert experiment.r51.system_state(device, prefix + "-main-still") == ("ON", "true", "true")
-            device.shell("input", "swipe", 430, 8, 430, 1210, 350)
-            device.capture(prefix + "-shade-first-request")
-            wait_restricted(device, prefix + "-shade", rb"quick_settings_panel|tile_label|Settings button|qs_footer")
+            try:
+                device.shell("cmd", "statusbar", "expand-settings")
+                device.capture(prefix + "-shade-first-request")
+                wait_restricted(device, prefix + "-shade", rb"quick_settings_panel|tile_label|Settings button|qs_footer|SplitShade")
+            except experiment.EXPERIMENT_FAILURES as error:
+                failures.append(f"{prefix} shade: {error}")
+                device.note(f"{prefix} shade incomplete: {error}")
             device.shell("input", "keyevent", "KEYCODE_BACK")
             experiment.r51.visible_orb(device, prefix + "-main-after-shade")
             device.shell("input", "keyevent", "KEYCODE_MENU")

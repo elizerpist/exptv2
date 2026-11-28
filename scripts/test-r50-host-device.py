@@ -209,7 +209,8 @@ def visible_labels(raw, package=None):
     ]
 
 
-SETTINGS_ROWS = ["Android kisegítő lehetőségek", "1×1 ORB", "2×2 ORB"]
+SETTINGS_ROWS = ["Android kisegítő lehetőségek", "1×1 (56 dp)", "2×2 (112 dp)"]
+R51_SETTINGS_ROWS = ["Android kisegítő lehetőségek", "1×1 ORB", "2×2 ORB"]
 
 
 def settings_rows(device):
@@ -219,8 +220,9 @@ def settings_rows(device):
         raw = device.screen()
         device.save(f"three-settings-rows-{sample:02d}.xml", raw)
         labels = visible_labels(raw, PACKAGE)
-        if all(row in labels for row in SETTINGS_ROWS):
-            indices = [labels.index(row) for row in SETTINGS_ROWS]
+        rows = SETTINGS_ROWS if SETTINGS_ROWS[1] in labels else R51_SETTINGS_ROWS
+        if all(row in labels for row in rows):
+            indices = [labels.index(row) for row in rows]
             assert indices == sorted(indices)
             assert labels.count("Android kisegítő lehetőségek") == 1
             assert "Aktuális fejléc megosztása" not in labels
@@ -245,7 +247,7 @@ def prepare_binding(device):
     device.save("cancelled-widgets.txt", device.adb("shell", "dumpsys", "appwidget"))
     time.sleep(.5)
     settings_rows(device)
-    device.click("1×1 ORB", package=PACKAGE)
+    device.click("1×1 (56 dp)", "1×1 ORB", package=PACKAGE)
     device.save("single-use-grant.xml", device.screen())
     device.click("Create", "Allow", package="com.android.settings", limit=8)
     device.save("after-grant-widgets.txt", device.adb("shell", "dumpsys", "appwidget"))
@@ -330,7 +332,7 @@ def exercise(device, apk, system, observer):
     device.shell("am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
     if SETTINGS_ROWS[0] not in visible_labels(device.screen(), PACKAGE):
         enter_settings(device)
-    device.click("2×2 ORB", package=PACKAGE)
+    device.click("2×2 (112 dp)", "2×2 ORB", package=PACKAGE)
     device.shell("input", "keyevent", "KEYCODE_HOME")
     device.wake_lock_screen()
     large = check_motion_and_drag(device, "112dp")
