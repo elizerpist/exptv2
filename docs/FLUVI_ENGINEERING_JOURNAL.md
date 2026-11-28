@@ -25993,3 +25993,84 @@ Track separately: full product change, automated targeted checks, signed full AP
 ```
 
 **Round closure.** Confirmed the artifact mix-up, the missing default phone log and a real stock restricted-screen overlap. The shorter timeout and downstream local fade/first-remove failure are unsupported as sufficient explanations for the two phone runs. Timing of the first public denial, persistence of the owned pixels and independent system copies remain open for A142. D54.1 changes the actual product withdrawal. D54.2 makes an ordinary unlock diagnosable. **R54 implementation / APK / automated qualification — pending coding-agent execution. PHYSICAL VALIDATION — PENDING, USER ONLY.**
+
+## 2026-11-28 — R54 · Full Fluvi application and ordinary unlock export
+
+The application branch `implement/r54-full-fluvi-unlock` contains `41add67b7f4d4ecdf7a0a48abff64ca85364ac9e` from exact R52 parent `7705f87c0c8f2bdf930a528b5bc6f87d276676a5`. R54 follows the 21-section handoff at `7bdd84346574ce3dce97a713f9c1a40ddeed3b22`. The R53 witness is an independent observer in the stock tests. [Application diff](https://github.com/elizerpist/exptv2/compare/7705f87c0c8f2bdf930a528b5bc6f87d276676a5...41add67b7f4d4ecdf7a0a48abff64ca85364ac9e)
+
+### Application and delivered bytes
+
+API 34+ uses one transparent SurfaceView with a windowless SurfaceControlViewHost visual. The existing live AppWidget and matte mask share its surface. The authorizing overlay owns one display, widget, wake and attachment. Each terminal hides the owned child with a direct visibility and alpha transaction before local hide and window removal. The exact attached unlock qualifies one bounded private AtomicFile export. Settings and Debug Console share the Copy action. Both copies are independent of the opt-in V1/V2 recorder. The API 33 test exercised the original view presenter. The existing admission and 50 ms notification timeout policies and 300 ms entrance remain in source.
+
+| Identity | Verified value |
+| --- | --- |
+| App | `com.fluvi.app` 0.1.5 (7), MainActivity, full Flutter finance and WA payload, HUMAN_DIAGNOSTIC profile |
+| Bytes | 114,043,547 |
+| SHA-256 | `bbc23b647e65bfda9fe29d16bac3b5c98a7f6ae111755d9a4c9337d7c7903c80` |
+| Update certificate | `faedbe8483532ebb1412bf4d8387c36ff6bbcd4b1da560ba0eabbaea9bad49fb` |
+| Artifact Git commit | `f09afc9ba70b8d9e9d9bc3e5c6d200ddc05d2eca` |
+| Verification | Full anonymous GET returned 200. Hash, length, v2/v3 signatures, 16 KiB alignment, package, launcher, embedded native resource and AOT source for all three ABIs, mask, shader and WA resources verified. |
+
+[Direct full APK](https://media.githubusercontent.com/media/elizerpist/exptv2/f09afc9ba70b8d9e9d9bc3e5c6d200ddc05d2eca/Fluvi_R54_HUMAN_41add67b7f4d.apk) · [Builder job](https://github.com/elizerpist/exptv2/actions/runs/46126838748/job/140923199462) · [Unchanged builder payload](https://github.com/elizerpist/exptv2/actions/runs/46126838748/artifacts/15255669823)
+
+The independent graph is `e86ab3bb92e5f30e69af57b498ac1ba6d9addbe8`, parent `d2442ea5ef2a67531f89ad4398108fd8edb65e76`, on `tooling/r54-full-fluvi-unlock-41add67b7f4d`. SCIP Dart 1.6.2 indexes the exact application SHA, 815 documents, 20,146 repository symbols, 135,934 references and 42,016 edges. Index SHA-256 `60fa9ff20b76c6768a97e2c9ce86e3cb1c17c579298d385ff89e7c8df159101e`. All shards, 16 tooling tests and analysis passed. Kotlin navigation is from a checked source inventory. An initial LFS-hook push stopped on local disk capacity, and the verified graph-only commit was subsequently pushed. [Graph manifest](https://github.com/elizerpist/exptv2/blob/e86ab3bb92e5f30e69af57b498ac1ba6d9addbe8/docs/codegraph/manifest.json) · [Native navigation](https://github.com/elizerpist/exptv2/blob/e86ab3bb92e5f30e69af57b498ac1ba6d9addbe8/docs/codegraph-r54-orb-withdrawal.md)
+
+### Matched API 37 stock unlock evidence
+
+The comparison used the independent R53 return activity, the actual signed full applications, API 37 Pixel 7 x86_64 default stock build CE2A.260420.051.A3, swangle, display 0, 1080 × 2400, plain 112 dp ORB and normal 50 ms under verbose arm A for trace correlation. Raw image, MP4, frame rows, clocks, V2 export and Perfetto traces are in each archive. The prior R53 forbidden overlap in #108 remains valid. In this new matched set the recorder's definite restricted destination samples were clear.
+
+| Application and trial | Sampled boundary | Recorder evidence and outcome |
+| --- | --- | --- |
+| R52 #1 | #137 MAIN ORB, #138–139 UNKNOWN ORB, #140 return clear | 1,033.877 ms largest boundary gap. Absolute recorder alignment failed. INCONCLUSIVE. |
+| R52 #2 | #98 MAIN ORB, #99–100 UNKNOWN ORB, #101 return clear | 2,065.533 ms largest gap. Absolute recorder alignment passed. INCONCLUSIVE for physical frame. |
+| R54 #1 | No unlock action | Debug tab still showed loading status. Invalid precondition retained. |
+| R54 #2 | #105 MAIN ORB, #106 UNKNOWN ORB, #107 return clear | 2,062.989 ms largest gap. Absolute recorder alignment passed. First clear recorder image +637.896 ms relative to the V2 LOCAL_HIDE. Source age and same-display present join unobserved. INCONCLUSIVE. |
+
+For the valid R54 trial the owner was display 0, service `92193429851`, episode 1, window 1, widget 4. Uptime event age 571 ms, independent of the elapsed-ns renderer phases. Production decision `174615816392` ns, child request `174615935549`, apply return `174617427099`, local hide `174620441928`, detach `174796606864`, first remove return `175225716263`, Main commit receipt `175876131098`. No retry. The submit call took 1.492 ms. Its return preceded WM remove return by 608.289 ms.
+
+The traced layer tree is outer VRI 288 → bounds 289 → SurfaceView 290 → BLAST 291 → SurfaceControlViewHost 293 → leash 294 → pixel leaf 295. The leaf was visible at snapshot `174405266584` and invisible at `174621940836`, 4.514 ms after child apply returned. This brackets sampled layer state. The clip and snapshots do not identify the first physical forbidden frame. The renderer change and software ownership are exercised. Timing detectability and any system copies remain open under H54.1–3. The new attempts do not establish a speed difference or the 10 ms goal.
+
+[R52 raw archive 15256069365](https://github.com/elizerpist/exptv2/actions/runs/46127500901/artifacts/15256069365) SHA-256 `b5650f05e932a748729106c11461ef7effaa80fe9d0f0187c3993a1c4557fc5b` · [R54 raw archive 15256556605](https://github.com/elizerpist/exptv2/actions/runs/46127500901/artifacts/15256556605) SHA-256 `e55357af9efe083b09121b4a372ce691731c0555d9c7325ad1843cec1c8b37de`. R54 traced copy whole SHA-256 `1118102089a0c0ad1d64c6470475b02c7756ed1598101be787577c376997db2c`.
+
+### Qualification ledger
+
+| Gate | Exact outcome and evidence |
+| --- | --- |
+| Diff and boundaries | PASS. `git diff --check` and `bash scripts/verify-fluvi-boundaries.sh`. Java 17.0.21, Flutter 3.41.4, adb 37.0.1, SDK 36 compile tools. Local /dev/kvm unavailable. |
+| WA native | PASS. `android/gradlew -p android :wa-lockscreen:testDebugUnitTest --offline --no-daemon --max-workers=3 --console=plain` reached BUILD SUCCESSFUL in 58 s after isolated cache and correct Flutter SDK path. Original local preflights stopped on disk capacity and a missing engine.stamp respectively. Independent SDK compile and JUnit passed 20 tests. |
+| Targeted Flutter | Six exact-source settings and console tests PASS. Forty-five combined focused UI and material tests passed during development. Scoped analysis returned two pre-existing informational lints. |
+| Optical classifier | Eight exact fixture offline controls PASS. Stock R52/R54 optics INCONCLUSIVE with the above retained per-sample evidence. |
+| Native and curated Flutter CI | PASS, [native core/app/WA](https://github.com/elizerpist/exptv2/actions/runs/46126838748/job/140923199450) and [curated Flutter](https://github.com/elizerpist/exptv2/actions/runs/46126838748/job/140923199327). |
+| Full Flutter CI | FAIL in 5m46s of tests with 2,774 passing, 3 skipped and 115 failing. All 115 names match [the exact R52 job](https://github.com/elizerpist/exptv2/actions/runs/46086211987/job/140796267677). [R54 job](https://github.com/elizerpist/exptv2/actions/runs/46126838748/job/140923199436) · [Golden evidence](https://github.com/elizerpist/exptv2/actions/runs/46126838748/artifacts/15256221333) |
+| Formal API 35 host | FAIL before settings setup. The UI observer did not reach Beállítások. [Job](https://github.com/elizerpist/exptv2/actions/runs/46126838748/job/140925145981) · [Archive](https://github.com/elizerpist/exptv2/actions/runs/46126838748/artifacts/15256755910) |
+| Formal API 37 host | FAIL at the existing shade call after 56 dp motion, five verified drag destinations and return to the saved placement. Both retained shade images show the clock scene with the ORB and no independent shade witness. The formal failure remains. [Job](https://github.com/elizerpist/exptv2/actions/runs/46126838748/job/140925145965) · [Archive](https://github.com/elizerpist/exptv2/actions/runs/46126838748/artifacts/15256955089) |
+| Explicit API 37 restricted scenes | PASS for settled shade and PIN with independent scene witnesses, each starting on real painted ORB. First physical restricted frame unmeasured. [Job](https://github.com/elizerpist/exptv2/actions/runs/46127931530/job/140926563968) · [Archive](https://github.com/elizerpist/exptv2/actions/runs/46127931530/artifacts/15257050638) |
+| Older supported Android route | API 33 PASS with the same signed product. Real ORB, normal swipe, app settings clipboard, `LEGACY_API`, `childHide=UNSUPPORTED`, detached true. [Job](https://github.com/elizerpist/exptv2/actions/runs/46127621349/job/140925623611) · [Archive](https://github.com/elizerpist/exptv2/actions/runs/46127621349/artifacts/15256895544) |
+| First stock material run | FAIL for three cases against the original 0.35 per-cutout threshold. Actual live packet matching and the 56 dp matte were established. The force-stop prevented service reconnect before 112 dp mask. R52's calibrated source-match and process-restart path is the separate recovery. [Job](https://github.com/elizerpist/exptv2/actions/runs/46127500901/job/140925252640) · [Archive](https://github.com/elizerpist/exptv2/actions/runs/46127500901/artifacts/15256411873) |
+| Initial signed update trial | FAIL before install when adb root closed the just-booted transport. [Archive](https://github.com/elizerpist/exptv2/actions/runs/46127500901/artifacts/15255959167) |
+| Update transport recovery | Signed `adb install -r` PASS with versionCode 7 and preserved firstInstallTime. R52 ordinary unlock positive control confirmed missing Copy and missing last-report file. Dashboard proof failed on the cold splash. [Archive](https://github.com/elizerpist/exptv2/actions/runs/46127773159/artifacts/15256282148) |
+| Dashboard startup recovery | Stopped before candidate install at R52's optional initial Cancel screen. The preserved screen already displayed the setup page and requested size. Subsequent fixture branches from actual UI state and retains the real consent. [Archive](https://github.com/elizerpist/exptv2/actions/runs/46128244180/artifacts/15256617175) |
+| CI delivery marker | Skipped because formal host gates failed. The single signed APK came from completed build-wa-profile. Nightly Flutter, native nightly and the historical dashboard baseline were skipped by dispatch flags. [Workflow](https://github.com/elizerpist/exptv2/actions/runs/46126838748) |
+| Dashboard profile A–K | FAIL. RangeError on year 2026 outside 2027–2051 and incomplete A–K report. The same range failure is recorded for the R52 baseline. [Job](https://github.com/elizerpist/exptv2/actions/runs/46126838748/job/140924884121) · [Archive](https://github.com/elizerpist/exptv2/actions/runs/46126838748/artifacts/15257251072) |
+| Matched four-style recovery | PASS for all four visible combinations, saved independent style choices and service process restart. 112 dp plain/mask matched 9/12, 56 dp mask 23/2, 56 dp restored plain 7/6, 112 dp restored plain 6/9. Mask gap stayed RGB 240/240/240. Foreground palette-change subtest failed before verifying the new palette. Overall job FAIL. The original run remains in the ledger. [Job](https://github.com/elizerpist/exptv2/actions/runs/46128343704/job/140927862221) · [Archive](https://github.com/elizerpist/exptv2/actions/runs/46128343704/artifacts/15257036869) |
+| Forced failure and timing cases | The unit test rejects late receipts from an older owner and preserves missing and retry fields. Forced loss during pending surface attach, a native hide-transaction exception, and a deliberately failed first WM remove were NOT RUN on the signed product. The available runtime probes did not force those boundaries. First physical display-present identities and a controlled screen-off during the 300 ms entrance were also unestablished. |
+
+The core XML contains 150 Room and 32 application tests with zero failures. The separate WA suite has 20. The four-style archive SHA-256 is `392135ffc05e49a4bc0c77edc3521608a72ae4246748058529966b12d803c584`. [Native XML](https://github.com/elizerpist/exptv2/actions/runs/46126838748/artifacts/15256365993)
+
+### Signed upgrade and the normal, unarmed last unlock
+
+**PASS, 9m24s**, on stock API 37 and exact signed bytes. Fixture `0a4b274aff9029dd09fa7f219e2fbff8543f0f19` observed and followed the actual consent state. The R52 RED normal unlock had no Copy item and emitted no last-unlock file. Android then accepted `adb install -r` with R54. The ordinary MainActivity dashboard opened. The synthetic ledger sentinel, app widget host 1003 and widget 3, accessibility consent, 112 dp size, per-size styles and saved drag position survived. The R52 frozen V2 re-copy was byte-identical at 6,534 bytes with file SHA-256 `7e3bef2afa36217f1484b290946f66fb434cbe3f6e101b28575c15f544f7001d`. Ownerless callbacks had emitted no R54 report before the witnessed lock and unlock.
+
+The fixture waited for painted ORB, performed a normal swipe and copied without starting capture. The installed product's Settings Copy and Debug Console Copy yielded identical 1,661 bytes on the actual Android clipboard. The same bytes survived an app process death and service reconnect. Embedded child drag, saved position and visible-ORB locked screen-off followed by relock passed. Screen-off preserved the previous log. A fresh successor unlock replaced it with a new attachment report.
+
+- Ordinary sample display 0, service `208230493970`, episode 1, window 1, widget 3, 112 dp ORB and SURFACE_CHILD. UNLOCKED 2048 event age 130 ms by uptime. Fresh gate read 32.685 ms, child submit 17.362 ms. Apply returned at elapsed ns `293818418314`, local hide `293818629628`, detach `293819367125`, WM return `293957515886`, Main commit receipt `294306503018`. No retry. The two observed child submit durations belong to distinct trials and capture modes.
+- File SHA-256 `e1c69d26c06b5086396d5b60319e68564fabd980f23b02ff10797b593260c70a`, body SHA-256 `2d26ff9a9131c7806f44154c3de05b1c0836c2a1335c6785eed9c16cd122e0fe`. The byte-identical synthetic AVD text is directly downloaded and checked on evidence commit `b46b1294205f0b020c60931b31615a7073ff6032`. The physical endpoints inside this genuine software report are UNOBSERVED.
+
+[Read the actual Fluvi clipboard](https://raw.githubusercontent.com/elizerpist/exptv2/b46b1294205f0b020c60931b31615a7073ff6032/fluvi_R54_ordinary_unlock.txt) · [Install, preservation and copy job](https://github.com/elizerpist/exptv2/actions/runs/46128653459/job/140928772692) · [Signed upgrade evidence 15257400800](https://github.com/elizerpist/exptv2/actions/runs/46128653459/artifacts/15257400800) archive SHA-256 `de2218e10fe58f408707e698b0beabd38b5ee1a2a48dc779568f03e8b0016b68`.
+
+### Reviewer delta and owner test
+
+- **Implementation** D54.1 product-owned visual child and direct withdrawal are exercised in real API 37 output. D54.2 actual default-off clipboard gap is closed in the upgrade fixture.
+- **Automated qualification** The signed update, preserved data, both Copy paths and restart passed. Formal CI failures and unrun forced-fault cases remain in the ledger. Optical first-forbidden and threshold comparisons remain INCONCLUSIVE. H54.1–3 remain open for physical lag attribution.
+- **APK delivery** Verified full Human test candidate, update compatible with exact R52, direct public bytes above. The app SHA differs from the graph, fixture and artifact commits.
+- **Physical acceptance** Install this APK over R52, lock and wake once, then unlock normally while the ORB is visible. In Fluvi, open Zárképernyő and tap Legutóbbi feloldás másolása. **PHYSICAL VALIDATION — PENDING, USER ONLY.**
