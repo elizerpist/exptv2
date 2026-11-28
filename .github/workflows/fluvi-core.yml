@@ -1,40 +1,22 @@
-name: R54 data-preserving upgrade and ordinary unlock
+name: R55 masked stock unlock, ordinary clipboard
 on:
+  push:
+    branches: ['test/r55-masked-stock-r54', 'test/r55-masked-stock-r55']
   workflow_dispatch:
-    inputs:
-      app_sha:
-        required: true
-        type: string
-      apk:
-        required: true
-        type: string
-      sha256:
-        required: true
-        type: string
-      size:
-        required: true
-        type: string
 permissions:
   contents: read
-
 jobs:
   stock:
-    strategy:
-      fail-fast: false
-      matrix:
-        case: [upgrade]
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 28
     env:
-      APP_SHA: ${{ inputs.app_sha }}
-      APK_URL: ${{ inputs.apk }}
-      APK_HASH: ${{ inputs.sha256 }}
-      APK_SIZE: ${{ inputs.size }}
-      CASE: ${{ matrix.case }}
-      R52_SHA: 7705f87c0c8f2bdf930a528b5bc6f87d276676a5
-      REFERENCE_SHA: b3c6fe33267fa19e4853fe03b551ef27fec7dbd6
       PYTHONDONTWRITEBYTECODE: '1'
-      PYTHONPATH: .github/r52-stock:.github/r53-unlock:.github/r54-unlock
+      PYTHONPATH: .github/r55:.github/r52-stock:.github/r53-unlock:.github/r54-unlock
+      APP_SHA: 41add67b7f4d4ecdf7a0a48abff64ca85364ac9e
+      APP_BYTES: '114043547'
+      APP_HASH: bbc23b647e65bfda9fe29d16bac3b5c98a7f6ae111755d9a4c9337d7c7903c80
+      APP_URL: https://media.githubusercontent.com/media/elizerpist/exptv2/f09afc9ba70b8d9e9d9bc3e5c6d200ddc05d2eca/Fluvi_R54_HUMAN_41add67b7f4d.apk
+      REFERENCE_SHA: b3c6fe33267fa19e4853fe03b551ef27fec7dbd6
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -47,44 +29,31 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Verify full products, reference and offline controls
+      - name: Verify independently downloaded products and prepare the existing observer
         run: |
           mkdir -p evidence
-          if [[ "$CASE" != optical-r52 ]]; then
-            bash .github/r52-stock/verify-apk.sh "$APK_URL" "$APK_HASH" "$APK_SIZE" \
-              "$APP_SHA" "$RUNNER_TEMP/r54.apk"
-          fi
-          if [[ "$CASE" == upgrade || "$CASE" == optical-r52 ]]; then
-            bash .github/r52-stock/verify-apk.sh \
-              https://media.githubusercontent.com/media/elizerpist/exptv2/8f7fc51e91d8ab2f65aae1565ed803e6fea9f3a1/Fluvi_R52_HUMAN_7705f87c0c8f.apk \
-              4ca98594dc1e764b5ec1c9e2a93dd0dd212b7fcd7ca88f8e55db89d677ba9f7d \
-              114027163 "$R52_SHA" "$RUNNER_TEMP/r52.apk"
-          fi
-          if [[ "$CASE" == optical-* ]]; then
-            bash .github/r53-unlock/reference/verify.sh \
-              https://media.githubusercontent.com/media/elizerpist/exptv2/ac3c7adeb9d90e69b01ed670e5c06d6911367cd2/Fluvi_R53_Reference_b3c6fe33267f.apk \
-              3bbeda3c9555a56c3bf194c00844164f0bcf93c24e11099fec7f7e7da6dacb54 \
-              16811 "$REFERENCE_SHA" 9260dbbf7fcbe03f1f0bf4218a3c3ddc892dba1ae86f50b88434719f7daf6d54 \
-              "$RUNNER_TEMP/reference.apk" | tee evidence/reference-apk.txt
-          fi
+          bash .github/r52-stock/verify-apk.sh "$APP_URL" "$APP_HASH" "$APP_BYTES" "$APP_SHA" "$RUNNER_TEMP/fluvi.apk"
+          bash .github/r53-unlock/reference/verify.sh \
+            https://media.githubusercontent.com/media/elizerpist/exptv2/ac3c7adeb9d90e69b01ed670e5c06d6911367cd2/Fluvi_R53_Reference_b3c6fe33267f.apk \
+            3bbeda3c9555a56c3bf194c00844164f0bcf93c24e11099fec7f7e7da6dacb54 16811 "$REFERENCE_SHA" \
+            9260dbbf7fcbe03f1f0bf4218a3c3ddc892dba1ae86f50b88434719f7daf6d54 "$RUNNER_TEMP/reference.apk"
           bash .github/r52-stock/prepare-runner.sh
-          python -m unittest discover -s .github/r53-unlock -v 2>&1 | tee evidence/offline-controls.txt
       - uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: ${{ matrix.case == 'legacy' && 33 || 36 }}
-          system-image-api-level: ${{ matrix.case == 'legacy' && '33' || '37.0' }}
+          api-level: 36
+          system-image-api-level: '37.0'
           target: default
           arch: x86_64
           profile: pixel_7
           ram-size: 2048M
           disable-animations: false
           emulator-options: -no-window -gpu swangle -feature -Vulkan -accel on -no-snapshot -noaudio -no-boot-anim -camera-back none -partition-size 4096
-          script: bash .github/r54-unlock/run.sh
+          script: python3 .github/r53-unlock/run_unlock.py --app-sha "$APP_SHA" --apk "$RUNNER_TEMP/fluvi.apk" --observer "$RUNNER_TEMP/observer.apk" --reference "$RUNNER_TEMP/reference.apk" --reference-sha "$REFERENCE_SHA" --output evidence/unlock
       - if: always()
         run: bash .github/r53-unlock/export_trace.sh evidence/unlock
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: r54-${{ matrix.case }}-${{ github.sha }}
+          name: r55-masked-stock-${{ github.sha }}
           path: evidence/
           if-no-files-found: error

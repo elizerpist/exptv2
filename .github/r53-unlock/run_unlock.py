@@ -14,7 +14,11 @@ from PIL import Image
 
 import r52_measure as stock
 from r52_video import color_at
-from r53_pixels import PixelWitness, reference_phase
+from r53_pixels import reference_phase
+from masked_pixels import MaskWitness, verify_motion
+from receipt import copy as ordinary_copy
+import mask_controls as masks
+from upgrade import bind_r52, wait_for_root
 from r53_video import analyze
 
 APP = stock.PKG
@@ -178,7 +182,6 @@ def sample(device, args, name, extent, trial):
     trial.update(name=name, route="unlock", display=0, extent=size, fixture="INCONCLUSIVE", action_issued=False)
     reference = None
     try:
-        stock.arm(device, name, 50)
         assert stock.readback(device, "normal-50-confirmed", 50) == [50]
         with record(device, size, trial):
             launch(device, 1, "start-color")
@@ -190,16 +193,32 @@ def sample(device, args, name, extent, trial):
             assert activity(device, REFERENCE, "return-destination-after-read") == reference
             device.shell("input", "keyevent", "KEYCODE_SLEEP")
             stock.independent_state(device, "sleep-before-wake", stock.sleeping)
-            painted, rect = stock.r51.wake(device, "lock-main")
+            device.shell("input", "keyevent", "KEYCODE_WAKEUP")
+            stock.r51.poll_state(device, "lock-main", "ON", True)
+            painted, rect = device.observe_orb("lock-main", limit=12)
             assert painted.size == size and rect[2] - rect[0] == rect[3] - rect[1]
             density = int(re.findall(r"\d+", device.shell("wm", "density").splitlines()[-1])[-1])
-            assert rect[2] - rect[0] == round(112 * density / 160), (rect, density)
+            assert rect[2] - rect[0] == round(56 * density / 160), (rect, density)
             trial["bounds"] = rect
             painted.save(device.output / "painted-main.png")
             device.save("pre-action-wm.txt", device.adb("shell", "dumpsys", "window", "windows"))
             trial["state_before"] = stock.r51.system_state(device, "action-pre")
             assert trial["state_before"] == ("ON", "true", "true")
-            PixelWitness(painted, image((device.output / "neutral-before.png").read_bytes()), rect)
+            # Keep one no-unlock control on this same attachment, with no recorder session in Fluvi.
+            neutral = image((device.output / "neutral-before.png").read_bytes())
+            packet_id, packet_frames = masks.packet(device)
+            save_json(device, "packet-identity.json", packet_id)
+            shots = []
+            for index in range(6):
+                screen = image(device.adb("exec-out", "screencap", "-p"))
+                shots.append((now(device), screen))
+                screen.crop(rect).save(device.output / f"locked-control-{index}.png")
+                time.sleep(.28)
+            verify_motion(device, rect, "locked-control", shots, packet_frames)
+            assert stock.r51.system_state(device, "settled-still-locked") == ("ON", "true", "true")
+            painted = shots[-1][1]
+            painted.save(device.output / "painted-main.png")
+            MaskWitness(painted, neutral, rect)
             trial["action_issued"] = True
             result = stock.unlock(device, size[0] // 5, size[1])
             device.save("direct-swipe.txt", result.encode())
@@ -214,6 +233,7 @@ def sample(device, args, name, extent, trial):
             assert stock.r51.system_state(device, "held-after-unlock") == unlocked
             assert activity(device, REFERENCE, "held-destination") == reference
             assert paint(device, 0, "held-neutral").size == size
+            trial["ordinary_copy_deadline_ns"] = now(device) + 10_000_000
             trial["destination_witnessed"] = True
             trial["fixture"] = "VALID_SOFTWARE"
             launch(device, 2, "end-color")
@@ -230,27 +250,19 @@ def summary(device, trial, reference, args):
     identity = {}
     if trial["action_issued"]:
         try:
-            document = stock.copy(device, "unlock", args.sha, 2, 50)
-            row = stock.match_windows(document, [trial])[0]
-            save_json(device, "owned-software-row.json", row)
-            if (row.get("match"), row.get("dp"), row.get("displayId"), row.get("reason")) == (
-                "MATCHED", "112", "0", "UNLOCKED"
-            ):
-                identity["owner"] = (APP, *(int(row[k]) for k in ("s", "e", "w", "id")))
-                identity["local_hide_ns"] = int(row["localHide"].split(",")[2])
-                for field, name in (("lockedControl", "locked_read_interval_ns"),
-                                    ("publicNegative", "unlocked_read_interval_ns")):
-                    if row[field] != "UNOBSERVED":
-                        identity[name] = [int(v) for v in row[field].split(",")[3:5]]
+            raw, fields = ordinary_copy(device, "ordinary", args.sha)
+            save_json(device, "owned-child-row.json", fields)
+            assert fields["sizeDp"] == "56" and fields["style"] == "FLUVI_MASK" and fields["display"] == "0"
+            assert fields["presenter"] == "SURFACE_CHILD" and fields["childHide"] == "APPLIED"
+            assert fields["removeDetached"] == "true"
+            assert int(fields["widget"]) == args.widget_id
+            assert trial["action_bracket_ns"][0] <= int(fields["decisionElapsedNs"]) <= trial["ordinary_copy_deadline_ns"]
+            identity["owner"] = (APP, *(int(fields[k]) for k in ("serviceElapsedNs", "episode", "window", "widget")))
+            identity["local_hide_ns"] = int(fields["localHideElapsedNs"])
+            if fields.get("locked") == "false":
+                identity["unlocked_read_interval_ns"] = [int(fields[k]) for k in ("gateReadBeginElapsedNs","gateReadEndElapsedNs")]
         except FAILURES as error:
             device.save("copy-error.txt", (str(error) + "\n").encode())
-        if args.sha != APP_SOURCE:
-            try:
-                from upgrade import last_copy
-                _, endpoints = last_copy(device, "owned-child", args.sha)
-                save_json(device, "owned-child-row.json", endpoints)
-            except FAILURES as error:
-                device.save("child-copy-error.txt", (str(error) + "\n").encode())
     if reference and "recording_bracket_ns" in trial and "bounds" in trial:
         try:
             draws = draw_records(device, trial["recording_bracket_ns"][0], args.reference_sha, reference["task"])
@@ -264,6 +276,7 @@ def summary(device, trial, reference, args):
 def prepare(device, args):
     assert device.shell("getprop", "ro.kernel.qemu") == "1"
     assert device.shell("getprop", "ro.build.version.sdk") == "37"
+    wait_for_root(device)
     ids = {}
     for pkg, apk in ((APP, args.apk), (OBSERVER, args.observer), (REFERENCE, args.reference)):
         assert b"Success" in device.adb("install", apk, timeout=90)
@@ -280,10 +293,17 @@ def prepare(device, args):
         device.shell("locksettings", "set-disabled", "false")
     device.shell("am", "start", "-W", "-n", stock.r51.ACTIVITY)
     stock.r51.stock.enter_settings(device)
-    widget = stock.r51.stock.prepare_binding(device)
-    device.click("2×2 (112 dp)", package=APP)
+    widget = bind_r52(device)
+    device.click("1×1 (56 dp)", package=APP)
+    masks.select_style(device, 56, "fluviMask")
+    pref = masks.prefs(device)
+    assert pref["sizeDp"] == "56" and pref["style56"] == "fluviMask" and pref["active"] == widget.decode()
+    args.widget_id = int(widget)
     device.save("widgets.txt", device.adb("shell", "dumpsys", "appwidget"))
-    device.note(f"Bound widget {widget.decode()} for 112 dp plain ORB")
+    stock.panel(device)
+    assert "Leállítás" not in stock.labels(device)
+    assert stock.readback(device, "capture-off-50", 50) == [50]
+    device.note(f"Bound {args.widget_id}, 56 dp FLUVI_MASK, default timeout, manual capture off")
     return extent
 
 
@@ -301,28 +321,37 @@ def main():
     device = stock.r51.Device(args.output)
     try:
         extent = prepare(device, args)
-        first_valid = False
-        for attempt in (1, 2):
+        import signal
+        def timeout(_signum, _frame):
+            raise TimeoutError("90 second acquisition limit")
+        signal.signal(signal.SIGALRM, timeout)
+        usable = 0
+        failed_acquisitions = 0
+        forbidden_seen = False
+        for attempt in (1, 2, 3):
             step = stock.r51.Device(device.output / f"attempt-{attempt}")
             trial = {}
-            reference = sample(step, args, f"attempt-{attempt}", extent, trial)
+            signal.alarm(90)
+            try:
+                reference = sample(step, args, f"attempt-{attempt}", extent, trial)
+            finally:
+                signal.alarm(0)
             summary(step, trial, reference, args)
-            if trial["action_issued"]:
-                assert trial["fixture"] == "VALID_SOFTWARE", trial
-                assert (step.output / "frame-report.json").is_file(), "frames were retained with an analysis error"
-                first_valid = True
-                if not args.repeat_valid or attempt == 2:
-                    break
-                stock.home(step)
-                continue
-            assert attempt == 1, "no qualified pre-action setup in the two allowed attempts"
-            # Restore unlocked state for the single permitted pre-action replacement.
-            step.shell("input", "keyevent", "KEYCODE_WAKEUP")
-            step.shell("wm", "dismiss-keyguard")
-            stock.panel(step)
-            if "Leállítás" in stock.labels(step):
-                step.click("Leállítás", package=APP)
-        assert first_valid
+            report = step.output / "frame-report.json"
+            association = json.loads((step.output / "app-identity.json").read_text())
+            if report.exists() and trial.get("fixture") == "VALID_SOFTWARE" and association.get("owner"):
+                usable += 1
+                verdict = json.loads(report.read_text())["verdict"]
+                forbidden_seen |= verdict["status"] == "FAIL"
+            else:
+                failed_acquisitions += 1
+            if usable >= 2 or failed_acquisitions >= 2:
+                break
+            stock.home(step)
+        save_json(device, "qualification.json", dict(usable=usable, acquisition_failures=failed_acquisitions,
+                  forbidden_sample=forbidden_seen, physical="PENDING USER ONLY"))
+        assert usable >= 2, "paired usable acquisition count below target"
+        assert not forbidden_seen, "ORB witnessed on an independently identified forbidden sample"
     finally:
         device.save("logcat.txt", device.adb("logcat", "-d", "-v", "threadtime"))
 

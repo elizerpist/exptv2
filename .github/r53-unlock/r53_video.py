@@ -12,7 +12,7 @@ from PIL import Image
 from r52_video import frame_stream
 from r53_mp4 import MetadataError, from_file
 from r53_oracle import Frame, classify, order
-from r53_pixels import PixelWitness
+from masked_pixels import MaskWitness as PixelWitness
 
 MS = 1_000_000
 ABSOLUTE_CLOCK_GUARD_NS = 20 * MS
